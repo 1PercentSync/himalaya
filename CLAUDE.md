@@ -58,6 +58,16 @@ scope 可选，常用值：`rhi`, `app`, `framework`, `passes`, `shaders`
 
 使用 `#pragma once`，路径带项目前缀：`#include <himalaya/rhi/context.h>`
 
+### 代码文档
+
+- 格式：Javadoc 风格 Doxygen（`/** */`）
+- 语言：英文
+- `.h` + `.cpp` 配对：`.h` 写接口文档（**what**：做什么、语义、约束），`.cpp` 写实现注释（**why/how**：为什么这么做、算法解释）
+- 仅 `.h`（纯头文件库 / 数据结构定义）：文档全部写在 `.h` 中，同时包含 what 和 why
+- 仅 `.cpp`（如 `main.cpp`）：文档全部写在 `.cpp` 中，同时包含 what 和 why
+- 所有公开和私有接口、字段、枚举值均需写文档
+- 文件头文档（`@file`）只写不会随开发变化的内容（文件名、所属模块），不写会过时的功能描述
+
 ### 命名
 
 | 元素 | 规范 | 示例 |
