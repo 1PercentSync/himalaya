@@ -18,7 +18,7 @@
 - [x] 创建 `rhi/include/himalaya/rhi/context.h`
 - [x] 创建 `rhi/src/context.cpp`
 - [x] Instance 创建（启用 Validation Layer + debug_utils 扩展）
-- [ ] Debug Messenger 回调
+- [x] Debug Messenger 回调
 - [ ] Physical Device 选择
 - [ ] Logical Device + Queue 创建（启用 1.4 核心特性）
 - [ ] VMA Allocator 初始化
