@@ -24,6 +24,24 @@ namespace himalaya::rhi {
     /** @brief Default log level. Change to debug/info for more verbose Vulkan diagnostics. */
     constexpr auto kLogLevel = spdlog::level::warn;
 
+    /**
+     * Derives Vulkan debug messenger severity flags from the spdlog log level,
+     * so the validation layer only delivers messages that spdlog would actually display.
+     */
+    // ReSharper disable once CppDFAConstantParameter
+    consteval VkDebugUtilsMessageSeverityFlagsEXT severity_flags_from_log_level(const spdlog::level::level_enum level) {
+        VkDebugUtilsMessageSeverityFlagsEXT flags = VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+        // ReSharper disable once CppDFAConstantConditions
+        if (level <= spdlog::level::warn) flags |= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT;
+        // ReSharper disable once CppDFAConstantConditions
+        // ReSharper disable once CppDFAUnreachableCode
+        if (level <= spdlog::level::info) flags |= VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT;
+        // ReSharper disable once CppDFAConstantConditions
+        // ReSharper disable once CppDFAUnreachableCode
+        if (level <= spdlog::level::debug) flags |= VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT;
+        return flags;
+    }
+
     void Context::init(GLFWwindow *window) {
         spdlog::set_level(kLogLevel);
         create_instance();
@@ -105,11 +123,7 @@ namespace himalaya::rhi {
 
         VkDebugUtilsMessengerCreateInfoEXT create_info{};
         create_info.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
-        create_info.messageSeverity =
-                VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
-                VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT |
-                VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
-                VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+        create_info.messageSeverity = severity_flags_from_log_level(kLogLevel);
         create_info.messageType =
                 // VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |        // loader/layer lifecycle noise
                 VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
