@@ -29,7 +29,7 @@
 ### Agent 约束
 
 - **禁止** 执行 cmake、build、run 命令
-- **禁止** 修改构建配置文件（CMakeLists.txt、vcpkg.json 等非代码文件），这些由用户在 CLion 中完成
+- **禁止** 修改构建配置和工具链文件（CMakeLists.txt、vcpkg.json、.clangd 等非代码文件），这些由用户在 CLion 中完成
 - **只能** 创建和编辑 C++/GLSL 源码文件及文档
 - 需要验证时告知用户在 CLion 中操作
 
