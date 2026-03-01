@@ -50,6 +50,8 @@
 
 scope 可选，常用值：`rhi`, `app`, `framework`, `passes`, `shaders`
 
+**分离原则**：代码变更和文档变更必须分开提交，不得混在同一个 commit 中
+
 ---
 
 ## 编码规范
