@@ -110,7 +110,8 @@ rhi/
     ├── shader.cpp
     ├── pipeline.cpp
     ├── commands.cpp
-    └── resources.cpp
+    ├── resources.cpp
+    └── vma_impl.cpp        # VMA 单头文件库实现
 
 app/
 ├── CMakeLists.txt
