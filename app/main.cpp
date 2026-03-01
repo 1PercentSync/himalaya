@@ -1,9 +1,8 @@
 #include <GLFW/glfw3.h>
-#include <cstdlib>
 
 constexpr int kInitialWidth = 1280;
 constexpr int kInitialHeight = 720;
-constexpr const char* kWindowTitle = "Himalaya";
+constexpr auto kWindowTitle = "Himalaya";
 
 int main() {
     glfwInit();
