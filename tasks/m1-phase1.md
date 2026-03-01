@@ -15,8 +15,8 @@
 
 ## Step 2：Vulkan 初始化
 
-- [ ] 创建 `rhi/include/himalaya/rhi/context.h`
-- [ ] 创建 `rhi/src/context.cpp`
+- [x] 创建 `rhi/include/himalaya/rhi/context.h`
+- [x] 创建 `rhi/src/context.cpp`
 - [ ] Instance 创建（启用 Validation Layer + debug_utils 扩展）
 - [ ] Debug Messenger 回调
 - [ ] Physical Device 选择
