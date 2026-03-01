@@ -66,7 +66,8 @@ rhi/
     ├── descriptors.cpp
     ├── pipeline.cpp
     ├── commands.cpp
-    └── shader.cpp
+    ├── shader.cpp
+    └── vma_impl.cpp            # VMA 单头文件库实现
 ```
 
 **与旧版差异说明：**
