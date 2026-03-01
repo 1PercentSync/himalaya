@@ -5,6 +5,19 @@
 
 ---
 
+## 0. Vulkan API 基线
+
+**Vulkan 1.4**
+
+| 核心特性 | 用途 |
+|---------|------|
+| Dynamic Rendering | 替代 VkRenderPass / VkFramebuffer，与 Render Graph 天然契合 |
+| Synchronization2 | 更清晰的 barrier API，Render Graph barrier 自动插入受益 |
+| Extended Dynamic State | 减少 pipeline 数量，viewport/scissor/cull mode/depth 等动态设置 |
+| Descriptor Indexing | Bindless 纹理支持 |
+
+---
+
 ## 1. 渲染框架
 
 **Forward+**
