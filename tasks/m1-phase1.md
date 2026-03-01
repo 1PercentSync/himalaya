@@ -6,12 +6,12 @@
 
 ## Step 1：项目骨架
 
-- [ ] 创建顶层 `CMakeLists.txt`（cmake_minimum_required、project、vcpkg 工具链、C++20、add_subdirectory）
-- [ ] 创建 `vcpkg.json`（glfw3、glm、spdlog、vulkan-memory-allocator、shaderc、imgui）
-- [ ] 创建 `rhi/CMakeLists.txt`（himalaya_rhi static lib、include 路径、依赖链接）
-- [ ] 创建 `app/CMakeLists.txt`（himalaya_app exe、链接 himalaya_rhi）
-- [ ] 创建 `app/main.cpp`（GLFW 窗口创建 + 空主循环 + 事件轮询）
-- [ ] 验证：CLion 构建通过，运行后出现可关闭的黑窗口
+- [x] 创建顶层 `CMakeLists.txt`（cmake_minimum_required、project、vcpkg 工具链、C++20、add_subdirectory）
+- [x] 创建 `vcpkg.json`（glfw3、glm、spdlog、vulkan-memory-allocator、shaderc、imgui）
+- [x] 创建 `rhi/CMakeLists.txt`（himalaya_rhi static lib、include 路径、依赖链接）
+- [x] 创建 `app/CMakeLists.txt`（himalaya_app exe、链接 himalaya_rhi）
+- [x] 创建 `app/main.cpp`（GLFW 窗口创建 + 空主循环 + 事件轮询）
+- [x] 验证：CLion 构建通过，运行后出现可关闭的黑窗口
 
 ## Step 2：Vulkan 初始化
 
