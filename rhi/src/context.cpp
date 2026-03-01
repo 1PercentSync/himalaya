@@ -1,5 +1,6 @@
 #include <himalaya/rhi/context.h>
 
+#include <string>
 #include <vector>
 
 #include <GLFW/glfw3.h>
@@ -20,7 +21,11 @@ namespace himalaya::rhi {
     constexpr bool kEnableValidationLayers = true;
 #endif
 
+    /** @brief Default log level. Change to debug/info for more verbose Vulkan diagnostics. */
+    constexpr auto kLogLevel = spdlog::level::warn;
+
     void Context::init(GLFWwindow *window) {
+        spdlog::set_level(kLogLevel);
         create_instance();
         create_debug_messenger();
         VK_CHECK(glfwCreateWindowSurface(instance, window, nullptr, &surface));
@@ -64,10 +69,61 @@ namespace himalaya::rhi {
 
         VK_CHECK(vkCreateInstance(&create_info, nullptr, &instance));
 
-        spdlog::info("Vulkan instance created (API 1.4)");
+        spdlog::warn("Vulkan instance created (API 1.4)");
+    }
+
+    // Builds a tag string from the message type bitmask (e.g. "[Validation][Performance]")
+    static std::string format_message_type(const VkDebugUtilsMessageTypeFlagsEXT type) {
+        std::string tag;
+        if (type & VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT) tag += "[Validation]";
+        if (type & VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT) tag += "[Performance]";
+        return tag;
+    }
+
+    // Validation layer message callback, routes to spdlog by severity
+    static VKAPI_ATTR VkBool32 VKAPI_CALL debug_callback(
+        const VkDebugUtilsMessageSeverityFlagBitsEXT severity,
+        const VkDebugUtilsMessageTypeFlagsEXT type,
+        const VkDebugUtilsMessengerCallbackDataEXT *callback_data,
+        [[maybe_unused]] void *user_data) {
+        auto tag = format_message_type(type);
+        if (severity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT) {
+            spdlog::error("{} {}", tag, callback_data->pMessage);
+        } else if (severity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) {
+            spdlog::warn("{} {}", tag, callback_data->pMessage);
+        } else if (severity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT) {
+            spdlog::info("{} {}", tag, callback_data->pMessage);
+        } else {
+            spdlog::debug("{} {}", tag, callback_data->pMessage);
+        }
+        return VK_FALSE;
     }
 
     void Context::create_debug_messenger() {
+        // ReSharper disable once CppDFAUnreachableCode
+        if constexpr (!kEnableValidationLayers) return;
+
+        VkDebugUtilsMessengerCreateInfoEXT create_info{};
+        create_info.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
+        create_info.messageSeverity =
+                VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
+                VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT |
+                VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
+                VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+        create_info.messageType =
+                // VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |        // loader/layer lifecycle noise
+                VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
+                VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT
+                // | VK_DEBUG_UTILS_MESSAGE_TYPE_DEVICE_ADDRESS_BINDING_BIT_EXT        // GPU VA tracking
+                ;
+        create_info.pfnUserCallback = debug_callback;
+
+        // vkCreateDebugUtilsMessengerEXT is an extension function, must load manually
+        const auto func = reinterpret_cast<PFN_vkCreateDebugUtilsMessengerEXT>(
+            vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT"));
+        VK_CHECK(func(instance, &create_info, nullptr, &debug_messenger));
+
+        spdlog::warn("Debug messenger created");
     }
 
     void Context::pick_physical_device() {
