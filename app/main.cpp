@@ -4,7 +4,12 @@
  */
 
 #include <himalaya/rhi/context.h>
+#include <himalaya/rhi/pipeline.h>
+#include <himalaya/rhi/shader.h>
 #include <himalaya/rhi/swapchain.h>
+
+#include <fstream>
+#include <sstream>
 
 #include <GLFW/glfw3.h>
 #include <spdlog/spdlog.h>
@@ -39,6 +44,42 @@ int main() {
 
     himalaya::rhi::Swapchain swapchain;
     swapchain.init(context, window);
+
+    // --- Shader compilation and pipeline creation ---
+    auto read_file = [](const std::string &path) -> std::string {
+        const std::ifstream file(path);
+        if (!file.is_open()) {
+            spdlog::error("Failed to open file: {}", path);
+            return {};
+        }
+        std::ostringstream ss;
+        ss << file.rdbuf();
+        return ss.str();
+    };
+
+    himalaya::rhi::ShaderCompiler shader_compiler;
+
+    const auto vert_source = read_file("shaders/triangle.vert");
+    const auto frag_source = read_file("shaders/triangle.frag");
+
+    const auto vert_spirv = shader_compiler.compile(
+        vert_source, himalaya::rhi::ShaderStage::Vertex, "triangle.vert");
+    const auto frag_spirv = shader_compiler.compile(
+        frag_source, himalaya::rhi::ShaderStage::Fragment, "triangle.frag");
+
+    VkShaderModule vert_module = himalaya::rhi::create_shader_module(context.device, vert_spirv);
+    VkShaderModule frag_module = himalaya::rhi::create_shader_module(context.device, frag_spirv);
+
+    himalaya::rhi::GraphicsPipelineDesc pipeline_desc;
+    pipeline_desc.vertex_shader = vert_module;
+    pipeline_desc.fragment_shader = frag_module;
+    pipeline_desc.color_formats = {swapchain.format};
+
+    auto triangle_pipeline = himalaya::rhi::create_graphics_pipeline(context.device, pipeline_desc);
+
+    // Shader modules can be destroyed immediately after pipeline creation
+    vkDestroyShaderModule(context.device, frag_module, nullptr);
+    vkDestroyShaderModule(context.device, vert_module, nullptr);
 
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();
@@ -162,6 +203,7 @@ int main() {
     // TODO: replace with per-fence waits when multiple queues are introduced
     vkDeviceWaitIdle(context.device);
 
+    triangle_pipeline.destroy(context.device);
     swapchain.destroy(context.device);
     context.destroy();
     glfwDestroyWindow(window);
