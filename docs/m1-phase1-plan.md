@@ -143,6 +143,6 @@ shaders/
 | 窗口归属 | App 层拥有 GLFW 窗口，传 `GLFWwindow*` 给 RHI 创建 Surface |
 | Framework 提前引入 | 原计划阶段二创建 framework 层，因 ImGui backend 需要独立于 app 的封装而提前至阶段一 Step 7 引入，仅含 `imgui_backend.h/cpp` |
 | GLFW 回调链 | ImGui GLFW backend 以 `install_callbacks = true` 初始化，链式调用先前注册的回调；因此 ImGui 初始化必须在 app 的 GLFW 回调注册之后 |
-| ImGui API 兼容性 | `ImGui_ImplVulkan_InitInfo` 的 `UseDynamicRendering` 等字段在 1.92.4（2025-10）移入 `PipelineInfoMain` 子结构体；若升级 vcpkg baseline 导致安装 1.92.4+ 需调整初始化代码 |
-| Descriptor Pool 规格 | 专用池，16 个 `COMBINED_IMAGE_SAMPLER`，`FREE_DESCRIPTOR_SET_BIT` |
+| ImGui API 版本 | vcpkg baseline 安装的版本中 `MSAASamples` 和 `PipelineRenderingCreateInfo` 为 `ImGui_ImplVulkan_InitInfo` 顶层字段，无 `ColorAttachmentFormat` 简写字段 |
+| Descriptor Pool 规格 | 专用池，4 个 `COMBINED_IMAGE_SAMPLER`，`FREE_DESCRIPTOR_SET_BIT` |
 | ImGui 架构决策 | 详见 `m1-architecture-choices.md` "ImGui 集成" 章节 |
