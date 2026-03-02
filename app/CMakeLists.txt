@@ -1,6 +1,6 @@
 add_executable(himalaya_app main.cpp)
 
-target_link_libraries(himalaya_app PRIVATE himalaya_rhi)
+target_link_libraries(himalaya_app PRIVATE himalaya_rhi himalaya_framework)
 
 # Clean and copy shaders to build directory after each build
 add_custom_command(TARGET himalaya_app POST_BUILD
