@@ -17,6 +17,7 @@
 
 #include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
+#include <imgui.h>
 #include <spdlog/spdlog.h>
 
 /** @brief Initial window width in pixels. */
@@ -176,6 +177,18 @@ int main() {
 
         // Start ImGui frame (paired with render() later in this iteration)
         imgui_backend.begin_frame();
+
+        // --- Debug panel ---
+        ImGui::Begin("Debug");
+        ImGui::Text("FPS: %.1f", ImGui::GetIO().Framerate);
+        ImGui::Text("GPU: %s", context.gpu_name.c_str());
+        ImGui::Text("Resolution: %u x %u", swapchain.extent.width, swapchain.extent.height);
+
+        const auto vram = context.query_vram_usage();
+        ImGui::Text("VRAM: %.1f / %.1f MB",
+                    static_cast<double>(vram.used) / (1024.0 * 1024.0),
+                    static_cast<double>(vram.budget) / (1024.0 * 1024.0));
+        ImGui::End();
 
         // Record command buffer
         const himalaya::rhi::CommandBuffer cmd(frame.command_buffer);

@@ -54,7 +54,7 @@ namespace himalaya::rhi {
     void Context::destroy() {
         vkDestroyCommandPool(device, immediate_command_pool, nullptr);
 
-        for (auto &frame : frames) {
+        for (auto &frame: frames) {
             frame.deletion_queue.flush();
             vkDestroyCommandPool(device, frame.command_pool, nullptr);
             vkDestroyFence(device, frame.render_fence, nullptr);
@@ -189,7 +189,7 @@ namespace himalaya::rhi {
         std::vector<VkExtensionProperties> available(count);
         vkEnumerateDeviceExtensionProperties(dev, nullptr, &count, available.data());
 
-        for (const auto *required : kRequiredDeviceExtensions) {
+        for (const auto *required: kRequiredDeviceExtensions) {
             const bool found = std::ranges::any_of(available, [required](const auto &ext) {
                 return std::strcmp(ext.extensionName, required) == 0;
             });
@@ -255,7 +255,8 @@ namespace himalaya::rhi {
 
         VkPhysicalDeviceProperties props;
         vkGetPhysicalDeviceProperties(physical_device, &props);
-        spdlog::info("Selected GPU: {} (score: {})", props.deviceName, best_score);
+        gpu_name = props.deviceName;
+        spdlog::info("Selected GPU: {} (score: {})", gpu_name, best_score);
     }
 
     void Context::create_device() {
@@ -392,5 +393,24 @@ namespace himalaya::rhi {
         VK_CHECK(vkAllocateCommandBuffers(device, &alloc_info, &immediate_command_buffer));
 
         spdlog::info("Immediate command pool created");
+    }
+
+    // Sums usage and budget across all device-local heaps.
+    // VK_EXT_memory_budget provides the per-heap budget/usage via VMA.
+    VramInfo Context::query_vram_usage() const {
+        VmaBudget budgets[VK_MAX_MEMORY_HEAPS];
+        vmaGetHeapBudgets(allocator, budgets);
+
+        VkPhysicalDeviceMemoryProperties mem_props;
+        vkGetPhysicalDeviceMemoryProperties(physical_device, &mem_props);
+
+        VramInfo info;
+        for (uint32_t i = 0; i < mem_props.memoryHeapCount; ++i) {
+            if (mem_props.memoryHeaps[i].flags & VK_MEMORY_HEAP_DEVICE_LOCAL_BIT) {
+                info.used += budgets[i].usage;
+                info.budget += budgets[i].budget;
+            }
+        }
+        return info;
     }
 } // namespace himalaya::rhi

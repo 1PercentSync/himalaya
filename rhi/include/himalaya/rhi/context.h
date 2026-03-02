@@ -6,7 +6,9 @@
  */
 
 #include <array>
+#include <cstdint>
 #include <functional>
+#include <string>
 #include <vector>
 
 #include <vulkan/vulkan.h>
@@ -29,9 +31,22 @@ struct GLFWwindow;
     } while (0)
 
 namespace himalaya::rhi {
-
     /** @brief Number of frames that can be in-flight simultaneously. */
     constexpr uint32_t kMaxFramesInFlight = 2;
+
+    /**
+     * @brief Device-local VRAM usage snapshot.
+     *
+     * Aggregates all device-local memory heaps.
+     * Requires VK_EXT_memory_budget (enabled as a device extension).
+     */
+    struct VramInfo {
+        /** @brief Bytes currently used by the application. */
+        uint64_t used = 0;
+
+        /** @brief Bytes available to the application (driver-reported budget). */
+        uint64_t budget = 0;
+    };
 
     /**
      * @brief Deferred resource destruction queue.
@@ -49,13 +64,13 @@ namespace himalaya::rhi {
 
         /** @brief Executes all queued destructors and clears the queue. */
         void flush() {
-            for (auto &fn : deletors_) fn();
+            for (auto &fn: deletors_) fn();
             deletors_.clear();
         }
 
     private:
         /** @brief Queued destruction callables. */
-        std::vector<std::function<void()>> deletors_;
+        std::vector<std::function<void()> > deletors_;
     };
 
     /**
@@ -110,6 +125,9 @@ namespace himalaya::rhi {
         /** @brief Selected physical device (GPU). */
         VkPhysicalDevice physical_device = VK_NULL_HANDLE;
 
+        /** @brief Human-readable GPU name, populated during init. */
+        std::string gpu_name;
+
         /** @brief Logical device. */
         VkDevice device = VK_NULL_HANDLE;
 
@@ -149,6 +167,12 @@ namespace himalaya::rhi {
 
         /** @brief Advances to the next in-flight frame index. */
         void advance_frame() { frame_index = (frame_index + 1) % kMaxFramesInFlight; }
+
+        /**
+         * @brief Queries aggregated device-local VRAM usage from VMA.
+         * @return Snapshot of current VRAM usage and budget.
+         */
+        [[nodiscard]] VramInfo query_vram_usage() const;
 
     private:
         /** @brief Creates VkInstance with validation layers and debug_utils extension. */
