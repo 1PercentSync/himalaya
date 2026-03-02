@@ -48,9 +48,12 @@ namespace himalaya::rhi {
         create_device();
         create_allocator();
         create_frame_data();
+        create_immediate_pool();
     }
 
     void Context::destroy() {
+        vkDestroyCommandPool(device, immediate_command_pool, nullptr);
+
         for (auto &frame : frames) {
             frame.deletion_queue.flush();
             vkDestroyCommandPool(device, frame.command_pool, nullptr);
@@ -367,5 +370,26 @@ namespace himalaya::rhi {
         }
 
         spdlog::info("Frame data created ({} frames in flight)", kMaxFramesInFlight);
+    }
+
+    // Creates a dedicated command pool for one-shot blocking GPU operations (uploads, etc.).
+    // Uses TRANSIENT_BIT: command buffers are short-lived (begin → record → submit → reset).
+    void Context::create_immediate_pool() {
+        VkCommandPoolCreateInfo pool_info{};
+        pool_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+        pool_info.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
+        pool_info.queueFamilyIndex = graphics_queue_family;
+
+        VK_CHECK(vkCreateCommandPool(device, &pool_info, nullptr, &immediate_command_pool));
+
+        VkCommandBufferAllocateInfo alloc_info{};
+        alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+        alloc_info.commandPool = immediate_command_pool;
+        alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+        alloc_info.commandBufferCount = 1;
+
+        VK_CHECK(vkAllocateCommandBuffers(device, &alloc_info, &immediate_command_buffer));
+
+        spdlog::info("Immediate command pool created");
     }
 } // namespace himalaya::rhi

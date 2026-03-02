@@ -131,6 +131,19 @@ namespace himalaya::rhi {
         /** @brief Index of the current in-flight frame (0 to kMaxFramesInFlight-1). */
         uint32_t frame_index = 0;
 
+        /**
+         * @brief Command pool for immediate one-shot GPU operations.
+         *
+         * Used by upload_buffer and similar blocking transfer operations.
+         * Decoupled from per-frame command pools so uploads are safe to call
+         * at any point (init-time or mid-frame) without conflicting with
+         * the frame's primary command buffer.
+         */
+        VkCommandPool immediate_command_pool = VK_NULL_HANDLE;
+
+        /** @brief Command buffer for immediate one-shot GPU operations. */
+        VkCommandBuffer immediate_command_buffer = VK_NULL_HANDLE;
+
         /** @brief Returns the FrameData for the current in-flight frame. */
         FrameData &current_frame() { return frames[frame_index]; }
 
@@ -155,5 +168,8 @@ namespace himalaya::rhi {
 
         /** @brief Creates per-frame command pools, command buffers, fences, and semaphores. */
         void create_frame_data();
+
+        /** @brief Creates the immediate command pool for one-shot blocking GPU operations. */
+        void create_immediate_pool();
     };
 } // namespace himalaya::rhi

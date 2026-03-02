@@ -93,7 +93,8 @@ namespace himalaya::rhi {
         info.usage = VMA_MEMORY_USAGE_AUTO;
         switch (memory) {
             case MemoryUsage::GpuOnly:
-                info.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
+                // No flags: VMA auto-selects pooled or dedicated allocation
+                // based on VkMemoryDedicatedRequirements from the driver.
                 break;
             case MemoryUsage::CpuToGpu:
                 info.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT
@@ -208,6 +209,9 @@ namespace himalaya::rhi {
 
     ImageHandle ResourceManager::create_image(const ImageDesc &desc) {
         assert(desc.width > 0 && desc.height > 0 && "Image dimensions must be greater than zero");
+        assert(desc.depth > 0 && "Image depth must be greater than zero");
+        assert(desc.mip_levels > 0 && "Image mip_levels must be greater than zero");
+        assert(desc.sample_count > 0 && "Image sample_count must be greater than zero");
 
         VkImageCreateInfo image_info{};
         image_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -323,22 +327,16 @@ namespace himalaya::rhi {
         // 2. Copy data into the mapped staging buffer
         std::memcpy(staging_info.pMappedData, data, size);
 
-        // 3. Allocate and begin a one-shot command buffer
-        VkCommandBufferAllocateInfo cmd_alloc_info{};
-        cmd_alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-        cmd_alloc_info.commandPool = context_->current_frame().command_pool;
-        cmd_alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-        cmd_alloc_info.commandBufferCount = 1;
+        // 3. Record copy command into the immediate command buffer
+        VkCommandBuffer cmd = context_->immediate_command_buffer;
 
-        VkCommandBuffer cmd = VK_NULL_HANDLE;
-        VK_CHECK(vkAllocateCommandBuffers(context_->device, &cmd_alloc_info, &cmd));
+        VK_CHECK(vkResetCommandBuffer(cmd, 0));
 
         VkCommandBufferBeginInfo begin_info{};
         begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
         begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
         VK_CHECK(vkBeginCommandBuffer(cmd, &begin_info));
 
-        // 4. Record buffer copy command
         VkBufferCopy copy_region{};
         copy_region.srcOffset = 0;
         copy_region.dstOffset = offset;
@@ -347,7 +345,7 @@ namespace himalaya::rhi {
 
         VK_CHECK(vkEndCommandBuffer(cmd));
 
-        // 5. Submit and wait for completion
+        // 4. Submit and wait for completion
         VkSubmitInfo submit_info{};
         submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
         submit_info.commandBufferCount = 1;
@@ -356,9 +354,7 @@ namespace himalaya::rhi {
         VK_CHECK(vkQueueSubmit(context_->graphics_queue, 1, &submit_info, VK_NULL_HANDLE));
         VK_CHECK(vkQueueWaitIdle(context_->graphics_queue));
 
-        // 6. Cleanup: free command buffer and destroy staging buffer
-        vkFreeCommandBuffers(context_->device,
-                             context_->current_frame().command_pool, 1, &cmd);
+        // 5. Cleanup staging buffer
         vmaDestroyBuffer(context_->allocator, staging_buffer, staging_allocation);
     }
 } // namespace himalaya::rhi
