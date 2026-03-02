@@ -41,46 +41,105 @@ namespace himalaya::rhi {
 
         if (leaked_buffers > 0 || leaked_images > 0) {
             spdlog::warn("Resource manager destroyed with {} leaked buffer(s) and {} leaked image(s)",
-                         leaked_buffers, leaked_images);
+                         leaked_buffers,
+                         leaked_images);
         }
 
         context_ = nullptr;
         spdlog::info("Resource manager destroyed");
     }
 
+    // ---- Pool slot allocation ----
+
+    // Reuses a free slot if available, otherwise appends a new one.
+    uint32_t ResourceManager::allocate_buffer_slot() {
+        if (!free_buffer_slots_.empty()) {
+            const uint32_t index = free_buffer_slots_.back();
+            free_buffer_slots_.pop_back();
+            return index;
+        }
+        buffers_.emplace_back();
+        return static_cast<uint32_t>(buffers_.size() - 1);
+    }
+
+    uint32_t ResourceManager::allocate_image_slot() {
+        if (!free_image_slots_.empty()) {
+            const uint32_t index = free_image_slots_.back();
+            free_image_slots_.pop_back();
+            return index;
+        }
+        images_.emplace_back();
+        return static_cast<uint32_t>(images_.size() - 1);
+    }
+
+    // ---- Buffer operations ----
+
     BufferHandle ResourceManager::create_buffer([[maybe_unused]] const BufferDesc &desc) {
-        // Stub — implemented in "Buffer 创建接口" task
+        // Stub — VMA buffer creation implemented in "Buffer 创建接口" task
         assert(false && "create_buffer not yet implemented");
         return {};
     }
 
-    void ResourceManager::destroy_buffer([[maybe_unused]] BufferHandle handle) {
-        // Stub — implemented in "Buffer 创建接口" task
-        assert(false && "destroy_buffer not yet implemented");
+    void ResourceManager::destroy_buffer(const BufferHandle handle) {
+        assert(handle.valid() && "Invalid buffer handle");
+        assert(handle.index < buffers_.size() && "Buffer handle index out of range");
+
+        auto &slot = buffers_[handle.index];
+        assert(slot.generation == handle.generation && "Stale buffer handle (use-after-free)");
+        assert(slot.buffer != VK_NULL_HANDLE && "Double-free on buffer slot");
+
+        vmaDestroyBuffer(context_->allocator, slot.buffer, slot.allocation);
+        slot.buffer = VK_NULL_HANDLE;
+        slot.allocation = VK_NULL_HANDLE;
+        slot.allocation_info = {};
+        ++slot.generation;
+        free_buffer_slots_.push_back(handle.index);
     }
 
-    const Buffer &ResourceManager::get_buffer(BufferHandle handle) const {
-        // Stub — implemented in "资源池实现" task
-        assert(handle.valid() && handle.index < buffers_.size());
+    const Buffer &ResourceManager::get_buffer(const BufferHandle handle) const {
+        assert(handle.valid() && "Invalid buffer handle");
+        assert(handle.index < buffers_.size() && "Buffer handle index out of range");
+        assert(buffers_[handle.index].generation == handle.generation
+            && "Stale buffer handle (use-after-free)");
         return buffers_[handle.index];
     }
 
+    // ---- Image operations ----
+
     ImageHandle ResourceManager::create_image([[maybe_unused]] const ImageDesc &desc) {
-        // Stub — implemented in "Image 创建接口" task
+        // Stub — VMA image creation implemented in "Image 创建接口" task
         assert(false && "create_image not yet implemented");
         return {};
     }
 
-    void ResourceManager::destroy_image([[maybe_unused]] ImageHandle handle) {
-        // Stub — implemented in "Image 创建接口" task
-        assert(false && "destroy_image not yet implemented");
+    void ResourceManager::destroy_image(const ImageHandle handle) {
+        assert(handle.valid() && "Invalid image handle");
+        assert(handle.index < images_.size() && "Image handle index out of range");
+
+        auto &slot = images_[handle.index];
+        assert(slot.generation == handle.generation && "Stale image handle (use-after-free)");
+        assert(slot.image != VK_NULL_HANDLE && "Double-free on image slot");
+
+        if (slot.view != VK_NULL_HANDLE) {
+            vkDestroyImageView(context_->device, slot.view, nullptr);
+            slot.view = VK_NULL_HANDLE;
+        }
+        vmaDestroyImage(context_->allocator, slot.image, slot.allocation);
+        slot.image = VK_NULL_HANDLE;
+        slot.allocation = VK_NULL_HANDLE;
+        ++slot.generation;
+        free_image_slots_.push_back(handle.index);
     }
 
-    const Image &ResourceManager::get_image(ImageHandle handle) const {
-        // Stub — implemented in "资源池实现" task
-        assert(handle.valid() && handle.index < images_.size());
+    const Image &ResourceManager::get_image(const ImageHandle handle) const {
+        assert(handle.valid() && "Invalid image handle");
+        assert(handle.index < images_.size() && "Image handle index out of range");
+        assert(images_[handle.index].generation == handle.generation
+            && "Stale image handle (use-after-free)");
         return images_[handle.index];
     }
+
+    // ---- Upload ----
 
     void ResourceManager::upload_buffer([[maybe_unused]] BufferHandle handle,
                                         [[maybe_unused]] const void *data,

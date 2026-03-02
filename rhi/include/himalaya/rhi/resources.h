@@ -7,7 +7,6 @@
 
 #include <himalaya/rhi/types.h>
 
-#include <cstdint>
 #include <vector>
 
 #include <vulkan/vulkan.h>
@@ -264,6 +263,20 @@ namespace himalaya::rhi {
     private:
         /** @brief Vulkan context (device, allocator, queues). */
         Context *context_ = nullptr;
+
+        // ---- Pool slot allocation ----
+
+        /**
+         * @brief Allocates a buffer slot, reusing a free slot if available.
+         * @return Index of the allocated slot in buffers_.
+         */
+        uint32_t allocate_buffer_slot();
+
+        /**
+         * @brief Allocates an image slot, reusing a free slot if available.
+         * @return Index of the allocated slot in images_.
+         */
+        uint32_t allocate_image_slot();
 
         // ---- Buffer pool ----
 
