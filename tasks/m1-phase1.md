@@ -36,7 +36,7 @@
 - [x] Context 中添加 FrameData（command pool、command buffer、fence、semaphore × 2 帧）
 - [x] 删除队列（DeletionQueue）
 - [x] 帧索引轮换逻辑
-- [ ] 主循环：wait fence → acquire image → begin cmd → clear → end cmd → submit → present
+- [x] 主循环：wait fence → acquire image → begin cmd → clear → end cmd → submit → present
 - [ ] 验证：窗口显示纯色 clear color
 
 ## Step 4：Pipeline + Shader 编译
