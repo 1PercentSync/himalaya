@@ -377,7 +377,8 @@ namespace himalaya::rhi {
     void Context::create_immediate_pool() {
         VkCommandPoolCreateInfo pool_info{};
         pool_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-        pool_info.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
+        pool_info.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT
+                          | VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
         pool_info.queueFamilyIndex = graphics_queue_family;
 
         VK_CHECK(vkCreateCommandPool(device, &pool_info, nullptr, &immediate_command_pool));
