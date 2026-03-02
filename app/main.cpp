@@ -95,6 +95,7 @@ int main() {
         frame.deletion_queue.flush();
 
         // Acquire next swapchain image
+        // TODO: handle VK_SUBOPTIMAL_KHR / VK_ERROR_OUT_OF_DATE_KHR when implementing resize (Step 6)
         uint32_t image_index;
         VK_CHECK(vkAcquireNextImageKHR(context.device,
             swapchain.swapchain,
@@ -213,6 +214,7 @@ int main() {
         present_info.pSwapchains = &swapchain.swapchain;
         present_info.pImageIndices = &image_index;
 
+        // TODO: handle VK_SUBOPTIMAL_KHR / VK_ERROR_OUT_OF_DATE_KHR when implementing resize (Step 6)
         VK_CHECK(vkQueuePresentKHR(context.graphics_queue, &present_info));
 
         context.advance_frame();

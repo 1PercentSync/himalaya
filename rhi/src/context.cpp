@@ -22,6 +22,12 @@ namespace himalaya::rhi {
     constexpr bool kEnableValidationLayers = true;
 #endif
 
+    /** @brief Device extensions required by the renderer. */
+    constexpr const char *kRequiredDeviceExtensions[] = {
+        VK_KHR_SWAPCHAIN_EXTENSION_NAME,
+        VK_EXT_MEMORY_BUDGET_EXTENSION_NAME,
+    };
+
     /**
      * Derives Vulkan debug messenger severity flags from the current spdlog log level,
      * so the validation layer only delivers messages that spdlog would actually display.
@@ -172,17 +178,21 @@ namespace himalaya::rhi {
         return false;
     }
 
-    // Checks whether the device supports VK_KHR_swapchain extension
+    // Checks whether the device supports all extensions in kRequiredDeviceExtensions
     // ReSharper disable once CppParameterMayBeConst
-    static bool has_swapchain_support(VkPhysicalDevice dev) {
+    static bool has_required_extensions(VkPhysicalDevice dev) {
         uint32_t count = 0;
         vkEnumerateDeviceExtensionProperties(dev, nullptr, &count, nullptr);
-        std::vector<VkExtensionProperties> extensions(count);
-        vkEnumerateDeviceExtensionProperties(dev, nullptr, &count, extensions.data());
+        std::vector<VkExtensionProperties> available(count);
+        vkEnumerateDeviceExtensionProperties(dev, nullptr, &count, available.data());
 
-        return std::ranges::any_of(extensions, [](const auto &ext) {
-            return std::strcmp(ext.extensionName, VK_KHR_SWAPCHAIN_EXTENSION_NAME) == 0;
-        });
+        for (const auto *required : kRequiredDeviceExtensions) {
+            const bool found = std::ranges::any_of(available, [required](const auto &ext) {
+                return std::strcmp(ext.extensionName, required) == 0;
+            });
+            if (!found) return false;
+        }
+        return true;
     }
 
     /**
@@ -193,7 +203,7 @@ namespace himalaya::rhi {
     // ReSharper disable once CppParameterMayBeConst
     static int rate_device(VkPhysicalDevice dev, VkSurfaceKHR surface) {
         if (!has_graphics_present_queue(dev, surface)) return 0;
-        if (!has_swapchain_support(dev)) return 0;
+        if (!has_required_extensions(dev)) return 0;
 
         VkPhysicalDeviceProperties props;
         vkGetPhysicalDeviceProperties(dev, &props);
@@ -236,7 +246,7 @@ namespace himalaya::rhi {
         }
 
         if (physical_device == VK_NULL_HANDLE) {
-            spdlog::error("No suitable GPU found (need graphics+present queue + swapchain support)");
+            spdlog::error("No suitable GPU found (need graphics+present queue + required extensions)");
             std::abort();
         }
 
@@ -296,15 +306,13 @@ namespace himalaya::rhi {
 
         features_12.pNext = &features_13;
 
-        const char *device_extensions[] = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
-
         VkDeviceCreateInfo device_info{};
         device_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
         device_info.pNext = &features_12;
         device_info.queueCreateInfoCount = 1;
         device_info.pQueueCreateInfos = &queue_info;
-        device_info.enabledExtensionCount = 1;
-        device_info.ppEnabledExtensionNames = device_extensions;
+        device_info.enabledExtensionCount = static_cast<uint32_t>(std::size(kRequiredDeviceExtensions));
+        device_info.ppEnabledExtensionNames = kRequiredDeviceExtensions;
 
         VK_CHECK(vkCreateDevice(physical_device, &device_info, nullptr, &device));
 

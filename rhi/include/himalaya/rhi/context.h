@@ -45,17 +45,17 @@ namespace himalaya::rhi {
          * @brief Enqueues a destructor to be called later.
          * @param fn Callable that destroys one or more Vulkan resources.
          */
-        void push(std::function<void()> &&fn) { deletors.push_back(std::move(fn)); }
+        void push(std::function<void()> &&fn) { deletors_.push_back(std::move(fn)); }
 
         /** @brief Executes all queued destructors and clears the queue. */
         void flush() {
-            for (auto &fn : deletors) fn();
-            deletors.clear();
+            for (auto &fn : deletors_) fn();
+            deletors_.clear();
         }
 
     private:
         /** @brief Queued destruction callables. */
-        std::vector<std::function<void()>> deletors;
+        std::vector<std::function<void()>> deletors_;
     };
 
     /**
