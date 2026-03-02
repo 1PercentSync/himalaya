@@ -3,6 +3,8 @@
  * @brief Himalaya renderer application entry point.
  */
 
+#include <himalaya/rhi/context.h>
+
 #include <GLFW/glfw3.h>
 #include <spdlog/spdlog.h>
 
@@ -30,10 +32,14 @@ int main() {
 
     GLFWwindow *window = glfwCreateWindow(kInitialWidth, kInitialHeight, kWindowTitle, nullptr, nullptr);
 
+    himalaya::rhi::Context context;
+    context.init(window);
+
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();
     }
 
+    context.destroy();
     glfwDestroyWindow(window);
     glfwTerminate();
     return 0;
