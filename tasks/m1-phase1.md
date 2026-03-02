@@ -47,7 +47,7 @@
 - [x] 编译结果内存缓存
 - [x] 创建 `rhi/include/himalaya/rhi/pipeline.h` + `rhi/src/pipeline.cpp`
 - [x] Graphics Pipeline 创建（适配 Dynamic Rendering、Extended Dynamic State）
-- [ ] Pipeline Layout 创建
+- [x] Pipeline Layout 创建
 - [ ] 创建 `shaders/triangle.vert`（硬编码三角形顶点 + 颜色）
 - [ ] 创建 `shaders/triangle.frag`（输出插值颜色）
 - [ ] CMakeLists.txt 添加 shader 拷贝到 build 目录的命令
