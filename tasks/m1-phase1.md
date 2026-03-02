@@ -69,7 +69,7 @@
 - [x] 资源池实现（generation-based slot 分配/回收）
 - [x] Buffer 创建接口（BufferDesc → BufferHandle）
 - [x] Image 创建接口（ImageDesc → ImageHandle）
-- [ ] Staging buffer 上传流程
+- [x] Staging buffer 上传流程
 - [ ] 创建 Vertex Buffer，上传三角形顶点数据
 - [ ] Pipeline 更新：添加顶点输入属性描述
 - [ ] Shader 更新：从顶点属性读取位置和颜色
