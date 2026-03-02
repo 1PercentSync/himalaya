@@ -107,6 +107,51 @@ namespace himalaya::rhi {
         return info;
     }
 
+    // Translates ImageUsage flags to VkImageUsageFlags.
+    static VkImageUsageFlags to_vk_image_usage(const ImageUsage usage) {
+        VkImageUsageFlags flags = 0;
+        if (has_flag(usage, ImageUsage::Sampled))         flags |= VK_IMAGE_USAGE_SAMPLED_BIT;
+        if (has_flag(usage, ImageUsage::Storage))         flags |= VK_IMAGE_USAGE_STORAGE_BIT;
+        if (has_flag(usage, ImageUsage::ColorAttachment)) flags |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+        if (has_flag(usage, ImageUsage::DepthAttachment)) flags |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+        if (has_flag(usage, ImageUsage::TransferSrc))     flags |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+        if (has_flag(usage, ImageUsage::TransferDst))     flags |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+        return flags;
+    }
+
+    // Translates Format enum to VkFormat.
+    static VkFormat to_vk_format(const Format format) {
+        switch (format) {
+            case Format::Undefined:          return VK_FORMAT_UNDEFINED;
+            case Format::R8Unorm:            return VK_FORMAT_R8_UNORM;
+            case Format::R8G8Unorm:          return VK_FORMAT_R8G8_UNORM;
+            case Format::R8G8B8A8Unorm:      return VK_FORMAT_R8G8B8A8_UNORM;
+            case Format::R8G8B8A8Srgb:       return VK_FORMAT_R8G8B8A8_SRGB;
+            case Format::B8G8R8A8Unorm:      return VK_FORMAT_B8G8R8A8_UNORM;
+            case Format::B8G8R8A8Srgb:       return VK_FORMAT_B8G8R8A8_SRGB;
+            case Format::R16Sfloat:          return VK_FORMAT_R16_SFLOAT;
+            case Format::R16G16Sfloat:       return VK_FORMAT_R16G16_SFLOAT;
+            case Format::R16G16B16A16Sfloat: return VK_FORMAT_R16G16B16A16_SFLOAT;
+            case Format::R32Sfloat:          return VK_FORMAT_R32_SFLOAT;
+            case Format::R32G32Sfloat:       return VK_FORMAT_R32G32_SFLOAT;
+            case Format::R32G32B32A32Sfloat: return VK_FORMAT_R32G32B32A32_SFLOAT;
+            case Format::D32Sfloat:          return VK_FORMAT_D32_SFLOAT;
+            case Format::D24UnormS8Uint:     return VK_FORMAT_D24_UNORM_S8_UINT;
+        }
+        return VK_FORMAT_UNDEFINED;
+    }
+
+    // Returns the appropriate aspect mask for an image view based on format.
+    static VkImageAspectFlags aspect_from_format(const Format format) {
+        switch (format) {
+            case Format::D32Sfloat:
+            case Format::D24UnormS8Uint:
+                return VK_IMAGE_ASPECT_DEPTH_BIT;
+            default:
+                return VK_IMAGE_ASPECT_COLOR_BIT;
+        }
+    }
+
     // ---- Buffer operations ----
 
     BufferHandle ResourceManager::create_buffer(const BufferDesc &desc) {
@@ -161,10 +206,54 @@ namespace himalaya::rhi {
 
     // ---- Image operations ----
 
-    ImageHandle ResourceManager::create_image([[maybe_unused]] const ImageDesc &desc) {
-        // Stub — VMA image creation implemented in "Image 创建接口" task
-        assert(false && "create_image not yet implemented");
-        return {};
+    ImageHandle ResourceManager::create_image(const ImageDesc &desc) {
+        assert(desc.width > 0 && desc.height > 0 && "Image dimensions must be greater than zero");
+
+        VkImageCreateInfo image_info{};
+        image_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+        image_info.imageType = VK_IMAGE_TYPE_2D;
+        image_info.format = to_vk_format(desc.format);
+        image_info.extent = {desc.width, desc.height, desc.depth};
+        image_info.mipLevels = desc.mip_levels;
+        image_info.arrayLayers = 1;
+        image_info.samples = static_cast<VkSampleCountFlagBits>(desc.sample_count);
+        image_info.tiling = VK_IMAGE_TILING_OPTIMAL;
+        image_info.usage = to_vk_image_usage(desc.usage);
+        image_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+        image_info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+
+        // Images are always GPU-only in M1
+        VmaAllocationCreateInfo alloc_info{};
+        alloc_info.usage = VMA_MEMORY_USAGE_AUTO;
+        alloc_info.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
+
+        const uint32_t index = allocate_image_slot();
+        // ReSharper disable once CppUseStructuredBinding
+        auto &slot = images_[index];
+
+        VK_CHECK(vmaCreateImage(context_->allocator,
+            &image_info,
+            &alloc_info,
+            &slot.image,
+            &slot.allocation,
+            nullptr));
+        slot.desc = desc;
+
+        // Create default image view
+        VkImageViewCreateInfo view_info{};
+        view_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+        view_info.image = slot.image;
+        view_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+        view_info.format = image_info.format;
+        view_info.subresourceRange.aspectMask = aspect_from_format(desc.format);
+        view_info.subresourceRange.baseMipLevel = 0;
+        view_info.subresourceRange.levelCount = desc.mip_levels;
+        view_info.subresourceRange.baseArrayLayer = 0;
+        view_info.subresourceRange.layerCount = 1;
+
+        VK_CHECK(vkCreateImageView(context_->device, &view_info, nullptr, &slot.view));
+
+        return {index, slot.generation};
     }
 
     void ResourceManager::destroy_image(const ImageHandle handle) {
