@@ -34,7 +34,7 @@
 - [x] Swapchain 创建（format、present mode、extent 选择）
 - [x] Image View 获取
 - [x] Context 中添加 FrameData（command pool、command buffer、fence、semaphore × 2 帧）
-- [ ] 删除队列（DeletionQueue）
+- [x] 删除队列（DeletionQueue）
 - [ ] 帧索引轮换逻辑
 - [ ] 主循环：wait fence → acquire image → begin cmd → clear → end cmd → submit → present
 - [ ] 验证：窗口显示纯色 clear color
