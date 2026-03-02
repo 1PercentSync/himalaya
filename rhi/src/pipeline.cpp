@@ -9,9 +9,15 @@ namespace himalaya::rhi {
     Pipeline create_graphics_pipeline(VkDevice device, const GraphicsPipelineDesc &desc) {
         Pipeline out;
 
-        // --- Pipeline Layout (next task) ---
-        // TODO: implement in "Pipeline Layout 创建" task
-        out.layout = VK_NULL_HANDLE;
+        // --- Pipeline Layout ---
+        VkPipelineLayoutCreateInfo layout_info{};
+        layout_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+        layout_info.setLayoutCount = static_cast<uint32_t>(desc.descriptor_set_layouts.size());
+        layout_info.pSetLayouts = desc.descriptor_set_layouts.data();
+        layout_info.pushConstantRangeCount = static_cast<uint32_t>(desc.push_constant_ranges.size());
+        layout_info.pPushConstantRanges = desc.push_constant_ranges.data();
+
+        VK_CHECK(vkCreatePipelineLayout(device, &layout_info, nullptr, &out.layout));
 
         // --- Shader stages ---
         std::array<VkPipelineShaderStageCreateInfo, 2> shader_stages{};
