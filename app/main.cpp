@@ -263,6 +263,7 @@ int main() {
     vkDeviceWaitIdle(context.device);
 
     triangle_pipeline.destroy(context.device);
+    resource_manager.destroy_buffer(vertex_buffer);
     resource_manager.destroy();
     swapchain.destroy(context.device);
     context.destroy();

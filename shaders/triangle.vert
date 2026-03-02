@@ -2,29 +2,18 @@
 
 /**
  * @file triangle.vert
- * @brief Hardcoded triangle vertex shader.
+ * @brief Triangle vertex shader reading from vertex buffer attributes.
  *
- * Positions and colors are stored in constant arrays indexed by gl_VertexIndex.
- * No vertex buffer is needed — draw with vkCmdDraw(3, 1, 0, 0).
+ * Vertex data (position, color) is supplied via a vertex buffer bound at
+ * binding 0. The pipeline's vertex input state defines the attribute layout.
  */
+
+layout(location = 0) in vec2 in_position;
+layout(location = 1) in vec3 in_color;
 
 layout(location = 0) out vec3 frag_color;
 
 void main() {
-    // Triangle vertices in clip space (Y-up, matching GLM conventions)
-    const vec2 positions[3] = vec2[](
-        vec2( 0.0,  0.5),   // top
-        vec2(-0.5, -0.5),   // bottom-left
-        vec2( 0.5, -0.5)    // bottom-right
-    );
-
-    // Per-vertex colors (red, green, blue)
-    const vec3 colors[3] = vec3[](
-        vec3(1.0, 0.0, 0.0),
-        vec3(0.0, 1.0, 0.0),
-        vec3(0.0, 0.0, 1.0)
-    );
-
-    gl_Position = vec4(positions[gl_VertexIndex], 0.0, 1.0);
-    frag_color = colors[gl_VertexIndex];
+    gl_Position = vec4(in_position, 0.0, 1.0);
+    frag_color = in_color;
 }
