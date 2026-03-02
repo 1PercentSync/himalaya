@@ -132,6 +132,14 @@ int main() {
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();
 
+        // Pause rendering while minimized (framebuffer extent is 0)
+        int fb_width = 0, fb_height = 0;
+        glfwGetFramebufferSize(window, &fb_width, &fb_height);
+        while ((fb_width == 0 || fb_height == 0) && !glfwWindowShouldClose(window)) {
+            glfwWaitEvents();
+            glfwGetFramebufferSize(window, &fb_width, &fb_height);
+        }
+
         auto &frame = context.current_frame();
 
         // Wait for the GPU to finish the previous use of this frame's resources
