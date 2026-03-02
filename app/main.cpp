@@ -3,6 +3,7 @@
  * @brief Himalaya renderer application entry point.
  */
 
+#include <himalaya/framework/imgui_backend.h>
 #include <himalaya/rhi/commands.h>
 #include <himalaya/rhi/context.h>
 #include <himalaya/rhi/pipeline.h>
@@ -68,6 +69,12 @@ int main() {
     glfwSetFramebufferSizeCallback(window, [](GLFWwindow *w, int, int) {
         *static_cast<bool *>(glfwGetWindowUserPointer(w)) = true;
     });
+
+    // --- ImGui ---
+    // Must be initialized after the framebuffer resize callback so ImGui
+    // chains our callback when install_callbacks = true.
+    himalaya::framework::ImGuiBackend imgui_backend;
+    imgui_backend.init(context, swapchain, window);
 
     // --- Resource manager and vertex buffer ---
     himalaya::rhi::ResourceManager resource_manager;
@@ -167,6 +174,9 @@ int main() {
         // Reset fence only after a successful acquire guarantees we will submit work
         VK_CHECK(vkResetFences(context.device, 1, &frame.render_fence));
 
+        // Start ImGui frame (paired with render() later in this iteration)
+        imgui_backend.begin_frame();
+
         // Record command buffer
         const himalaya::rhi::CommandBuffer cmd(frame.command_buffer);
         cmd.begin();
@@ -229,6 +239,9 @@ int main() {
 
         cmd.bind_vertex_buffer(0, resource_manager.get_buffer(vertex_buffer).buffer);
         cmd.draw(3);
+
+        // --- ImGui rendering (same pass, drawn on top of scene) ---
+        imgui_backend.render(cmd.handle());
 
         cmd.end_rendering();
 
@@ -293,6 +306,7 @@ int main() {
     // Wait for all submits and presents on the graphics queue to complete
     vkQueueWaitIdle(context.graphics_queue);
 
+    imgui_backend.destroy();
     triangle_pipeline.destroy(context.device);
     resource_manager.destroy_buffer(vertex_buffer);
     resource_manager.destroy();

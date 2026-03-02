@@ -8,7 +8,6 @@
 #include <vulkan/vulkan.h>
 
 namespace himalaya::rhi {
-
     struct Pipeline;
 
     /**
@@ -109,9 +108,11 @@ namespace himalaya::rhi {
         /** @brief Sets the depth comparison operator. */
         void set_depth_compare_op(VkCompareOp compare_op) const;
 
+        /** @brief Returns the underlying Vulkan command buffer handle. */
+        [[nodiscard]] VkCommandBuffer handle() const { return cmd_; }
+
     private:
         /** @brief Wrapped Vulkan command buffer. */
         VkCommandBuffer cmd_;
     };
-
 } // namespace himalaya::rhi
