@@ -15,13 +15,31 @@ namespace himalaya::rhi {
         std::abort();
     }
 
-    // Compiles GLSL to SPIR-V using shaderc.
+    // Builds a collision-free cache key: single-char stage prefix + full source text.
+    static std::string make_cache_key(const std::string &source, const ShaderStage stage) {
+        char prefix;
+        switch (stage) {
+            case ShaderStage::Vertex:   prefix = 'V'; break;
+            case ShaderStage::Fragment: prefix = 'F'; break;
+            case ShaderStage::Compute:  prefix = 'C'; break;
+            default: std::abort();
+        }
+        return prefix + source;
+    }
+
+    // Compiles GLSL to SPIR-V using shaderc, with in-memory caching.
     // Debug: no optimization + debug info for RenderDoc shader source mapping.
     // Release: performance optimization for production shader quality.
     std::vector<uint32_t> ShaderCompiler::compile(
         const std::string &source,
         const ShaderStage stage,
         const std::string &filename) {
+        auto key = make_cache_key(source, stage);
+        if (const auto it = cache_.find(key); it != cache_.end()) {
+            spdlog::debug("Shader cache hit: {}", filename);
+            return it->second;
+        }
+
         const shaderc::Compiler compiler;
         shaderc::CompileOptions options;
 
@@ -50,7 +68,9 @@ namespace himalaya::rhi {
 
         spdlog::info("Shader compiled: {}", filename);
 
-        return {result.cbegin(), result.cend()};
+        std::vector spirv(result.cbegin(), result.cend());
+        cache_[std::move(key)] = spirv;
+        return spirv;
     }
 
     // Creates a VkShaderModule from pre-compiled SPIR-V bytecode.

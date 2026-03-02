@@ -8,6 +8,7 @@
 #include <himalaya/rhi/types.h>
 
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include <vulkan/vulkan.h>
@@ -32,10 +33,14 @@ namespace himalaya::rhi {
          * @param filename Source filename for error messages (not read from disk).
          * @return SPIR-V bytecode as uint32_t words, or empty vector on failure.
          */
-        static [[nodiscard]] std::vector<uint32_t> compile(
+        [[nodiscard]] std::vector<uint32_t> compile(
             const std::string &source,
             ShaderStage stage,
             const std::string &filename);
+
+    private:
+        /** @brief SPIR-V cache. Key is stage prefix + full source text (collision-free). */
+        std::unordered_map<std::string, std::vector<uint32_t>> cache_;
     };
 
     /**
