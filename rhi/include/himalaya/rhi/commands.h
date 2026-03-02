@@ -5,9 +5,13 @@
  * @brief Command buffer wrapper for Vulkan command recording.
  */
 
+#include <cstdint>
+
 #include <vulkan/vulkan.h>
 
 namespace himalaya::rhi {
+
+    struct Pipeline;
 
     /**
      * @brief Thin wrapper around VkCommandBuffer for convenient command recording.
@@ -47,6 +51,34 @@ namespace himalaya::rhi {
          * @brief Ends the current dynamic rendering pass.
          */
         void end_rendering() const;
+
+        /**
+         * @brief Binds a graphics pipeline for subsequent draw commands.
+         * @param pipeline Pipeline to bind (both layout and pipeline handle are used).
+         */
+        void bind_pipeline(const Pipeline &pipeline) const;
+
+        /**
+         * @brief Records a non-indexed draw call.
+         * @param vertex_count   Number of vertices to draw.
+         * @param instance_count Number of instances (default 1).
+         * @param first_vertex   Offset into the vertex buffer (default 0).
+         * @param first_instance First instance ID (default 0).
+         */
+        void draw(uint32_t vertex_count, uint32_t instance_count = 1,
+                  uint32_t first_vertex = 0, uint32_t first_instance = 0) const;
+
+        /**
+         * @brief Sets the dynamic viewport state.
+         * @param viewport Viewport dimensions and depth range.
+         */
+        void set_viewport(const VkViewport &viewport) const;
+
+        /**
+         * @brief Sets the dynamic scissor rectangle.
+         * @param scissor Scissor region.
+         */
+        void set_scissor(const VkRect2D &scissor) const;
 
     private:
         /** @brief Wrapped Vulkan command buffer. */
