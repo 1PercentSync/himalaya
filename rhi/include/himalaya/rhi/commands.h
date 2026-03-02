@@ -24,6 +24,30 @@ namespace himalaya::rhi {
          */
         explicit CommandBuffer(VkCommandBuffer cmd);
 
+        /**
+         * @brief Resets and begins recording with ONE_TIME_SUBMIT usage.
+         *
+         * Combines vkResetCommandBuffer + vkBeginCommandBuffer into one call
+         * since they are always paired in our frame loop.
+         */
+        void begin() const;
+
+        /**
+         * @brief Ends command buffer recording.
+         */
+        void end() const;
+
+        /**
+         * @brief Begins a dynamic rendering pass.
+         * @param rendering_info Rendering configuration (render area, attachments, etc.).
+         */
+        void begin_rendering(const VkRenderingInfo &rendering_info) const;
+
+        /**
+         * @brief Ends the current dynamic rendering pass.
+         */
+        void end_rendering() const;
+
     private:
         /** @brief Wrapped Vulkan command buffer. */
         VkCommandBuffer cmd_;
