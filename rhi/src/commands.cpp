@@ -50,4 +50,8 @@ namespace himalaya::rhi {
     void CommandBuffer::set_scissor(const VkRect2D &scissor) const {
         vkCmdSetScissor(cmd_, 0, 1, &scissor);
     }
+
+    void CommandBuffer::pipeline_barrier(const VkDependencyInfo &dependency_info) const {
+        vkCmdPipelineBarrier2(cmd_, &dependency_info);
+    }
 } // namespace himalaya::rhi

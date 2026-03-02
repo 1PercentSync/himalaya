@@ -80,6 +80,12 @@ namespace himalaya::rhi {
          */
         void set_scissor(const VkRect2D &scissor) const;
 
+        /**
+         * @brief Inserts a pipeline barrier using the Synchronization2 API.
+         * @param dependency_info Barrier specification (image/buffer/memory barriers).
+         */
+        void pipeline_barrier(const VkDependencyInfo &dependency_info) const;
+
     private:
         /** @brief Wrapped Vulkan command buffer. */
         VkCommandBuffer cmd_;
