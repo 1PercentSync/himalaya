@@ -41,7 +41,7 @@
 
 ## Step 4：Pipeline + Shader 编译
 
-- [ ] 创建 `rhi/include/himalaya/rhi/types.h`（句柄、枚举、格式）
+- [x] 创建 `rhi/include/himalaya/rhi/types.h`（句柄、枚举、格式）
 - [ ] 创建 `rhi/include/himalaya/rhi/shader.h` + `rhi/src/shader.cpp`
 - [ ] shaderc 集成（编译 GLSL 源码为 SPIR-V）
 - [ ] 编译结果内存缓存
