@@ -11,11 +11,11 @@
 layout(location = 0) out vec3 frag_color;
 
 void main() {
-    // Triangle vertices in NDC (clip space with w=1)
+    // Triangle vertices in clip space (Y-up, matching GLM conventions)
     const vec2 positions[3] = vec2[](
-        vec2( 0.0, -0.5),   // top
-        vec2( 0.5,  0.5),   // bottom-right
-        vec2(-0.5,  0.5)    // bottom-left
+        vec2( 0.0,  0.5),   // top
+        vec2(-0.5, -0.5),   // bottom-left
+        vec2( 0.5, -0.5)    // bottom-right
     );
 
     // Per-vertex colors (red, green, blue)

@@ -54,4 +54,24 @@ namespace himalaya::rhi {
     void CommandBuffer::pipeline_barrier(const VkDependencyInfo &dependency_info) const {
         vkCmdPipelineBarrier2(cmd_, &dependency_info);
     }
+
+    void CommandBuffer::set_cull_mode(const VkCullModeFlags cull_mode) const {
+        vkCmdSetCullMode(cmd_, cull_mode);
+    }
+
+    void CommandBuffer::set_front_face(const VkFrontFace front_face) const {
+        vkCmdSetFrontFace(cmd_, front_face);
+    }
+
+    void CommandBuffer::set_depth_test_enable(const bool enable) const {
+        vkCmdSetDepthTestEnable(cmd_, enable ? VK_TRUE : VK_FALSE);
+    }
+
+    void CommandBuffer::set_depth_write_enable(const bool enable) const {
+        vkCmdSetDepthWriteEnable(cmd_, enable ? VK_TRUE : VK_FALSE);
+    }
+
+    void CommandBuffer::set_depth_compare_op(const VkCompareOp compare_op) const {
+        vkCmdSetDepthCompareOp(cmd_, compare_op);
+    }
 } // namespace himalaya::rhi

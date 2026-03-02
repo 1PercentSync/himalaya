@@ -132,7 +132,7 @@ int main() {
         color_attachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
         color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
         color_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-        color_attachment.clearValue.color = {{0.39f, 0.58f, 0.93f, 1.0f}}; // cornflower blue
+        color_attachment.clearValue.color = {{0.0f, 0.0f, 0.0f, 1.0f}};
 
         VkRenderingInfo rendering_info{};
         rendering_info.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
@@ -142,6 +142,28 @@ int main() {
         rendering_info.pColorAttachments = &color_attachment;
 
         cmd.begin_rendering(rendering_info);
+
+        // --- Draw triangle ---
+        cmd.bind_pipeline(triangle_pipeline);
+
+        VkViewport viewport{};
+        viewport.x = 0.0f;
+        viewport.y = static_cast<float>(swapchain.extent.height);
+        viewport.width = static_cast<float>(swapchain.extent.width);
+        viewport.height = -static_cast<float>(swapchain.extent.height);
+        viewport.minDepth = 0.0f;
+        viewport.maxDepth = 1.0f;
+        cmd.set_viewport(viewport);
+        cmd.set_scissor({{0, 0}, swapchain.extent});
+
+        cmd.set_cull_mode(VK_CULL_MODE_BACK_BIT);
+        cmd.set_front_face(VK_FRONT_FACE_COUNTER_CLOCKWISE);
+        cmd.set_depth_test_enable(false);
+        cmd.set_depth_write_enable(false);
+        cmd.set_depth_compare_op(VK_COMPARE_OP_NEVER);
+
+        cmd.draw(3);
+
         cmd.end_rendering();
 
         // --- Transition swapchain image: COLOR_ATTACHMENT_OPTIMAL → PRESENT_SRC_KHR ---

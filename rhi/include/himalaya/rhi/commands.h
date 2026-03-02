@@ -86,6 +86,23 @@ namespace himalaya::rhi {
          */
         void pipeline_barrier(const VkDependencyInfo &dependency_info) const;
 
+        // --- Extended Dynamic State ---
+
+        /** @brief Sets the dynamic cull mode. */
+        void set_cull_mode(VkCullModeFlags cull_mode) const;
+
+        /** @brief Sets the dynamic front face winding order. */
+        void set_front_face(VkFrontFace front_face) const;
+
+        /** @brief Enables or disables depth testing. */
+        void set_depth_test_enable(bool enable) const;
+
+        /** @brief Enables or disables depth buffer writes. */
+        void set_depth_write_enable(bool enable) const;
+
+        /** @brief Sets the depth comparison operator. */
+        void set_depth_compare_op(VkCompareOp compare_op) const;
+
     private:
         /** @brief Wrapped Vulkan command buffer. */
         VkCommandBuffer cmd_;
