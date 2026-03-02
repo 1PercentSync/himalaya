@@ -55,7 +55,7 @@
 
 ## Step 5：绘制三角形
 
-- [ ] 创建 `rhi/include/himalaya/rhi/commands.h` + `rhi/src/commands.cpp`
+- [x] 创建 `rhi/include/himalaya/rhi/commands.h` + `rhi/src/commands.cpp`
 - [ ] Command Buffer wrapper：begin/end、begin_rendering/end_rendering
 - [ ] bind_pipeline、draw、set_viewport、set_scissor
 - [ ] pipeline_barrier（Synchronization2 API）
