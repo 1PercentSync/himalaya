@@ -6,13 +6,16 @@
 #include <himalaya/rhi/commands.h>
 #include <himalaya/rhi/context.h>
 #include <himalaya/rhi/pipeline.h>
+#include <himalaya/rhi/resources.h>
 #include <himalaya/rhi/shader.h>
 #include <himalaya/rhi/swapchain.h>
 
+#include <array>
 #include <fstream>
 #include <sstream>
 
 #include <GLFW/glfw3.h>
+#include <glm/glm.hpp>
 #include <spdlog/spdlog.h>
 
 /** @brief Initial window width in pixels. */
@@ -26,6 +29,19 @@ constexpr auto kWindowTitle = "Himalaya";
 
 /** @brief Default log level. Change to debug/info for more verbose Vulkan diagnostics. */
 constexpr auto kLogLevel = spdlog::level::warn;
+
+/** @brief Interleaved vertex attributes: position (vec2) + color (vec3). */
+struct Vertex {
+    glm::vec2 position;
+    glm::vec3 color;
+};
+
+/** @brief Triangle vertex data matching the hardcoded shader values. */
+constexpr std::array kTriangleVertices = {
+    Vertex{{0.0f, 0.5f}, {1.0f, 0.0f, 0.0f}}, // top — red
+    Vertex{{-0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}}, // bottom-left — green
+    Vertex{{0.5f, -0.5f}, {0.0f, 0.0f, 1.0f}}, // bottom-right — blue
+};
 
 /**
  * @brief Application entry point.
@@ -45,6 +61,17 @@ int main() {
 
     himalaya::rhi::Swapchain swapchain;
     swapchain.init(context, window);
+
+    // --- Resource manager and vertex buffer ---
+    himalaya::rhi::ResourceManager resource_manager;
+    resource_manager.init(&context);
+
+    auto vertex_buffer = resource_manager.create_buffer({
+        .size = sizeof(kTriangleVertices),
+        .usage = himalaya::rhi::BufferUsage::VertexBuffer | himalaya::rhi::BufferUsage::TransferDst,
+        .memory = himalaya::rhi::MemoryUsage::GpuOnly,
+    });
+    resource_manager.upload_buffer(vertex_buffer, kTriangleVertices.data(), sizeof(kTriangleVertices));
 
     // --- Shader compilation and pipeline creation ---
     auto read_file = [](const std::string &path) -> std::string {
@@ -224,6 +251,7 @@ int main() {
     vkDeviceWaitIdle(context.device);
 
     triangle_pipeline.destroy(context.device);
+    resource_manager.destroy();
     swapchain.destroy(context.device);
     context.destroy();
     glfwDestroyWindow(window);
