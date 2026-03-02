@@ -84,4 +84,4 @@
 - [x] ImGui GLFW backend 初始化
 - [x] 每帧 ImGui 渲染集成（NewFrame → Render → draw data 录制到 command buffer）
 - [x] 基础调试面板（FPS、GPU 名称、窗口分辨率、VRAM 占用）
-- [ ] 验证：ImGui 面板正常显示，三角形渲染不受影响
+- [x] 验证：ImGui 面板正常显示，三角形渲染不受影响
