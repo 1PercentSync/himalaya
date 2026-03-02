@@ -29,7 +29,7 @@
 
 ## Step 3：Swapchain + 帧同步
 
-- [ ] 创建 `rhi/include/himalaya/rhi/swapchain.h`
+- [x] 创建 `rhi/include/himalaya/rhi/swapchain.h`
 - [ ] 创建 `rhi/src/swapchain.cpp`
 - [ ] Swapchain 创建（format、present mode、extent 选择）
 - [ ] Image View 获取
