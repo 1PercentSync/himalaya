@@ -258,7 +258,7 @@ namespace himalaya::rhi {
          * @param size    Number of bytes to upload.
          * @param offset  Byte offset into the destination buffer.
          */
-        void upload_buffer(BufferHandle handle, const void *data, uint64_t size, uint64_t offset = 0);
+        void upload_buffer(BufferHandle handle, const void *data, uint64_t size, uint64_t offset = 0) const;
 
     private:
         /** @brief Vulkan context (device, allocator, queues). */
