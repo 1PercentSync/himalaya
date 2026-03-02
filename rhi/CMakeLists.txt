@@ -1,6 +1,6 @@
 add_library(himalaya_rhi STATIC)
 
-target_sources(himalaya_rhi PRIVATE src/context.cpp src/swapchain.cpp src/shader.cpp src/pipeline.cpp src/vma_impl.cpp)
+target_sources(himalaya_rhi PRIVATE src/context.cpp src/swapchain.cpp src/shader.cpp src/pipeline.cpp src/commands.cpp src/vma_impl.cpp)
 
 target_include_directories(himalaya_rhi PUBLIC include)
 

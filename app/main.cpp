@@ -3,6 +3,7 @@
  * @brief Himalaya renderer application entry point.
  */
 
+#include <himalaya/rhi/commands.h>
 #include <himalaya/rhi/context.h>
 #include <himalaya/rhi/pipeline.h>
 #include <himalaya/rhi/shader.h>
@@ -101,14 +102,9 @@ int main() {
             VK_NULL_HANDLE,
             &image_index));
 
-        // Begin command buffer
-        VkCommandBuffer cmd = frame.command_buffer;
-        VK_CHECK(vkResetCommandBuffer(cmd, 0));
-
-        VkCommandBufferBeginInfo begin_info{};
-        begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-        begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-        VK_CHECK(vkBeginCommandBuffer(cmd, &begin_info));
+        // Record command buffer
+        const himalaya::rhi::CommandBuffer cmd(frame.command_buffer);
+        cmd.begin();
 
         // --- Transition swapchain image: UNDEFINED → COLOR_ATTACHMENT_OPTIMAL ---
         VkImageMemoryBarrier2 barrier{};
@@ -127,7 +123,7 @@ int main() {
         dep_info.imageMemoryBarrierCount = 1;
         dep_info.pImageMemoryBarriers = &barrier;
 
-        vkCmdPipelineBarrier2(cmd, &dep_info);
+        cmd.pipeline_barrier(dep_info);
 
         // --- Dynamic rendering: clear swapchain image ---
         VkRenderingAttachmentInfo color_attachment{};
@@ -145,8 +141,8 @@ int main() {
         rendering_info.colorAttachmentCount = 1;
         rendering_info.pColorAttachments = &color_attachment;
 
-        vkCmdBeginRendering(cmd, &rendering_info);
-        vkCmdEndRendering(cmd);
+        cmd.begin_rendering(rendering_info);
+        cmd.end_rendering();
 
         // --- Transition swapchain image: COLOR_ATTACHMENT_OPTIMAL → PRESENT_SRC_KHR ---
         barrier.srcStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
@@ -156,14 +152,14 @@ int main() {
         barrier.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
         barrier.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 
-        vkCmdPipelineBarrier2(cmd, &dep_info);
+        cmd.pipeline_barrier(dep_info);
 
-        VK_CHECK(vkEndCommandBuffer(cmd));
+        cmd.end();
 
         // --- Submit ---
         VkCommandBufferSubmitInfo cmd_submit_info{};
         cmd_submit_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO;
-        cmd_submit_info.commandBuffer = cmd;
+        cmd_submit_info.commandBuffer = frame.command_buffer;
 
         VkSemaphoreSubmitInfo wait_info{};
         wait_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO;
