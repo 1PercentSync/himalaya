@@ -1,5 +1,6 @@
 #include <himalaya/rhi/context.h>
 
+#include <algorithm>
 #include <string>
 #include <vector>
 
@@ -87,7 +88,7 @@ namespace himalaya::rhi {
 
         VK_CHECK(vkCreateInstance(&create_info, nullptr, &instance));
 
-        spdlog::warn("Vulkan instance created (API 1.4)");
+        spdlog::info("Vulkan instance created (API 1.4)");
     }
 
     // Builds a tag string from the message type bitmask (e.g. "[Validation][Performance]")
@@ -137,10 +138,93 @@ namespace himalaya::rhi {
             vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT"));
         VK_CHECK(func(instance, &create_info, nullptr, &debug_messenger));
 
-        spdlog::warn("Debug messenger created");
+        spdlog::info("Debug messenger created");
+    }
+
+    // Checks whether the device has a queue family with VK_QUEUE_GRAPHICS_BIT
+    // ReSharper disable once CppParameterMayBeConst
+    static bool has_graphics_queue(VkPhysicalDevice dev) {
+        uint32_t count = 0;
+        vkGetPhysicalDeviceQueueFamilyProperties(dev, &count, nullptr);
+        std::vector<VkQueueFamilyProperties> families(count);
+        vkGetPhysicalDeviceQueueFamilyProperties(dev, &count, families.data());
+
+        return std::ranges::any_of(families, [](const auto &f) {
+            return f.queueFlags & VK_QUEUE_GRAPHICS_BIT;
+        });
+    }
+
+    // Checks whether the device supports VK_KHR_swapchain extension
+    // ReSharper disable once CppParameterMayBeConst
+    static bool has_swapchain_support(VkPhysicalDevice dev) {
+        uint32_t count = 0;
+        vkEnumerateDeviceExtensionProperties(dev, nullptr, &count, nullptr);
+        std::vector<VkExtensionProperties> extensions(count);
+        vkEnumerateDeviceExtensionProperties(dev, nullptr, &count, extensions.data());
+
+        return std::ranges::any_of(extensions, [](const auto &ext) {
+            return std::strcmp(ext.extensionName, VK_KHR_SWAPCHAIN_EXTENSION_NAME) == 0;
+        });
+    }
+
+    /**
+     * Rates a physical device's suitability. Returns 0 if unsuitable.
+     * Scoring: discrete GPU +1000, then +1 per GB of device-local VRAM.
+     * (An iGPU with over 1000 GB VRAM would outscore a discrete GPU — good luck finding one.)
+     */
+    // ReSharper disable once CppParameterMayBeConst
+    static int rate_device(VkPhysicalDevice dev) {
+        if (!has_graphics_queue(dev)) return 0;
+        if (!has_swapchain_support(dev)) return 0;
+
+        VkPhysicalDeviceProperties props;
+        vkGetPhysicalDeviceProperties(dev, &props);
+
+        int score = 1;
+        if (props.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) {
+            score += 1000;
+        }
+
+        VkPhysicalDeviceMemoryProperties mem_props;
+        vkGetPhysicalDeviceMemoryProperties(dev, &mem_props);
+        VkDeviceSize max_heap = 0;
+        for (uint32_t i = 0; i < mem_props.memoryHeapCount; ++i) {
+            if (mem_props.memoryHeaps[i].flags & VK_MEMORY_HEAP_DEVICE_LOCAL_BIT) {
+                max_heap = std::max(max_heap, mem_props.memoryHeaps[i].size);
+            }
+        }
+        score += static_cast<int>(max_heap / (1024 * 1024 * 1024));
+
+        return score;
     }
 
     void Context::pick_physical_device() {
+        uint32_t device_count = 0;
+        vkEnumeratePhysicalDevices(instance, &device_count, nullptr);
+        if (device_count == 0) {
+            spdlog::error("No Vulkan-capable GPU found");
+            std::abort();
+        }
+
+        std::vector<VkPhysicalDevice> devices(device_count);
+        vkEnumeratePhysicalDevices(instance, &device_count, devices.data());
+
+        int best_score = 0;
+        for (const auto &dev : devices) {
+            if (const int score = rate_device(dev); score > best_score) {
+                best_score = score;
+                physical_device = dev;
+            }
+        }
+
+        if (physical_device == VK_NULL_HANDLE) {
+            spdlog::error("No suitable GPU found (need graphics queue + swapchain support)");
+            std::abort();
+        }
+
+        VkPhysicalDeviceProperties props;
+        vkGetPhysicalDeviceProperties(physical_device, &props);
+        spdlog::info("Selected GPU: {} (score: {})", props.deviceName, best_score);
     }
 
     void Context::create_device() {
