@@ -23,13 +23,15 @@ struct BindlessIndex { uint32_t index = UINT32_MAX; };
 ### 资源创建描述
 
 ```cpp
+// 所有字段必须显式初始化，无默认值。
+// create_image() 通过 assert 拦截 depth/mip_levels/sample_count 为 0 的情况。
 struct ImageDesc {
     uint32_t width, height;
-    uint32_t depth = 1;
-    uint32_t mip_levels = 1;
-    uint32_t sample_count = 1;
-    Format format;          // 自定义枚举，映射到 VkFormat
-    ImageUsage usage;       // 自定义 flags，映射到 VkImageUsageFlags
+    uint32_t depth;             // 2D images: must be 1
+    uint32_t mip_levels;        // single level: must be 1
+    uint32_t sample_count;      // no MSAA: must be 1
+    Format format;              // 自定义枚举，映射到 VkFormat
+    ImageUsage usage;           // 自定义 flags，映射到 VkImageUsageFlags
 };
 
 struct BufferDesc {

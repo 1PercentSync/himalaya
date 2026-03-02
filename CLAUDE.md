@@ -177,6 +177,11 @@ himalaya/
 
 ---
 
-## Shader 工作流
+## Shader 规范
+
+- GLSL 版本：`#version 460`
+- 编译目标：Vulkan 1.4（shaderc `shaderc_env_version_vulkan_1_4`）
+
+### 工作流
 
 CMake 构建后拷贝 shader 到 build 目录。开发期编辑 build 目录副本触发热重载，确认后同步回源码目录。
