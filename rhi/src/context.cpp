@@ -141,17 +141,23 @@ namespace himalaya::rhi {
         spdlog::info("Debug messenger created");
     }
 
-    // Checks whether the device has a queue family with VK_QUEUE_GRAPHICS_BIT
-    // ReSharper disable once CppParameterMayBeConst
-    static bool has_graphics_queue(VkPhysicalDevice dev) {
+    // Checks whether the device has a queue family supporting both graphics and present
+    // ReSharper disable CppParameterMayBeConst
+    static bool has_graphics_present_queue(VkPhysicalDevice dev, VkSurfaceKHR surface) {
+        // ReSharper restore CppParameterMayBeConst
         uint32_t count = 0;
         vkGetPhysicalDeviceQueueFamilyProperties(dev, &count, nullptr);
         std::vector<VkQueueFamilyProperties> families(count);
         vkGetPhysicalDeviceQueueFamilyProperties(dev, &count, families.data());
 
-        return std::ranges::any_of(families, [](const auto &f) {
-            return f.queueFlags & VK_QUEUE_GRAPHICS_BIT;
-        });
+        for (uint32_t i = 0; i < count; ++i) {
+            if (!(families[i].queueFlags & VK_QUEUE_GRAPHICS_BIT)) continue;
+
+            VkBool32 present_support = VK_FALSE;
+            vkGetPhysicalDeviceSurfaceSupportKHR(dev, i, surface, &present_support);
+            if (present_support) return true;
+        }
+        return false;
     }
 
     // Checks whether the device supports VK_KHR_swapchain extension
@@ -173,8 +179,8 @@ namespace himalaya::rhi {
      * (An iGPU with over 1000 GB VRAM would outscore a discrete GPU — good luck finding one.)
      */
     // ReSharper disable once CppParameterMayBeConst
-    static int rate_device(VkPhysicalDevice dev) {
-        if (!has_graphics_queue(dev)) return 0;
+    static int rate_device(VkPhysicalDevice dev, VkSurfaceKHR surface) {
+        if (!has_graphics_present_queue(dev, surface)) return 0;
         if (!has_swapchain_support(dev)) return 0;
 
         VkPhysicalDeviceProperties props;
@@ -210,15 +216,15 @@ namespace himalaya::rhi {
         vkEnumeratePhysicalDevices(instance, &device_count, devices.data());
 
         int best_score = 0;
-        for (const auto &dev : devices) {
-            if (const int score = rate_device(dev); score > best_score) {
+        for (const auto &dev: devices) {
+            if (const int score = rate_device(dev, surface); score > best_score) {
                 best_score = score;
                 physical_device = dev;
             }
         }
 
         if (physical_device == VK_NULL_HANDLE) {
-            spdlog::error("No suitable GPU found (need graphics queue + swapchain support)");
+            spdlog::error("No suitable GPU found (need graphics+present queue + swapchain support)");
             std::abort();
         }
 
@@ -228,6 +234,71 @@ namespace himalaya::rhi {
     }
 
     void Context::create_device() {
+        // Find a queue family that supports both graphics and present
+        uint32_t family_count = 0;
+        vkGetPhysicalDeviceQueueFamilyProperties(physical_device, &family_count, nullptr);
+        std::vector<VkQueueFamilyProperties> families(family_count);
+        vkGetPhysicalDeviceQueueFamilyProperties(physical_device, &family_count, families.data());
+
+        bool found = false;
+        for (uint32_t i = 0; i < family_count; ++i) {
+            if (!(families[i].queueFlags & VK_QUEUE_GRAPHICS_BIT)) continue;
+
+            VkBool32 present_support = VK_FALSE;
+            vkGetPhysicalDeviceSurfaceSupportKHR(physical_device, i, surface, &present_support);
+            if (!present_support) continue;
+
+            graphics_queue_family = i;
+            found = true;
+            break;
+        }
+
+        if (!found) {
+            spdlog::error("No queue family supports both graphics and present "
+                          "(unexpected: should have been filtered by pick_physical_device)");
+            std::abort();
+        }
+
+        constexpr float queue_priority = 1.0f;
+        VkDeviceQueueCreateInfo queue_info{};
+        queue_info.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+        queue_info.queueFamilyIndex = graphics_queue_family;
+        queue_info.queueCount = 1;
+        queue_info.pQueuePriorities = &queue_priority;
+
+        // Vulkan 1.2 core features: descriptor indexing for bindless textures
+        VkPhysicalDeviceVulkan12Features features_12{};
+        features_12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
+        features_12.descriptorBindingPartiallyBound = VK_TRUE;
+        features_12.descriptorBindingSampledImageUpdateAfterBind = VK_TRUE;
+        features_12.descriptorBindingVariableDescriptorCount = VK_TRUE;
+        features_12.runtimeDescriptorArray = VK_TRUE;
+        features_12.shaderSampledImageArrayNonUniformIndexing = VK_TRUE;
+
+        // Vulkan 1.3 core features: dynamic rendering + synchronization2
+        // Extended Dynamic State is unconditionally available in 1.3+ (no feature bit needed)
+        VkPhysicalDeviceVulkan13Features features_13{};
+        features_13.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
+        features_13.dynamicRendering = VK_TRUE;
+        features_13.synchronization2 = VK_TRUE;
+
+        features_12.pNext = &features_13;
+
+        const char *device_extensions[] = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
+
+        VkDeviceCreateInfo device_info{};
+        device_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+        device_info.pNext = &features_12;
+        device_info.queueCreateInfoCount = 1;
+        device_info.pQueueCreateInfos = &queue_info;
+        device_info.enabledExtensionCount = 1;
+        device_info.ppEnabledExtensionNames = device_extensions;
+
+        VK_CHECK(vkCreateDevice(physical_device, &device_info, nullptr, &device));
+
+        vkGetDeviceQueue(device, graphics_queue_family, 0, &graphics_queue);
+
+        spdlog::info("Logical device created (queue family: {})", graphics_queue_family);
     }
 
     void Context::create_allocator() {
