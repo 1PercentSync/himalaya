@@ -43,7 +43,7 @@
 
 - [x] 创建 `rhi/include/himalaya/rhi/types.h`（句柄、枚举、格式）
 - [x] 创建 `rhi/include/himalaya/rhi/shader.h` + `rhi/src/shader.cpp`
-- [ ] shaderc 集成（编译 GLSL 源码为 SPIR-V）
+- [x] shaderc 集成（编译 GLSL 源码为 SPIR-V）
 - [ ] 编译结果内存缓存
 - [ ] 创建 `rhi/include/himalaya/rhi/pipeline.h` + `rhi/src/pipeline.cpp`
 - [ ] Graphics Pipeline 创建（适配 Dynamic Rendering、Extended Dynamic State）
