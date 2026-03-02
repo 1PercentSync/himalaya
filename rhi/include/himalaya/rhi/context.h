@@ -6,6 +6,8 @@
  */
 
 #include <array>
+#include <functional>
+#include <vector>
 
 #include <vulkan/vulkan.h>
 #include <vk_mem_alloc.h>
@@ -32,6 +34,31 @@ namespace himalaya::rhi {
     constexpr uint32_t kMaxFramesInFlight = 2;
 
     /**
+     * @brief Deferred resource destruction queue.
+     *
+     * Resources cannot be destroyed immediately because the GPU may still
+     * reference them. Instead, destruction lambdas are pushed into the queue
+     * and flushed once the corresponding frame's fence has been waited on.
+     */
+    struct DeletionQueue {
+        /**
+         * @brief Enqueues a destructor to be called later.
+         * @param fn Callable that destroys one or more Vulkan resources.
+         */
+        void push(std::function<void()> &&fn) { deletors.push_back(std::move(fn)); }
+
+        /** @brief Executes all queued destructors and clears the queue. */
+        void flush() {
+            for (auto &fn : deletors) fn();
+            deletors.clear();
+        }
+
+    private:
+        /** @brief Queued destruction callables. */
+        std::vector<std::function<void()>> deletors;
+    };
+
+    /**
      * @brief Per-frame GPU synchronization and command recording resources.
      *
      * Each in-flight frame owns an independent set of these objects
@@ -52,6 +79,9 @@ namespace himalaya::rhi {
 
         /** @brief Signaled when rendering is done; the presentation engine waits on this. */
         VkSemaphore render_finished_semaphore = VK_NULL_HANDLE;
+
+        /** @brief Deferred deletions executed after the fence confirms GPU completion. */
+        DeletionQueue deletion_queue;
     };
 
     /**
@@ -72,7 +102,7 @@ namespace himalaya::rhi {
         /**
          * @brief Destroys all Vulkan objects in reverse creation order.
          */
-        void destroy() const;
+        void destroy();
 
         /** @brief Vulkan instance. */
         VkInstance instance = VK_NULL_HANDLE;

@@ -44,8 +44,9 @@ namespace himalaya::rhi {
         create_frame_data();
     }
 
-    void Context::destroy() const {
-        for (const auto &frame: frames) {
+    void Context::destroy() {
+        for (auto &frame : frames) {
+            frame.deletion_queue.flush();
             vkDestroyCommandPool(device, frame.command_pool, nullptr);
             vkDestroyFence(device, frame.render_fence, nullptr);
             vkDestroySemaphore(device, frame.image_available_semaphore, nullptr);
