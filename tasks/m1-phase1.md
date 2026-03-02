@@ -72,7 +72,7 @@
 - [x] Staging buffer 上传流程
 - [x] 创建 Vertex Buffer，上传三角形顶点数据
 - [x] Pipeline 更新：添加顶点输入属性描述
-- [ ] Shader 更新：从顶点属性读取位置和颜色
+- [x] Shader 更新：从顶点属性读取位置和颜色
 - [ ] 窗口 resize 处理（Swapchain 重建）
 - [ ] 窗口最小化处理（extent 为 0 时暂停渲染）
 - [ ] 验证：三角形正确显示，resize 和最小化不崩溃
