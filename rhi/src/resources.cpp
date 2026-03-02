@@ -72,12 +72,67 @@ namespace himalaya::rhi {
         return static_cast<uint32_t>(images_.size() - 1);
     }
 
+    // ---- Enum conversion helpers ----
+
+    // Translates BufferUsage flags to VkBufferUsageFlags.
+    static VkBufferUsageFlags to_vk_buffer_usage(const BufferUsage usage) {
+        VkBufferUsageFlags flags = 0;
+        if (has_flag(usage, BufferUsage::VertexBuffer)) flags |= VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+        if (has_flag(usage, BufferUsage::IndexBuffer)) flags |= VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
+        if (has_flag(usage, BufferUsage::UniformBuffer)) flags |= VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+        if (has_flag(usage, BufferUsage::StorageBuffer)) flags |= VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+        if (has_flag(usage, BufferUsage::TransferSrc)) flags |= VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+        if (has_flag(usage, BufferUsage::TransferDst)) flags |= VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+        return flags;
+    }
+
+    // Translates MemoryUsage to VmaAllocationCreateInfo.
+    // VMA_MEMORY_USAGE_AUTO lets VMA pick the best heap; the flags refine CPU access.
+    static VmaAllocationCreateInfo to_vma_alloc_info(const MemoryUsage memory) {
+        VmaAllocationCreateInfo info{};
+        info.usage = VMA_MEMORY_USAGE_AUTO;
+        switch (memory) {
+            case MemoryUsage::GpuOnly:
+                info.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
+                break;
+            case MemoryUsage::CpuToGpu:
+                info.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT
+                             | VMA_ALLOCATION_CREATE_MAPPED_BIT;
+                break;
+            case MemoryUsage::GpuToCpu:
+                info.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT
+                             | VMA_ALLOCATION_CREATE_MAPPED_BIT;
+                break;
+        }
+        return info;
+    }
+
     // ---- Buffer operations ----
 
-    BufferHandle ResourceManager::create_buffer([[maybe_unused]] const BufferDesc &desc) {
-        // Stub — VMA buffer creation implemented in "Buffer 创建接口" task
-        assert(false && "create_buffer not yet implemented");
-        return {};
+    BufferHandle ResourceManager::create_buffer(const BufferDesc &desc) {
+        assert(desc.size > 0 && "Buffer size must be greater than zero");
+
+        VkBufferCreateInfo buffer_info{};
+        buffer_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        buffer_info.size = desc.size;
+        buffer_info.usage = to_vk_buffer_usage(desc.usage);
+        buffer_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+        const auto alloc_info = to_vma_alloc_info(desc.memory);
+
+        const uint32_t index = allocate_buffer_slot();
+        // ReSharper disable once CppUseStructuredBinding
+        auto &slot = buffers_[index];
+
+        VK_CHECK(vmaCreateBuffer(context_->allocator,
+            &buffer_info,
+            &alloc_info,
+            &slot.buffer,
+            &slot.allocation,
+            &slot.allocation_info));
+        slot.desc = desc;
+
+        return {index, slot.generation};
     }
 
     void ResourceManager::destroy_buffer(const BufferHandle handle) {
