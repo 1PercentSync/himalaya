@@ -103,6 +103,17 @@ int main() {
     pipeline_desc.fragment_shader = frag_module;
     pipeline_desc.color_formats = {swapchain.format};
 
+    // Vertex input: single binding with interleaved position (vec2) + color (vec3)
+    pipeline_desc.vertex_bindings = {{
+        .binding = 0,
+        .stride = sizeof(Vertex),
+        .inputRate = VK_VERTEX_INPUT_RATE_VERTEX,
+    }};
+    pipeline_desc.vertex_attributes = {
+        {.location = 0, .binding = 0, .format = VK_FORMAT_R32G32_SFLOAT,    .offset = offsetof(Vertex, position)},
+        {.location = 1, .binding = 0, .format = VK_FORMAT_R32G32B32_SFLOAT, .offset = offsetof(Vertex, color)},
+    };
+
     auto triangle_pipeline = himalaya::rhi::create_graphics_pipeline(context.device, pipeline_desc);
 
     // Shader modules can be destroyed immediately after pipeline creation
@@ -190,6 +201,7 @@ int main() {
         cmd.set_depth_write_enable(false);
         cmd.set_depth_compare_op(VK_COMPARE_OP_NEVER);
 
+        cmd.bind_vertex_buffer(0, resource_manager.get_buffer(vertex_buffer).buffer);
         cmd.draw(3);
 
         cmd.end_rendering();

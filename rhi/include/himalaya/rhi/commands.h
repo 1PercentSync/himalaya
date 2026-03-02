@@ -5,8 +5,6 @@
  * @brief Command buffer wrapper for Vulkan command recording.
  */
 
-#include <cstdint>
-
 #include <vulkan/vulkan.h>
 
 namespace himalaya::rhi {
@@ -57,6 +55,14 @@ namespace himalaya::rhi {
          * @param pipeline Pipeline to bind (both layout and pipeline handle are used).
          */
         void bind_pipeline(const Pipeline &pipeline) const;
+
+        /**
+         * @brief Binds a vertex buffer to the given binding point.
+         * @param binding Binding index (matches VkVertexInputBindingDescription::binding).
+         * @param buffer  Vulkan buffer handle.
+         * @param offset  Byte offset into the buffer.
+         */
+        void bind_vertex_buffer(uint32_t binding, VkBuffer buffer, VkDeviceSize offset = 0) const;
 
         /**
          * @brief Records a non-indexed draw call.

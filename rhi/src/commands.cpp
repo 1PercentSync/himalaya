@@ -3,7 +3,8 @@
 #include <himalaya/rhi/pipeline.h>
 
 namespace himalaya::rhi {
-    CommandBuffer::CommandBuffer(const VkCommandBuffer cmd) : cmd_(cmd) {
+    // ReSharper disable once CppParameterMayBeConst
+    CommandBuffer::CommandBuffer(VkCommandBuffer cmd) : cmd_(cmd) {
     }
 
     // Combines reset + begin since every frame starts fresh.
@@ -30,6 +31,13 @@ namespace himalaya::rhi {
 
     void CommandBuffer::bind_pipeline(const Pipeline &pipeline) const {
         vkCmdBindPipeline(cmd_, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.pipeline);
+    }
+
+    void CommandBuffer::bind_vertex_buffer(const uint32_t binding,
+                                           // ReSharper disable once CppParameterMayBeConst
+                                           VkBuffer buffer,
+                                           const VkDeviceSize offset) const {
+        vkCmdBindVertexBuffers(cmd_, binding, 1, &buffer, &offset);
     }
 
     void CommandBuffer::draw(const uint32_t vertex_count,
