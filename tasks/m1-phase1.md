@@ -30,7 +30,7 @@
 ## Step 3：Swapchain + 帧同步
 
 - [x] 创建 `rhi/include/himalaya/rhi/swapchain.h`
-- [ ] 创建 `rhi/src/swapchain.cpp`
+- [x] 创建 `rhi/src/swapchain.cpp`
 - [ ] Swapchain 创建（format、present mode、extent 选择）
 - [ ] Image View 获取
 - [ ] Context 中添加 FrameData（command pool、command buffer、fence、semaphore × 2 帧）
