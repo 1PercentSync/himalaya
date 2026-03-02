@@ -9,6 +9,38 @@
 
 namespace himalaya::rhi {
     void Swapchain::init(const Context &context, GLFWwindow *window) {
+        create_resources(context, window, VK_NULL_HANDLE);
+    }
+
+    void Swapchain::recreate(const Context &context, GLFWwindow *window) {
+        // Fences only track vkQueueSubmit completion, not vkQueuePresentKHR.
+        // vkQueueWaitIdle covers both submits and presents on this queue,
+        // without stalling unrelated queues like vkDeviceWaitIdle would.
+        vkQueueWaitIdle(context.graphics_queue);
+
+        // Destroy old image views and semaphores; keep old swapchain for driver recycling
+        for (const auto sem: render_finished_semaphores)
+            vkDestroySemaphore(context.device, sem, nullptr);
+        for (const auto view: image_views)
+            vkDestroyImageView(context.device, view, nullptr);
+        render_finished_semaphores.clear();
+        image_views.clear();
+        images.clear();
+
+        // ReSharper disable once CppLocalVariableMayBeConst
+        VkSwapchainKHR old_swapchain = swapchain;
+        swapchain = VK_NULL_HANDLE;
+
+        create_resources(context, window, old_swapchain);
+
+        vkDestroySwapchainKHR(context.device, old_swapchain, nullptr);
+    }
+
+    // Core creation logic: queries surface, creates swapchain, retrieves images,
+    // creates image views and per-image semaphores.
+    // old_swapchain is passed to the driver for internal resource recycling.
+    // ReSharper disable once CppParameterMayBeConst
+    void Swapchain::create_resources(const Context &context, GLFWwindow *window, VkSwapchainKHR old_swapchain) {
         VkSurfaceCapabilitiesKHR capabilities;
         vkGetPhysicalDeviceSurfaceCapabilitiesKHR(context.physical_device, context.surface, &capabilities);
 
@@ -38,6 +70,7 @@ namespace himalaya::rhi {
         create_info.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
         create_info.presentMode = present_mode;
         create_info.clipped = VK_TRUE;
+        create_info.oldSwapchain = old_swapchain;
 
         VK_CHECK(vkCreateSwapchainKHR(context.device, &create_info, nullptr, &swapchain));
 
@@ -54,7 +87,7 @@ namespace himalaya::rhi {
         render_finished_semaphores.resize(images.size());
         VkSemaphoreCreateInfo semaphore_info{};
         semaphore_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-        for (auto &sem : render_finished_semaphores) {
+        for (auto &sem: render_finished_semaphores) {
             VK_CHECK(vkCreateSemaphore(context.device, &semaphore_info, nullptr, &sem));
         }
 
@@ -66,10 +99,10 @@ namespace himalaya::rhi {
 
     // ReSharper disable once CppParameterMayBeConst
     void Swapchain::destroy(VkDevice device) const {
-        for (const auto sem : render_finished_semaphores) {
+        for (const auto sem: render_finished_semaphores) {
             vkDestroySemaphore(device, sem, nullptr);
         }
-        for (const auto view : image_views) {
+        for (const auto view: image_views) {
             vkDestroyImageView(device, view, nullptr);
         }
         vkDestroySwapchainKHR(device, swapchain, nullptr);

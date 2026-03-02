@@ -62,6 +62,13 @@ int main() {
     himalaya::rhi::Swapchain swapchain;
     swapchain.init(context, window);
 
+    // --- Framebuffer resize detection via GLFW callback ---
+    bool framebuffer_resized = false;
+    glfwSetWindowUserPointer(window, &framebuffer_resized);
+    glfwSetFramebufferSizeCallback(window, [](GLFWwindow *w, int, int) {
+        *static_cast<bool *>(glfwGetWindowUserPointer(w)) = true;
+    });
+
     // --- Resource manager and vertex buffer ---
     himalaya::rhi::ResourceManager resource_manager;
     resource_manager.init(&context);
@@ -104,13 +111,15 @@ int main() {
     pipeline_desc.color_formats = {swapchain.format};
 
     // Vertex input: single binding with interleaved position (vec2) + color (vec3)
-    pipeline_desc.vertex_bindings = {{
-        .binding = 0,
-        .stride = sizeof(Vertex),
-        .inputRate = VK_VERTEX_INPUT_RATE_VERTEX,
-    }};
+    pipeline_desc.vertex_bindings = {
+        {
+            .binding = 0,
+            .stride = sizeof(Vertex),
+            .inputRate = VK_VERTEX_INPUT_RATE_VERTEX,
+        }
+    };
     pipeline_desc.vertex_attributes = {
-        {.location = 0, .binding = 0, .format = VK_FORMAT_R32G32_SFLOAT,    .offset = offsetof(Vertex, position)},
+        {.location = 0, .binding = 0, .format = VK_FORMAT_R32G32_SFLOAT, .offset = offsetof(Vertex, position)},
         {.location = 1, .binding = 0, .format = VK_FORMAT_R32G32B32_SFLOAT, .offset = offsetof(Vertex, color)},
     };
 
@@ -127,19 +136,28 @@ int main() {
 
         // Wait for the GPU to finish the previous use of this frame's resources
         VK_CHECK(vkWaitForFences(context.device, 1, &frame.render_fence, VK_TRUE, UINT64_MAX));
-        VK_CHECK(vkResetFences(context.device, 1, &frame.render_fence));
 
         // Safe to flush deferred deletions now
         frame.deletion_queue.flush();
 
         // Acquire next swapchain image
-        // TODO: handle VK_SUBOPTIMAL_KHR / VK_ERROR_OUT_OF_DATE_KHR when implementing resize (Step 6)
         uint32_t image_index;
-        VK_CHECK(vkAcquireNextImageKHR(context.device,
-            swapchain.swapchain,
-            UINT64_MAX,frame.image_available_semaphore,
-            VK_NULL_HANDLE,
-            &image_index));
+        VkResult acquire_result = vkAcquireNextImageKHR(context.device,
+                                                        swapchain.swapchain,
+                                                        UINT64_MAX, frame.image_available_semaphore,
+                                                        VK_NULL_HANDLE,
+                                                        &image_index);
+
+        if (acquire_result == VK_ERROR_OUT_OF_DATE_KHR) {
+            swapchain.recreate(context, window);
+            continue;
+        }
+        if (acquire_result != VK_SUCCESS && acquire_result != VK_SUBOPTIMAL_KHR) {
+            std::abort();
+        }
+
+        // Reset fence only after a successful acquire guarantees we will submit work
+        VK_CHECK(vkResetFences(context.device, 1, &frame.render_fence));
 
         // Record command buffer
         const himalaya::rhi::CommandBuffer cmd(frame.command_buffer);
@@ -253,14 +271,19 @@ int main() {
         present_info.pSwapchains = &swapchain.swapchain;
         present_info.pImageIndices = &image_index;
 
-        // TODO: handle VK_SUBOPTIMAL_KHR / VK_ERROR_OUT_OF_DATE_KHR when implementing resize (Step 6)
-        VK_CHECK(vkQueuePresentKHR(context.graphics_queue, &present_info));
+        if (VkResult present_result = vkQueuePresentKHR(context.graphics_queue, &present_info);
+            present_result == VK_ERROR_OUT_OF_DATE_KHR || present_result == VK_SUBOPTIMAL_KHR || framebuffer_resized) {
+            framebuffer_resized = false;
+            swapchain.recreate(context, window);
+        } else if (present_result != VK_SUCCESS) {
+            std::abort();
+        }
 
         context.advance_frame();
     }
 
-    // TODO: replace with per-fence waits when multiple queues are introduced
-    vkDeviceWaitIdle(context.device);
+    // Wait for all submits and presents on the graphics queue to complete
+    vkQueueWaitIdle(context.graphics_queue);
 
     triangle_pipeline.destroy(context.device);
     resource_manager.destroy_buffer(vertex_buffer);

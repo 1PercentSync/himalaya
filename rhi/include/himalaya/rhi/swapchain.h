@@ -31,6 +31,18 @@ namespace himalaya::rhi {
         void init(const Context &context, GLFWwindow *window);
 
         /**
+         * @brief Recreates the swapchain after a resize or suboptimal present.
+         *
+         * Waits for the device to be idle, destroys the old resources,
+         * creates a new swapchain (passing the old handle for driver recycling),
+         * then destroys the old swapchain.
+         *
+         * @param context Vulkan context providing device, physical device, and surface.
+         * @param window  GLFW window used to query the new framebuffer size.
+         */
+        void recreate(const Context &context, GLFWwindow *window);
+
+        /**
          * @brief Destroys image views and the swapchain.
          * @param device Logical device that owns the swapchain.
          */
@@ -85,6 +97,20 @@ namespace himalaya::rhi {
          * the GLFW framebuffer size and clamps to the supported range.
          */
         static VkExtent2D choose_extent(const VkSurfaceCapabilitiesKHR &capabilities, GLFWwindow *window);
+
+        /**
+         * @brief Core creation logic shared by init() and recreate().
+         *
+         * Queries surface capabilities, selects format/present mode/extent,
+         * creates the swapchain, retrieves images, and creates image views
+         * and per-image semaphores.
+         *
+         * @param context       Vulkan context providing device, physical device, and surface.
+         * @param window        GLFW window used to query framebuffer size for extent.
+         * @param old_swapchain Previous swapchain handle for driver recycling,
+         *                      or VK_NULL_HANDLE for first creation.
+         */
+        void create_resources(const Context &context, GLFWwindow *window, VkSwapchainKHR old_swapchain);
 
         /**
          * @brief Creates a VkImageView for each swapchain image.
