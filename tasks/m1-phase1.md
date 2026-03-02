@@ -60,7 +60,7 @@
 - [x] bind_pipeline、draw、set_viewport、set_scissor
 - [x] pipeline_barrier（Synchronization2 API）
 - [x] Swapchain image layout transition 集成到帧循环
-- [ ] 渲染三角形到 Swapchain image
+- [x] 渲染三角形到 Swapchain image
 - [ ] 验证：屏幕上出现彩色三角形
 
 ## Step 6：基础资源管理
