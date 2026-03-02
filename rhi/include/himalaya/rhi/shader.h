@@ -32,7 +32,7 @@ namespace himalaya::rhi {
          * @param filename Source filename for error messages (not read from disk).
          * @return SPIR-V bytecode as uint32_t words, or empty vector on failure.
          */
-        [[nodiscard]] std::vector<uint32_t> compile(
+        static [[nodiscard]] std::vector<uint32_t> compile(
             const std::string &source,
             ShaderStage stage,
             const std::string &filename);
