@@ -46,7 +46,7 @@
 - [x] shaderc 集成（编译 GLSL 源码为 SPIR-V）
 - [x] 编译结果内存缓存
 - [x] 创建 `rhi/include/himalaya/rhi/pipeline.h` + `rhi/src/pipeline.cpp`
-- [ ] Graphics Pipeline 创建（适配 Dynamic Rendering、Extended Dynamic State）
+- [x] Graphics Pipeline 创建（适配 Dynamic Rendering、Extended Dynamic State）
 - [ ] Pipeline Layout 创建
 - [ ] 创建 `shaders/triangle.vert`（硬编码三角形顶点 + 颜色）
 - [ ] 创建 `shaders/triangle.frag`（输出插值颜色）
