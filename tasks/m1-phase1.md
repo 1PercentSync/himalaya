@@ -68,7 +68,7 @@
 - [x] 创建 `rhi/include/himalaya/rhi/resources.h` + `rhi/src/resources.cpp`
 - [x] 资源池实现（generation-based slot 分配/回收）
 - [x] Buffer 创建接口（BufferDesc → BufferHandle）
-- [ ] Image 创建接口（ImageDesc → ImageHandle）
+- [x] Image 创建接口（ImageDesc → ImageHandle）
 - [ ] Staging buffer 上传流程
 - [ ] 创建 Vertex Buffer，上传三角形顶点数据
 - [ ] Pipeline 更新：添加顶点输入属性描述
