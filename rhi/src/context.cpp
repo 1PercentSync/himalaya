@@ -302,5 +302,15 @@ namespace himalaya::rhi {
     }
 
     void Context::create_allocator() {
+        VmaAllocatorCreateInfo alloc_info{};
+        alloc_info.flags = VMA_ALLOCATOR_CREATE_EXT_MEMORY_BUDGET_BIT;
+        alloc_info.physicalDevice = physical_device;
+        alloc_info.device = device;
+        alloc_info.instance = instance;
+        alloc_info.vulkanApiVersion = VK_API_VERSION_1_4;
+
+        VK_CHECK(vmaCreateAllocator(&alloc_info, &allocator));
+
+        spdlog::info("VMA allocator created");
     }
 } // namespace himalaya::rhi
