@@ -50,7 +50,6 @@ namespace himalaya::rhi {
             vkDestroyCommandPool(device, frame.command_pool, nullptr);
             vkDestroyFence(device, frame.render_fence, nullptr);
             vkDestroySemaphore(device, frame.image_available_semaphore, nullptr);
-            vkDestroySemaphore(device, frame.render_finished_semaphore, nullptr);
         }
 
         vmaDestroyAllocator(allocator);
@@ -357,7 +356,6 @@ namespace himalaya::rhi {
             semaphore_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
 
             VK_CHECK(vkCreateSemaphore(device, &semaphore_info, nullptr, &frame.image_available_semaphore));
-            VK_CHECK(vkCreateSemaphore(device, &semaphore_info, nullptr, &frame.render_finished_semaphore));
         }
 
         spdlog::info("Frame data created ({} frames in flight)", kMaxFramesInFlight);

@@ -77,9 +77,6 @@ namespace himalaya::rhi {
         /** @brief Signaled when a swapchain image has been acquired for this frame. */
         VkSemaphore image_available_semaphore = VK_NULL_HANDLE;
 
-        /** @brief Signaled when rendering is done; the presentation engine waits on this. */
-        VkSemaphore render_finished_semaphore = VK_NULL_HANDLE;
-
         /** @brief Deferred deletions executed after the fence confirms GPU completion. */
         DeletionQueue deletion_queue;
     };
