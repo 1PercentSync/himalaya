@@ -65,7 +65,7 @@
 
 ## Step 6：基础资源管理
 
-- [ ] 创建 `rhi/include/himalaya/rhi/resources.h` + `rhi/src/resources.cpp`
+- [x] 创建 `rhi/include/himalaya/rhi/resources.h` + `rhi/src/resources.cpp`
 - [ ] 资源池实现（generation-based slot 分配/回收）
 - [ ] Buffer 创建接口（BufferDesc → BufferHandle）
 - [ ] Image 创建接口（ImageDesc → ImageHandle）
