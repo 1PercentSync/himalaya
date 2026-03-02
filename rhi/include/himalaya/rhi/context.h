@@ -131,6 +131,15 @@ namespace himalaya::rhi {
         /** @brief Per-frame synchronization and command recording resources. */
         std::array<FrameData, kMaxFramesInFlight> frames{};
 
+        /** @brief Index of the current in-flight frame (0 to kMaxFramesInFlight-1). */
+        uint32_t frame_index = 0;
+
+        /** @brief Returns the FrameData for the current in-flight frame. */
+        FrameData &current_frame() { return frames[frame_index]; }
+
+        /** @brief Advances to the next in-flight frame index. */
+        void advance_frame() { frame_index = (frame_index + 1) % kMaxFramesInFlight; }
+
     private:
         /** @brief Creates VkInstance with validation layers and debug_utils extension. */
         void create_instance();
