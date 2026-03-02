@@ -75,7 +75,7 @@
 - [x] Shader 更新：从顶点属性读取位置和颜色
 - [x] 窗口 resize 处理（Swapchain 重建）
 - [x] 窗口最小化处理（extent 为 0 时暂停渲染）
-- [ ] 验证：三角形正确显示，resize 和最小化不崩溃
+- [x] 验证：三角形正确显示，resize 和最小化不崩溃
 
 ## Step 7：ImGui 集成
 
