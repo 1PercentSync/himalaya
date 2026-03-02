@@ -57,7 +57,7 @@
 
 - [x] 创建 `rhi/include/himalaya/rhi/commands.h` + `rhi/src/commands.cpp`
 - [x] Command Buffer wrapper：begin/end、begin_rendering/end_rendering
-- [ ] bind_pipeline、draw、set_viewport、set_scissor
+- [x] bind_pipeline、draw、set_viewport、set_scissor
 - [ ] pipeline_barrier（Synchronization2 API）
 - [ ] Swapchain image layout transition 集成到帧循环
 - [ ] 渲染三角形到 Swapchain image
