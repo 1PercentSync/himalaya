@@ -113,6 +113,12 @@ rhi/
     ├── resources.cpp
     └── vma_impl.cpp        # VMA 单头文件库实现
 
+framework/
+├── include/himalaya/framework/
+│   └── imgui_backend.h    # ImGui 生命周期管理（init, destroy, begin_frame, render）
+└── src/
+    └── imgui_backend.cpp
+
 app/
 ├── CMakeLists.txt
 └── main.cpp               # 窗口创建, 主循环, 最小 Layer 3 壳
@@ -135,3 +141,8 @@ shaders/
 | 单 Queue | 阶段一只使用 Graphics Queue，Transfer Queue 在后续按需引入 |
 | 三角形顶点 | Step 5 硬编码在 shader 中（gl_VertexIndex），Step 6 改为 Vertex Buffer |
 | 窗口归属 | App 层拥有 GLFW 窗口，传 `GLFWwindow*` 给 RHI 创建 Surface |
+| Framework 提前引入 | 原计划阶段二创建 framework 层，因 ImGui backend 需要独立于 app 的封装而提前至阶段一 Step 7 引入，仅含 `imgui_backend.h/cpp` |
+| GLFW 回调链 | ImGui GLFW backend 以 `install_callbacks = true` 初始化，链式调用先前注册的回调；因此 ImGui 初始化必须在 app 的 GLFW 回调注册之后 |
+| ImGui API 兼容性 | `ImGui_ImplVulkan_InitInfo` 的 `UseDynamicRendering` 等字段在 1.92.4（2025-10）移入 `PipelineInfoMain` 子结构体；若升级 vcpkg baseline 导致安装 1.92.4+ 需调整初始化代码 |
+| Descriptor Pool 规格 | 专用池，16 个 `COMBINED_IMAGE_SAMPLER`，`FREE_DESCRIPTOR_SET_BIT` |
+| ImGui 架构决策 | 详见 `m1-architecture-choices.md` "ImGui 集成" 章节 |

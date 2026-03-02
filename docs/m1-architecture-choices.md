@@ -126,6 +126,43 @@ Shader 以 GLSL 源码形式存在，运行时根据需要的变体组合用 sha
 
 ---
 
+## ImGui 集成
+
+**选择：Framework 层集成，直接使用 Vulkan 类型**
+
+ImGui backend（初始化、每帧渲染循环、销毁）放在 `framework/` 层（`imgui_backend.h/cpp`），调试面板内容由 `app/` 层构建。
+
+### Framework 层使用 Vulkan 类型
+
+架构文档约束"上层不接触 Vulkan 类型"，但 ImGui 的 Vulkan backend 天然需要 `VkDevice`、`VkInstance`、`VkCommandBuffer` 等。当前实现直接传递这些类型，这是**暂时性的实现**，不是对架构约束的例外。阶段二 RHI 抽象完善后，framework 层应通过 RHI 接口获取所需信息，不再直接接触 Vulkan 类型。
+
+### Dynamic Rendering
+
+ImGui Vulkan backend 配置为 Dynamic Rendering 模式，不使用 `VkRenderPass`。ImGui 在与场景相同的 dynamic rendering pass 中渲染（场景绘制之后、`end_rendering` 之前），避免额外的 pass 和 barrier 开销。
+
+### Descriptor Pool
+
+ImGui 使用专用 Descriptor Pool，与渲染器自身的 descriptor 管理完全隔离。
+
+### CommandBuffer::handle()
+
+为 `CommandBuffer` wrapper 添加 `handle()` 方法暴露底层 `VkCommandBuffer`，供 ImGui 等第三方库直接录制命令。
+
+### 调试面板数据源
+
+| 数据 | 来源 |
+|------|------|
+| FPS | `ImGui::GetIO().Framerate`（120 帧滑动平均） |
+| VRAM 占用 | `vmaGetHeapBudgets()`（`VK_EXT_memory_budget`），不做 fallback |
+| GPU 名称 | `vkGetPhysicalDeviceProperties()` |
+| 窗口分辨率 | `Swapchain::extent` |
+
+### Docking
+
+启用 `ImGuiConfigFlags_DockingEnable`，支持 ImGui 窗口停靠布局，为后续多面板调参做准备。
+
+---
+
 ## 配置与调参系统
 
 **选择：ImGui 面板 + 配置结构体**
@@ -195,4 +232,5 @@ Shader 以 GLSL 源码形式存在，运行时根据需要的变体组合用 sha
 | 场景数据 | 渲染列表 | 简单解耦够用 |
 | Temporal 数据 | 手动 Double Buffer | M1 只有 SSAO 需要 |
 | 调参 | ImGui + 配置结构体 | 能调就行 |
+| ImGui 集成 | Framework 层，Dynamic Rendering，专用 Descriptor Pool | 同 pass 渲染，零额外 barrier |
 | 错误处理 | VK_CHECK + Validation Layer + Debug Utils | 开发期全面检测 |
