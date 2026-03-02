@@ -50,7 +50,7 @@
 - [x] Pipeline Layout 创建
 - [x] 创建 `shaders/triangle.vert`（硬编码三角形顶点 + 颜色）
 - [x] 创建 `shaders/triangle.frag`（输出插值颜色）
-- [ ] CMakeLists.txt 添加 shader 拷贝到 build 目录的命令
+- [x] CMakeLists.txt 添加 shader 拷贝到 build 目录的命令
 - [ ] 验证：Pipeline 创建成功，无报错
 
 ## Step 5：绘制三角形
