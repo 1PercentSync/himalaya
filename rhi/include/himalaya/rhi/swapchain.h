@@ -51,6 +51,16 @@ namespace himalaya::rhi {
         /** @brief One image view per swapchain image. */
         std::vector<VkImageView> image_views;
 
+        /**
+         * @brief One render-finished semaphore per swapchain image.
+         *
+         * Indexed by the acquired image index (not the frame index).
+         * The presentation engine holds the semaphore until the image is
+         * actually displayed, so per-frame semaphores are insufficient
+         * when the swapchain has more images than frames in flight.
+         */
+        std::vector<VkSemaphore> render_finished_semaphores;
+
     private:
         /**
          * @brief Selects the best surface format.

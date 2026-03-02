@@ -48,6 +48,16 @@ namespace himalaya::rhi {
 
         create_image_views(context.device);
 
+        // One render-finished semaphore per swapchain image, indexed by acquired image index.
+        // Presentation engine holds the semaphore until the image is displayed,
+        // so per-frame allocation is insufficient with MAILBOX (3 images, 2 frames).
+        render_finished_semaphores.resize(images.size());
+        VkSemaphoreCreateInfo semaphore_info{};
+        semaphore_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+        for (auto &sem : render_finished_semaphores) {
+            VK_CHECK(vkCreateSemaphore(context.device, &semaphore_info, nullptr, &sem));
+        }
+
         spdlog::info("Swapchain created ({}x{}, {} images)",
                      extent.width,
                      extent.height,
@@ -56,7 +66,10 @@ namespace himalaya::rhi {
 
     // ReSharper disable once CppParameterMayBeConst
     void Swapchain::destroy(VkDevice device) const {
-        for (const auto view: image_views) {
+        for (const auto sem : render_finished_semaphores) {
+            vkDestroySemaphore(device, sem, nullptr);
+        }
+        for (const auto view : image_views) {
             vkDestroyImageView(device, view, nullptr);
         }
         vkDestroySwapchainKHR(device, swapchain, nullptr);
