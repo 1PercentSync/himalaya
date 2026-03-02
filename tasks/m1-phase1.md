@@ -33,7 +33,7 @@
 - [x] 创建 `rhi/src/swapchain.cpp`
 - [x] Swapchain 创建（format、present mode、extent 选择）
 - [x] Image View 获取
-- [ ] Context 中添加 FrameData（command pool、command buffer、fence、semaphore × 2 帧）
+- [x] Context 中添加 FrameData（command pool、command buffer、fence、semaphore × 2 帧）
 - [ ] 删除队列（DeletionQueue）
 - [ ] 帧索引轮换逻辑
 - [ ] 主循环：wait fence → acquire image → begin cmd → clear → end cmd → submit → present
