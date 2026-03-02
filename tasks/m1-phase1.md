@@ -21,7 +21,7 @@
 - [x] Debug Messenger 回调
 - [x] Physical Device 选择
 - [x] Logical Device + Queue 创建（启用 1.4 核心特性）
-- [ ] VMA Allocator 初始化
+- [x] VMA Allocator 初始化
 - [ ] `destroy()` 方法（按反序销毁所有对象）
 - [ ] 集成 spdlog 日志
 - [ ] `app/main.cpp` 中调用 Context 初始化和销毁
