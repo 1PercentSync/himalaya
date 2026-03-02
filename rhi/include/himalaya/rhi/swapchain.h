@@ -27,8 +27,9 @@ namespace himalaya::rhi {
          * @brief Creates the swapchain and its image views.
          * @param context Vulkan context providing device, physical device, and surface.
          * @param window  GLFW window used to query framebuffer size for extent.
+         * @param vsync   true selects FIFO (vsync), false prefers MAILBOX.
          */
-        void init(const Context &context, GLFWwindow *window);
+        void init(const Context &context, GLFWwindow *window, bool vsync = false);
 
         /**
          * @brief Recreates the swapchain after a resize or suboptimal present.
@@ -47,6 +48,9 @@ namespace himalaya::rhi {
          * @param device Logical device that owns the swapchain.
          */
         void destroy(VkDevice device) const;
+
+        /** @brief Current vsync preference. Read by recreate() to preserve the setting. */
+        bool vsync = false;
 
         /** @brief Swapchain handle. */
         VkSwapchainKHR swapchain = VK_NULL_HANDLE;
@@ -88,7 +92,7 @@ namespace himalaya::rhi {
          * Prefers MAILBOX (triple-buffered, no tearing, low latency).
          * Falls back to FIFO (guaranteed available, v-sync).
          */
-        static VkPresentModeKHR choose_present_mode(VkPhysicalDevice physical_device, VkSurfaceKHR surface);
+        static VkPresentModeKHR choose_present_mode(VkPhysicalDevice physical_device, VkSurfaceKHR surface, bool vsync);
 
         /**
          * @brief Determines the swapchain extent from surface capabilities.

@@ -7,6 +7,7 @@
 #include <himalaya/rhi/context.h>
 #include <himalaya/rhi/swapchain.h>
 
+#include <GLFW/glfw3.h>
 #include <imgui.h>
 #include <imgui_impl_glfw.h>
 #include <imgui_impl_vulkan.h>
@@ -22,6 +23,14 @@ namespace himalaya::framework {
         io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
         io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
         ImGui::StyleColorsDark();
+
+        // --- DPI scaling ---
+        float scale_x, scale_y;
+        glfwGetWindowContentScale(window, &scale_x, &scale_y);
+        ImFontConfig font_config;
+        font_config.SizePixels = 13.0f * scale_y;
+        io.Fonts->AddFontDefault(&font_config);
+        ImGui::GetStyle().ScaleAllSizes(scale_y);
 
         // --- Dedicated descriptor pool ---
         // ImGui needs one combined image sampler for the font atlas.

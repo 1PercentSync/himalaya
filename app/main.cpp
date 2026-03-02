@@ -11,9 +11,11 @@
 #include <himalaya/rhi/shader.h>
 #include <himalaya/rhi/swapchain.h>
 
+#include <algorithm>
 #include <array>
 #include <fstream>
 #include <sstream>
+#include <vector>
 
 #include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
@@ -21,16 +23,70 @@
 #include <spdlog/spdlog.h>
 
 /** @brief Initial window width in pixels. */
-constexpr int kInitialWidth = 1280;
+constexpr int kInitialWidth = 1920;
 
 /** @brief Initial window height in pixels. */
-constexpr int kInitialHeight = 720;
+constexpr int kInitialHeight = 1080;
 
 /** @brief Window title shown in the title bar. */
 constexpr auto kWindowTitle = "Himalaya";
 
 /** @brief Default log level. Change to debug/info for more verbose Vulkan diagnostics. */
 constexpr auto kLogLevel = spdlog::level::warn;
+
+/**
+ * @brief Periodically computes frame time statistics for the debug panel.
+ *
+ * Accumulates per-frame delta times and every kUpdateInterval seconds
+ * computes average FPS, average frame time, and 1% low metrics.
+ * Between updates the displayed values remain stable (no flickering).
+ */
+struct FrameStats {
+    float avg_fps = 0.0f;
+    float avg_frame_time_ms = 0.0f;
+    float low1_fps = 0.0f;
+    float low1_frame_time_ms = 0.0f;
+
+    /** @brief Feed each frame's delta time (in seconds) from ImGui::GetIO().DeltaTime. */
+    void push(const float delta_time) {
+        samples_.push_back(delta_time);
+        elapsed_ += delta_time;
+
+        if (elapsed_ >= kUpdateInterval) {
+            compute();
+            samples_.clear();
+            elapsed_ = 0.0f;
+        }
+    }
+
+private:
+    static constexpr float kUpdateInterval = 1.0f;
+
+    std::vector<float> samples_;
+    float elapsed_ = 0.0f;
+
+    void compute() {
+        const size_t n = samples_.size();
+        if (n == 0) return;
+
+        float total = 0.0f;
+        for (const float s: samples_) total += s;
+
+        avg_frame_time_ms = (total / static_cast<float>(n)) * 1000.0f;
+        avg_fps = static_cast<float>(n) / total;
+
+        // 1% low: average the worst (longest) 1% of frame times
+        std::sort(samples_.begin(), samples_.end(), std::greater<>());
+        const size_t low_count = std::max<size_t>(1, n / 100);
+
+        float low_total = 0.0f;
+        for (size_t i = 0; i < low_count; ++i) {
+            low_total += samples_[i];
+        }
+        low1_frame_time_ms = (low_total / static_cast<float>(low_count)) * 1000.0f;
+        low1_fps = 1000.0f / low1_frame_time_ms;
+    }
+};
 
 /** @brief Interleaved vertex attributes: position (vec2) + color (vec3). */
 struct Vertex {
@@ -137,6 +193,9 @@ int main() {
     vkDestroyShaderModule(context.device, frag_module, nullptr);
     vkDestroyShaderModule(context.device, vert_module, nullptr);
 
+    FrameStats frame_stats;
+    bool vsync_changed = false;
+
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();
 
@@ -179,8 +238,15 @@ int main() {
         imgui_backend.begin_frame();
 
         // --- Debug panel ---
-        ImGui::Begin("Debug");
-        ImGui::Text("FPS: %.1f", ImGui::GetIO().Framerate);
+        frame_stats.push(ImGui::GetIO().DeltaTime);
+
+        ImGui::SetNextWindowPos({0, 0}, ImGuiCond_Once);
+        ImGui::Begin("Debug", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
+
+        ImGui::Text("FPS: %.1f (%.2f ms)", frame_stats.avg_fps, frame_stats.avg_frame_time_ms);
+        ImGui::Text("1%% Low: %.1f (%.2f ms)", frame_stats.low1_fps, frame_stats.low1_frame_time_ms);
+
+        ImGui::Separator();
         ImGui::Text("GPU: %s", context.gpu_name.c_str());
         ImGui::Text("Resolution: %u x %u", swapchain.extent.width, swapchain.extent.height);
 
@@ -188,6 +254,18 @@ int main() {
         ImGui::Text("VRAM: %.1f / %.1f MB",
                     static_cast<double>(vram.used) / (1024.0 * 1024.0),
                     static_cast<double>(vram.budget) / (1024.0 * 1024.0));
+
+        ImGui::Separator();
+        if (ImGui::Checkbox("VSync", &swapchain.vsync)) {
+            vsync_changed = true;
+        }
+
+        int current_log_level = static_cast<int>(spdlog::get_level());
+        constexpr const char *kLogLevelNames[] = {"Trace", "Debug", "Info", "Warn", "Error", "Critical", "Off"};
+        if (ImGui::Combo("Log Level", &current_log_level, kLogLevelNames, IM_ARRAYSIZE(kLogLevelNames))) {
+            spdlog::set_level(static_cast<spdlog::level::level_enum>(current_log_level));
+        }
+
         ImGui::End();
 
         // Record command buffer
@@ -306,8 +384,12 @@ int main() {
         present_info.pImageIndices = &image_index;
 
         if (VkResult present_result = vkQueuePresentKHR(context.graphics_queue, &present_info);
-            present_result == VK_ERROR_OUT_OF_DATE_KHR || present_result == VK_SUBOPTIMAL_KHR || framebuffer_resized) {
+            present_result == VK_ERROR_OUT_OF_DATE_KHR ||
+            present_result == VK_SUBOPTIMAL_KHR ||
+            framebuffer_resized ||
+            vsync_changed) {
             framebuffer_resized = false;
+            vsync_changed = false;
             swapchain.recreate(context, window);
         } else if (present_result != VK_SUCCESS) {
             std::abort();
