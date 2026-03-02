@@ -79,9 +79,9 @@
 
 ## Step 7：ImGui 集成
 
-- [ ] ImGui Vulkan backend 初始化（适配 Dynamic Rendering）
-- [ ] 创建 ImGui 专用 Descriptor Pool
-- [ ] ImGui GLFW backend 初始化
-- [ ] 每帧 ImGui 渲染集成（NewFrame → Render → draw data 录制到 command buffer）
+- [x] ImGui Vulkan backend 初始化（适配 Dynamic Rendering）
+- [x] 创建 ImGui 专用 Descriptor Pool
+- [x] ImGui GLFW backend 初始化
+- [x] 每帧 ImGui 渲染集成（NewFrame → Render → draw data 录制到 command buffer）
 - [ ] 基础调试面板（FPS、GPU 名称、窗口分辨率、VRAM 占用）
 - [ ] 验证：ImGui 面板正常显示，三角形渲染不受影响
