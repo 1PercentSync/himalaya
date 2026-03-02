@@ -53,7 +53,21 @@ namespace himalaya::rhi {
         create_allocator();
     }
 
-    void Context::destroy() {
+    void Context::destroy() const {
+        vmaDestroyAllocator(allocator);
+        vkDestroyDevice(device, nullptr);
+        vkDestroySurfaceKHR(instance, surface, nullptr);
+
+        if constexpr (kEnableValidationLayers) {
+            const auto func = reinterpret_cast<PFN_vkDestroyDebugUtilsMessengerEXT>(
+                vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT")
+            );
+            func(instance, debug_messenger, nullptr);
+        }
+
+        vkDestroyInstance(instance, nullptr);
+
+        spdlog::info("Vulkan context destroyed");
     }
 
     void Context::create_instance() {
@@ -255,7 +269,7 @@ namespace himalaya::rhi {
 
         if (!found) {
             spdlog::error("No queue family supports both graphics and present "
-                          "(unexpected: should have been filtered by pick_physical_device)");
+                "(unexpected: should have been filtered by pick_physical_device)");
             std::abort();
         }
 
