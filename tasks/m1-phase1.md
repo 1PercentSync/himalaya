@@ -32,7 +32,7 @@
 - [x] 创建 `rhi/include/himalaya/rhi/swapchain.h`
 - [x] 创建 `rhi/src/swapchain.cpp`
 - [x] Swapchain 创建（format、present mode、extent 选择）
-- [ ] Image View 获取
+- [x] Image View 获取
 - [ ] Context 中添加 FrameData（command pool、command buffer、fence、semaphore × 2 帧）
 - [ ] 删除队列（DeletionQueue）
 - [ ] 帧索引轮换逻辑
