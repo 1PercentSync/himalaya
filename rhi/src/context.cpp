@@ -41,9 +41,17 @@ namespace himalaya::rhi {
         pick_physical_device();
         create_device();
         create_allocator();
+        create_frame_data();
     }
 
     void Context::destroy() const {
+        for (const auto &frame: frames) {
+            vkDestroyCommandPool(device, frame.command_pool, nullptr);
+            vkDestroyFence(device, frame.render_fence, nullptr);
+            vkDestroySemaphore(device, frame.image_available_semaphore, nullptr);
+            vkDestroySemaphore(device, frame.render_finished_semaphore, nullptr);
+        }
+
         vmaDestroyAllocator(allocator);
         vkDestroyDevice(device, nullptr);
         vkDestroySurfaceKHR(instance, surface, nullptr);
@@ -316,5 +324,41 @@ namespace himalaya::rhi {
         VK_CHECK(vmaCreateAllocator(&alloc_info, &allocator));
 
         spdlog::info("VMA allocator created");
+    }
+
+    // Creates per-frame command pools, command buffers, fences (signaled), and semaphores.
+    // Fences start signaled so the first frame's wait_fence succeeds immediately.
+    void Context::create_frame_data() {
+        // ReSharper disable once CppUseStructuredBinding
+        for (auto &frame: frames) {
+            VkCommandPoolCreateInfo pool_info{};
+            pool_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+            pool_info.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+            pool_info.queueFamilyIndex = graphics_queue_family;
+
+            VK_CHECK(vkCreateCommandPool(device, &pool_info, nullptr, &frame.command_pool));
+
+            VkCommandBufferAllocateInfo alloc_info{};
+            alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+            alloc_info.commandPool = frame.command_pool;
+            alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+            alloc_info.commandBufferCount = 1;
+
+            VK_CHECK(vkAllocateCommandBuffers(device, &alloc_info, &frame.command_buffer));
+
+            VkFenceCreateInfo fence_info{};
+            fence_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+            fence_info.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+
+            VK_CHECK(vkCreateFence(device, &fence_info, nullptr, &frame.render_fence));
+
+            VkSemaphoreCreateInfo semaphore_info{};
+            semaphore_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+
+            VK_CHECK(vkCreateSemaphore(device, &semaphore_info, nullptr, &frame.image_available_semaphore));
+            VK_CHECK(vkCreateSemaphore(device, &semaphore_info, nullptr, &frame.render_finished_semaphore));
+        }
+
+        spdlog::info("Frame data created ({} frames in flight)", kMaxFramesInFlight);
     }
 } // namespace himalaya::rhi

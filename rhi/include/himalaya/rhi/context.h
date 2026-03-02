@@ -5,6 +5,8 @@
  * @brief Vulkan context: instance, device, queues, and memory allocator.
  */
 
+#include <array>
+
 #include <vulkan/vulkan.h>
 #include <vk_mem_alloc.h>
 
@@ -25,6 +27,33 @@ struct GLFWwindow;
     } while (0)
 
 namespace himalaya::rhi {
+
+    /** @brief Number of frames that can be in-flight simultaneously. */
+    constexpr uint32_t kMaxFramesInFlight = 2;
+
+    /**
+     * @brief Per-frame GPU synchronization and command recording resources.
+     *
+     * Each in-flight frame owns an independent set of these objects
+     * so the CPU can record frame N+1 while the GPU is still executing frame N.
+     */
+    struct FrameData {
+        /** @brief Command pool for this frame's command buffer allocation. */
+        VkCommandPool command_pool = VK_NULL_HANDLE;
+
+        /** @brief Primary command buffer recorded each frame. */
+        VkCommandBuffer command_buffer = VK_NULL_HANDLE;
+
+        /** @brief Signaled by the GPU when this frame's commands finish executing. */
+        VkFence render_fence = VK_NULL_HANDLE;
+
+        /** @brief Signaled when a swapchain image has been acquired for this frame. */
+        VkSemaphore image_available_semaphore = VK_NULL_HANDLE;
+
+        /** @brief Signaled when rendering is done; the presentation engine waits on this. */
+        VkSemaphore render_finished_semaphore = VK_NULL_HANDLE;
+    };
+
     /**
      * @brief Core Vulkan context owning instance, device, queues, and allocator.
      *
@@ -69,6 +98,9 @@ namespace himalaya::rhi {
         /** @brief VMA allocator for GPU memory management. */
         VmaAllocator allocator = VK_NULL_HANDLE;
 
+        /** @brief Per-frame synchronization and command recording resources. */
+        std::array<FrameData, kMaxFramesInFlight> frames{};
+
     private:
         /** @brief Creates VkInstance with validation layers and debug_utils extension. */
         void create_instance();
@@ -84,5 +116,8 @@ namespace himalaya::rhi {
 
         /** @brief Initializes VMA allocator. */
         void create_allocator();
+
+        /** @brief Creates per-frame command pools, command buffers, fences, and semaphores. */
+        void create_frame_data();
     };
 } // namespace himalaya::rhi
