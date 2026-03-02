@@ -24,7 +24,7 @@
 - [x] VMA Allocator 初始化
 - [x] `destroy()` 方法（按反序销毁所有对象）
 - [x] 集成 spdlog 日志
-- [ ] `app/main.cpp` 中调用 Context 初始化和销毁
+- [x] `app/main.cpp` 中调用 Context 初始化和销毁
 - [ ] 验证：启动后控制台输出 GPU 名称，无 Validation 报错
 
 ## Step 3：Swapchain + 帧同步
