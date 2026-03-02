@@ -110,33 +110,33 @@ namespace himalaya::rhi {
     // Translates ImageUsage flags to VkImageUsageFlags.
     static VkImageUsageFlags to_vk_image_usage(const ImageUsage usage) {
         VkImageUsageFlags flags = 0;
-        if (has_flag(usage, ImageUsage::Sampled))         flags |= VK_IMAGE_USAGE_SAMPLED_BIT;
-        if (has_flag(usage, ImageUsage::Storage))         flags |= VK_IMAGE_USAGE_STORAGE_BIT;
+        if (has_flag(usage, ImageUsage::Sampled)) flags |= VK_IMAGE_USAGE_SAMPLED_BIT;
+        if (has_flag(usage, ImageUsage::Storage)) flags |= VK_IMAGE_USAGE_STORAGE_BIT;
         if (has_flag(usage, ImageUsage::ColorAttachment)) flags |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
         if (has_flag(usage, ImageUsage::DepthAttachment)) flags |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
-        if (has_flag(usage, ImageUsage::TransferSrc))     flags |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
-        if (has_flag(usage, ImageUsage::TransferDst))     flags |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+        if (has_flag(usage, ImageUsage::TransferSrc)) flags |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+        if (has_flag(usage, ImageUsage::TransferDst)) flags |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
         return flags;
     }
 
     // Translates Format enum to VkFormat.
     static VkFormat to_vk_format(const Format format) {
         switch (format) {
-            case Format::Undefined:          return VK_FORMAT_UNDEFINED;
-            case Format::R8Unorm:            return VK_FORMAT_R8_UNORM;
-            case Format::R8G8Unorm:          return VK_FORMAT_R8G8_UNORM;
-            case Format::R8G8B8A8Unorm:      return VK_FORMAT_R8G8B8A8_UNORM;
-            case Format::R8G8B8A8Srgb:       return VK_FORMAT_R8G8B8A8_SRGB;
-            case Format::B8G8R8A8Unorm:      return VK_FORMAT_B8G8R8A8_UNORM;
-            case Format::B8G8R8A8Srgb:       return VK_FORMAT_B8G8R8A8_SRGB;
-            case Format::R16Sfloat:          return VK_FORMAT_R16_SFLOAT;
-            case Format::R16G16Sfloat:       return VK_FORMAT_R16G16_SFLOAT;
+            case Format::Undefined: return VK_FORMAT_UNDEFINED;
+            case Format::R8Unorm: return VK_FORMAT_R8_UNORM;
+            case Format::R8G8Unorm: return VK_FORMAT_R8G8_UNORM;
+            case Format::R8G8B8A8Unorm: return VK_FORMAT_R8G8B8A8_UNORM;
+            case Format::R8G8B8A8Srgb: return VK_FORMAT_R8G8B8A8_SRGB;
+            case Format::B8G8R8A8Unorm: return VK_FORMAT_B8G8R8A8_UNORM;
+            case Format::B8G8R8A8Srgb: return VK_FORMAT_B8G8R8A8_SRGB;
+            case Format::R16Sfloat: return VK_FORMAT_R16_SFLOAT;
+            case Format::R16G16Sfloat: return VK_FORMAT_R16G16_SFLOAT;
             case Format::R16G16B16A16Sfloat: return VK_FORMAT_R16G16B16A16_SFLOAT;
-            case Format::R32Sfloat:          return VK_FORMAT_R32_SFLOAT;
-            case Format::R32G32Sfloat:       return VK_FORMAT_R32G32_SFLOAT;
+            case Format::R32Sfloat: return VK_FORMAT_R32_SFLOAT;
+            case Format::R32G32Sfloat: return VK_FORMAT_R32G32_SFLOAT;
             case Format::R32G32B32A32Sfloat: return VK_FORMAT_R32G32B32A32_SFLOAT;
-            case Format::D32Sfloat:          return VK_FORMAT_D32_SFLOAT;
-            case Format::D24UnormS8Uint:     return VK_FORMAT_D24_UNORM_S8_UINT;
+            case Format::D32Sfloat: return VK_FORMAT_D32_SFLOAT;
+            case Format::D24UnormS8Uint: return VK_FORMAT_D24_UNORM_S8_UINT;
         }
         return VK_FORMAT_UNDEFINED;
     }
@@ -285,11 +285,80 @@ namespace himalaya::rhi {
 
     // ---- Upload ----
 
-    void ResourceManager::upload_buffer([[maybe_unused]] BufferHandle handle,
-                                        [[maybe_unused]] const void *data,
-                                        [[maybe_unused]] uint64_t size,
-                                        [[maybe_unused]] uint64_t offset) {
-        // Stub — implemented in "Staging buffer 上传流程" task
-        assert(false && "upload_buffer not yet implemented");
+    void ResourceManager::upload_buffer(const BufferHandle handle,
+                                        const void *data,
+                                        const uint64_t size,
+                                        const uint64_t offset) const {
+        assert(data && "Upload source data must not be null");
+        assert(size > 0 && "Upload size must be greater than zero");
+
+        const auto &dst = get_buffer(handle);
+        assert(has_flag(dst.desc.usage, BufferUsage::TransferDst)
+            && "Destination buffer must have TransferDst usage");
+        assert(offset + size <= dst.desc.size && "Upload exceeds buffer bounds");
+
+        // 1. Create a temporary CPU-visible staging buffer
+        VkBufferCreateInfo staging_buffer_info{};
+        staging_buffer_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        staging_buffer_info.size = size;
+        staging_buffer_info.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+        staging_buffer_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+        VmaAllocationCreateInfo staging_alloc_info{};
+        staging_alloc_info.usage = VMA_MEMORY_USAGE_AUTO;
+        staging_alloc_info.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT
+                                   | VMA_ALLOCATION_CREATE_MAPPED_BIT;
+
+        VkBuffer staging_buffer = VK_NULL_HANDLE;
+        VmaAllocation staging_allocation = VK_NULL_HANDLE;
+        VmaAllocationInfo staging_info{};
+
+        VK_CHECK(vmaCreateBuffer(context_->allocator,
+            &staging_buffer_info,
+            &staging_alloc_info,
+            &staging_buffer,
+            &staging_allocation,
+            &staging_info));
+
+        // 2. Copy data into the mapped staging buffer
+        std::memcpy(staging_info.pMappedData, data, size);
+
+        // 3. Allocate and begin a one-shot command buffer
+        VkCommandBufferAllocateInfo cmd_alloc_info{};
+        cmd_alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+        cmd_alloc_info.commandPool = context_->current_frame().command_pool;
+        cmd_alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+        cmd_alloc_info.commandBufferCount = 1;
+
+        VkCommandBuffer cmd = VK_NULL_HANDLE;
+        VK_CHECK(vkAllocateCommandBuffers(context_->device, &cmd_alloc_info, &cmd));
+
+        VkCommandBufferBeginInfo begin_info{};
+        begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+        begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+        VK_CHECK(vkBeginCommandBuffer(cmd, &begin_info));
+
+        // 4. Record buffer copy command
+        VkBufferCopy copy_region{};
+        copy_region.srcOffset = 0;
+        copy_region.dstOffset = offset;
+        copy_region.size = size;
+        vkCmdCopyBuffer(cmd, staging_buffer, dst.buffer, 1, &copy_region);
+
+        VK_CHECK(vkEndCommandBuffer(cmd));
+
+        // 5. Submit and wait for completion
+        VkSubmitInfo submit_info{};
+        submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+        submit_info.commandBufferCount = 1;
+        submit_info.pCommandBuffers = &cmd;
+
+        VK_CHECK(vkQueueSubmit(context_->graphics_queue, 1, &submit_info, VK_NULL_HANDLE));
+        VK_CHECK(vkQueueWaitIdle(context_->graphics_queue));
+
+        // 6. Cleanup: free command buffer and destroy staging buffer
+        vkFreeCommandBuffers(context_->device,
+                             context_->current_frame().command_pool, 1, &cmd);
+        vmaDestroyBuffer(context_->allocator, staging_buffer, staging_allocation);
     }
 } // namespace himalaya::rhi
