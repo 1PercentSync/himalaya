@@ -87,7 +87,7 @@
 - ImGui 初始化（适配 Dynamic Rendering 的 Vulkan backend）
 - ImGui 需要的 Descriptor Pool 创建
 - 每帧 ImGui 渲染集成到主循环
-- 基础调试面板（FPS、GPU 信息显示）
+- 基础调试面板（FPS、GPU 信息、VRAM 占用显示）
 - **验证**：ImGui 面板正常显示且不影响三角形渲染
 
 ---
