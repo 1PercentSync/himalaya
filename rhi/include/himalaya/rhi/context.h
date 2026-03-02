@@ -43,7 +43,7 @@ namespace himalaya::rhi {
         /**
          * @brief Destroys all Vulkan objects in reverse creation order.
          */
-        void destroy();
+        void destroy() const;
 
         /** @brief Vulkan instance. */
         VkInstance instance = VK_NULL_HANDLE;
