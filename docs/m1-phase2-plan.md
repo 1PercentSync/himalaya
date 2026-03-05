@@ -32,7 +32,7 @@
 | SceneRenderData | 完整结构一次定义，阶段二只填需要的字段 | 空 span 零成本 |
 | 视锥剔除 | 阶段二实现 | AABB-frustum，验证 world_bounds 正确性 |
 | Mip 生成 | GPU 端 vkCmdBlitImage | 标准做法，写一次复用 |
-| App 层 | 阶段二开始拆分 | main.cpp → 独立模块文件 |
+| App 层 | Application 持有全部（注释分组）+ 模块按需接口 | Composition Root，阶段三提取 Renderer |
 
 ---
 
@@ -45,6 +45,75 @@
 - `main.cpp` 只保留 `main()` 入口，创建 Application 并运行
 - 现有功能（三角形渲染、debug 面板）在重构后保持不变
 - **验证**：编译通过，运行效果与重构前一致
+
+#### Application 类设计
+
+Application 持有所有子系统，通过注释分组表达层次：
+
+```cpp
+class Application {
+    // --- 窗口 ---
+    GLFWwindow* window_;
+    bool framebuffer_resized_;
+
+    // --- RHI 基础设施 ---
+    rhi::Context context_;
+    rhi::Swapchain swapchain_;
+    rhi::ResourceManager resource_manager_;
+
+    // --- Framework ---
+    framework::ImGuiBackend imgui_backend_;
+
+    // --- App 模块 ---
+    DebugUI debug_ui_;
+
+    // --- 阶段一临时资源（Step 7 移除） ---
+    // triangle pipeline, vertex buffer 等
+};
+```
+
+后续 Step 加入的成员按相同分组规则添加（如 Step 2 在 RHI 区加 `DescriptorManager`，Step 3 在 Framework 区加 `RenderGraph`，Step 4 在 App 模块区加 `CameraController`）。
+
+#### 主循环结构
+
+`Application::run()` 内含完整循环，通过私有方法分解为四步：
+
+```
+run() → while loop:
+  glfwPollEvents()
+  minimize 暂停处理
+  begin_frame()   — fence wait → deletion flush → acquire → imgui begin
+  update()        — debug panel（后续加 camera update、culling）
+  render()        — 录制 command buffer（后续改为 RG compile/execute）
+  end_frame()     — submit → present → swapchain 重建检查 → advance frame
+```
+
+#### DebugUI 接口
+
+DebugUI 每帧通过参数 struct 接收所需数据，返回用户操作结果：
+
+```cpp
+struct DebugUIContext {
+    float delta_time;           // FrameStats 采样用
+    rhi::Context& context;      // GPU 名称、VRAM
+    rhi::Swapchain& swapchain;  // 分辨率、VSync 状态
+    // 后续扩展：scene stats, camera info...
+};
+
+struct DebugUIActions {
+    bool vsync_toggled = false;
+    // 后续扩展：shader reload, render mode change...
+};
+
+class DebugUI {
+public:
+    DebugUIActions draw(const DebugUIContext& ctx);
+private:
+    FrameStats frame_stats_;    // 内部持有，外部不关心
+};
+```
+
+`framebuffer_resized` 由 GLFW callback 直接写 Application 成员变量，不经过 DebugUI。
 
 ### Step 2：Descriptor 管理
 
