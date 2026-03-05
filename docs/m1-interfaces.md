@@ -157,10 +157,9 @@ public:
     RGResourceId import_image(const std::string& debug_name, ImageHandle handle);
     RGResourceId import_buffer(const std::string& debug_name, BufferHandle handle);
 
-    // 注册一个 pass
+    // 注册一个 pass（资源的读写语义由 RGAccessType 区分）
     void add_pass(const std::string& name,
-                  std::span<const RGResourceUsage> inputs,
-                  std::span<const RGResourceUsage> outputs,
+                  std::span<const RGResourceUsage> resources,
                   std::function<void(CommandBuffer&)> execute);
 
     // 获取资源句柄（pass execute 回调内调用）

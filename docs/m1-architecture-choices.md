@@ -66,7 +66,7 @@ Render Graph 的功能按需引入，不提前建设未使用的能力：
 
 ### 资源引用方式
 
-Pass 声明输入输出时使用 typed handle（`RGResourceId`）而非字符串引用资源。`declare_resource()` / `import_resource()` 返回 `RGResourceId`，pass 持有并传递这些 ID。资源名称仅用于调试（debug name）。
+Pass 声明资源使用时通过 typed handle（`RGResourceId`）而非字符串引用资源。`declare_resource()` / `import_resource()` 返回 `RGResourceId`，pass 持有并传递这些 ID。每个资源使用声明（`RGResourceUsage`）包含 handle、access type（READ / WRITE / READ_WRITE）和 stage，合并为单个列表传入 `add_pass()`，不区分 inputs/outputs 参数。资源名称仅用于调试（debug name）。
 
 **为什么不用字符串：** 拼写错误不被编译期捕获，且字符串查找不够优雅。typed handle 提供编译期类型安全和零运行时查找开销。
 

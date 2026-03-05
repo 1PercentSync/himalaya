@@ -30,7 +30,7 @@
 - [ ] 创建 `framework/include/himalaya/framework/render_graph.h` + `framework/src/render_graph.cpp`
 - [ ] `RGResourceId` 类型定义
 - [ ] `import_image()` / `import_buffer()`：导入外部资源，返回 `RGResourceId`
-- [ ] `add_pass()`：注册 pass 名称、输入/输出 `RGResourceUsage` 列表、execute lambda
+- [ ] `add_pass()`：注册 pass 名称、`RGResourceUsage` 列表（读写语义由 `RGAccessType` 区分）、execute lambda
 - [ ] `compile()`：根据 pass 声明的输入输出，计算每个 pass 之间需要的 barrier
 - [ ] `execute()`：按注册顺序依次执行 pass（插入 barrier → 调用 execute lambda）
 - [ ] `get_image()` / `get_buffer()`：在 execute 回调内通过 `RGResourceId` 获取底层句柄
