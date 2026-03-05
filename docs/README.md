@@ -24,6 +24,7 @@
 | `m1-directory-structure.md` | 文件组织（独立 CMake target 反映四层架构）、层间依赖规则 |
 | `m1-interfaces.md` | 层间关键数据结构：RHI 句柄（generation-based）、场景数据、Render Graph 接口、Pass 接口、材质系统、Shader 绑定布局 |
 | `m1-phase1-plan.md` | M1 阶段一（最小可见三角形）的 7 个实现步骤、文件清单、技术笔记 |
+| `m1-phase2-plan.md` | M1 阶段二（基础渲染管线）的 7 个实现步骤、技术决策摘要、文件清单、技术笔记 |
 
 ---
 

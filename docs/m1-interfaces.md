@@ -126,15 +126,14 @@ struct CullResult {
 
 ## Layer 1 — Render Graph 接口（framework/render_graph.h）
 
-### 资源声明
+### 资源标识
 
 ```cpp
-struct RGResourceDesc {
-    std::string name;           // 如 "SceneDepth"、"HDRColor"
-    RGResourceType type;        // IMAGE 或 BUFFER
-    ImageDesc image_desc;       // type == IMAGE 时有效
-    BufferDesc buffer_desc;     // type == BUFFER 时有效
-    bool is_temporal = false;   // 需要帧间保留
+// 由 import_resource() 返回，pass 声明输入输出时使用
+// 资源名称仅用于调试（debug name），不参与运行时查找
+struct RGResourceId {
+    uint32_t index = UINT32_MAX;
+    bool valid() const { return index != UINT32_MAX; }
 };
 ```
 
@@ -142,7 +141,7 @@ struct RGResourceDesc {
 
 ```cpp
 struct RGResourceUsage {
-    std::string resource_name;
+    RGResourceId resource;
     RGAccessType access;        // READ, WRITE, READ_WRITE
     RGStage stage;              // COMPUTE, FRAGMENT, VERTEX,
                                 // COLOR_ATTACHMENT, DEPTH_ATTACHMENT, TRANSFER
@@ -154,21 +153,19 @@ struct RGResourceUsage {
 ```cpp
 class RenderGraph {
 public:
+    // 导入外部创建的资源（阶段二：所有资源走此路径）
+    RGResourceId import_image(const std::string& debug_name, ImageHandle handle);
+    RGResourceId import_buffer(const std::string& debug_name, BufferHandle handle);
+
     // 注册一个 pass
     void add_pass(const std::string& name,
                   std::span<const RGResourceUsage> inputs,
                   std::span<const RGResourceUsage> outputs,
                   std::function<void(CommandBuffer&)> execute);
 
-    // 声明一个资源（可以被多个 pass 引用）
-    void declare_resource(const RGResourceDesc& desc);
-
     // 获取资源句柄（pass execute 回调内调用）
-    ImageHandle get_image(const std::string& name);
-    BufferHandle get_buffer(const std::string& name);
-
-    // 获取 temporal 资源的历史帧版本
-    ImageHandle get_history_image(const std::string& name);
+    ImageHandle get_image(RGResourceId id);
+    BufferHandle get_buffer(RGResourceId id);
 
     // 编译并执行（barrier 自动插入）
     void compile();
@@ -176,11 +173,30 @@ public:
 };
 ```
 
+### 后续扩展（不在阶段二实现）
+
+阶段三引入 transient 资源时新增：
+
+```cpp
+// 声明 RG 管理的 transient 资源（帧内创建，帧结束可回收）
+RGResourceId declare_resource(const RGResourceDesc& desc);
+```
+
+阶段五引入 temporal 资源时新增：
+
+```cpp
+// RGResourceDesc 中添加 is_temporal 标记
+// 获取 temporal 资源的历史帧版本
+ImageHandle get_history_image(RGResourceId id);
+```
+
 ---
 
 ## Layer 2 — Pass 接口（passes/pass_interface.h）
 
-每个渲染 Pass 实现此接口。
+> **推迟到阶段三引入**。阶段二 pass 少（一两个），直接在 Render Graph 的 lambda 回调中编写渲染逻辑。阶段三有了多个 pass 的实际经验后再提取此抽象。
+
+每个渲染 Pass 实现此接口（阶段三起）。
 
 ```cpp
 class RenderPass {

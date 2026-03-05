@@ -31,20 +31,24 @@
 
 ## 阶段二：基础渲染管线
 
-**Layer 0 补全 + Layer 1 框架 + Layer 3 加载**
+**Layer 0 补全 + Layer 1 框架 + Layer 3 重构与加载**
 
-- Bindless descriptor 管理
-- Mesh 加载（glTF + 顶点格式定义）
-- 纹理加载（BC 格式、mip 生成）
-- 材质系统基础（标准 PBR 参数布局、材质实例）
-- 相机（投影、视图矩阵、自由漫游控制器）
-- 场景渲染接口（渲染列表定义）
+- Bindless descriptor 管理（DescriptorManager：set layout、descriptor set、bindless 纹理注册/注销）
+- Mesh 加载（fastgltf 解析 glTF、统一顶点格式）
+- 纹理加载（stb_image 解码 JPEG/PNG、GPU 端 mip 生成）
+- 材质系统基础（全局 Material SSBO + push constant 数据流、标准 PBR 参数布局）
+- 相机（framework 层 Camera 数据结构 + app 层自由漫游控制器）
+- 场景渲染接口（完整 SceneRenderData 结构，阶段二只填充需要的字段）
 - glTF 场景加载 → 填充渲染列表
-- 视锥剔除
-- Render Graph 骨架（手动编排 + barrier 辅助）
-- ImGui 集成
+- 视锥剔除（CPU 端 AABB-frustum）
+- Render Graph 骨架（barrier 自动插入 + 资源导入，typed handle 引用）
+- App 层拆分（main.cpp → application / scene_loader / camera_controller / debug_ui）
 
-**产出：** 能加载一个 glTF 场景，用一个简单的 unlit 或基础光照 shader 渲染出来，相机能移动，ImGui 能显示。画面上就是一个有纹理的静态场景，没有正确的光照。
+**产出：** 能加载一个 glTF 场景，用基础 Lit shader（Lambert + 硬编码方向光）渲染出来，相机能移动，ImGui 能显示。画面上就是一个有纹理和基础光照的静态场景。
+
+**暂不实现：** BC 纹理压缩（阶段二直接加载 JPEG/PNG）、RG transient 资源管理（阶段三引入）、RG temporal 资源管理（阶段五引入）、Pass 抽象基类（阶段三引入）。
+
+> 详细步骤见 `m1-phase2-plan.md`
 
 ---
 
