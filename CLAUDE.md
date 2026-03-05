@@ -138,8 +138,7 @@ himalaya/
 │   ├── include/himalaya/passes/
 │   └── src/
 ├── app/                 # himalaya_app (exe) → all above
-│   ├── CMakeLists.txt
-│   └── main.cpp
+│   └── CMakeLists.txt
 ├── shaders/
 ├── docs/
 └── tasks/
@@ -174,6 +173,8 @@ himalaya/
 | VMA | Vulkan 内存分配 |
 | shaderc | 运行时 GLSL → SPIR-V 编译 |
 | Dear ImGui | 调试 UI |
+| fastgltf | glTF 场景加载 |
+| stb_image | JPEG/PNG 图像解码 |
 
 ---
 
