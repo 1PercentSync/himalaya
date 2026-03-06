@@ -160,6 +160,9 @@ himalaya/
 | 对象销毁 | 显式 `destroy()` 方法，不依赖析构函数 |
 | 帧并行 | 2 Frames in Flight |
 | 错误处理 | `VK_CHECK` 宏 + Validation Layer 常开 + `VK_EXT_debug_utils` |
+| 深度格式 | D32Sfloat（无 stencil） |
+| 深度策略 | Reverse-Z（near=1, far=0, compare GREATER） |
+| 纹理格式 | 按角色选择：颜色数据 SRGB，线性数据 UNORM |
 
 ---
 

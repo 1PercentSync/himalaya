@@ -33,6 +33,24 @@
 | 视锥剔除 | 阶段二实现 | AABB-frustum，验证 world_bounds 正确性 |
 | Mip 生成 | GPU 端 vkCmdBlitImage | 标准做法，写一次复用 |
 | App 层 | Application 持有全部（注释分组）+ 模块按需接口 | Composition Root，阶段三提取 Renderer |
+| Depth Buffer | 阶段二创建（D32Sfloat） | imported resource 导入 RG，resize 时重建 |
+| Reverse-Z | 阶段二启用 | near=1, far=0, clear 0.0f, compare GREATER |
+| CommandBuffer 补全 | 分散到各 Step | Step 2: bind_descriptor_sets; Step 7: draw_indexed 等 |
+| Shader #include | shaderc Includer | 自定义 includer 从 shaders/ 目录解析 |
+| RG 初始 layout | import_image 参数 | 调用方传入 initial_layout |
+| RG 帧间生命周期 | 每帧重建 | 长期方案，非过渡 |
+| RG Command Buffer | 外部传入 | execute(CommandBuffer&) |
+| RG Barrier 粒度 | 仅 image layout | buffer barrier 阶段三按需加 |
+| GPU 上传 | 批量上传 | begin/end_immediate scope，一次 submit |
+| Resize 策略 | Application 集中管理 | 阶段三重构为 on_resize() |
+| glTF 多 primitive | 展开为独立 MeshInstance | 长期方案 |
+| glTF 坐标系 | 无需额外处理 | 负 viewport + GLM 右手系自洽 |
+| glTF 资源加载 | fastgltf 统一处理 | LoadExternalBuffers + LoadExternalImages |
+| Material SSBO | 一次性分配 | 加载后知道数量再创建 |
+| Set 0 更新 | descriptor 写一次 + 每帧 memcpy | GlobalUBO×2, LightBuffer×2, MaterialBuffer×1 |
+| sRGB 处理 | 按 texture 角色选 format | base color→SRGB, normal→UNORM |
+| Sampler 管理 | per-texture sampler | SamplerDesc + ResourceManager 管理 |
+| Default 纹理 | 三个 1×1（white/flat normal/black） | Texture 模块持有，固定 BindlessIndex |
 
 ---
 
@@ -124,22 +142,26 @@ private:
   - 创建 Descriptor Pool
   - 分配 Set 0 × 2（per-frame）+ Set 1 × 1
   - `get_global_set_layouts()` 返回 {set0_layout, set1_layout}
-  - Bindless 纹理注册（`register_texture()` → `BindlessIndex`）、注销（`unregister_texture()`，free list 回收）
+  - Bindless 纹理注册（`register_texture(ImageHandle, SamplerHandle)` → `BindlessIndex`）、注销（`unregister_texture()`，free list 回收）
   - 显式 `destroy()` 方法
+- ResourceManager 扩展 sampler 管理：`SamplerDesc` 结构体、`create_sampler()` / `destroy_sampler()` / `get_sampler()` 方法
+- CommandBuffer 新增 `bind_descriptor_sets()` 方法
 - **验证**：DescriptorManager 初始化/销毁无 validation 报错
 
 ### Step 3：Render Graph 骨架
 
 - 创建 `framework/include/himalaya/framework/render_graph.h` + `framework/src/render_graph.cpp`
 - `RGResourceId` 类型定义
-- `import_image()` / `import_buffer()`：导入外部资源，返回 `RGResourceId`
+- `import_image(debug_name, handle, initial_layout)` / `import_buffer()`：导入外部资源，返回 `RGResourceId`（import_image 带 `VkImageLayout initial_layout` 参数）
 - `add_pass()`：注册 pass 名称、`RGResourceUsage` 列表（读写语义由 `RGAccessType` 区分）、execute lambda
-- `compile()`：根据 pass 声明的输入输出，计算每个 pass 之间需要的 barrier
-- `execute()`：按注册顺序依次执行 pass（插入 barrier → 调用 execute lambda）
+- `compile()`：根据 pass 声明的输入输出，计算每个 pass 之间需要的 barrier（仅处理 image layout transition）
+- `execute(CommandBuffer& cmd)`：接收外部 command buffer，按注册顺序依次执行 pass（插入 barrier → 调用 execute lambda）
+- `clear()`：每帧重建前清除所有 pass 和资源引用（RG 每帧重建是长期方案）
 - `get_image()` / `get_buffer()`：在 execute 回调内通过 `RGResourceId` 获取底层句柄
 - 帧循环重构：acquire → RG compile/execute → submit → present
 - 三角形渲染迁移到 RG 的一个 pass 中
 - ImGui 迁移到 RG 的最后一个 pass 中
+- Shader 编译增加 shaderc includer 支持（`shaderc::CompileOptions::SetIncluder()` 自定义 includer，从 shaders/ 目录解析 `#include` 路径）
 - **验证**：三角形 + ImGui 通过 RG 渲染，效果与之前一致，无 validation 报错
 
 ### Step 4：Camera + 场景数据接口
@@ -159,20 +181,27 @@ private:
   - stb_image 加载 JPEG/PNG → RGBA8 像素数据
   - 上传到 GPU image（staging buffer）
   - GPU 端 mip 生成（`vkCmdBlitImage` 逐级降采样 + layout transition 链）
+  - 纹理加载时根据用途选择 format（base color/emissive → SRGB, normal/metallic-roughness/occlusion → UNORM）
   - 注册到 DescriptorManager 获取 `BindlessIndex`
+- 批量上传：Context 新增 `begin_immediate()` / `end_immediate()` scope
+- Default 纹理创建（1×1 white、flat normal、black），Texture 模块初始化时注册到 bindless array 获得固定 BindlessIndex
+- Sampler 创建：从 glTF sampler 定义创建对应 VkSampler（缺失时使用 default: linear repeat mip-linear）
 - **验证**：能加载单张纹理并在 shader 中通过 bindless index 采样显示
 
 ### Step 6：材质系统 + glTF 场景加载
 
 - 创建 `framework/include/himalaya/framework/material_system.h` + `framework/src/material_system.cpp`
   - `GPUMaterialData` 结构体（base_color_factor、metallic_factor、roughness_factor、各纹理 BindlessIndex）
-  - 全局 Material SSBO 管理（创建 buffer、写入材质数据）
+  - 全局 Material SSBO 管理（场景加载后知道材质总数，一次性创建恰好大小的 buffer）
   - `MaterialInstance` 管理（template_id + buffer offset）
+  - 缺失纹理字段填入 default 纹理的 BindlessIndex
 - 创建 `app/scene_loader.h/cpp`
   - fastgltf 解析 glTF 文件
   - 遍历 mesh：转换为统一顶点格式，创建 vertex/index buffer
   - 遍历 material：提取 PBR 参数和纹理引用，创建 MaterialInstance
   - 遍历 node：计算世界变换矩阵，填充 MeshInstance（含 world_bounds 计算）
+  - glTF 每个 primitive 展开为独立 MeshInstance（长期方案）
+  - 使用 fastgltf `LoadExternalBuffers` + `LoadExternalImages` options 统一处理嵌入式与外部资源
   - 填充 SceneRenderData
 - **验证**：glTF 场景加载后数据结构正确（可通过 ImGui 显示统计信息验证：mesh 数、材质数、纹理数）
 
@@ -182,10 +211,12 @@ private:
   - Vertex shader：MVP 变换，输出 world position / normal / uv0 / tangent
   - Fragment shader：采样 base color 纹理 × base_color_factor + Lambert 光照（硬编码方向光）+ 法线贴图采样（TBN 矩阵）
   - 使用 `shaders/common/bindings.glsl` 全局绑定布局
-- 创建 GlobalUBO 管理（每帧更新相机矩阵、屏幕尺寸等）
-- 创建 LightBuffer 管理（填充方向光数据）
-- Forward pass 注册到 Render Graph
+- Depth buffer 创建（D32Sfloat，imported resource 导入 RG，resize 时 Application 重建）
+- Reverse-Z 配置：depth clear 0.0f，compare op `VK_COMPARE_OP_GREATER`，投影矩阵使用自定义 reverse-Z perspective
+- 创建 GlobalUBO × 2 + LightBuffer × 2（`CpuToGpu` memory，descriptor 初始化写一次，每帧 memcpy 更新内容）
+- Forward pass 注册到 Render Graph（使用 depth attachment）
 - Pipeline 创建（使用 `DescriptorManager::get_global_set_layouts()`）
+- CommandBuffer 新增 `bind_index_buffer()`、`draw_indexed()`、`push_constants()` 方法
 - Draw loop：遍历可见物体，push constant 传 model matrix + material_index，draw call
 - 创建 `framework/include/himalaya/framework/culling.h` + `framework/src/culling.cpp`
   - AABB vs 6 frustum planes 测试

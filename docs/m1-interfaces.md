@@ -39,6 +39,15 @@ struct BufferDesc {
     BufferUsage usage;
     MemoryUsage memory;     // GPU_ONLY, CPU_TO_GPU, GPU_TO_CPU
 };
+
+struct SamplerDesc {
+    Filter mag_filter;          // NEAREST, LINEAR
+    Filter min_filter;          // NEAREST, LINEAR
+    SamplerMipMode mip_mode;    // NEAREST, LINEAR
+    SamplerWrapMode wrap_u;     // REPEAT, CLAMP_TO_EDGE, MIRRORED_REPEAT
+    SamplerWrapMode wrap_v;     // REPEAT, CLAMP_TO_EDGE, MIRRORED_REPEAT
+    float max_anisotropy;       // 0 表示不启用各向异性
+};
 ```
 
 ---
@@ -154,7 +163,9 @@ struct RGResourceUsage {
 class RenderGraph {
 public:
     // 导入外部创建的资源（阶段二：所有资源走此路径）
-    RGResourceId import_image(const std::string& debug_name, ImageHandle handle);
+    // initial_layout：资源导入时的当前 layout，RG 以此为起点计算 layout transition
+    RGResourceId import_image(const std::string& debug_name, ImageHandle handle,
+                              VkImageLayout initial_layout);
     RGResourceId import_buffer(const std::string& debug_name, BufferHandle handle);
 
     // 注册一个 pass（资源的读写语义由 RGAccessType 区分）
@@ -166,9 +177,14 @@ public:
     ImageHandle get_image(RGResourceId id);
     BufferHandle get_buffer(RGResourceId id);
 
-    // 编译并执行（barrier 自动插入）
+    // 每帧重建前调用，清除所有 pass 和资源引用
+    void clear();
+
+    // 编译（barrier 自动插入）
     void compile();
-    void execute();
+
+    // 执行（接收外部 command buffer，RG 不持有同步资源）
+    void execute(CommandBuffer& cmd);
 };
 ```
 
@@ -279,6 +295,26 @@ struct GPUMaterialData {
 ```
 
 > M1 阶段 GPUMaterialData 是定长结构体。以后材质类型增多时可扩展（加字段）或改为更灵活的布局。
+
+---
+
+## Layer 0 — Immediate Command Scope（rhi/context.h）
+
+场景加载等批量上传场景使用。一次 begin，录制所有传输命令，一次 end 提交并等待完成。
+
+```cpp
+// Context 新增方法
+class Context {
+public:
+    // 开始一段 immediate command 录制，返回可用的 CommandBuffer
+    CommandBuffer begin_immediate();
+
+    // 提交录制的命令并 vkQueueWaitIdle 等待完成
+    void end_immediate(CommandBuffer& cmd);
+};
+```
+
+> 现有 `upload_buffer()` 保留作为便利方法，内部调用 begin/end_immediate。
 
 ---
 

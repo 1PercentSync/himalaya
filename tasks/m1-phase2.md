@@ -20,23 +20,27 @@
 - [ ] 创建 Descriptor Pool
 - [ ] 分配 Set 0 × 2（per-frame）+ Set 1 × 1
 - [ ] `get_global_set_layouts()` 返回 {set0_layout, set1_layout}
-- [ ] Bindless 纹理注册（`register_texture()` → `BindlessIndex`）
+- [ ] Bindless 纹理注册（`register_texture(ImageHandle, SamplerHandle)` → `BindlessIndex`）
 - [ ] Bindless 纹理注销（`unregister_texture()`，free list 回收 + deferred deletion）
 - [ ] 显式 `destroy()` 方法
+- [ ] ResourceManager 扩展 sampler 管理：`SamplerDesc`、`create_sampler()`、`destroy_sampler()`、`get_sampler()`
+- [ ] CommandBuffer 新增 `bind_descriptor_sets()` 方法
 - [ ] 验证：DescriptorManager 初始化/销毁无 validation 报错
 
 ## Step 3：Render Graph 骨架
 
 - [ ] 创建 `framework/include/himalaya/framework/render_graph.h` + `framework/src/render_graph.cpp`
 - [ ] `RGResourceId` 类型定义
-- [ ] `import_image()` / `import_buffer()`：导入外部资源，返回 `RGResourceId`
+- [ ] `import_image(debug_name, handle, initial_layout)` / `import_buffer()`：导入外部资源，返回 `RGResourceId`
 - [ ] `add_pass()`：注册 pass 名称、`RGResourceUsage` 列表（读写语义由 `RGAccessType` 区分）、execute lambda
-- [ ] `compile()`：根据 pass 声明的输入输出，计算每个 pass 之间需要的 barrier
-- [ ] `execute()`：按注册顺序依次执行 pass（插入 barrier → 调用 execute lambda）
+- [ ] `compile()`：根据 pass 声明的输入输出，计算每个 pass 之间需要的 barrier（仅 image layout transition）
+- [ ] `execute(CommandBuffer& cmd)`：接收外部 command buffer，按注册顺序依次执行 pass
+- [ ] `clear()`：每帧重建前清除所有 pass 和资源引用
 - [ ] `get_image()` / `get_buffer()`：在 execute 回调内通过 `RGResourceId` 获取底层句柄
 - [ ] 帧循环重构：acquire → RG compile/execute → submit → present
 - [ ] 三角形渲染迁移到 RG 的一个 pass 中
 - [ ] ImGui 迁移到 RG 的最后一个独立 pass 中
+- [ ] Shader 编译增加 shaderc includer 支持（自定义 includer，从 shaders/ 解析 `#include`）
 - [ ] 验证：三角形 + ImGui 通过 RG 渲染，效果与之前一致，无 validation 报错
 
 ## Step 4：Camera + 场景数据接口
@@ -56,20 +60,27 @@
 - [ ] stb_image 加载 JPEG/PNG → RGBA8 像素数据
 - [ ] 上传到 GPU image（staging buffer）
 - [ ] GPU 端 mip 生成（`vkCmdBlitImage` 逐级降采样 + layout transition 链）
+- [ ] 纹理加载时根据用途选择 format（base color/emissive → SRGB, normal/metallic-roughness/occlusion → UNORM）
 - [ ] 注册到 DescriptorManager 获取 `BindlessIndex`
+- [ ] 批量上传：Context 新增 `begin_immediate()` / `end_immediate()` scope
+- [ ] Default 纹理创建（1×1 white、flat normal、black），Texture 模块初始化时注册到 bindless
+- [ ] Sampler 创建：从 glTF sampler 定义创建对应 VkSampler（缺失时使用 default）
 - [ ] 验证：能加载单张纹理并在 shader 中通过 bindless index 采样显示
 
 ## Step 6：材质系统 + glTF 场景加载
 
 - [ ] 创建 `framework/include/himalaya/framework/material_system.h` + `framework/src/material_system.cpp`
 - [ ] `GPUMaterialData` 结构体（base_color_factor、metallic/roughness_factor、各纹理 BindlessIndex）
-- [ ] 全局 Material SSBO 管理（创建 buffer、写入材质数据）
+- [ ] 全局 Material SSBO 管理（场景加载后一次性分配恰好大小的 buffer）
 - [ ] `MaterialInstance` 管理（template_id + buffer offset）
+- [ ] 缺失纹理字段填入 default 纹理的 BindlessIndex
 - [ ] 创建 `app/scene_loader.h/cpp`
 - [ ] fastgltf 解析 glTF 文件
 - [ ] 遍历 mesh：转换为统一顶点格式，创建 vertex/index buffer
 - [ ] 遍历 material：提取 PBR 参数和纹理引用，创建 MaterialInstance
 - [ ] 遍历 node：计算世界变换矩阵，填充 MeshInstance（含 world_bounds 计算）
+- [ ] glTF 每个 primitive 展开为独立 MeshInstance
+- [ ] 使用 fastgltf `LoadExternalBuffers` + `LoadExternalImages` 统一处理嵌入式与外部资源
 - [ ] 填充 SceneRenderData
 - [ ] 验证：glTF 场景加载后数据结构正确（ImGui 显示 mesh 数、材质数、纹理数）
 
@@ -78,10 +89,12 @@
 - [ ] 创建 `shaders/common/bindings.glsl`（全局绑定布局：Set 0 + Set 1 + push constant）
 - [ ] 创建 `shaders/forward.vert`（MVP 变换，输出 world position / normal / uv0 / tangent）
 - [ ] 创建 `shaders/forward.frag`（base color 纹理采样 + Lambert 光照 + 法线贴图 TBN）
-- [ ] GlobalUBO 管理（每帧更新相机矩阵、屏幕尺寸等）
-- [ ] LightBuffer 管理（填充方向光数据）
-- [ ] Forward pass 注册到 Render Graph
+- [ ] Depth buffer 创建（D32Sfloat，imported resource 导入 RG，resize 时 Application 重建）
+- [ ] Reverse-Z 配置：depth clear 0.0f，compare op GREATER，自定义 reverse-Z perspective 投影矩阵
+- [ ] GlobalUBO × 2 + LightBuffer × 2 管理（CpuToGpu memory，descriptor 初始化写一次，每帧 memcpy）
+- [ ] Forward pass 注册到 Render Graph（使用 depth attachment）
 - [ ] Pipeline 创建（使用 `DescriptorManager::get_global_set_layouts()`）
+- [ ] CommandBuffer 新增 `bind_index_buffer()`、`draw_indexed()`、`push_constants()` 方法
 - [ ] Draw loop：遍历可见物体，push constant 传 model matrix + material_index，draw call
 - [ ] 创建 `framework/include/himalaya/framework/culling.h` + `framework/src/culling.cpp`
 - [ ] AABB vs 6 frustum planes 视锥剔除
