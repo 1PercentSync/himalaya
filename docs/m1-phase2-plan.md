@@ -24,7 +24,7 @@
 | 图像解码 | stb_image | JPEG/PNG 解码 |
 | 纹理格式 | 阶段二直接加载 JPEG/PNG | BC 压缩推迟，是后续优化项 |
 | 顶点格式 | 统一（position + normal + uv0 + tangent + uv1） | 缺失属性填默认值 |
-| 阶段二 shader | 基础 Lit（Lambert + 硬编码方向光） | 验证 normal/tangent 数据链路 |
+| 阶段二 shader | 基础 Lit（Lambert + 从 LightBuffer 读取方向光） | 验证完整数据流（含 bindless + light buffer） |
 | 材质数据流 | 全局 Material SSBO + push constant（完整实现） | 验证 bindless 完整链路 |
 | 相机 | Camera 数据在 framework，CameraController 在 app | 渲染器不知道输入如何产生 |
 | Y-flip | 负 viewport height（延续阶段一） | 心智负担最小，Vulkan 核心保证 |
@@ -51,6 +51,21 @@
 | sRGB 处理 | 按 texture 角色选 format | base color→SRGB, normal→UNORM |
 | Sampler 管理 | per-texture sampler | SamplerDesc + ResourceManager 管理 |
 | Default 纹理 | 三个 1×1（white/flat normal/black） | Texture 模块持有，固定 BindlessIndex |
+| RG final_layout | import_image 必填参数 | 所有 imported image 指定帧末 layout，RG 自动插入转换 |
+| RG barrier 计算 | 按需实现映射组合 | 阶段二只实现用到的组合，assert 拦截未实现的。RG 不管 loadOp |
+| RG debug label | 阶段二实现 | CommandBuffer 新增方法，RG execute 自动插入 |
+| 纹理角色 | TextureRole 枚举 | texture 模块接受 Color/Linear，scene_loader 按 glTF 字段传入 |
+| 缺失 tangent | MikkTSpace 生成 | vcpkg 引入 mikktspace，mesh 缺失 tangent 时自动生成 |
+| Sampler 去重 | 不做 | glTF 层面自然去重够用，后续按需升级 |
+| upload_buffer | 录制到 immediate scope | 不自行 submit，staging 由 Context 收集并在 end_immediate 后销毁 |
+| Resize 流程 | handle_resize() 集中处理 | vkQueueWaitIdle 后立即销毁，acquire 失败和帧末两处共用 |
+| GPUMaterialData | 完整字段 64 字节 | vec4×2 + float×2 + uint×5 + padding，含 occlusion/emissive 占位 |
+| Forward shader 光照 | 从 LightBuffer 读取 | 不硬编码，验证完整数据流 |
+| Descriptor Pool | 两个 pool 分离 | 普通 pool (Set 0) + UPDATE_AFTER_BIND pool (Set 1) |
+| SceneLoader 所有权 | 持有全部资源句柄 | 提供 destroy() 一次性清理，支持场景切换 |
+| stb_image 通道 | 强制 RGBA | stbi_load 第四参数传 4，统一 R8G8B8A8 |
+| CameraController 输入 | 检查 ImGui WantCapture | 避免 ImGui 操作时相机误动 |
+| 默认方向光 | Application 保底 | scene_loader 忠实还原 glTF，Application 检测空光源后填默认值 |
 
 ---
 
@@ -139,7 +154,7 @@ private:
 - `DescriptorManager` 实现：
   - 创建 Set 0 layout（GlobalUBO binding 0 + LightBuffer binding 1 + MaterialBuffer binding 2）
   - 创建 Set 1 layout（bindless sampler2D array，上限 4096，`VARIABLE_DESCRIPTOR_COUNT` + `PARTIALLY_BOUND` + `UPDATE_AFTER_BIND`）
-  - 创建 Descriptor Pool
+  - 创建两个独立的 Descriptor Pool：普通 pool（Set 0, 2 UBO + 4 SSBO, maxSets=2）+ UPDATE_AFTER_BIND pool（Set 1, 4096 COMBINED_IMAGE_SAMPLER, maxSets=1）
   - 分配 Set 0 × 2（per-frame）+ Set 1 × 1
   - `get_global_set_layouts()` 返回 {set0_layout, set1_layout}
   - Bindless 纹理注册（`register_texture(ImageHandle, SamplerHandle)` → `BindlessIndex`）、注销（`unregister_texture()`，free list 回收）
@@ -152,7 +167,7 @@ private:
 
 - 创建 `framework/include/himalaya/framework/render_graph.h` + `framework/src/render_graph.cpp`
 - `RGResourceId` 类型定义
-- `import_image(debug_name, handle, initial_layout)` / `import_buffer()`：导入外部资源，返回 `RGResourceId`（import_image 带 `VkImageLayout initial_layout` 参数）
+- `import_image(debug_name, handle, initial_layout, final_layout)` / `import_buffer()`：导入外部资源，返回 `RGResourceId`（import_image 带 `initial_layout` 和 `final_layout` 参数，`final_layout` 必填，RG execute 结束后自动插入最终 layout transition）
 - `add_pass()`：注册 pass 名称、`RGResourceUsage` 列表（读写语义由 `RGAccessType` 区分）、execute lambda
 - `compile()`：根据 pass 声明的输入输出，计算每个 pass 之间需要的 barrier（仅处理 image layout transition）
 - `execute(CommandBuffer& cmd)`：接收外部 command buffer，按注册顺序依次执行 pass（插入 barrier → 调用 execute lambda）
@@ -162,6 +177,9 @@ private:
 - 三角形渲染迁移到 RG 的一个 pass 中
 - ImGui 迁移到 RG 的最后一个 pass 中
 - Shader 编译增加 shaderc includer 支持（`shaderc::CompileOptions::SetIncluder()` 自定义 includer，从 shaders/ 目录解析 `#include` 路径）
+- CommandBuffer 新增 `begin_debug_label(name, color)` / `end_debug_label()` 方法（封装 `VK_EXT_debug_utils`）
+- RG `execute()` 自动为每个 pass 插入 debug label（RenderDoc / GPU profiler 按 pass 名称分组）
+- `compile()` 的 barrier 计算：从 `(RGAccessType, RGStage)` 到 `(VkImageLayout, VkPipelineStageFlags2, VkAccessFlags2)` 的映射按需实现，未实现的组合 assert 拦截。RG 不管 loadOp/storeOp
 - **验证**：三角形 + ImGui 通过 RG 渲染，效果与之前一致，无 validation 报错
 
 ### Step 4：Camera + 场景数据接口
@@ -169,6 +187,7 @@ private:
 - 创建 `framework/include/himalaya/framework/camera.h`（Camera 结构体：view/projection/view_projection 矩阵、position、fov、near/far、aspect）+ 矩阵计算方法
 - 创建 `framework/include/himalaya/framework/scene_data.h`（完整 SceneRenderData、MeshInstance、DirectionalLight、PointLight、ReflectionProbe、LightmapInfo、CullResult、AABB）
 - 创建 `app/camera_controller.h/cpp`（WASD 移动 + 鼠标旋转的自由漫游控制器）
+- CameraController 检查 `ImGui::GetIO().WantCaptureMouse` / `WantCaptureKeyboard`，为 true 时跳过相机输入处理
 - 负 viewport height 处理 Y-flip + `GLM_FORCE_DEPTH_ZERO_TO_ONE`
 - **验证**：相机能自由移动，三角形随视角变化正确透视
 
@@ -177,11 +196,12 @@ private:
 - 创建 `framework/include/himalaya/framework/mesh.h` + `framework/src/mesh.cpp`
   - 统一顶点格式定义（`Vertex`：position vec3 + normal vec3 + uv0 vec2 + tangent vec4 + uv1 vec2）
   - Mesh 数据结构（vertex buffer handle、index buffer handle、顶点/索引数量）
+  - MikkTSpace 集成（vcpkg 引入 mikktspace）：mesh 缺失 tangent 属性时从 position + normal + uv0 自动生成
 - 创建 `framework/include/himalaya/framework/texture.h` + `framework/src/texture.cpp`
-  - stb_image 加载 JPEG/PNG → RGBA8 像素数据
+  - stb_image 加载 JPEG/PNG → RGBA8 像素数据（强制 4 通道，`stbi_load` 第四参数传 4，统一 R8G8B8A8 format）
   - 上传到 GPU image（staging buffer）
   - GPU 端 mip 生成（`vkCmdBlitImage` 逐级降采样 + layout transition 链）
-  - 纹理加载时根据用途选择 format（base color/emissive → SRGB, normal/metallic-roughness/occlusion → UNORM）
+  - 纹理加载接口接受 `TextureRole` 枚举（`Color` / `Linear`），根据角色选择 format（Color → SRGB, Linear → UNORM）。scene_loader 根据 glTF 材质字段引用关系确定角色后传入
   - 注册到 DescriptorManager 获取 `BindlessIndex`
 - 批量上传：Context 新增 `begin_immediate()` / `end_immediate()` scope
 - Default 纹理创建（1×1 white、flat normal、black），Texture 模块初始化时注册到 bindless array 获得固定 BindlessIndex
@@ -191,10 +211,10 @@ private:
 ### Step 6：材质系统 + glTF 场景加载
 
 - 创建 `framework/include/himalaya/framework/material_system.h` + `framework/src/material_system.cpp`
-  - `GPUMaterialData` 结构体（base_color_factor、metallic_factor、roughness_factor、各纹理 BindlessIndex）
+  - `GPUMaterialData` 结构体（std430 layout, 64 字节, alignas(16)）：base_color_factor(vec4) + emissive_factor(vec4, w unused) + metallic/roughness(float×2) + 5 个纹理 BindlessIndex(uint×5) + padding
   - 全局 Material SSBO 管理（场景加载后知道材质总数，一次性创建恰好大小的 buffer）
   - `MaterialInstance` 管理（template_id + buffer offset）
-  - 缺失纹理字段填入 default 纹理的 BindlessIndex
+  - 缺失纹理字段填入 default 纹理的 BindlessIndex（包括 occlusion_tex 和 emissive_tex 占位）
 - 创建 `app/scene_loader.h/cpp`
   - fastgltf 解析 glTF 文件
   - 遍历 mesh：转换为统一顶点格式，创建 vertex/index buffer
@@ -202,6 +222,8 @@ private:
   - 遍历 node：计算世界变换矩阵，填充 MeshInstance（含 world_bounds 计算）
   - glTF 每个 primitive 展开为独立 MeshInstance（长期方案）
   - 使用 fastgltf `LoadExternalBuffers` + `LoadExternalImages` options 统一处理嵌入式与外部资源
+  - Sampler 不做 ResourceManager 层去重，glTF 同一 sampler index 只创建一个 VkSampler（自然去重），后续按需升级为 hash 去重
+  - SceneLoader 持有所有加载产生的资源句柄列表（mesh buffer、texture、sampler、material），提供 `destroy()` 方法一次性清理，支持场景切换
   - 填充 SceneRenderData
 - **验证**：glTF 场景加载后数据结构正确（可通过 ImGui 显示统计信息验证：mesh 数、材质数、纹理数）
 
@@ -209,10 +231,12 @@ private:
 
 - 创建基础 Lit shader：`shaders/forward.vert` + `shaders/forward.frag`
   - Vertex shader：MVP 变换，输出 world position / normal / uv0 / tangent
-  - Fragment shader：采样 base color 纹理 × base_color_factor + Lambert 光照（硬编码方向光）+ 法线贴图采样（TBN 矩阵）
+  - Fragment shader：采样 base color 纹理 × base_color_factor + Lambert 光照（从 LightBuffer SSBO 读取方向光参数，不硬编码）+ 法线贴图采样（TBN 矩阵）
   - 使用 `shaders/common/bindings.glsl` 全局绑定布局
 - Depth buffer 创建（D32Sfloat，imported resource 导入 RG，resize 时 Application 重建）
 - Reverse-Z 配置：depth clear 0.0f，compare op `VK_COMPARE_OP_GREATER`，投影矩阵使用自定义 reverse-Z perspective
+- Application 提供保底方向光（检测 SceneRenderData 无方向光时填入默认值），scene_loader 忠实还原 glTF（无光源则输出空数组）
+- Resize 资源重建：提取 `handle_resize()` 私有方法，`vkQueueWaitIdle` 后立即销毁旧资源（不走 deferred deletion），acquire 失败和帧末 resize 两处共用
 - 创建 GlobalUBO × 2 + LightBuffer × 2（`CpuToGpu` memory，descriptor 初始化写一次，每帧 memcpy 更新内容）
 - Forward pass 注册到 Render Graph（使用 depth attachment）
 - Pipeline 创建（使用 `DescriptorManager::get_global_set_layouts()`）
@@ -282,3 +306,13 @@ shaders/
 | fastgltf + stb_image | fastgltf 不带图像解码，stb_image 负责 JPEG/PNG 解码 |
 | glTF 纹理归属 | framework 层的 texture 模块管理纹理生命周期，scene_loader 调用它 |
 | Descriptor Pool 规格 | 需要容纳 Set 0 × 2（per-frame）+ Set 1 × 1 + ImGui 专用池（已有） |
+| stb_image 通道 | 强制 4 通道（RGBA），stbi_load 第四参数传 4。避免 R8G8B8 三通道格式的 GPU 兼容性问题 |
+| 纹理角色 | texture 模块通过 `TextureRole` 枚举（`Color`/`Linear`）选择 format。同一张图被不同角色引用时创建两个 GPU image（极少发生） |
+| MikkTSpace | vcpkg 引入 mikktspace。仅在 mesh 缺失 tangent 属性时调用生成。填充顺序：position → normal → uv0 → MikkTSpace → uv1 |
+| Sampler 去重 | ResourceManager 层不做 hash 去重。glTF 同一 sampler index 只创建一个 VkSampler（自然去重）。后续按需升级 |
+| upload_buffer 行为 | 必须在 begin/end_immediate scope 内调用。只录制 copy 命令，不自行 submit。scope 外调用 assert 失败 |
+| Resize 销毁策略 | vkQueueWaitIdle 后立即销毁（不走 deferred deletion），因 idle 已保证 GPU 不再引用 |
+| CameraController 输入 | 检查 ImGui WantCaptureMouse/WantCaptureKeyboard 避免输入冲突 |
+| 默认方向光 | Application 检测 SceneRenderData 无方向光时填入保底光源。scene_loader 不捏造不存在的数据 |
+| Descriptor Pool 分离 | 两个独立 pool：普通 pool (Set 0, 2 UBO + 4 SSBO) + UPDATE_AFTER_BIND pool (Set 1, 4096 COMBINED_IMAGE_SAMPLER) |
+| GPUMaterialData 对齐 | std430 布局 64 字节。emissive_factor 用 vec4 避免 vec3 对齐问题。C++ 侧 alignas(16) |

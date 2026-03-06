@@ -44,7 +44,7 @@
 - Render Graph 骨架（barrier 自动插入 + 资源导入，typed handle 引用）
 - App 层拆分（main.cpp → application / scene_loader / camera_controller / debug_ui）
 
-**产出：** 能加载一个 glTF 场景，用基础 Lit shader（Lambert + 硬编码方向光）渲染出来，相机能移动，ImGui 能显示。画面上就是一个有纹理和基础光照的静态场景。
+**产出：** 能加载一个 glTF 场景，用基础 Lit shader（Lambert + 从 LightBuffer 读取方向光）渲染出来，相机能移动，ImGui 能显示。画面上就是一个有纹理和基础光照的静态场景。
 
 **暂不实现：** BC 纹理压缩（阶段二直接加载 JPEG/PNG）、RG transient 资源管理（阶段三引入）、RG temporal 资源管理（阶段五引入）、Pass 抽象基类（阶段三引入）。
 

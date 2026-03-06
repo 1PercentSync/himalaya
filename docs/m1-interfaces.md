@@ -164,8 +164,11 @@ class RenderGraph {
 public:
     // 导入外部创建的资源（阶段二：所有资源走此路径）
     // initial_layout：资源导入时的当前 layout，RG 以此为起点计算 layout transition
+    // final_layout：RG execute 结束后将资源转换到的目标 layout（必填，无默认值）
+    //   所有 imported image 都是帧间存活的，必须指定帧末 layout 以匹配下一帧的 initial_layout
     RGResourceId import_image(const std::string& debug_name, ImageHandle handle,
-                              VkImageLayout initial_layout);
+                              VkImageLayout initial_layout,
+                              VkImageLayout final_layout);
     RGResourceId import_buffer(const std::string& debug_name, BufferHandle handle);
 
     // 注册一个 pass（资源的读写语义由 RGAccessType 区分）
@@ -187,6 +190,16 @@ public:
     void execute(CommandBuffer& cmd);
 };
 ```
+
+### CommandBuffer Debug Utils 扩展
+
+```cpp
+// Debug utils (VK_EXT_debug_utils)
+void begin_debug_label(const std::string& name, std::array<float, 4> color = {0, 0, 0, 1});
+void end_debug_label();
+```
+
+RG `execute()` 自动为每个 pass 调用 `begin_debug_label(pass_name)` / `end_debug_label()`，在 RenderDoc 和 GPU profiler 中按 pass 名称分组显示。
 
 ### 后续扩展（不在阶段二实现）
 
@@ -282,19 +295,22 @@ struct MaterialInstance {
 ### GPU 端材质数据布局（shader 读取）
 
 ```cpp
-struct GPUMaterialData {
-    vec4 base_color_factor;
-    float metallic_factor;
-    float roughness_factor;
-    BindlessIndex base_color_tex;
-    BindlessIndex normal_tex;
-    BindlessIndex metallic_roughness_tex;
-    BindlessIndex lightmap_tex;
-    // ... 可扩展
+// std430 layout, total 64 bytes, aligned to 16 bytes
+struct alignas(16) GPUMaterialData {
+    vec4  base_color_factor;           // offset  0  — glTF baseColorFactor
+    vec4  emissive_factor;             // offset 16  — xyz = glTF emissiveFactor, w unused (= 0)
+    float metallic_factor;             // offset 32  — glTF metallicFactor
+    float roughness_factor;            // offset 36  — glTF roughnessFactor
+    uint  base_color_tex;              // offset 40  — bindless index
+    uint  normal_tex;                  // offset 44  — bindless index
+    uint  metallic_roughness_tex;      // offset 48  — bindless index
+    uint  occlusion_tex;               // offset 52  — bindless index
+    uint  emissive_tex;                // offset 56  — bindless index
+    uint  _padding;                    // offset 60  — padding to 64 bytes (struct align = 16)
 };
 ```
 
-> M1 阶段 GPUMaterialData 是定长结构体。以后材质类型增多时可扩展（加字段）或改为更灵活的布局。
+> emissive_factor 使用 vec4 而非 vec3 以避免 std430 对齐问题（vec3 对齐 16 字节会引入隐式 padding）。occlusion_tex 和 emissive_tex 在阶段二数据流中填充，shader 中阶段三 PBR 光照完善时启用读取。M1 阶段 GPUMaterialData 是定长结构体。以后材质类型增多时可扩展（加字段）或改为更灵活的布局。
 
 ---
 
@@ -314,7 +330,7 @@ public:
 };
 ```
 
-> 现有 `upload_buffer()` 保留作为便利方法，内部调用 begin/end_immediate。
+`upload_buffer()` 改为录制模式：在活跃的 begin/end_immediate scope 内调用时，只录制 copy 命令到当前 command buffer，不自行 submit。staging buffer 由 Context 收集，`end_immediate()` submit + wait 完成后统一销毁。scope 外调用 `upload_buffer()` 会 assert 失败。
 
 ---
 
