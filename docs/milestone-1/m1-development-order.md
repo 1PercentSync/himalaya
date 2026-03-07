@@ -48,7 +48,7 @@
 
 **暂不实现：** BC 纹理压缩（阶段二直接加载 JPEG/PNG）、RG transient 资源管理（阶段三引入）、RG temporal 资源管理（阶段五引入）、Pass 抽象基类（阶段三引入）。
 
-> 详细步骤见 `../m1-phase2-plan.md`
+> 详细步骤见 `../current-phase.md`
 
 ---
 

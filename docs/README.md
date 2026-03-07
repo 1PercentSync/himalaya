@@ -39,7 +39,6 @@
 | 文件 | 说明 |
 |------|------|
 | `current-phase.md` | 当前阶段（M1 阶段二）实现步骤、文件清单、技术笔记 |
-| `m1-phase2-plan.md` | M1 阶段二完整设计记录（含技术决策摘要，`current-phase.md` 的上游文档） |
 
 ---
 
@@ -61,3 +60,4 @@
 |------|------|
 | `archive/conversation-initial-design.md` | 初始设计的完整对话记录，所有决策的原始讨论上下文 |
 | `archive/m1-phase1-plan.md` | M1 阶段一（最小可见三角形）的 7 个实现步骤（已完成） |
+| `archive/m1-phase2-plan.md` | M1 阶段二原始设计记录（决策摘要表，内容已分散到 `milestone-1/m1-architecture-choices.md` 和 `current-phase.md`） |
