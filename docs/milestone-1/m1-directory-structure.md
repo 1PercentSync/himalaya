@@ -1,7 +1,7 @@
 # Milestone 1：目录结构
 
 > 本文档定义 M1 的文件组织，直接反映四层架构。
-> 四层架构定义见 `architecture.md`。
+> 四层架构定义见 `../architecture.md`。
 
 ---
 

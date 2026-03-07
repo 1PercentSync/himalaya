@@ -2,13 +2,13 @@
 
 > 阶段二的目标是搭建完整的渲染管线骨架：加载 glTF 场景、用基础 Lit shader 渲染、相机自由漫游。
 > 涉及 Layer 0 补全（Descriptor 管理）、Layer 1 框架建设、Layer 3 重构与场景加载。
-> 高层级阶段划分见 `m1-development-order.md`，架构决策见 `m1-architecture-choices.md`。
+> 高层级阶段划分见 `milestone-1/m1-development-order.md`，架构决策见 `milestone-1/m1-architecture-choices.md`。
 
 ---
 
 ## 阶段二技术决策摘要
 
-以下决策在阶段二设计讨论中确定，详细理由见 `m1-architecture-choices.md`：
+以下决策在阶段二设计讨论中确定，详细理由见 `milestone-1/m1-architecture-choices.md`：
 
 | 决策项 | 选择 | 要点 |
 |--------|------|------|

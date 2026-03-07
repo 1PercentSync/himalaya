@@ -1,6 +1,6 @@
 # Milestone 1 阶段一：任务清单
 
-> 详细设计见 `docs/m1-phase1-plan.md`
+> 详细设计见 `docs/archive/m1-phase1-plan.md`（已归档）
 
 ---
 
