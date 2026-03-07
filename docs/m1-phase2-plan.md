@@ -70,9 +70,9 @@
 | RG 解析 ImageHandle | RG 持有 ResourceManager* | framework→rhi 合法依赖方向 |
 | RG barrier aspect | 从 format 推导 | `aspect_from_format()` 提取到 `rhi/types.h` 公共函数 |
 | Format 转换函数 | 提取到 `rhi/types.h` | `to_vk_format()` + `aspect_from_format()` 供多处复用 |
-| GlobalUBO 布局 | 去掉 time，vec4 打包 | `camera_position_and_exposure`（xyz=pos, w=exposure），放 scene_data.h |
+| GlobalUBO 布局 | vec4 打包，保留 time | `camera_position_and_exposure`（xyz=pos, w=exposure）+ `screen_size` + `time`，放 scene_data.h |
 | GPUDirectionalLight | 两个 vec4，含 cast_shadows | `direction_and_intensity` + `color_and_shadow`，放 scene_data.h |
-| PushConstantData | 单 range VERTEX\|FRAGMENT | `mat4 model` + `uint material_index`，68 bytes，放 scene_data.h |
+| PushConstantData | 单 range VERTEX\|FRAGMENT | `mat4 model` + `uint material_index`，68 bytes，放 scene_data.h。阶段六迁移到 per-instance SSBO |
 | Image upload | ResourceManager 新增方法 | `upload_image()` + `generate_mips()`，通用资源操作 |
 | Staging buffer 收集 | Context pending list | `end_immediate()` 后统一销毁 |
 | GLM 编译宏 | CMake PUBLIC 定义 | `GLM_FORCE_DEPTH_ZERO_TO_ONE` 定义在 himalaya_framework |
@@ -80,6 +80,10 @@
 | stb_image 实现 | `framework/src/stb_impl.cpp` | `#define STB_IMAGE_IMPLEMENTATION` |
 | Framework Vulkan 类型 | RG + ImGui 为明确例外 | 非暂时性，详见 architecture.md |
 | Shader 文件读取 | `ShaderCompiler::compile_from_file()` | 封装文件读取+编译 |
+| 场景路径 | `argc/argv` + 默认路径 | 长期方向 GUI 文件选择器 |
+| 加载错误处理 | log error + abort | 开发期不做 fallback，立刻暴露问题 |
+| upload_buffer 迁移时机 | Step 5 | Step 5 引入 immediate scope 时适配旧三角形上传代码，Step 7 删除三角形后旧路径消失 |
+| RG READ_WRITE 语义 | 同帧同 image 读写 | 不用于 temporal（历史帧是独立 RGResourceId） |
 
 ---
 
@@ -218,11 +222,12 @@ private:
   - 纹理加载接口接受 `TextureRole` 枚举（`Color` / `Linear`），根据角色选择 format（Color → SRGB, Linear → UNORM）。scene_loader 根据 glTF 材质字段引用关系确定角色后传入
   - 注册到 DescriptorManager 获取 `BindlessIndex`
 - 批量上传：Context 新增 `begin_immediate()` / `end_immediate()` scope
+  - `upload_buffer()` API 变更：改为录制模式（必须在 scope 内调用）。旧的三角形顶点上传代码在此步骤同步适配
 - Default 纹理创建（1×1 white、flat normal、black），Texture 模块初始化时注册到 bindless array 获得固定 BindlessIndex
 - Sampler 创建：从 glTF sampler 定义创建对应 VkSampler（缺失时使用 default: linear repeat mip-linear）
-- **验证**：能加载单张纹理并在 shader 中通过 bindless index 采样显示
+- **验证**：改造三角形 shader 添加 hardcoded bindless index 采样，纹理正确显示在三角形上
 
-### Step 6：材质系统 + glTF 场景加载
+### Step 6：材质系统 + glTF 场景加载 + Unlit 渲染
 
 - 创建 `framework/include/himalaya/framework/material_system.h` + `framework/src/material_system.cpp`
   - `GPUMaterialData` 结构体（std430 layout, 64 字节, alignas(16)）：base_color_factor(vec4) + emissive_factor(vec4, w unused) + metallic/roughness(float×2) + 5 个纹理 BindlessIndex(uint×5) + padding
@@ -230,6 +235,8 @@ private:
   - `MaterialInstance` 管理（template_id + buffer offset）
   - 缺失纹理字段填入 default 纹理的 BindlessIndex（包括 occlusion_tex 和 emissive_tex 占位）
 - 创建 `app/scene_loader.h/cpp`
+  - 场景路径通过命令行参数传入（`argc/argv`），不传参时使用写死的默认路径
+  - 加载失败（glTF 解析、纹理缺失等）log error + abort，不做 fallback
   - fastgltf 解析 glTF 文件
   - 遍历 mesh：转换为统一顶点格式，创建 vertex/index buffer
   - 遍历 material：提取 PBR 参数和纹理引用，创建 MaterialInstance
@@ -239,27 +246,28 @@ private:
   - Sampler 不做 ResourceManager 层去重，glTF 同一 sampler index 只创建一个 VkSampler（自然去重），后续按需升级为 hash 去重
   - SceneLoader 持有所有加载产生的资源句柄列表（mesh buffer、texture、sampler、material），提供 `destroy()` 方法一次性清理，支持场景切换
   - 填充 SceneRenderData
-- **验证**：glTF 场景加载后数据结构正确（可通过 ImGui 显示统计信息验证：mesh 数、材质数、纹理数）
-
-### Step 7：Forward Pass + 视锥剔除
-
-- 创建基础 Lit shader：`shaders/forward.vert` + `shaders/forward.frag`
-  - Vertex shader：MVP 变换，输出 world position / normal / uv0 / tangent
-  - Fragment shader：采样 base color 纹理 × base_color_factor + Lambert 光照（从 LightBuffer SSBO 读取方向光参数，不硬编码）+ 法线贴图采样（TBN 矩阵）
-  - 使用 `shaders/common/bindings.glsl` 全局绑定布局
+- CommandBuffer 新增 `bind_index_buffer()`、`draw_indexed()`、`push_constants()` 方法
+- 创建 `shaders/common/bindings.glsl`（全局绑定布局：Set 0 + Set 1 + push constant）
+- 创建 unlit shader（forward.frag 的雏形）：采样 base_color_tex × base_color_factor，无光照计算
+- 创建 `shaders/forward.vert`（MVP 变换，输出 world position / normal / uv0 / tangent）
 - Depth buffer 创建（D32Sfloat，imported resource 导入 RG，resize 时 Application 重建）
 - Reverse-Z 配置：depth clear 0.0f，compare op `VK_COMPARE_OP_GREATER`，投影矩阵使用自定义 reverse-Z perspective
-- Application 提供保底方向光（检测 SceneRenderData 无方向光时填入默认值），scene_loader 忠实还原 glTF（无光源则输出空数组）
 - Resize 资源重建：提取 `handle_resize()` 私有方法，`vkQueueWaitIdle` 后立即销毁旧资源（不走 deferred deletion），acquire 失败和帧末 resize 两处共用
 - 创建 GlobalUBO × 2 + LightBuffer × 2（`CpuToGpu` memory，descriptor 初始化写一次，每帧 memcpy 更新内容）
-- Forward pass 注册到 Render Graph（使用 depth attachment）
+- Unlit pass 注册到 Render Graph（使用 depth attachment）
 - Pipeline 创建（使用 `DescriptorManager::get_global_set_layouts()`）
-- CommandBuffer 新增 `bind_index_buffer()`、`draw_indexed()`、`push_constants()` 方法
-- Draw loop：遍历可见物体，push constant 传 model matrix + material_index，draw call
+- Draw loop：遍历物体，push constant 传 model matrix + material_index，draw call
+- 移除旧的三角形渲染代码和 triangle shader（被 unlit pass 取代）
+- **验证**：glTF 场景渲染出有纹理的画面（无光照，验证数据管线完整性：顶点、变换、材质、bindless 全链路）
+
+### Step 7：Forward 光照 + 视锥剔除
+
+- 升级 `shaders/forward.frag`：在 unlit 基础上加入 Lambert 光照（从 LightBuffer SSBO 读取方向光参数，不硬编码）+ 法线贴图采样（TBN 矩阵）
+- Application 提供保底方向光（检测 SceneRenderData 无方向光时填入默认值），scene_loader 忠实还原 glTF（无光源则输出空数组）
 - 创建 `framework/include/himalaya/framework/culling.h` + `framework/src/culling.cpp`
   - AABB vs 6 frustum planes 测试
   - 输入 SceneRenderData + Camera，输出 CullResult
-- 移除旧的三角形渲染代码和 triangle shader（被 forward pass 取代）
+- Draw loop 改为遍历 CullResult 的 visible indices
 - **验证**：glTF 场景正确渲染，有纹理和基础光照，相机移动时视锥剔除生效
 
 ---
@@ -317,7 +325,7 @@ shaders/
 | 无 RG temporal 资源 | 阶段五 SSAO temporal filter 时引入 |
 | 顶点格式固定 | 统一 position + normal + uv0 + tangent + uv1，缺失属性填默认值 |
 | Y-flip | 负 viewport height，Vulkan 核心保证。深度 [0,1] 用 `GLM_FORCE_DEPTH_ZERO_TO_ONE` |
-| triangle shader 退役 | Step 7 完成后 `shaders/triangle.vert/frag` 被 forward shader 取代，可删除 |
+| triangle shader 退役 | Step 6 完成后 `shaders/triangle.vert/frag` 被 forward shader 取代，可删除 |
 | fastgltf + stb_image | fastgltf 不带图像解码，stb_image 负责 JPEG/PNG 解码 |
 | glTF 纹理归属 | framework 层的 texture 模块管理纹理生命周期，scene_loader 调用它 |
 | Descriptor Pool 规格 | 需要容纳 Set 0 × 2（per-frame）+ Set 1 × 1 + ImGui 专用池（已有） |
@@ -325,9 +333,13 @@ shaders/
 | 纹理角色 | texture 模块通过 `TextureRole` 枚举（`Color`/`Linear`）选择 format。同一张图被不同角色引用时创建两个 GPU image（极少发生） |
 | MikkTSpace | vcpkg 引入 mikktspace。仅在 mesh 缺失 tangent 属性时调用生成。填充顺序：position → normal → uv0 → MikkTSpace → uv1 |
 | Sampler 去重 | ResourceManager 层不做 hash 去重。glTF 同一 sampler index 只创建一个 VkSampler（自然去重）。后续按需升级 |
-| upload_buffer 行为 | 必须在 begin/end_immediate scope 内调用。只录制 copy 命令，不自行 submit。scope 外调用 assert 失败 |
+| upload_buffer 行为 | 必须在 begin/end_immediate scope 内调用。只录制 copy 命令，不自行 submit。scope 外调用 assert 失败。API 变更在 Step 5 执行，旧三角形上传代码同步适配 |
 | Resize 销毁策略 | vkQueueWaitIdle 后立即销毁（不走 deferred deletion），因 idle 已保证 GPU 不再引用 |
 | CameraController 输入 | 检查 ImGui WantCaptureMouse/WantCaptureKeyboard 避免输入冲突 |
 | 默认方向光 | Application 检测 SceneRenderData 无方向光时填入保底光源。scene_loader 不捏造不存在的数据 |
 | Descriptor Pool 分离 | 两个独立 pool：普通 pool (Set 0, 2 UBO + 4 SSBO) + UPDATE_AFTER_BIND pool (Set 1, 4096 COMBINED_IMAGE_SAMPLER) |
 | GPUMaterialData 对齐 | std430 布局 64 字节。emissive_factor 用 vec4 避免 vec3 对齐问题。C++ 侧 alignas(16) |
+| 场景路径 | `argc/argv` + 写死默认路径。CLion Run Configuration 切换场景。长期方向 GUI 文件选择器 |
+| 加载错误处理 | 加载失败（glTF / 纹理 / shader）一律 log error + abort。开发期不做 fallback |
+| Step 5→6 视觉验证 | Step 5 用三角形 shader + bindless 验证纹理链路。Step 6 用 unlit shader 验证完整数据管线（顶点、变换、材质）。Step 7 加光照和剔除 |
+| PushConstant 演进 | 阶段二 68 bytes（model + material_index）。阶段六迁移到 per-instance SSBO，为 lightmap 和 M2 motion vectors 预留空间 |

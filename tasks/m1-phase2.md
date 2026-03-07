@@ -67,12 +67,12 @@
 - [ ] GPU 端 mip 生成（`vkCmdBlitImage` 逐级降采样 + layout transition 链）
 - [ ] 纹理加载接口接受 `TextureRole` 枚举（Color/Linear），根据角色选择 format
 - [ ] 注册到 DescriptorManager 获取 `BindlessIndex`
-- [ ] 批量上传：Context 新增 `begin_immediate()` / `end_immediate()` scope
+- [ ] 批量上传：Context 新增 `begin_immediate()` / `end_immediate()` scope，`upload_buffer()` 改为录制模式，旧三角形上传代码同步适配
 - [ ] Default 纹理创建（1×1 white、flat normal、black），Texture 模块初始化时注册到 bindless
 - [ ] Sampler 创建：从 glTF sampler 定义创建对应 VkSampler（缺失时使用 default）
-- [ ] 验证：能加载单张纹理并在 shader 中通过 bindless index 采样显示
+- [ ] 验证：改造三角形 shader 添加 hardcoded bindless index 采样，纹理正确显示在三角形上
 
-## Step 6：材质系统 + glTF 场景加载
+## Step 6：材质系统 + glTF 场景加载 + Unlit 渲染
 
 - [ ] 创建 `framework/include/himalaya/framework/material_system.h` + `framework/src/material_system.cpp`
 - [ ] `GPUMaterialData` 结构体（64 字节, alignas(16)：vec4×2 + float×2 + uint×5 + padding）
@@ -80,6 +80,8 @@
 - [ ] `MaterialInstance` 管理（template_id + buffer offset）
 - [ ] 缺失纹理字段填入 default 纹理的 BindlessIndex
 - [ ] 创建 `app/scene_loader.h/cpp`
+- [ ] 场景路径通过 `argc/argv` 传入，不传参时使用默认路径
+- [ ] 加载失败 log error + abort，不做 fallback
 - [ ] fastgltf 解析 glTF 文件
 - [ ] 遍历 mesh：转换为统一顶点格式，创建 vertex/index buffer
 - [ ] 遍历 material：提取 PBR 参数和纹理引用，创建 MaterialInstance
@@ -89,23 +91,25 @@
 - [ ] Sampler 不做 ResourceManager 层去重（glTF 同一 sampler index 自然去重）
 - [ ] SceneLoader 持有所有资源句柄列表，提供 `destroy()` 一次性清理
 - [ ] 填充 SceneRenderData
-- [ ] 验证：glTF 场景加载后数据结构正确（ImGui 显示 mesh 数、材质数、纹理数）
-
-## Step 7：Forward Pass + 视锥剔除
-
+- [ ] CommandBuffer 新增 `bind_index_buffer()`、`draw_indexed()`、`push_constants()` 方法
 - [ ] 创建 `shaders/common/bindings.glsl`（全局绑定布局：Set 0 + Set 1 + push constant）
 - [ ] 创建 `shaders/forward.vert`（MVP 变换，输出 world position / normal / uv0 / tangent）
-- [ ] 创建 `shaders/forward.frag`（base color 纹理采样 + Lambert 光照（从 LightBuffer 读取）+ 法线贴图 TBN）
+- [ ] 创建 unlit shader（forward.frag 雏形）：采样 base_color_tex × base_color_factor，无光照
 - [ ] Depth buffer 创建（D32Sfloat，imported resource 导入 RG，resize 时 Application 重建）
 - [ ] Reverse-Z 配置：depth clear 0.0f，compare op GREATER，自定义 reverse-Z perspective 投影矩阵
-- [ ] Application 提供保底方向光（检测无光源时填默认值），scene_loader 忠实还原 glTF
 - [ ] 提取 `handle_resize()` 私有方法（vkQueueWaitIdle 后立即销毁旧资源，acquire 失败和帧末共用）
 - [ ] GlobalUBO × 2 + LightBuffer × 2 管理（CpuToGpu memory，descriptor 初始化写一次，每帧 memcpy）
-- [ ] Forward pass 注册到 Render Graph（使用 depth attachment）
+- [ ] Unlit pass 注册到 Render Graph（使用 depth attachment）
 - [ ] Pipeline 创建（使用 `DescriptorManager::get_global_set_layouts()`）
-- [ ] CommandBuffer 新增 `bind_index_buffer()`、`draw_indexed()`、`push_constants()` 方法
-- [ ] Draw loop：遍历可见物体，push constant 传 model matrix + material_index，draw call
+- [ ] Draw loop：遍历物体，push constant 传 model matrix + material_index，draw call
+- [ ] 移除旧的三角形渲染代码和 triangle shader
+- [ ] 验证：glTF 场景渲染出有纹理的画面（无光照，验证数据管线完整性）
+
+## Step 7：Forward 光照 + 视锥剔除
+
+- [ ] 升级 `shaders/forward.frag`：加入 Lambert 光照（从 LightBuffer 读取方向光）+ 法线贴图 TBN
+- [ ] Application 提供保底方向光（检测无光源时填默认值），scene_loader 忠实还原 glTF
 - [ ] 创建 `framework/include/himalaya/framework/culling.h` + `framework/src/culling.cpp`
 - [ ] AABB vs 6 frustum planes 视锥剔除
-- [ ] 移除旧的三角形渲染代码和 triangle shader
+- [ ] Draw loop 改为遍历 CullResult 的 visible indices
 - [ ] 验证：glTF 场景正确渲染，有纹理和基础光照，相机移动时视锥剔除生效

@@ -191,6 +191,7 @@ struct GlobalUniformData {
     glm::mat4 inv_view_projection;              // offset 192
     glm::vec4 camera_position_and_exposure;     // offset 256 — xyz = position, w = exposure
     glm::vec2 screen_size;                      // offset 272
+    float time;                                 // offset 280 — 程序运行时间（秒），M2 水面/云层等动画用
     // std140 padding to 288 bytes
 };
 
@@ -203,6 +204,9 @@ struct alignas(16) GPUDirectionalLight {
 
 // Per-draw push constant — 68 bytes, within 128-byte minimum guarantee
 // 对应 shader: push_constant, stage = VERTEX | FRAGMENT
+// 演进计划：阶段六迁移到 per-instance SSBO（push constant 缩减为 uint instance_id），
+//   同时容纳 lightmap 数据，并为 M2 的 prev_model (motion vectors) 预留空间。
+//   详见 m1-architecture-choices.md「Per-draw 数据演进」
 struct PushConstantData {
     glm::mat4 model;                            // 64 bytes — vertex shader 使用
     uint32_t material_index;                    //  4 bytes — fragment shader 使用
@@ -233,6 +237,9 @@ struct RGResourceUsage {
     RGStage stage;              // COMPUTE, FRAGMENT, VERTEX,
                                 // COLOR_ATTACHMENT, DEPTH_ATTACHMENT, TRANSFER
 };
+// READ_WRITE 语义：同一张 image 在同一帧内同时读写（如 depth attachment: test + write）。
+// 不用于 temporal 场景——历史帧通过 get_history_image() 获取独立 RGResourceId，
+// 当前帧和历史帧各自声明 READ 或 WRITE。
 ```
 
 ### Render Graph 核心接口
@@ -423,6 +430,7 @@ layout(set = 0, binding = 0) uniform GlobalUBO {
     mat4 inv_view_projection;
     vec4 camera_position_and_exposure;      // xyz = position, w = exposure
     vec2 screen_size;
+    float time;                             // 程序运行时间（秒）
 } global;
 
 layout(set = 0, binding = 1) readonly buffer LightBuffer {
