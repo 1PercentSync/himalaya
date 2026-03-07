@@ -1,0 +1,56 @@
+# Agent 会话上下文
+
+> 每次会话开始时阅读本文档，快速定位当前状态和所需上下文。
+
+---
+
+## 当前位置
+
+- **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
+- **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
+- **Phase**：阶段二 — 基础渲染管线（加载 glTF 场景、基础 Lit shader 渲染、相机漫游）
+- **进度**：阶段一（最小可见三角形）已完成并归档。阶段二 7 个 Step 全部未开始
+
+### 下一个任务
+
+Step 1：App 层重构 → 详见 `tasks/m1-phase2.md` 的 Step 1 复选框列表
+
+---
+
+## 必读文档
+
+CLAUDE.md 已自动加载，以下为额外必读：
+
+| 文档 | 说明 | 何时需要重读 |
+|------|------|-------------|
+| `docs/agent-context.md` | 本文档 | 每次会话开始 |
+| `docs/milestone-1/milestone-1.md` | M1 范围、预期效果、已知局限性 | Milestone 切换时 |
+| `docs/m1-phase2-plan.md` | 阶段二实现步骤、技术决策摘要、文件清单 | Phase 切换时 |
+| `docs/milestone-1/m1-interfaces.md` | 关键数据结构、GPU 布局、RG 接口、Shader 绑定 | 实现时按需查阅 |
+| `docs/milestone-1/m1-architecture-choices.md` | M1 各组件的实现级别选择与约定 | 实现时按需查阅 |
+| `tasks/m1-phase2.md` | 阶段二任务清单（复选框进度跟踪） | 每次会话开始 |
+
+## 按需文档
+
+遇到需要理解"为什么这么设计"时查阅：
+
+| 文档 | 说明 |
+|------|------|
+| `docs/technical-decisions.md` | 所有技术模块的最终选型结果与演进路线 |
+| `docs/decision-process.md` | 每项选型的推理过程、候选方案、排除理由 |
+| `docs/requirements-and-philosophy.md` | 项目定位、技术选型原则、画面质量目标 |
+| `docs/architecture.md` | 渲染器长远架构、四层结构、架构约束 |
+| `docs/milestone-1/m1-frame-flow.md` | M1 完整帧流程（pass 执行顺序、资源生命周期） |
+| `docs/milestone-1/m1-directory-structure.md` | 文件组织、层间依赖规则 |
+| `docs/milestone-1/m1-development-order.md` | M1 的 8 个开发阶段及依赖关系 |
+| `docs/roadmap/milestone-2.md` | M2 规划（画质全面提升） |
+| `docs/roadmap/milestone-3.md` | M3 规划（动态物体 + 性能优化） |
+| `docs/roadmap/milestone-future.md` | 远期可选目标 |
+
+---
+
+## 维护规则
+
+- **每个 Step 完成后**：更新"当前位置"的进度描述和"下一个任务"
+- **Phase 切换时**：更新 Phase 行、进度、下一个任务、必读文档列表中的 phase 文档路径
+- **Milestone 切换时**：全面更新本文档
