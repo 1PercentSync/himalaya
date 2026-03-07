@@ -28,11 +28,9 @@
 | 文件 | 说明 |
 |------|------|
 | `milestone-1/milestone-1.md` | M1 范围定义：预期效果、已知局限性、包含 / 不包含的功能清单 |
-| `milestone-1/m1-architecture-choices.md` | M1 各架构组件的实现级别选择（Render Graph、描述符、材质、Shader 等） |
+| `milestone-1/m1-implementation-ref.md` | M1 实现参考：项目结构与依赖规则、架构实现选择、关键接口与数据结构 |
 | `milestone-1/m1-frame-flow.md` | M1 一帧的完整 Pass 执行顺序、输入输出、MSAA 处理策略、资源生命周期 |
 | `milestone-1/m1-development-order.md` | M1 的 8 个开发阶段、每阶段的产出、阶段间依赖关系 |
-| `milestone-1/m1-directory-structure.md` | 文件组织（独立 CMake target 反映四层架构）、层间依赖规则 |
-| `milestone-1/m1-interfaces.md` | 层间关键数据结构：RHI 句柄（generation-based）、场景数据、Render Graph 接口、Pass 接口、材质系统、Shader 绑定布局 |
 
 ### 当前阶段计划
 
@@ -60,4 +58,3 @@
 |------|------|
 | `archive/conversation-initial-design.md` | 初始设计的完整对话记录，所有决策的原始讨论上下文 |
 | `archive/m1-phase1-plan.md` | M1 阶段一（最小可见三角形）的 7 个实现步骤（已完成） |
-| `archive/m1-phase2-plan.md` | M1 阶段二原始设计记录（决策摘要表，内容已分散到 `milestone-1/m1-architecture-choices.md` 和 `current-phase.md`） |

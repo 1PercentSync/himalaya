@@ -26,8 +26,7 @@ CLAUDE.md 已自动加载，以下为额外必读：
 | `docs/agent-context.md` | 本文档 | 每次会话开始 |
 | `docs/milestone-1/milestone-1.md` | M1 范围、预期效果、已知局限性 | Milestone 切换时 |
 | `docs/current-phase.md` | 当前阶段实现步骤、文件清单、技术笔记 | Phase 切换时 |
-| `docs/milestone-1/m1-interfaces.md` | 关键数据结构、GPU 布局、RG 接口、Shader 绑定 | 实现时按需查阅 |
-| `docs/milestone-1/m1-architecture-choices.md` | M1 各组件的实现级别选择与约定 | 实现时按需查阅 |
+| `docs/milestone-1/m1-implementation-ref.md` | M1 实现参考：项目结构、架构选择、关键接口与数据结构 | 实现时按需查阅 |
 | `tasks/m1-phase2.md` | 阶段二任务清单（复选框进度跟踪） | 每次会话开始 |
 
 ## 按需文档
@@ -41,7 +40,6 @@ CLAUDE.md 已自动加载，以下为额外必读：
 | `docs/requirements-and-philosophy.md` | 项目定位、技术选型原则、画面质量目标 |
 | `docs/architecture.md` | 渲染器长远架构、四层结构、架构约束 |
 | `docs/milestone-1/m1-frame-flow.md` | M1 完整帧流程（pass 执行顺序、资源生命周期） |
-| `docs/milestone-1/m1-directory-structure.md` | 文件组织、层间依赖规则 |
 | `docs/milestone-1/m1-development-order.md` | M1 的 8 个开发阶段及依赖关系 |
 | `docs/roadmap/milestone-2.md` | M2 规划（画质全面提升） |
 | `docs/roadmap/milestone-3.md` | M3 规划（动态物体 + 性能优化） |
