@@ -1,54 +1,11 @@
 # Milestone 1：实现参考
 
-> 本文档合并 M1 的项目结构、架构实现选择和关键接口定义，供实现时按需查阅。
+> 本文档包含 M1 的目标文件结构、架构实现选择和关键接口定义。
 > 长远架构目标见 `../architecture.md`，M1 功能范围见 `milestone-1.md`。
 
 ---
 
-## 项目结构与依赖规则
-
-> M1 的文件组织直接反映四层架构，四层架构定义见 `../architecture.md`。
-
-### 项目顶层结构
-
-```
-himalaya/
-├── CMakeLists.txt               # 顶层 CMake（project、vcpkg 工具链、add_subdirectory）
-├── vcpkg.json                   # vcpkg manifest（依赖声明）
-├── CLAUDE.md                    # Agent 持续性指令
-│
-├── rhi/                         # himalaya_rhi (static lib)
-│   ├── CMakeLists.txt
-│   ├── include/himalaya/rhi/    # 公开头文件
-│   └── src/                     # 实现文件
-│
-├── framework/                   # himalaya_framework (static lib) → himalaya_rhi
-│   ├── CMakeLists.txt
-│   ├── include/himalaya/framework/
-│   └── src/
-│
-├── passes/                      # himalaya_passes (static lib) → himalaya_framework
-│   ├── CMakeLists.txt
-│   ├── include/himalaya/passes/
-│   └── src/
-│
-├── app/                         # himalaya_app (exe) → all above
-│   ├── CMakeLists.txt
-│   └── main.cpp
-│
-├── shaders/                     # GLSL 源码
-│   ├── common/                  # 共享头文件 / 函数
-│   └── *.vert / *.frag / *.comp
-│
-├── docs/                        # 设计文档
-└── tasks/                       # 任务规划
-```
-
-每层为独立 CMake target，通过 `target_link_libraries` 表达依赖关系。编译期强制单向依赖——如果 `rhi/` 的代码试图引用 `framework/` 的头文件，编译直接报错。
-
-第三方库全部通过 vcpkg 管理，不使用 `third_party/` 目录。
-
----
+## M1 目标文件结构
 
 ### Layer 0 — RHI（rhi/）
 
@@ -173,22 +130,6 @@ shaders/
 - CMake 构建后拷贝到 build 目录，开发期通过编辑 build 副本触发热重载
 
 ---
-
-### 层间依赖规则
-
-| 目录 | 架构层 | 允许的依赖 |
-|------|--------|-----------|
-| `rhi/` | Layer 0 | Vulkan SDK、vcpkg 库（VMA、shaderc、GLFW） |
-| `framework/` | Layer 1 | `himalaya_rhi`、vcpkg 库（GLM、ImGui、stb_image、mikktspace） |
-| `passes/` | Layer 2 | `himalaya_framework`（通过 Render Graph 和资源接口） |
-| `shaders/` | — | `common/` 被所有 shader 引用 |
-| `app/` | Layer 3 | `himalaya_rhi`、`himalaya_framework`、`himalaya_passes`、vcpkg 库（GLFW、spdlog、fastgltf） |
-
-**禁止的依赖方向：**
-
-- `rhi/` 不依赖 `framework/`、`passes/`、`app/`
-- `framework/` 不依赖 `passes/`、`app/`
-- `passes/` 中的各 pass 文件之间不互相依赖（通过 Render Graph 间接关联）
 
 ---
 

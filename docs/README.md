@@ -28,7 +28,7 @@
 | 文件 | 说明 |
 |------|------|
 | `milestone-1/milestone-1.md` | M1 范围定义：预期效果、已知局限性、包含 / 不包含的功能清单 |
-| `milestone-1/m1-implementation-ref.md` | M1 实现参考：项目结构与依赖规则、架构实现选择、关键接口与数据结构 |
+| `milestone-1/m1-implementation-ref.md` | M1 实现参考：目标文件结构、架构实现选择、关键接口与数据结构 |
 | `milestone-1/m1-frame-flow.md` | M1 一帧的完整 Pass 执行顺序、输入输出、MSAA 处理策略、资源生命周期 |
 | `milestone-1/m1-development-order.md` | M1 的 8 个开发阶段、每阶段的产出、阶段间依赖关系 |
 
