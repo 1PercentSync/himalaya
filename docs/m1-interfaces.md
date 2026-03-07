@@ -50,6 +50,52 @@ struct SamplerDesc {
 };
 ```
 
+### Format 转换函数（rhi/types.h）
+
+```cpp
+// Format 枚举 → VkFormat 映射
+VkFormat to_vk_format(Format format);
+
+// Format 枚举 → VkImageAspectFlags 推导（depth → DEPTH_BIT, color → COLOR_BIT）
+VkImageAspectFlags aspect_from_format(Format format);
+```
+
+与 `Format` 枚举定义在同一文件中。RG 的 barrier 计算、ResourceManager 的 image 创建等处统一使用。
+
+### ResourceManager 扩展接口
+
+```cpp
+class ResourceManager {
+public:
+    // --- 已有接口省略 ---
+
+    // 外部 image 注册（swapchain image 等非 ResourceManager 创建的资源）
+    // 分配 slot 记录 VkImage/VkImageView/desc，allocation 为 null（不持有 VMA 内存）
+    ImageHandle register_external_image(VkImage image, VkImageView view, const ImageDesc& desc);
+
+    // 取消注册外部 image（释放 slot，递增 generation，不调用 vmaDestroyImage）
+    void unregister_external_image(ImageHandle handle);
+
+    // Image 上传（staging buffer + vkCmdCopyBufferToImage，在 immediate scope 内调用）
+    void upload_image(ImageHandle handle, const void* data, uint64_t size);
+
+    // GPU 端 mip 生成（逐级 vkCmdBlitImage，在 immediate scope 内调用）
+    void generate_mips(ImageHandle handle);
+};
+```
+
+### ShaderCompiler 扩展接口
+
+```cpp
+class ShaderCompiler {
+public:
+    // --- 已有接口省略 ---
+
+    // 从文件路径加载并编译 shader（封装文件读取 + compile）
+    std::vector<uint32_t> compile_from_file(const std::string& path, ShaderStage stage);
+};
+```
+
 ---
 
 ## Layer 1 — 场景数据接口（framework/scene_data.h）
@@ -128,6 +174,38 @@ struct CullResult {
     // 剔除输出，不修改 SceneRenderData
     std::vector<uint32_t> visible_opaque_indices;
     std::vector<uint32_t> visible_transparent_indices;  // 已按距离排序
+};
+```
+
+### GPU 数据结构（scene_data.h）
+
+CPU 侧数据结构的 GPU 布局镜像，必须与 shader 端一一对应。
+
+```cpp
+// GlobalUBO — std140 layout, 288 bytes (aligned to 16)
+// 对应 shader: Set 0, Binding 0
+struct GlobalUniformData {
+    glm::mat4 view;                             // offset   0
+    glm::mat4 projection;                       // offset  64
+    glm::mat4 view_projection;                  // offset 128
+    glm::mat4 inv_view_projection;              // offset 192
+    glm::vec4 camera_position_and_exposure;     // offset 256 — xyz = position, w = exposure
+    glm::vec2 screen_size;                      // offset 272
+    // std140 padding to 288 bytes
+};
+
+// GPU 方向光 — std430 layout, 32 bytes per element
+// 对应 shader: Set 0, Binding 1 (LightBuffer SSBO)
+struct alignas(16) GPUDirectionalLight {
+    glm::vec4 direction_and_intensity;          // xyz = direction, w = intensity
+    glm::vec4 color_and_shadow;                 // xyz = color, w = cast_shadows (0.0 / 1.0)
+};
+
+// Per-draw push constant — 68 bytes, within 128-byte minimum guarantee
+// 对应 shader: push_constant, stage = VERTEX | FRAGMENT
+struct PushConstantData {
+    glm::mat4 model;                            // 64 bytes — vertex shader 使用
+    uint32_t material_index;                    //  4 bytes — fragment shader 使用
 };
 ```
 
@@ -343,15 +421,13 @@ layout(set = 0, binding = 0) uniform GlobalUBO {
     mat4 projection;
     mat4 view_projection;
     mat4 inv_view_projection;
-    vec3 camera_position;
-    float time;
+    vec4 camera_position_and_exposure;      // xyz = position, w = exposure
     vec2 screen_size;
-    float exposure;
-    // ...
 } global;
 
 layout(set = 0, binding = 1) readonly buffer LightBuffer {
-    DirectionalLight directional_lights[];
+    // 每个元素: vec4 direction_and_intensity + vec4 color_and_shadow
+    GPUDirectionalLight directional_lights[];
 };
 
 layout(set = 0, binding = 2) readonly buffer MaterialBuffer {

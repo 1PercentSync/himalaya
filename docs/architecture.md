@@ -160,13 +160,24 @@ Layer 0（Vulkan 抽象层 / RHI）
 
 | 约束 | 保护的架构属性 | 说明 |
 |------|---------------|------|
-| 上层不接触 Vulkan 类型 | Layer 0 内部实现自由度 | Layer 1/2 代码中不出现 VkImage、VkBuffer 等类型，通过句柄操作 |
+| 上层不接触 Vulkan 类型 | Layer 0 内部实现自由度 | Layer 1/2 代码中不出现 VkImage、VkBuffer 等类型，通过句柄操作。**例外**：Render Graph 和 ImGui Backend 直接操作 Vulkan 同步/渲染原语，允许使用 VkImageLayout 等类型（见下方说明） |
 | Pass 间只通过资源声明通信 | Pass 可插拔性 | SSAO 不持有 Depth PrePass 的引用，只声明"我需要 DepthBuffer 输入"，Render Graph 连接 |
 | 渲染列表帧内不可变 | 多视图复用、数据安全 | 剔除结果是独立的索引列表，不从渲染列表中删除物体 |
 | 配置参数单向传递 | 数据流清晰可追踪 | 应用层 → 配置结构体 → Pass 读取。Pass 私有运行时状态（如当前 EV 值）不反馈到应用层 |
 | Temporal 数据归属 Pass | 模块启用禁用的干净性 | 由 Render Graph temporal 机制管理。禁用 Pass 时其 temporal 数据自然失效，重新启用时干净积累 |
 | Shader 不硬编码绑定 | 材质系统灵活性 | 纹理通过 bindless index 访问，uniform 通过定义好的 buffer 布局访问 |
 | Validation Layer 常开 | 开发期 bug 可见性 | Layer 0 每个 API 调用检查返回值。关键资源加 debug name（VK_EXT_debug_utils）|
+
+### Framework 层 Vulkan 类型例外
+
+以下 Framework 层组件允许直接使用 Vulkan 类型（VkImageLayout 等），不受"上层不接触 Vulkan 类型"约束：
+
+| 组件 | 理由 |
+|------|------|
+| Render Graph | 本质是 Vulkan barrier 管理器，用 VkImageLayout 比自造枚举再映射更直观且不易出错 |
+| ImGui Backend | 第三方库的 Vulkan backend 天然需要 Vulkan 类型 |
+
+其他 Framework 模块（Camera、Mesh、Texture、MaterialSystem 等）的公开接口仍然不使用 Vulkan 类型，通过 RHI 句柄和自定义枚举操作。
 
 ### 资源命名约定
 

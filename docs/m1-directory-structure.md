@@ -175,10 +175,10 @@ shaders/
 | 目录 | 架构层 | 允许的依赖 |
 |------|--------|-----------|
 | `rhi/` | Layer 0 | Vulkan SDK、vcpkg 库（VMA、shaderc、GLFW） |
-| `framework/` | Layer 1 | `himalaya_rhi`、vcpkg 库（GLM、ImGui、fastgltf、stb_image） |
+| `framework/` | Layer 1 | `himalaya_rhi`、vcpkg 库（GLM、ImGui、stb_image、mikktspace） |
 | `passes/` | Layer 2 | `himalaya_framework`（通过 Render Graph 和资源接口） |
 | `shaders/` | — | `common/` 被所有 shader 引用 |
-| `app/` | Layer 3 | `himalaya_rhi`、`himalaya_framework`、`himalaya_passes`、vcpkg 库（GLFW、spdlog） |
+| `app/` | Layer 3 | `himalaya_rhi`、`himalaya_framework`、`himalaya_passes`、vcpkg 库（GLFW、spdlog、fastgltf） |
 
 **禁止的依赖方向：**
 

@@ -66,6 +66,20 @@
 | stb_image 通道 | 强制 RGBA | stbi_load 第四参数传 4，统一 R8G8B8A8 |
 | CameraController 输入 | 检查 ImGui WantCapture | 避免 ImGui 操作时相机误动 |
 | 默认方向光 | Application 保底 | scene_loader 忠实还原 glTF，Application 检测空光源后填默认值 |
+| Swapchain image 导入 RG | ResourceManager 外部注册 | `register_external_image()` 返回 ImageHandle，import_image 接口不变 |
+| RG 解析 ImageHandle | RG 持有 ResourceManager* | framework→rhi 合法依赖方向 |
+| RG barrier aspect | 从 format 推导 | `aspect_from_format()` 提取到 `rhi/types.h` 公共函数 |
+| Format 转换函数 | 提取到 `rhi/types.h` | `to_vk_format()` + `aspect_from_format()` 供多处复用 |
+| GlobalUBO 布局 | 去掉 time，vec4 打包 | `camera_position_and_exposure`（xyz=pos, w=exposure），放 scene_data.h |
+| GPUDirectionalLight | 两个 vec4，含 cast_shadows | `direction_and_intensity` + `color_and_shadow`，放 scene_data.h |
+| PushConstantData | 单 range VERTEX\|FRAGMENT | `mat4 model` + `uint material_index`，68 bytes，放 scene_data.h |
+| Image upload | ResourceManager 新增方法 | `upload_image()` + `generate_mips()`，通用资源操作 |
+| Staging buffer 收集 | Context pending list | `end_immediate()` 后统一销毁 |
+| GLM 编译宏 | CMake PUBLIC 定义 | `GLM_FORCE_DEPTH_ZERO_TO_ONE` 定义在 himalaya_framework |
+| fastgltf 归属 | app 层 | 链接到 himalaya_app，不是 framework |
+| stb_image 实现 | `framework/src/stb_impl.cpp` | `#define STB_IMAGE_IMPLEMENTATION` |
+| Framework Vulkan 类型 | RG + ImGui 为明确例外 | 非暂时性，详见 architecture.md |
+| Shader 文件读取 | `ShaderCompiler::compile_from_file()` | 封装文件读取+编译 |
 
 ---
 
@@ -266,7 +280,7 @@ framework/
 │   ├── texture.h              # 纹理加载（stb_image）、GPU mip 生成、bindless 注册
 │   ├── material_system.h      # 材质模板、实例、全局 Material SSBO
 │   ├── camera.h               # Camera 数据结构 + 矩阵计算
-│   ├── scene_data.h           # SceneRenderData、MeshInstance、光源、探针（纯头文件）
+│   ├── scene_data.h           # SceneRenderData、MeshInstance、光源、探针、GPU 数据结构（纯头文件）
 │   └── culling.h              # 视锥剔除
 └── src/
     ├── render_graph.cpp
@@ -274,7 +288,8 @@ framework/
     ├── texture.cpp
     ├── material_system.cpp
     ├── camera.cpp
-    └── culling.cpp
+    ├── culling.cpp
+    └── stb_impl.cpp           # stb_image 单头文件库实现（#define STB_IMAGE_IMPLEMENTATION）
 
 app/
 ├── main.cpp                   # 入口（创建 Application 并运行）
