@@ -76,7 +76,7 @@ private:
         avg_fps = static_cast<float>(n) / total;
 
         // 1% low: average the worst (longest) 1% of frame times
-        std::sort(samples_.begin(), samples_.end(), std::greater<>());
+        std::ranges::sort(samples_, std::greater<>());
         const size_t low_count = std::max<size_t>(1, n / 100);
 
         float low_total = 0.0f;
