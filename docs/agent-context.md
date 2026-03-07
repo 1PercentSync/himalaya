@@ -25,7 +25,7 @@ CLAUDE.md 已自动加载，以下为额外必读：
 |------|------|-------------|
 | `docs/agent-context.md` | 本文档 | 每次会话开始 |
 | `docs/milestone-1/milestone-1.md` | M1 范围、预期效果、已知局限性 | Milestone 切换时 |
-| `docs/m1-phase2-plan.md` | 阶段二实现步骤、技术决策摘要、文件清单 | Phase 切换时 |
+| `docs/current-phase.md` | 当前阶段实现步骤、文件清单、技术笔记 | Phase 切换时 |
 | `docs/milestone-1/m1-interfaces.md` | 关键数据结构、GPU 布局、RG 接口、Shader 绑定 | 实现时按需查阅 |
 | `docs/milestone-1/m1-architecture-choices.md` | M1 各组件的实现级别选择与约定 | 实现时按需查阅 |
 | `tasks/m1-phase2.md` | 阶段二任务清单（复选框进度跟踪） | 每次会话开始 |
