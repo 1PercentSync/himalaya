@@ -25,7 +25,7 @@ CLAUDE.md 已自动加载，以下为额外必读：
 |------|------|
 | `docs/milestone-1/milestone-1.md` | M1 范围、预期效果、已知局限性 |
 | `docs/current-phase.md` | 当前阶段实现步骤、文件清单、技术笔记 |
-| `docs/milestone-1/m1-implementation-ref.md` | M1 实现参考：目标文件结构、关键接口与数据结构 |
+| `docs/milestone-1/m1-interfaces.md` | M1 接口与目标结构：文件结构、关键接口与数据结构 |
 | `tasks/m1-phase2.md` | 阶段二任务清单（复选框进度跟踪） |
 
 ## 按需文档
@@ -38,7 +38,7 @@ CLAUDE.md 已自动加载，以下为额外必读：
 | `docs/project/decision-process.md` | 每项选型的推理过程、候选方案、排除理由 |
 | `docs/project/requirements-and-philosophy.md` | 项目定位、技术选型原则、画面质量目标 |
 | `docs/project/architecture.md` | 渲染器长远架构、四层结构、架构约束 |
-| `docs/milestone-1/m1-architecture-choices.md` | M1 各组件的实现选择与决策理由 |
+| `docs/milestone-1/m1-design-decisions.md` | M1 各组件的设计选择与决策理由 |
 | `docs/milestone-1/m1-frame-flow.md` | M1 完整帧流程（pass 执行顺序、资源生命周期） |
 | `docs/milestone-1/m1-development-order.md` | M1 的 8 个开发阶段及依赖关系 |
 | `docs/roadmap/milestone-2.md` | M2 规划（画质全面提升） |

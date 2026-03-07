@@ -1,7 +1,7 @@
-# Milestone 1：实现参考
+# Milestone 1：接口与目标结构
 
 > 本文档包含 M1 的目标文件结构和关键接口定义。
-> 架构实现选择见 `m1-architecture-choices.md`，长远架构目标见 `../project/architecture.md`，M1 功能范围见 `milestone-1.md`。
+> 设计决策与理由见 `m1-design-decisions.md`，长远架构目标见 `../project/architecture.md`，M1 功能范围见 `milestone-1.md`。
 
 ---
 
@@ -30,10 +30,6 @@ rhi/
     ├── shader.cpp
     └── vma_impl.cpp            # VMA 单头文件库实现
 ```
-
-**与旧版差异说明：**
-- `device.h` + `sync.h` 合并为 `context.h`——帧同步（fence/semaphore）是 Context 核心职责之一，与 Device/Queue 管理内聚
-- 文件按需创建，不提前建空骨架
 
 ---
 
@@ -336,7 +332,7 @@ struct alignas(16) GPUDirectionalLight {
 // 对应 shader: push_constant, stage = VERTEX | FRAGMENT
 // 演进计划：阶段六迁移到 per-instance SSBO（push constant 缩减为 uint instance_id），
 //   同时容纳 lightmap 数据，并为 M2 的 prev_model (motion vectors) 预留空间。
-//   详见 m1-architecture-choices.md「Per-draw 数据演进：Push Constant → Per-instance SSBO」
+//   详见 m1-design-decisions.md「Per-draw 数据演进：Push Constant → Per-instance SSBO」
 struct PushConstantData {
     glm::mat4 model;                            // 64 bytes — vertex shader 使用
     uint32_t material_index;                    //  4 bytes — fragment shader 使用
@@ -416,30 +412,11 @@ void end_debug_label();
 
 RG `execute()` 自动为每个 pass 调用 `begin_debug_label(pass_name)` / `end_debug_label()`，在 RenderDoc 和 GPU profiler 中按 pass 名称分组显示。
 
-#### 后续扩展（不在阶段二实现）
-
-阶段三引入 transient 资源时新增：
-
-```cpp
-// 声明 RG 管理的 transient 资源（帧内创建，帧结束可回收）
-RGResourceId declare_resource(const RGResourceDesc& desc);
-```
-
-阶段五引入 temporal 资源时新增：
-
-```cpp
-// RGResourceDesc 中添加 is_temporal 标记
-// 获取 temporal 资源的历史帧版本
-ImageHandle get_history_image(RGResourceId id);
-```
-
 ---
 
 ### Layer 2 — Pass 接口（passes/pass_interface.h）
 
-> **推迟到阶段三引入**。阶段二 pass 少（一两个），直接在 Render Graph 的 lambda 回调中编写渲染逻辑。阶段三有了多个 pass 的实际经验后再提取此抽象。
-
-每个渲染 Pass 实现此接口（阶段三起）。
+> 阶段三引入。阶段二直接在 RG lambda 回调中编写渲染逻辑。
 
 ```cpp
 class RenderPass {

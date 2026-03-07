@@ -1,6 +1,6 @@
 # Milestone 1 阶段二：任务清单
 
-> 实现步骤见 `docs/current-phase.md`，技术决策与接口定义见 `docs/milestone-1/m1-implementation-ref.md`
+> 实现步骤见 `docs/current-phase.md`，接口定义见 `docs/milestone-1/m1-interfaces.md`
 
 ---
 

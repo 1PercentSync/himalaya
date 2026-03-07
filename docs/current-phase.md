@@ -3,7 +3,7 @@
 > 目标：搭建完整的渲染管线骨架 — 加载 glTF 场景、用基础 Lit shader 渲染、相机自由漫游。
 > 涉及 Layer 0 补全（Descriptor 管理）、Layer 1 框架建设、Layer 3 重构与场景加载。
 >
-> 关键接口定义见 `milestone-1/m1-implementation-ref.md`，架构实现选择见 `milestone-1/m1-architecture-choices.md`。
+> 关键接口定义见 `milestone-1/m1-interfaces.md`，设计决策见 `milestone-1/m1-design-decisions.md`。
 
 ---
 

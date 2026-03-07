@@ -145,4 +145,4 @@ shaders/
 | GLFW 回调链 | ImGui GLFW backend 以 `install_callbacks = true` 初始化，链式调用先前注册的回调；因此 ImGui 初始化必须在 app 的 GLFW 回调注册之后 |
 | ImGui API 版本 | vcpkg baseline 安装的版本中 `MSAASamples` 和 `PipelineRenderingCreateInfo` 为 `ImGui_ImplVulkan_InitInfo` 顶层字段，无 `ColorAttachmentFormat` 简写字段 |
 | Descriptor Pool 规格 | 专用池，4 个 `COMBINED_IMAGE_SAMPLER`，`FREE_DESCRIPTOR_SET_BIT` |
-| ImGui 架构决策 | 详见 `../milestone-1/m1-implementation-ref.md`「ImGui 集成」章节 |
+| ImGui 架构决策 | 详见 `../milestone-1/m1-design-decisions.md`「ImGui 集成」章节 |
