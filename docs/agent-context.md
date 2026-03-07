@@ -45,6 +45,13 @@ CLAUDE.md 已自动加载，以下为额外必读：
 | `docs/roadmap/milestone-3.md` | M3 规划（动态物体 + 性能优化） |
 | `docs/roadmap/milestone-future.md` | 远期可选目标 |
 
+## 归档文档
+
+| 文档 | 说明 |
+|------|------|
+| `docs/archive/conversation-initial-design.md` | 初始设计的完整对话记录 |
+| `docs/archive/m1-phase1-plan.md` | M1 阶段一实现步骤（已完成） |
+
 ---
 
 ## 维护规则

@@ -2,7 +2,7 @@
 
 基于 Vulkan 1.4 的实时渲染器，以光栅化渲染为起步。
 
-- 设计文档索引：`docs/README.md`
+- 设计文档索引：`docs/agent-context.md`
 - 任务规划：`tasks/`
 
 ## 文档规范
