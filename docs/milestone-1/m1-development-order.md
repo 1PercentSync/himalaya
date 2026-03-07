@@ -1,7 +1,7 @@
 # Milestone 1：开发顺序
 
 > 本文档记录 M1 的分阶段开发计划，每个阶段结束都有可见的、可验证的产出。
-> 帧流程详见 `m1-frame-flow.md`，架构选择详见 `m1-implementation-ref.md`。
+> 帧流程详见 `m1-frame-flow.md`，架构选择详见 `m1-architecture-choices.md`，接口定义详见 `m1-implementation-ref.md`。
 
 ---
 
