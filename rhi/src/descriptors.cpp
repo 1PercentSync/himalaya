@@ -173,6 +173,37 @@ namespace himalaya::rhi {
     }
 
     void DescriptorManager::allocate_sets() {
-        // TODO: Allocate descriptor sets
+        // --- Set 0 x2 (per-frame) ---
+        const std::array set0_layouts = {
+            set0_layout_, set0_layout_,
+        };
+
+        const VkDescriptorSetAllocateInfo set0_alloc{
+            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+            .descriptorPool = set0_pool_,
+            .descriptorSetCount = kMaxFramesInFlight,
+            .pSetLayouts = set0_layouts.data(),
+        };
+
+        VK_CHECK(vkAllocateDescriptorSets(context_->device, &set0_alloc, set0_sets_.data()));
+
+        // --- Set 1 x1 (bindless textures) ---
+        constexpr uint32_t variable_count = kMaxBindlessTextures;
+
+        constexpr VkDescriptorSetVariableDescriptorCountAllocateInfo variable_info{
+            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO,
+            .descriptorSetCount = 1,
+            .pDescriptorCounts = &variable_count,
+        };
+
+        const VkDescriptorSetAllocateInfo set1_alloc{
+            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+            .pNext = &variable_info,
+            .descriptorPool = set1_pool_,
+            .descriptorSetCount = 1,
+            .pSetLayouts = &set1_layout_,
+        };
+
+        VK_CHECK(vkAllocateDescriptorSets(context_->device, &set1_alloc, &set1_set_));
     }
 } // namespace himalaya::rhi
