@@ -5,9 +5,17 @@
 
 #include <himalaya/framework/render_graph.h>
 
+#include <himalaya/rhi/commands.h>
+#include <himalaya/rhi/resources.h>
+
 #include <cassert>
 
 namespace himalaya::framework {
+    void RenderGraph::init(rhi::ResourceManager *resource_manager) {
+        assert(resource_manager && "ResourceManager must not be null");
+        resource_manager_ = resource_manager;
+    }
+
     RGResourceId RenderGraph::import_image(const std::string &debug_name,
                                            const rhi::ImageHandle handle,
                                            const VkImageLayout initial_layout,
@@ -187,5 +195,67 @@ namespace himalaya::framework {
         }
 
         compiled_ = true;
+    }
+
+    void RenderGraph::execute(rhi::CommandBuffer &cmd) {
+        assert(compiled_ && "Must call compile() before execute()");
+        assert(resource_manager_ && "Must call init() before execute()");
+
+        // Execute each pass: insert barriers → call pass callback
+        for (uint32_t i = 0; i < passes_.size(); ++i) {
+            emit_barriers(cmd, compiled_passes_[i].barriers);
+            passes_[i].execute(cmd);
+        }
+
+        // Insert final layout transitions for imported images
+        emit_barriers(cmd, final_barriers_);
+    }
+
+    void RenderGraph::emit_barriers(const rhi::CommandBuffer &cmd,
+                                    const std::span<const CompiledBarrier> barriers) const {
+        if (barriers.empty()) {
+            return;
+        }
+
+        // Build VkImageMemoryBarrier2 array
+        std::vector<VkImageMemoryBarrier2> vk_barriers;
+        vk_barriers.reserve(barriers.size());
+
+        // ReSharper disable once CppUseStructuredBinding
+        for (const auto &b: barriers) {
+            const auto &res = resources_[b.resource_index];
+            const auto &image = resource_manager_->get_image(res.image_handle);
+
+            // Derive aspect mask from format
+            const VkImageAspectFlags aspect =
+                    (image.desc.format == rhi::Format::D32Sfloat || image.desc.format == rhi::Format::D24UnormS8Uint)
+                        ? VK_IMAGE_ASPECT_DEPTH_BIT
+                        : VK_IMAGE_ASPECT_COLOR_BIT;
+
+            VkImageMemoryBarrier2 barrier{};
+            barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+            barrier.srcStageMask = b.src_stage;
+            barrier.srcAccessMask = b.src_access;
+            barrier.dstStageMask = b.dst_stage;
+            barrier.dstAccessMask = b.dst_access;
+            barrier.oldLayout = b.old_layout;
+            barrier.newLayout = b.new_layout;
+            barrier.image = image.image;
+            barrier.subresourceRange = {
+                aspect,
+                0,
+                VK_REMAINING_MIP_LEVELS,
+                0,
+                VK_REMAINING_ARRAY_LAYERS
+            };
+            vk_barriers.push_back(barrier);
+        }
+
+        VkDependencyInfo dep_info{};
+        dep_info.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+        dep_info.imageMemoryBarrierCount = static_cast<uint32_t>(vk_barriers.size());
+        dep_info.pImageMemoryBarriers = vk_barriers.data();
+
+        cmd.pipeline_barrier(dep_info);
     }
 } // namespace himalaya::framework

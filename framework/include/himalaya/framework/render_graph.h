@@ -15,6 +15,7 @@
 
 namespace himalaya::rhi {
     class CommandBuffer;
+    class ResourceManager;
 } // namespace himalaya::rhi
 
 namespace himalaya::framework {
@@ -94,6 +95,16 @@ namespace himalaya::framework {
     class RenderGraph {
     public:
         /**
+         * @brief Initializes the render graph with a resource manager reference.
+         *
+         * Must be called once before any other method. The resource manager is used
+         * during execute() to resolve ImageHandle → VkImage for barrier insertion.
+         *
+         * @param resource_manager Resource manager (must outlive the render graph).
+         */
+        void init(rhi::ResourceManager *resource_manager);
+
+        /**
          * @brief Imports an externally created image into the graph.
          *
          * @param debug_name     Human-readable name for debug labels and diagnostics.
@@ -146,6 +157,17 @@ namespace himalaya::framework {
          */
         void compile();
 
+        /**
+         * @brief Executes all passes in registration order.
+         *
+         * Inserts compiled barriers before each pass, then invokes the pass's
+         * execute callback. After all passes, inserts final layout transitions
+         * for imported images. Must be called after compile().
+         *
+         * @param cmd Command buffer to record into (must be in recording state).
+         */
+        void execute(rhi::CommandBuffer &cmd);
+
     private:
         /** @brief Internal storage for an imported resource. */
         struct RGResource {
@@ -193,6 +215,14 @@ namespace himalaya::framework {
          * Implemented on-demand: asserts for unhandled combinations.
          */
         static ResolvedUsage resolve_usage(RGAccessType access, RGStage stage);
+
+        /**
+         * @brief Emits VkImageMemoryBarrier2 commands for a list of compiled barriers.
+         */
+        void emit_barriers(const rhi::CommandBuffer &cmd, std::span<const CompiledBarrier> barriers) const;
+
+        /** @brief Resource manager for resolving handles to Vulkan objects. */
+        rhi::ResourceManager *resource_manager_ = nullptr;
 
         /** @brief All resources imported this frame, indexed by RGResourceId::index. */
         std::vector<RGResource> resources_;

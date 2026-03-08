@@ -307,6 +307,29 @@ namespace himalaya::rhi {
          */
         [[nodiscard]] const Image &get_image(ImageHandle handle) const;
 
+        /**
+         * @brief Registers an externally created image (e.g. swapchain image).
+         *
+         * Allocates a slot to record the VkImage/VkImageView/desc without owning
+         * the VMA allocation. The caller is responsible for the image's lifetime.
+         *
+         * @param image Vulkan image handle.
+         * @param view  Vulkan image view.
+         * @param desc  Image description (format, dimensions, usage).
+         * @return Handle to reference this image through the resource system.
+         */
+        [[nodiscard]] ImageHandle register_external_image(VkImage image, VkImageView view, const ImageDesc &desc);
+
+        /**
+         * @brief Unregisters an external image previously registered.
+         *
+         * Releases the slot and increments generation. Does NOT destroy the
+         * VkImage or VkImageView (they are externally owned).
+         *
+         * @param handle Handle returned by register_external_image().
+         */
+        void unregister_external_image(ImageHandle handle);
+
         // ---- Sampler operations ----
 
         /**

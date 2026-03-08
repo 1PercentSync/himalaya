@@ -339,6 +339,33 @@ namespace himalaya::rhi {
         return images_[handle.index];
     }
 
+    ImageHandle ResourceManager::register_external_image(const VkImage image, const VkImageView view,
+                                                         const ImageDesc &desc) {
+        const uint32_t index = allocate_image_slot();
+        auto &slot = images_[index];
+        slot.image = image;
+        slot.view = view;
+        slot.allocation = VK_NULL_HANDLE; // Not owned by VMA
+        slot.desc = desc;
+        return {index, slot.generation};
+    }
+
+    void ResourceManager::unregister_external_image(const ImageHandle handle) {
+        assert(handle.valid() && "Invalid image handle");
+        assert(handle.index < images_.size() && "Image handle index out of range");
+
+        auto &slot = images_[handle.index];
+        assert(slot.generation == handle.generation && "Stale image handle (use-after-free)");
+        assert(slot.image != VK_NULL_HANDLE && "Double-free on image slot");
+
+        // Do NOT destroy VkImage/VkImageView — externally owned
+        slot.image = VK_NULL_HANDLE;
+        slot.view = VK_NULL_HANDLE;
+        slot.allocation = VK_NULL_HANDLE;
+        ++slot.generation;
+        free_image_slots_.push_back(handle.index);
+    }
+
     // ---- Sampler operations ----
 
     SamplerHandle ResourceManager::create_sampler(const SamplerDesc &desc) {
