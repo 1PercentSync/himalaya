@@ -25,7 +25,7 @@
 - [x] 显式 `destroy()` 方法
 - [x] ResourceManager 扩展 sampler 管理：`SamplerDesc`、`create_sampler()`、`destroy_sampler()`、`get_sampler()`
 - [x] CommandBuffer 新增 `bind_descriptor_sets()` 方法
-- [ ] 验证：DescriptorManager 初始化/销毁无 validation 报错
+- [x] 验证：DescriptorManager 初始化/销毁无 validation 报错
 
 ## Step 3：Render Graph 骨架
 
