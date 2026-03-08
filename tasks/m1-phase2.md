@@ -29,7 +29,7 @@
 
 ## Step 3：Render Graph 骨架
 
-- [ ] 创建 `framework/include/himalaya/framework/render_graph.h` + `framework/src/render_graph.cpp`
+- [x] 创建 `framework/include/himalaya/framework/render_graph.h` + `framework/src/render_graph.cpp`
 - [ ] `RGResourceId` 类型定义
 - [ ] `import_image(debug_name, handle, initial_layout, final_layout)` / `import_buffer()`：导入外部资源，返回 `RGResourceId`
 - [ ] `add_pass()`：注册 pass 名称、`RGResourceUsage` 列表（读写语义由 `RGAccessType` 区分）、execute lambda
