@@ -66,10 +66,44 @@ namespace himalaya::rhi {
         return set1_set_;
     }
 
-    BindlessIndex DescriptorManager::register_texture(ImageHandle image, SamplerHandle sampler) {
-        // TODO: Implement bindless texture registration
-        assert(false && "register_texture not yet implemented");
-        return {};
+    BindlessIndex DescriptorManager::register_texture(const ImageHandle image, SamplerHandle sampler) {
+        // Pick a slot: reuse freed index or allocate sequentially
+        uint32_t slot;
+        if (!free_bindless_indices_.empty()) {
+            slot = free_bindless_indices_.back();
+            free_bindless_indices_.pop_back();
+        } else {
+            assert(next_bindless_index_ < kMaxBindlessTextures && "Bindless texture array full");
+            slot = next_bindless_index_++;
+        }
+
+        // Write combined image sampler descriptor into Set 1
+        const auto &img = resource_manager_->get_image(image);
+        const auto &smp = resource_manager_->get_sampler(sampler);
+
+        const VkDescriptorImageInfo image_info{
+            .sampler = smp.sampler,
+            .imageView = img.view,
+            .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+        };
+
+        const VkWriteDescriptorSet write{
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstSet = set1_set_,
+            .dstBinding = 0,
+            .dstArrayElement = slot,
+            .descriptorCount = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+            .pImageInfo = &image_info,
+        };
+
+        vkUpdateDescriptorSets(context_->device,
+                               1,
+                               &write,
+                               0,
+                               nullptr);
+
+        return {slot};
     }
 
     void DescriptorManager::unregister_texture(BindlessIndex index) {
