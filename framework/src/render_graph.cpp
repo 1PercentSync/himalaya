@@ -8,9 +8,37 @@
 #include <himalaya/rhi/commands.h>
 #include <himalaya/rhi/resources.h>
 
+#include <array>
 #include <cassert>
+#include <cmath>
 
 namespace himalaya::framework {
+    // Generates a distinct RGBA color for each pass index using golden-angle hue distribution.
+    // Saturation and value are fixed for good visibility in RenderDoc/Nsight.
+    static std::array<float, 4> pass_debug_color(const uint32_t index) {
+        constexpr float kGoldenRatio = 0.618033988749895f;
+        const float h = std::fmod(static_cast<float>(index) * kGoldenRatio, 1.0f);
+        constexpr float s = 0.7f;
+        constexpr float v = 0.9f;
+
+        // HSV to RGB
+        const float c = v * s;
+        const float x = c * (1.0f - std::fabs(std::fmod(h * 6.0f, 2.0f) - 1.0f));
+        const float m = v - c;
+
+        float r, g, b;
+        const int sector = static_cast<int>(h * 6.0f);
+        switch (sector % 6) {
+            case 0: r = c; g = x; b = 0; break;
+            case 1: r = x; g = c; b = 0; break;
+            case 2: r = 0; g = c; b = x; break;
+            case 3: r = 0; g = x; b = c; break;
+            case 4: r = x; g = 0; b = c; break;
+            default: r = c; g = 0; b = x; break;
+        }
+        return {r + m, g + m, b + m, 1.0f};
+    }
+
     void RenderGraph::init(rhi::ResourceManager *resource_manager) {
         assert(resource_manager && "ResourceManager must not be null");
         resource_manager_ = resource_manager;
@@ -221,10 +249,12 @@ namespace himalaya::framework {
         assert(compiled_ && "Must call compile() before execute()");
         assert(resource_manager_ && "Must call init() before execute()");
 
-        // Execute each pass: insert barriers → call pass callback
+        // Execute each pass: debug label → barriers → callback → end label
         for (uint32_t i = 0; i < passes_.size(); ++i) {
+            cmd.begin_debug_label(passes_[i].name.c_str(), pass_debug_color(i));
             emit_barriers(cmd, compiled_passes_[i].barriers);
             passes_[i].execute(cmd);
+            cmd.end_debug_label();
         }
 
         // Insert final layout transitions for imported images

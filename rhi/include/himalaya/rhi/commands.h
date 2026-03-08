@@ -124,7 +124,7 @@ namespace himalaya::rhi {
          * @param name  Label name (visible in RenderDoc, Nsight, etc.).
          * @param color RGBA color for the label region.
          */
-        void begin_debug_label(const char *name, std::array<float, 4> color = {1.0f, 1.0f, 1.0f, 1.0f}) const;
+        void begin_debug_label(const char *name, std::array<float, 4> color) const;
 
         /**
          * @brief Ends the current debug label region.
