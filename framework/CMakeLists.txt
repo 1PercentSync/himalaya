@@ -1,6 +1,9 @@
 add_library(himalaya_framework STATIC)
 
-target_sources(himalaya_framework PRIVATE src/imgui_backend.cpp)
+target_sources(himalaya_framework PRIVATE
+        src/imgui_backend.cpp
+        src/render_graph.cpp
+)
 
 target_include_directories(himalaya_framework PUBLIC include)
 
