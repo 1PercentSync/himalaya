@@ -5,14 +5,13 @@
  * @brief Main application class: window management, frame loop, init/destroy sequence.
  */
 
+#include <himalaya/app/debug_ui.h>
 #include <himalaya/framework/imgui_backend.h>
 #include <himalaya/rhi/context.h>
 #include <himalaya/rhi/pipeline.h>
 #include <himalaya/rhi/resources.h>
 #include <himalaya/rhi/shader.h>
 #include <himalaya/rhi/swapchain.h>
-
-#include <vector>
 
 struct GLFWwindow;
 
@@ -66,6 +65,11 @@ namespace himalaya::app {
         /** @brief ImGui integration backend. */
         framework::ImGuiBackend imgui_backend_;
 
+        // --- App modules ---
+
+        /** @brief Debug UI panel. */
+        DebugUI debug_ui_;
+
         // --- Phase 1 temporary resources (removed in Step 7) ---
 
         /** @brief Shader compiler instance. */
@@ -76,32 +80,6 @@ namespace himalaya::app {
 
         /** @brief Triangle vertex buffer handle. */
         rhi::BufferHandle vertex_buffer_;
-
-        /**
-         * @brief Periodically computes frame time statistics for the debug panel.
-         *
-         * Accumulates per-frame delta times and every kUpdateInterval seconds
-         * computes average FPS, average frame time, and 1% low metrics.
-         * Between updates the displayed values remain stable (no flickering).
-         */
-        struct FrameStats {
-            float avg_fps = 0.0f;
-            float avg_frame_time_ms = 0.0f;
-            float low1_fps = 0.0f;
-            float low1_frame_time_ms = 0.0f;
-
-            /** @brief Feed each frame's delta time (in seconds) from ImGui::GetIO().DeltaTime. */
-            void push(float delta_time);
-
-        private:
-            static constexpr float kUpdateInterval = 1.0f;
-            std::vector<float> samples_;
-            float elapsed_ = 0.0f;
-            void compute();
-        };
-
-        /** @brief Frame time statistics for the debug panel. */
-        FrameStats frame_stats_;
 
         /** @brief Whether VSync was toggled this frame (triggers swapchain recreate). */
         bool vsync_changed_ = false;
