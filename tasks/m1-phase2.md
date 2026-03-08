@@ -36,7 +36,7 @@
 - [x] `compile()`：根据 pass 声明的输入输出，计算每个 pass 之间需要的 barrier（仅 image layout transition）
 - [x] `execute(CommandBuffer& cmd)`：接收外部 command buffer，按注册顺序依次执行 pass
 - [x] `clear()`：每帧重建前清除所有 pass 和资源引用
-- [ ] `get_image()` / `get_buffer()`：在 execute 回调内通过 `RGResourceId` 获取底层句柄
+- [x] `get_image()` / `get_buffer()`：在 execute 回调内通过 `RGResourceId` 获取底层句柄
 - [ ] 帧循环重构：acquire → RG compile/execute → submit → present
 - [ ] 三角形渲染迁移到 RG 的一个 pass 中
 - [ ] ImGui 迁移到 RG 的最后一个独立 pass 中
