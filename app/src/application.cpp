@@ -17,7 +17,6 @@
 #include <spdlog/spdlog.h>
 
 namespace himalaya::app {
-
     /** @brief Initial window width in pixels. */
     constexpr int kInitialWidth = 1920;
 
@@ -40,13 +39,13 @@ namespace himalaya::app {
 
     /** @brief Triangle vertex data matching the hardcoded shader values. */
     constexpr std::array kTriangleVertices = {
-        Vertex{{0.0f, 0.5f}, {1.0f, 0.0f, 0.0f}},   // top — red
-        Vertex{{-0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},  // bottom-left — green
-        Vertex{{0.5f, -0.5f}, {0.0f, 0.0f, 1.0f}},   // bottom-right — blue
+        Vertex{{0.0f, 0.5f}, {1.0f, 0.0f, 0.0f}}, // top — red
+        Vertex{{-0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}}, // bottom-left — green
+        Vertex{{0.5f, -0.5f}, {0.0f, 0.0f, 1.0f}}, // bottom-right — blue
     };
 
     /** @brief Reads an entire file into a string. */
-    static std::string read_file(const std::string& path) {
+    static std::string read_file(const std::string &path) {
         const std::ifstream file(path);
         if (!file.is_open()) {
             spdlog::error("Failed to open file: {}", path);
@@ -71,8 +70,8 @@ namespace himalaya::app {
 
         // Framebuffer resize detection via GLFW callback
         glfwSetWindowUserPointer(window_, &framebuffer_resized_);
-        glfwSetFramebufferSizeCallback(window_, [](GLFWwindow* w, int, int) {
-            *static_cast<bool*>(glfwGetWindowUserPointer(w)) = true;
+        glfwSetFramebufferSizeCallback(window_, [](GLFWwindow *w, int, int) {
+            *static_cast<bool *>(glfwGetWindowUserPointer(w)) = true;
         });
 
         // ImGui must be initialized after the framebuffer resize callback
@@ -81,6 +80,8 @@ namespace himalaya::app {
 
         resource_manager_.init(&context_);
         descriptor_manager_.init(&context_, &resource_manager_);
+        render_graph_.init(&resource_manager_);
+        register_swapchain_images();
 
         // --- Phase 1 temporary resources ---
         vertex_buffer_ = resource_manager_.create_buffer({
@@ -130,6 +131,7 @@ namespace himalaya::app {
         imgui_backend_.destroy();
         triangle_pipeline_.destroy(context_.device);
         resource_manager_.destroy_buffer(vertex_buffer_);
+        unregister_swapchain_images();
         descriptor_manager_.destroy();
         resource_manager_.destroy();
         swapchain_.destroy(context_.device);
@@ -160,7 +162,7 @@ namespace himalaya::app {
     }
 
     bool Application::begin_frame() {
-        auto& frame = context_.current_frame();
+        auto &frame = context_.current_frame();
 
         // Wait for the GPU to finish the previous use of this frame's resources
         VK_CHECK(vkWaitForFences(context_.device, 1, &frame.render_fence, VK_TRUE, UINT64_MAX));
@@ -169,12 +171,14 @@ namespace himalaya::app {
         frame.deletion_queue.flush();
 
         // Acquire next swapchain image
-        VkResult acquire_result = vkAcquireNextImageKHR(
+        const VkResult acquire_result = vkAcquireNextImageKHR(
             context_.device, swapchain_.swapchain, UINT64_MAX,
             frame.image_available_semaphore, VK_NULL_HANDLE, &image_index_);
 
         if (acquire_result == VK_ERROR_OUT_OF_DATE_KHR) {
+            unregister_swapchain_images();
             swapchain_.recreate(context_, window_);
+            register_swapchain_images();
             return false;
         }
         if (acquire_result != VK_SUCCESS && acquire_result != VK_SUBOPTIMAL_KHR) {
@@ -191,6 +195,7 @@ namespace himalaya::app {
     }
 
     void Application::update() {
+        // ReSharper disable once CppUseStructuredBinding
         const auto actions = debug_ui_.draw({
             .delta_time = ImGui::GetIO().DeltaTime,
             .context = context_,
@@ -203,7 +208,7 @@ namespace himalaya::app {
     }
 
     void Application::render() {
-        auto& frame = context_.current_frame();
+        auto &frame = context_.current_frame();
         const rhi::CommandBuffer cmd(frame.command_buffer);
         cmd.begin();
 
@@ -217,7 +222,13 @@ namespace himalaya::app {
         barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
         barrier.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
         barrier.image = swapchain_.images[image_index_];
-        barrier.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+        barrier.subresourceRange = {
+            VK_IMAGE_ASPECT_COLOR_BIT,
+            0,
+            1,
+            0,
+            1
+        };
 
         VkDependencyInfo dep_info{};
         dep_info.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
@@ -319,14 +330,16 @@ namespace himalaya::app {
         present_info.pSwapchains = &swapchain_.swapchain;
         present_info.pImageIndices = &image_index_;
 
-        if (VkResult present_result = vkQueuePresentKHR(context_.graphics_queue, &present_info);
+        if (const VkResult present_result = vkQueuePresentKHR(context_.graphics_queue, &present_info);
             present_result == VK_ERROR_OUT_OF_DATE_KHR ||
             present_result == VK_SUBOPTIMAL_KHR ||
             framebuffer_resized_ ||
             vsync_changed_) {
             framebuffer_resized_ = false;
             vsync_changed_ = false;
+            unregister_swapchain_images();
             swapchain_.recreate(context_, window_);
+            register_swapchain_images();
         } else if (present_result != VK_SUCCESS) {
             std::abort();
         }
@@ -334,4 +347,45 @@ namespace himalaya::app {
         context_.advance_frame();
     }
 
+    // ---- Swapchain image registration ----
+
+    // Maps VkFormat → rhi::Format for swapchain image registration.
+    // Only handles formats the swapchain actually selects.
+    static rhi::Format swapchain_format_to_rhi(const VkFormat format) {
+        switch (format) {
+            case VK_FORMAT_B8G8R8A8_SRGB: return rhi::Format::B8G8R8A8Srgb;
+            case VK_FORMAT_B8G8R8A8_UNORM: return rhi::Format::B8G8R8A8Unorm;
+            case VK_FORMAT_R8G8B8A8_SRGB: return rhi::Format::R8G8B8A8Srgb;
+            case VK_FORMAT_R8G8B8A8_UNORM: return rhi::Format::R8G8B8A8Unorm;
+            default:
+                spdlog::error("Unsupported swapchain format for RHI mapping: {}", static_cast<int>(format));
+                std::abort();
+        }
+    }
+
+    void Application::register_swapchain_images() {
+        const rhi::ImageDesc desc{
+            .width = swapchain_.extent.width,
+            .height = swapchain_.extent.height,
+            .depth = 1,
+            .mip_levels = 1,
+            .sample_count = 1,
+            .format = swapchain_format_to_rhi(swapchain_.format),
+            .usage = rhi::ImageUsage::ColorAttachment,
+        };
+
+        swapchain_image_handles_.reserve(swapchain_.images.size());
+        for (size_t i = 0; i < swapchain_.images.size(); ++i) {
+            swapchain_image_handles_.push_back(
+                resource_manager_.register_external_image(
+                    swapchain_.images[i], swapchain_.image_views[i], desc));
+        }
+    }
+
+    void Application::unregister_swapchain_images() {
+        for (const auto handle: swapchain_image_handles_) {
+            resource_manager_.unregister_external_image(handle);
+        }
+        swapchain_image_handles_.clear();
+    }
 } // namespace himalaya::app

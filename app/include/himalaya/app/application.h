@@ -7,6 +7,7 @@
 
 #include <himalaya/app/debug_ui.h>
 #include <himalaya/framework/imgui_backend.h>
+#include <himalaya/framework/render_graph.h>
 #include <himalaya/rhi/context.h>
 #include <himalaya/rhi/descriptors.h>
 #include <himalaya/rhi/pipeline.h>
@@ -69,6 +70,9 @@ namespace himalaya::app {
         /** @brief ImGui integration backend. */
         framework::ImGuiBackend imgui_backend_;
 
+        /** @brief Render graph for pass orchestration and automatic barriers. */
+        framework::RenderGraph render_graph_;
+
         // --- App modules ---
 
         /** @brief Debug UI panel. */
@@ -90,6 +94,9 @@ namespace himalaya::app {
 
         /** @brief Acquired swapchain image index for the current frame. */
         uint32_t image_index_ = 0;
+
+        /** @brief Registered ImageHandles for swapchain images (one per swapchain image). */
+        std::vector<rhi::ImageHandle> swapchain_image_handles_;
 
         // --- Frame loop phases ---
 
@@ -114,6 +121,16 @@ namespace himalaya::app {
          * @brief Presents the rendered image and handles swapchain recreation if needed.
          */
         void end_frame();
+
+        /**
+         * @brief Registers all swapchain images as external images in ResourceManager.
+         */
+        void register_swapchain_images();
+
+        /**
+         * @brief Unregisters all swapchain images from ResourceManager.
+         */
+        void unregister_swapchain_images();
     };
 
 } // namespace himalaya::app
