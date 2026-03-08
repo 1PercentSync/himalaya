@@ -73,10 +73,11 @@ namespace himalaya::framework {
      * Passed to add_pass() to describe the resource dependencies. The render graph
      * uses these declarations to compute layout transitions between passes.
      */
-    struct RGResourceUsage {
-        RGResourceId resource;  ///< Which resource is accessed.
-        RGAccessType access;    ///< Read, write, or both.
-        RGStage stage;          ///< Pipeline stage context for barrier computation.
+    struct RGResourceUsage { // NOLINT(*-pro-type-member-init)
+        RGResourceId resource;
+        ///< Which resource is accessed.
+        RGAccessType access; ///< Read, write, or both.
+        RGStage stage; ///< Pipeline stage context for barrier computation.
     };
 
     /**
