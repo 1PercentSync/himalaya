@@ -6,7 +6,7 @@
 
 ## Step 1：App 层重构
 
-- [ ] 从 `main.cpp` 拆分出 `app/application.h/cpp`（窗口管理、主循环骨架、初始化/销毁序列）
+- [x] 从 `main.cpp` 拆分出 `app/application.h/cpp`（窗口管理、主循环骨架、初始化/销毁序列）
 - [ ] 从 `main.cpp` 拆分出 `app/debug_ui.h/cpp`（ImGui 面板内容构建）
 - [ ] `main.cpp` 只保留 `main()` 入口，创建 Application 并运行
 - [ ] 现有功能（三角形渲染、debug 面板）在重构后保持不变
