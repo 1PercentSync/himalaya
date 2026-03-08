@@ -41,6 +41,18 @@ namespace himalaya::framework {
         return id;
     }
 
+    rhi::ImageHandle RenderGraph::get_image(const RGResourceId id) const {
+        assert(id.valid() && id.index < resources_.size() && "Invalid RGResourceId");
+        assert(resources_[id.index].type == RGResourceType::Image && "Resource is not an image");
+        return resources_[id.index].image_handle;
+    }
+
+    rhi::BufferHandle RenderGraph::get_buffer(const RGResourceId id) const {
+        assert(id.valid() && id.index < resources_.size() && "Invalid RGResourceId");
+        assert(resources_[id.index].type == RGResourceType::Buffer && "Resource is not a buffer");
+        return resources_[id.index].buffer_handle;
+    }
+
     void RenderGraph::clear() {
         resources_.clear();
         passes_.clear();

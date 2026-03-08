@@ -177,6 +177,28 @@ namespace himalaya::framework {
          */
         void clear();
 
+        /**
+         * @brief Returns the underlying image handle for a resource.
+         *
+         * Intended for use within pass execute callbacks to access the actual
+         * RHI handle for rendering operations.
+         *
+         * @param id Resource identifier returned by import_image().
+         * @return The underlying ImageHandle.
+         */
+        [[nodiscard]] rhi::ImageHandle get_image(RGResourceId id) const;
+
+        /**
+         * @brief Returns the underlying buffer handle for a resource.
+         *
+         * Intended for use within pass execute callbacks to access the actual
+         * RHI handle for rendering operations.
+         *
+         * @param id Resource identifier returned by import_buffer().
+         * @return The underlying BufferHandle.
+         */
+        [[nodiscard]] rhi::BufferHandle get_buffer(RGResourceId id) const;
+
     private:
         /** @brief Internal storage for an imported resource. */
         struct RGResource {
