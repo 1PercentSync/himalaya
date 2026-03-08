@@ -48,11 +48,12 @@
 
 ## Step 4：Camera + 场景数据接口
 
-- [ ] 创建 `framework/include/himalaya/framework/camera.h`（Camera 结构体 + 矩阵计算方法）
-- [ ] 创建 `framework/include/himalaya/framework/scene_data.h`（SceneRenderData、MeshInstance、DirectionalLight、PointLight、ReflectionProbe、LightmapInfo、CullResult、AABB）
+- [ ] 创建 `framework/include/himalaya/framework/camera.h` + `framework/src/camera.cpp`（Camera 结构体 + reverse-Z 投影矩阵）
+- [ ] 创建 `framework/include/himalaya/framework/scene_data.h`（SceneRenderData、MeshInstance、DirectionalLight、PointLight、ReflectionProbe、LightmapInfo、CullResult、AABB、GPU 数据结构）
 - [ ] 创建 `app/camera_controller.h/cpp`（WASD 移动 + 鼠标旋转自由漫游）
 - [ ] CameraController 检查 ImGui WantCaptureMouse/WantCaptureKeyboard，为 true 时跳过相机输入
-- [ ] 负 viewport height 处理 Y-flip + `GLM_FORCE_DEPTH_ZERO_TO_ONE`
+- [ ] `GLM_FORCE_DEPTH_ZERO_TO_ONE` 编译定义（`rhi/CMakeLists.txt` PUBLIC 传播）
+- [ ] 三角形接入 Camera：顶点改 3D、shader 读 GlobalUBO VP 矩阵、每帧填充并绑定 Set 0
 - [ ] 验证：相机能自由移动，三角形随视角变化正确透视
 
 ## Step 5：Mesh + 纹理加载
@@ -96,7 +97,7 @@
 - [ ] 创建 `shaders/forward.vert`（MVP 变换，输出 world position / normal / uv0 / tangent）
 - [ ] 创建 unlit shader（forward.frag 雏形）：采样 base_color_tex × base_color_factor，无光照
 - [ ] Depth buffer 创建（D32Sfloat，imported resource 导入 RG，resize 时 Application 重建）
-- [ ] Reverse-Z 配置：depth clear 0.0f，compare op GREATER，自定义 reverse-Z perspective 投影矩阵
+- [ ] Reverse-Z 配置：depth clear 0.0f，compare op GREATER（投影矩阵已在 Step 4 Camera 中实现）
 - [ ] 提取 `handle_resize()` 私有方法（vkQueueWaitIdle 后立即销毁旧资源，acquire 失败和帧末共用）
 - [ ] GlobalUBO × 2 + LightBuffer × 2 管理（CpuToGpu memory，descriptor 初始化写一次，每帧 memcpy）
 - [ ] Unlit pass 注册到 Render Graph（使用 depth attachment）

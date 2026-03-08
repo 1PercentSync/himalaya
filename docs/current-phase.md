@@ -130,11 +130,21 @@ private:
 
 ### Step 4：Camera + 场景数据接口
 
-- 创建 `framework/include/himalaya/framework/camera.h`（Camera 结构体：view/projection/view_projection 矩阵、position、fov、near/far、aspect）+ 矩阵计算方法
-- 创建 `framework/include/himalaya/framework/scene_data.h`（完整 SceneRenderData、MeshInstance、DirectionalLight、PointLight、ReflectionProbe、LightmapInfo、CullResult、AABB）
+- 创建 `framework/include/himalaya/framework/camera.h` + `framework/src/camera.cpp`
+  - Camera 结构体：view / projection / view_projection / inv_view_projection 矩阵、position、yaw/pitch、fov、near/far、aspect
+  - `update_view()`：从 position + yaw/pitch 计算 view 矩阵
+  - `update_projection()`：自定义 reverse-Z 透视投影（不用 `glm::perspective`，near 映射到 1、far 映射到 0）
+  - `update_view_projection()`：view × projection + 逆矩阵
+- 创建 `framework/include/himalaya/framework/scene_data.h`（纯头文件）
+  - 场景数据：SceneRenderData、MeshInstance、DirectionalLight、PointLight、ReflectionProbe、LightmapInfo、CullResult、AABB
+  - GPU 数据结构：GlobalUniformData、GPUDirectionalLight、PushConstantData（与 shader 端 `bindings.glsl` 一一对应）
 - 创建 `app/camera_controller.h/cpp`（WASD 移动 + 鼠标旋转的自由漫游控制器）
-- CameraController 检查 `ImGui::GetIO().WantCaptureMouse` / `WantCaptureKeyboard`，为 true 时跳过相机输入处理
-- 负 viewport height 处理 Y-flip + `GLM_FORCE_DEPTH_ZERO_TO_ONE`
+  - 检查 `ImGui::GetIO().WantCaptureMouse` / `WantCaptureKeyboard`，为 true 时跳过相机输入处理
+- `GLM_FORCE_DEPTH_ZERO_TO_ONE` 编译定义：在 `rhi/CMakeLists.txt` 中 `target_compile_definitions(himalaya_rhi PUBLIC ...)` 传播到所有上层
+- 三角形接入 Camera（验证所需的隐含工作）：
+  - 三角形顶点改为 3D（vec3 position，z=0 平面）
+  - `triangle.vert` 从 GlobalUBO 读取 `view_projection` 矩阵做变换
+  - 每帧创建 GlobalUBO × 2（per-frame, CpuToGpu），填充 camera 矩阵，绑定 Set 0
 - **验证**：相机能自由移动，三角形随视角变化正确透视
 
 ### Step 5：Mesh + 纹理加载
@@ -179,7 +189,7 @@ private:
 - 创建 unlit shader（forward.frag 的雏形）：采样 base_color_tex × base_color_factor，无光照计算
 - 创建 `shaders/forward.vert`（MVP 变换，输出 world position / normal / uv0 / tangent）
 - Depth buffer 创建（D32Sfloat，imported resource 导入 RG，resize 时 Application 重建）
-- Reverse-Z 配置：depth clear 0.0f，compare op `VK_COMPARE_OP_GREATER`，投影矩阵使用自定义 reverse-Z perspective
+- Reverse-Z 配置：depth clear 0.0f，compare op `VK_COMPARE_OP_GREATER`（投影矩阵已在 Step 4 Camera 中实现）
 - Resize 资源重建：提取 `handle_resize()` 私有方法，`vkQueueWaitIdle` 后立即销毁旧资源（不走 deferred deletion），acquire 失败和帧末 resize 两处共用
 - 创建 GlobalUBO × 2 + LightBuffer × 2（`CpuToGpu` memory，descriptor 初始化写一次，每帧 memcpy 更新内容）
 - Unlit pass 注册到 Render Graph（使用 depth attachment）
@@ -258,7 +268,9 @@ shaders/
 | 无 RG transient 资源 | 所有资源由外部创建后通过 `import_image/buffer()` 导入 RG |
 | 无 RG temporal 资源 | 阶段五 SSAO temporal filter 时引入 |
 | 顶点格式固定 | 统一 position + normal + uv0 + tangent + uv1，缺失属性填默认值 |
-| Y-flip | 负 viewport height，Vulkan 核心保证。深度 [0,1] 用 `GLM_FORCE_DEPTH_ZERO_TO_ONE` |
+| Y-flip | 负 viewport height，Vulkan 核心保证。深度 [0,1] 用 `GLM_FORCE_DEPTH_ZERO_TO_ONE`（`rhi/CMakeLists.txt` PUBLIC 传播） |
+| Reverse-Z 投影 | Step 4 Camera 即实现 reverse-Z 投影矩阵（near→1, far→0），避免 Step 6 再改投影。depth buffer/clear/compare 配置仍在 Step 6 |
+| Step 4 三角形接入 | 验证需要三角形响应 camera：顶点改 3D + shader 读 GlobalUBO VP + 每帧填充绑定 Set 0。作为验证的隐含工作 |
 | triangle shader 退役 | Step 6 完成后 `shaders/triangle.vert/frag` 被 forward shader 取代，可删除 |
 | fastgltf + stb_image | fastgltf 不带图像解码，stb_image 负责 JPEG/PNG 解码 |
 | glTF 纹理归属 | framework 层的 texture 模块管理纹理生命周期，scene_loader 调用它 |
