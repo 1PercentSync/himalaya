@@ -121,8 +121,10 @@ private:
   - includer 内部读取文件内容交给 shaderc 处理嵌套 include
 - CommandBuffer 新增 `begin_debug_label(name, color)` / `end_debug_label()` 方法：
   - 封装 `vkCmdBeginDebugUtilsLabelEXT` / `vkCmdEndDebugUtilsLabelEXT`
-  - 以 `kEnableValidationLayers` 守卫，release 下为空操作（`VK_EXT_debug_utils` 仅 debug 构建启用）
-- RG `execute()` 自动为每个 pass 插入 debug label（RenderDoc / GPU profiler 按 pass 名称分组）
+  - 扩展函数通过 `vkGetInstanceProcAddr` 动态加载（`init_debug_functions(VkInstance)` 静态方法，初始化时调用一次）
+  - `#ifndef NDEBUG` 守卫，release 下为空操作（`VK_EXT_debug_utils` 仅 debug 构建启用）
+  - `color` 为必填参数（无默认值），调用方决定颜色
+- RG `execute()` 自动为每个 pass 插入 debug label，按 pass 索引生成不同颜色（黄金角 hue 分布）
 - `compile()` 的 barrier 计算：从 `(RGAccessType, RGStage)` 到 `(VkImageLayout, VkPipelineStageFlags2, VkAccessFlags2)` 的映射按需实现，未实现的组合 assert 拦截。RG 不管 loadOp/storeOp
 - **验证**：三角形 + ImGui 通过 RG 渲染，效果与之前一致，无 validation 报错
 
@@ -276,4 +278,4 @@ shaders/
 | Step 5→6 视觉验证 | Step 5 用三角形 shader + bindless 验证纹理链路。Step 6 用 unlit shader 验证完整数据管线（顶点、变换、材质）。Step 7 加光照和剔除 |
 | PushConstant 演进 | 阶段二 68 bytes（model + material_index）。阶段六迁移到 per-instance SSBO，为 lightmap 和 M2 motion vectors 预留空间 |
 | shaderc includer | `set_include_path()` 配置根目录，严格路径解析（relative 相对当前文件，standard 相对根目录，不回退）。私有类不暴露到头文件 |
-| Debug label 守卫 | `begin/end_debug_label` 以 `kEnableValidationLayers` 守卫，release 下空操作。`VK_EXT_debug_utils` 仅 debug 构建启用，不为 release 单独开启 |
+| Debug label | `begin_debug_label(name, color)` + `end_debug_label()`。扩展函数动态加载（`init_debug_functions`），`#ifndef NDEBUG` 守卫。color 必填，RG 按 pass 索引黄金角分配 hue |
