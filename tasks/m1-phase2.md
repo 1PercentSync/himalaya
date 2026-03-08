@@ -41,7 +41,7 @@
 - [x] 三角形渲染迁移到 RG 的一个 pass 中
 - [x] ImGui 迁移到 RG 的最后一个独立 pass 中
 - [x] Shader 编译增加 shaderc includer 支持（自定义 includer，从 shaders/ 解析 `#include`）
-- [ ] CommandBuffer 新增 `begin_debug_label()` / `end_debug_label()` 方法
+- [x] CommandBuffer 新增 `begin_debug_label()` / `end_debug_label()` 方法
 - [ ] RG `execute()` 自动为每个 pass 插入 debug label
 - [x] `compile()` barrier 计算：按需实现 (RGAccessType, RGStage) → barrier 参数映射，未实现的 assert 拦截
 - [ ] 验证：三角形 + ImGui 通过 RG 渲染，效果与之前一致，无 validation 报错
