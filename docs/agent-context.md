@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段二 — 基础渲染管线（加载 glTF 场景、基础 Lit shader 渲染、相机漫游）
-- **进度**：Step 1 进行中 — `application.h/cpp` 已拆分完成（1/5）
+- **进度**：Step 1 进行中 — `application.h/cpp` + `debug_ui.h/cpp` 已拆分完成（2/5）
 
 ### 下一个任务
 
-Step 1 第 2 项：从 `main.cpp` 拆分出 `app/debug_ui.h/cpp`（ImGui 面板内容构建）
+Step 1 第 3 项：`main.cpp` 只保留 `main()` 入口，创建 Application 并运行
 
 ---
 
