@@ -39,10 +39,24 @@ namespace himalaya::rhi {
         images_.clear();
         free_image_slots_.clear();
 
-        if (leaked_buffers > 0 || leaked_images > 0) {
-            spdlog::warn("Resource manager destroyed with {} leaked buffer(s) and {} leaked image(s)",
-                         leaked_buffers,
-                         leaked_images);
+        // Destroy all remaining samplers
+        uint32_t leaked_samplers = 0;
+        for (auto &smp: samplers_) {
+            if (smp.sampler != VK_NULL_HANDLE) {
+                vkDestroySampler(context_->device, smp.sampler, nullptr);
+                smp.sampler = VK_NULL_HANDLE;
+                ++leaked_samplers;
+            }
+        }
+        samplers_.clear();
+        free_sampler_slots_.clear();
+
+        if (leaked_buffers > 0 || leaked_images > 0 || leaked_samplers > 0) {
+            spdlog::warn(
+                "Resource manager destroyed with {} leaked buffer(s), {} leaked image(s), {} leaked sampler(s)",
+                leaked_buffers,
+                leaked_images,
+                leaked_samplers);
         }
 
         context_ = nullptr;
@@ -60,6 +74,16 @@ namespace himalaya::rhi {
         }
         buffers_.emplace_back();
         return static_cast<uint32_t>(buffers_.size() - 1);
+    }
+
+    uint32_t ResourceManager::allocate_sampler_slot() {
+        if (!free_sampler_slots_.empty()) {
+            const uint32_t index = free_sampler_slots_.back();
+            free_sampler_slots_.pop_back();
+            return index;
+        }
+        samplers_.emplace_back();
+        return static_cast<uint32_t>(samplers_.size() - 1);
     }
 
     uint32_t ResourceManager::allocate_image_slot() {
@@ -151,6 +175,34 @@ namespace himalaya::rhi {
             default:
                 return VK_IMAGE_ASPECT_COLOR_BIT;
         }
+    }
+
+    // Translates Filter to VkFilter.
+    static VkFilter to_vk_filter(const Filter filter) {
+        switch (filter) {
+            case Filter::Nearest: return VK_FILTER_NEAREST;
+            case Filter::Linear: return VK_FILTER_LINEAR;
+        }
+        return VK_FILTER_LINEAR;
+    }
+
+    // Translates SamplerMipMode to VkSamplerMipmapMode.
+    static VkSamplerMipmapMode to_vk_mip_mode(const SamplerMipMode mode) {
+        switch (mode) {
+            case SamplerMipMode::Nearest: return VK_SAMPLER_MIPMAP_MODE_NEAREST;
+            case SamplerMipMode::Linear: return VK_SAMPLER_MIPMAP_MODE_LINEAR;
+        }
+        return VK_SAMPLER_MIPMAP_MODE_LINEAR;
+    }
+
+    // Translates SamplerWrapMode to VkSamplerAddressMode.
+    static VkSamplerAddressMode to_vk_wrap_mode(const SamplerWrapMode mode) {
+        switch (mode) {
+            case SamplerWrapMode::Repeat: return VK_SAMPLER_ADDRESS_MODE_REPEAT;
+            case SamplerWrapMode::ClampToEdge: return VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+            case SamplerWrapMode::MirroredRepeat: return VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
+        }
+        return VK_SAMPLER_ADDRESS_MODE_REPEAT;
     }
 
     // ---- Buffer operations ----
@@ -285,6 +337,55 @@ namespace himalaya::rhi {
         assert(images_[handle.index].generation == handle.generation
             && "Stale image handle (use-after-free)");
         return images_[handle.index];
+    }
+
+    // ---- Sampler operations ----
+
+    SamplerHandle ResourceManager::create_sampler(const SamplerDesc &desc) {
+        VkSamplerCreateInfo sampler_info{};
+        sampler_info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+        sampler_info.magFilter = to_vk_filter(desc.mag_filter);
+        sampler_info.minFilter = to_vk_filter(desc.min_filter);
+        sampler_info.mipmapMode = to_vk_mip_mode(desc.mip_mode);
+        sampler_info.addressModeU = to_vk_wrap_mode(desc.wrap_u);
+        sampler_info.addressModeV = to_vk_wrap_mode(desc.wrap_v);
+        sampler_info.addressModeW = to_vk_wrap_mode(desc.wrap_u);
+        sampler_info.maxLod = VK_LOD_CLAMP_NONE;
+
+        if (desc.max_anisotropy > 0.0f) {
+            sampler_info.anisotropyEnable = VK_TRUE;
+            sampler_info.maxAnisotropy = desc.max_anisotropy;
+        }
+
+        const uint32_t index = allocate_sampler_slot();
+        // ReSharper disable once CppUseStructuredBinding
+        auto &slot = samplers_[index];
+
+        VK_CHECK(vkCreateSampler(context_->device, &sampler_info, nullptr, &slot.sampler));
+        slot.desc = desc;
+
+        return {index, slot.generation};
+    }
+
+    void ResourceManager::destroy_sampler(const SamplerHandle handle) {
+        assert(handle.valid() && "Invalid sampler handle");
+        assert(handle.index < samplers_.size() && "Sampler handle index out of range");
+
+        auto &slot = samplers_[handle.index];
+        assert(slot.generation == handle.generation && "Stale sampler handle (use-after-free)");
+        assert(slot.sampler != VK_NULL_HANDLE && "Double-free on sampler slot");
+
+        vkDestroySampler(context_->device, slot.sampler, nullptr);
+        slot.sampler = VK_NULL_HANDLE;
+        ++slot.generation;
+        free_sampler_slots_.push_back(handle.index);
+    }
+
+    const Sampler &ResourceManager::get_sampler(const SamplerHandle handle) const {
+        assert(handle.valid() && "Invalid sampler handle");
+        assert(handle.index < samplers_.size() && "Sampler handle index out of range");
+        assert(samplers_[handle.index].generation == handle.generation && "Stale sampler handle (use-after-free)");
+        return samplers_[handle.index];
     }
 
     // ---- Upload ----

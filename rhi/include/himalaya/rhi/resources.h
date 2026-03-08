@@ -77,6 +77,27 @@ namespace himalaya::rhi {
         return (static_cast<uint32_t>(flags) & static_cast<uint32_t>(bit)) != 0;
     }
 
+    // ---- Sampler Enums ----
+
+    /** @brief Texture filtering mode. */
+    enum class Filter : uint32_t {
+        Nearest,
+        Linear,
+    };
+
+    /** @brief Mipmap interpolation mode. */
+    enum class SamplerMipMode : uint32_t {
+        Nearest,
+        Linear,
+    };
+
+    /** @brief Texture address wrapping mode. */
+    enum class SamplerWrapMode : uint32_t {
+        Repeat,
+        ClampToEdge,
+        MirroredRepeat,
+    };
+
     // ---- Resource Descriptions ----
 
     /**
@@ -124,6 +145,31 @@ namespace himalaya::rhi {
         ImageUsage usage;
     };
 
+    /**
+     * @brief Description for creating a GPU sampler.
+     *
+     * Upper layers fill this struct and pass it to ResourceManager::create_sampler().
+     */
+    struct SamplerDesc {
+        /** @brief Magnification filter. */
+        Filter mag_filter;
+
+        /** @brief Minification filter. */
+        Filter min_filter;
+
+        /** @brief Mipmap interpolation mode. */
+        SamplerMipMode mip_mode;
+
+        /** @brief Horizontal wrap mode. */
+        SamplerWrapMode wrap_u;
+
+        /** @brief Vertical wrap mode. */
+        SamplerWrapMode wrap_v;
+
+        /** @brief Max anisotropy level (0 = disabled). */
+        float max_anisotropy;
+    };
+
     // ---- Internal Resource Storage ----
 
     /**
@@ -167,6 +213,23 @@ namespace himalaya::rhi {
 
         /** @brief Creation parameters (dimensions, format, usage). */
         ImageDesc desc{};
+
+        /** @brief Generation counter for use-after-free detection. */
+        uint32_t generation = 0;
+    };
+
+    /**
+     * @brief Internal sampler slot: Vulkan sampler handle + metadata.
+     *
+     * Stored in the resource pool. The generation counter enables
+     * use-after-free detection on SamplerHandle lookups.
+     */
+    struct Sampler {
+        /** @brief Vulkan sampler handle (VK_NULL_HANDLE if slot is free). */
+        VkSampler sampler = VK_NULL_HANDLE;
+
+        /** @brief Creation parameters (filter, wrap, anisotropy). */
+        SamplerDesc desc{};
 
         /** @brief Generation counter for use-after-free detection. */
         uint32_t generation = 0;
@@ -244,6 +307,28 @@ namespace himalaya::rhi {
          */
         [[nodiscard]] const Image &get_image(ImageHandle handle) const;
 
+        // ---- Sampler operations ----
+
+        /**
+         * @brief Creates a GPU sampler.
+         * @param desc Sampler creation parameters.
+         * @return Handle to the created sampler.
+         */
+        [[nodiscard]] SamplerHandle create_sampler(const SamplerDesc &desc);
+
+        /**
+         * @brief Destroys a sampler.
+         * @param handle Sampler to destroy. The handle becomes invalid after this call.
+         */
+        void destroy_sampler(SamplerHandle handle);
+
+        /**
+         * @brief Returns the internal sampler data for a valid handle.
+         * @param handle Sampler handle (must be valid and current generation).
+         * @return Reference to the internal Sampler slot.
+         */
+        [[nodiscard]] const Sampler &get_sampler(SamplerHandle handle) const;
+
         // ---- Upload ----
 
         /**
@@ -278,6 +363,12 @@ namespace himalaya::rhi {
          */
         uint32_t allocate_image_slot();
 
+        /**
+         * @brief Allocates a sampler slot, reusing a free slot if available.
+         * @return Index of the allocated slot in samplers_.
+         */
+        uint32_t allocate_sampler_slot();
+
         // ---- Buffer pool ----
 
         /** @brief All buffer slots (active and free). */
@@ -293,5 +384,13 @@ namespace himalaya::rhi {
 
         /** @brief Indices of free image slots available for reuse. */
         std::vector<uint32_t> free_image_slots_;
+
+        // ---- Sampler pool ----
+
+        /** @brief All sampler slots (active and free). */
+        std::vector<Sampler> samplers_;
+
+        /** @brief Indices of free sampler slots available for reuse. */
+        std::vector<uint32_t> free_sampler_slots_;
     };
 } // namespace himalaya::rhi
