@@ -32,7 +32,7 @@
 - [x] 创建 `framework/include/himalaya/framework/render_graph.h` + `framework/src/render_graph.cpp`
 - [x] `RGResourceId` 类型定义
 - [x] `import_image(debug_name, handle, initial_layout, final_layout)` / `import_buffer()`：导入外部资源，返回 `RGResourceId`
-- [ ] `add_pass()`：注册 pass 名称、`RGResourceUsage` 列表（读写语义由 `RGAccessType` 区分）、execute lambda
+- [x] `add_pass()`：注册 pass 名称、`RGResourceUsage` 列表（读写语义由 `RGAccessType` 区分）、execute lambda
 - [ ] `compile()`：根据 pass 声明的输入输出，计算每个 pass 之间需要的 barrier（仅 image layout transition）
 - [ ] `execute(CommandBuffer& cmd)`：接收外部 command buffer，按注册顺序依次执行 pass
 - [ ] `clear()`：每帧重建前清除所有 pass 和资源引用
