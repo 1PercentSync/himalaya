@@ -134,7 +134,8 @@ namespace himalaya::rhi {
             },
         };
 
-        constexpr VkDescriptorSetLayoutCreateInfo set0_info{
+        // ReSharper disable once CppVariableCanBeMadeConstexpr
+        const VkDescriptorSetLayoutCreateInfo set0_info{
             .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
             .bindingCount = 3,
             .pBindings = set0_bindings,
@@ -156,13 +157,14 @@ namespace himalaya::rhi {
                 VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT |
                 VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT;
 
-        constexpr VkDescriptorSetLayoutBindingFlagsCreateInfo set1_binding_flags{
+        // ReSharper disable once CppVariableCanBeMadeConstexpr
+        const VkDescriptorSetLayoutBindingFlagsCreateInfo set1_binding_flags{
             .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO,
             .bindingCount = 1,
             .pBindingFlags = &binding_flags,
         };
 
-        constexpr VkDescriptorSetLayoutCreateInfo set1_info{
+        const VkDescriptorSetLayoutCreateInfo set1_info{
             .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
             .pNext = &set1_binding_flags,
             .flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT,
@@ -180,7 +182,8 @@ namespace himalaya::rhi {
             {.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, .descriptorCount = 4},
         };
 
-        constexpr VkDescriptorPoolCreateInfo set0_pool_info{
+        // ReSharper disable once CppVariableCanBeMadeConstexpr
+        const VkDescriptorPoolCreateInfo set0_pool_info{
             .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
             .maxSets = 2,
             .poolSizeCount = 2,
@@ -195,7 +198,8 @@ namespace himalaya::rhi {
             .descriptorCount = kMaxBindlessTextures,
         };
 
-        constexpr VkDescriptorPoolCreateInfo set1_pool_info{
+        // ReSharper disable once CppVariableCanBeMadeConstexpr
+        const VkDescriptorPoolCreateInfo set1_pool_info{
             .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
             .flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT,
             .maxSets = 1,
@@ -224,7 +228,8 @@ namespace himalaya::rhi {
         // --- Set 1 x1 (bindless textures) ---
         constexpr uint32_t variable_count = kMaxBindlessTextures;
 
-        constexpr VkDescriptorSetVariableDescriptorCountAllocateInfo variable_info{
+        // ReSharper disable once CppVariableCanBeMadeConstexpr
+        const VkDescriptorSetVariableDescriptorCountAllocateInfo variable_info{
             .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO,
             .descriptorSetCount = 1,
             .pDescriptorCounts = &variable_count,

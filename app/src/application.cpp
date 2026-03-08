@@ -80,6 +80,7 @@ namespace himalaya::app {
         imgui_backend_.init(context_, swapchain_, window_);
 
         resource_manager_.init(&context_);
+        descriptor_manager_.init(&context_, &resource_manager_);
 
         // --- Phase 1 temporary resources ---
         vertex_buffer_ = resource_manager_.create_buffer({
@@ -129,6 +130,7 @@ namespace himalaya::app {
         imgui_backend_.destroy();
         triangle_pipeline_.destroy(context_.device);
         resource_manager_.destroy_buffer(vertex_buffer_);
+        descriptor_manager_.destroy();
         resource_manager_.destroy();
         swapchain_.destroy(context_.device);
         context_.destroy();

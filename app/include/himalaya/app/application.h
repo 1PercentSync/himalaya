@@ -8,6 +8,7 @@
 #include <himalaya/app/debug_ui.h>
 #include <himalaya/framework/imgui_backend.h>
 #include <himalaya/rhi/context.h>
+#include <himalaya/rhi/descriptors.h>
 #include <himalaya/rhi/pipeline.h>
 #include <himalaya/rhi/resources.h>
 #include <himalaya/rhi/shader.h>
@@ -57,8 +58,11 @@ namespace himalaya::app {
         /** @brief Swapchain: presentation surface, images, and image views. */
         rhi::Swapchain swapchain_;
 
-        /** @brief GPU resource pool: buffers and images. */
+        /** @brief GPU resource pool: buffers, images, and samplers. */
         rhi::ResourceManager resource_manager_;
+
+        /** @brief Descriptor set layouts, pools, and bindless texture management. */
+        rhi::DescriptorManager descriptor_manager_;
 
         // --- Framework ---
 
