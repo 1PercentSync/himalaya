@@ -30,4 +30,14 @@ namespace himalaya::framework {
         });
         return id;
     }
+
+    void RenderGraph::add_pass(const std::string &name,
+                               std::span<const RGResourceUsage> resources,
+                               std::function<void(rhi::CommandBuffer &)> execute) {
+        passes_.push_back({
+            .name = name,
+            .resources = {resources.begin(), resources.end()},
+            .execute = std::move(execute),
+        });
+    }
 } // namespace himalaya::framework

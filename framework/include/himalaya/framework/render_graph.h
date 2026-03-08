@@ -7,6 +7,8 @@
 
 #include <himalaya/rhi/types.h>
 
+#include <functional>
+#include <span>
 #include <string>
 #include <vector>
 #include <vulkan/vulkan.h>
@@ -37,6 +39,44 @@ namespace himalaya::framework {
     enum class RGResourceType : uint8_t {
         Image,
         Buffer,
+    };
+
+    /** @brief How a pass accesses a resource. */
+    enum class RGAccessType : uint8_t {
+        /** @brief Read-only access (e.g. sampling a texture). */
+        Read,
+
+        /** @brief Write-only access (e.g. color attachment output). */
+        Write,
+
+        /** @brief Simultaneous read and write (e.g. depth test + write). */
+        ReadWrite,
+    };
+
+    /**
+     * @brief Pipeline stage context for a resource access.
+     *
+     * Determines the VkImageLayout and synchronization scope for barriers.
+     */
+    enum class RGStage : uint8_t {
+        Compute,
+        Fragment,
+        Vertex,
+        ColorAttachment,
+        DepthAttachment,
+        Transfer,
+    };
+
+    /**
+     * @brief Declares how a pass uses a specific resource.
+     *
+     * Passed to add_pass() to describe the resource dependencies. The render graph
+     * uses these declarations to compute layout transitions between passes.
+     */
+    struct RGResourceUsage {
+        RGResourceId resource;  ///< Which resource is accessed.
+        RGAccessType access;    ///< Read, write, or both.
+        RGStage stage;          ///< Pipeline stage context for barrier computation.
     };
 
     /**
@@ -79,6 +119,21 @@ namespace himalaya::framework {
          */
         RGResourceId import_buffer(const std::string &debug_name, rhi::BufferHandle handle);
 
+        /**
+         * @brief Registers a render pass with its resource dependencies.
+         *
+         * Passes execute in registration order. Each pass declares which resources
+         * it reads/writes via the resources span; the graph uses these declarations
+         * to insert barriers between passes.
+         *
+         * @param name      Human-readable pass name (used for debug labels).
+         * @param resources Resource usage declarations for this pass.
+         * @param execute   Callback invoked during execute() with the active command buffer.
+         */
+        void add_pass(const std::string &name,
+                      std::span<const RGResourceUsage> resources,
+                      std::function<void(rhi::CommandBuffer &)> execute);
+
     private:
         /** @brief Internal storage for an imported resource. */
         struct RGResource {
@@ -90,7 +145,17 @@ namespace himalaya::framework {
             VkImageLayout final_layout = VK_IMAGE_LAYOUT_UNDEFINED; ///< Image only.
         };
 
+        /** @brief Internal storage for a registered pass. */
+        struct RGPass {
+            std::string name;
+            std::vector<RGResourceUsage> resources;
+            std::function<void(rhi::CommandBuffer &)> execute;
+        };
+
         /** @brief All resources imported this frame, indexed by RGResourceId::index. */
         std::vector<RGResource> resources_;
+
+        /** @brief All passes registered this frame, in execution order. */
+        std::vector<RGPass> passes_;
     };
 } // namespace himalaya::framework
