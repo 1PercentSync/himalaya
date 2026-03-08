@@ -1,4 +1,9 @@
-add_executable(himalaya_app main.cpp)
+add_executable(himalaya_app
+    src/main.cpp
+    src/application.cpp
+)
+
+target_include_directories(himalaya_app PRIVATE include)
 
 target_link_libraries(himalaya_app PRIVATE himalaya_rhi himalaya_framework)
 
