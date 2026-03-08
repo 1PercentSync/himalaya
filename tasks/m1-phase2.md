@@ -15,8 +15,8 @@
 ## Step 2：Descriptor 管理
 
 - [x] 创建 `rhi/include/himalaya/rhi/descriptors.h` + `rhi/src/descriptors.cpp`
-- [ ] 创建 Set 0 layout（GlobalUBO binding 0 + LightBuffer binding 1 + MaterialBuffer binding 2）
-- [ ] 创建 Set 1 layout（bindless sampler2D array，上限 4096，`VARIABLE_DESCRIPTOR_COUNT` + `PARTIALLY_BOUND` + `UPDATE_AFTER_BIND`）
+- [x] 创建 Set 0 layout（GlobalUBO binding 0 + LightBuffer binding 1 + MaterialBuffer binding 2）
+- [x] 创建 Set 1 layout（bindless sampler2D array，上限 4096，`VARIABLE_DESCRIPTOR_COUNT` + `PARTIALLY_BOUND` + `UPDATE_AFTER_BIND`）
 - [ ] 创建两个独立 Descriptor Pool（普通 pool for Set 0 + UPDATE_AFTER_BIND pool for Set 1）
 - [ ] 分配 Set 0 × 2（per-frame）+ Set 1 × 1
 - [ ] `get_global_set_layouts()` 返回 {set0_layout, set1_layout}
