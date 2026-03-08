@@ -85,11 +85,17 @@ passes/
 ```
 app/
 ├── CMakeLists.txt
-├── main.cpp                     # 入口
-├── application.h/cpp            # 主循环、窗口管理
-├── scene_loader.h/cpp           # glTF 加载 → 渲染列表
-├── camera_controller.h/cpp      # 自由漫游相机控制
-└── debug_ui.h/cpp               # ImGui 面板、各 Pass 参数调整
+├── include/himalaya/app/
+│   ├── application.h            # 主循环、窗口管理
+│   ├── scene_loader.h           # glTF 加载 → 渲染列表
+│   ├── camera_controller.h      # 自由漫游相机控制
+│   └── debug_ui.h               # ImGui 面板、各 Pass 参数调整
+└── src/
+    ├── main.cpp                 # 入口
+    ├── application.cpp
+    ├── scene_loader.cpp
+    ├── camera_controller.cpp
+    └── debug_ui.cpp
 ```
 
 App 层拥有 GLFW 窗口，传 `GLFWwindow*` 给 RHI 创建 Surface。

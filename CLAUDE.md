@@ -29,8 +29,8 @@
 ### Agent 约束
 
 - **禁止** 执行 cmake、build、run 命令
-- **禁止** 修改构建配置和工具链文件（CMakeLists.txt、vcpkg.json、.clangd 等非代码文件），这些由用户在 CLion 中完成
-- **只能** 创建和编辑 C++/GLSL 源码文件及文档
+- 修改构建配置和工具链文件（CMakeLists.txt、vcpkg.json、.clangd 等）时**必须向用户请求**，经用户同意后方可编辑
+- **只能** 创建和编辑 C++/GLSL 源码文件及文档（构建配置除外，见上条）
 - 需要验证时告知用户在 CLion 中操作
 
 ### 工作流程
@@ -107,6 +107,7 @@ scope 可选，常用值：`rhi`, `app`, `framework`, `passes`, `shaders`
 | `himalaya::rhi` | Layer 0 — Vulkan 抽象层 |
 | `himalaya::framework` | Layer 1 — 渲染框架层 |
 | `himalaya::passes` | Layer 2 — 渲染 Pass 层 |
+| `himalaya::app` | Layer 3 — 应用层 |
 
 ---
 
@@ -132,7 +133,9 @@ himalaya/
 │   ├── include/himalaya/passes/
 │   └── src/
 ├── app/                 # himalaya_app (exe) → all above
-│   └── CMakeLists.txt
+│   ├── CMakeLists.txt
+│   ├── include/himalaya/app/
+│   └── src/
 ├── shaders/
 ├── docs/
 └── tasks/

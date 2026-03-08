@@ -220,11 +220,17 @@ framework/
     └── stb_impl.cpp           # stb_image 单头文件库实现（#define STB_IMAGE_IMPLEMENTATION）
 
 app/
-├── main.cpp                   # 入口（创建 Application 并运行）
-├── application.h/cpp          # 主循环、窗口管理、初始化/销毁序列
-├── scene_loader.h/cpp         # fastgltf 加载 → 填充渲染列表
-├── camera_controller.h/cpp    # WASD + 鼠标自由漫游
-└── debug_ui.h/cpp             # ImGui 面板
+├── include/himalaya/app/
+│   ├── application.h          # 主循环、窗口管理、初始化/销毁序列
+│   ├── scene_loader.h         # fastgltf 加载 → 填充渲染列表
+│   ├── camera_controller.h    # WASD + 鼠标自由漫游
+│   └── debug_ui.h             # ImGui 面板
+└── src/
+    ├── main.cpp               # 入口（创建 Application 并运行）
+    ├── application.cpp
+    ├── scene_loader.cpp
+    ├── camera_controller.cpp
+    └── debug_ui.cpp
 
 shaders/
 ├── common/
