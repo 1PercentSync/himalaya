@@ -21,7 +21,7 @@
 - [x] 分配 Set 0 × 2（per-frame）+ Set 1 × 1
 - [x] `get_global_set_layouts()` 返回 {set0_layout, set1_layout}
 - [x] Bindless 纹理注册（`register_texture(ImageHandle, SamplerHandle)` → `BindlessIndex`）
-- [ ] Bindless 纹理注销（`unregister_texture()`，free list 回收 + deferred deletion）
+- [x] Bindless 纹理注销（`unregister_texture()`，free list 回收 + deferred deletion）
 - [ ] 显式 `destroy()` 方法
 - [ ] ResourceManager 扩展 sampler 管理：`SamplerDesc`、`create_sampler()`、`destroy_sampler()`、`get_sampler()`
 - [ ] CommandBuffer 新增 `bind_descriptor_sets()` 方法
