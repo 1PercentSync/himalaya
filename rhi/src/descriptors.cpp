@@ -106,9 +106,9 @@ namespace himalaya::rhi {
         return {slot};
     }
 
-    void DescriptorManager::unregister_texture(BindlessIndex index) {
-        // TODO: Implement bindless texture unregistration
-        assert(false && "unregister_texture not yet implemented");
+    void DescriptorManager::unregister_texture(const BindlessIndex index) {
+        assert(index.valid() && index.index < next_bindless_index_);
+        free_bindless_indices_.push_back(index.index);
     }
 
     void DescriptorManager::create_layouts() {
