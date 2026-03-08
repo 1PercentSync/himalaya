@@ -268,9 +268,35 @@ namespace himalaya::app {
                                                                resource_manager_.get_buffer(vertex_buffer_).buffer);
                                    pass_cmd.draw(3);
 
-                                   // ImGui rendering (same pass for now, split in next step)
-                                   imgui_backend_.render(pass_cmd.handle());
+                                   pass_cmd.end_rendering();
+                               });
 
+        // ImGui pass: last pass, reads previous content (loadOp LOAD) and draws on top
+        const std::array imgui_resources = {
+            framework::RGResourceUsage{
+                swapchain_image,
+                framework::RGAccessType::ReadWrite,
+                framework::RGStage::ColorAttachment
+            },
+        };
+        render_graph_.add_pass("ImGui", imgui_resources,
+                               [this](const rhi::CommandBuffer &pass_cmd) {
+                                   VkRenderingAttachmentInfo color_attachment{};
+                                   color_attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+                                   color_attachment.imageView = swapchain_.image_views[image_index_];
+                                   color_attachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+                                   color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+                                   color_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+
+                                   VkRenderingInfo rendering_info{};
+                                   rendering_info.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
+                                   rendering_info.renderArea = {{0, 0}, swapchain_.extent};
+                                   rendering_info.layerCount = 1;
+                                   rendering_info.colorAttachmentCount = 1;
+                                   rendering_info.pColorAttachments = &color_attachment;
+
+                                   pass_cmd.begin_rendering(rendering_info);
+                                   imgui_backend_.render(pass_cmd.handle());
                                    pass_cmd.end_rendering();
                                });
 
