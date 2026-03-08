@@ -83,6 +83,8 @@ namespace himalaya::app {
         render_graph_.init(&resource_manager_);
         register_swapchain_images();
 
+        shader_compiler_.set_include_path("shaders");
+
         // --- Phase 1 temporary resources ---
         vertex_buffer_ = resource_manager_.create_buffer({
             .size = sizeof(kTriangleVertices),
