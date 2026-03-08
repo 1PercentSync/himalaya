@@ -11,7 +11,6 @@
 #include <spdlog/spdlog.h>
 
 namespace himalaya::rhi {
-
     void DescriptorManager::init(Context *context, ResourceManager *resource_manager) {
         context_ = context;
         resource_manager_ = resource_manager;
@@ -119,9 +118,9 @@ namespace himalaya::rhi {
         };
 
         constexpr VkDescriptorBindingFlags binding_flags =
-            VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT |
-            VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT |
-            VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT;
+                VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT |
+                VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT |
+                VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT;
 
         constexpr VkDescriptorSetLayoutBindingFlagsCreateInfo set1_binding_flags{
             .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO,
@@ -141,11 +140,39 @@ namespace himalaya::rhi {
     }
 
     void DescriptorManager::create_pools() {
-        // TODO: Create descriptor pools
+        // --- Normal pool for Set 0 (maxSets=2, 2 UBO + 4 SSBO) ---
+        constexpr VkDescriptorPoolSize set0_pool_sizes[] = {
+            {.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, .descriptorCount = 2},
+            {.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, .descriptorCount = 4},
+        };
+
+        constexpr VkDescriptorPoolCreateInfo set0_pool_info{
+            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+            .maxSets = 2,
+            .poolSizeCount = 2,
+            .pPoolSizes = set0_pool_sizes,
+        };
+
+        VK_CHECK(vkCreateDescriptorPool(context_->device, &set0_pool_info, nullptr, &set0_pool_));
+
+        // --- UPDATE_AFTER_BIND pool for Set 1 (maxSets=1, 4096 COMBINED_IMAGE_SAMPLER) ---
+        constexpr VkDescriptorPoolSize set1_pool_size{
+            .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+            .descriptorCount = kMaxBindlessTextures,
+        };
+
+        constexpr VkDescriptorPoolCreateInfo set1_pool_info{
+            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+            .flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT,
+            .maxSets = 1,
+            .poolSizeCount = 1,
+            .pPoolSizes = &set1_pool_size,
+        };
+
+        VK_CHECK(vkCreateDescriptorPool(context_->device, &set1_pool_info, nullptr, &set1_pool_));
     }
 
     void DescriptorManager::allocate_sets() {
         // TODO: Allocate descriptor sets
     }
-
 } // namespace himalaya::rhi
