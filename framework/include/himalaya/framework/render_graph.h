@@ -168,6 +168,15 @@ namespace himalaya::framework {
          */
         void execute(rhi::CommandBuffer &cmd);
 
+        /**
+         * @brief Clears all passes, resources, and compiled data.
+         *
+         * Must be called at the start of each frame before importing resources
+         * and adding passes for the new frame. The graph is designed to be
+         * rebuilt every frame.
+         */
+        void clear();
+
     private:
         /** @brief Internal storage for an imported resource. */
         struct RGResource {

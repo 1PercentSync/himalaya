@@ -41,6 +41,14 @@ namespace himalaya::framework {
         return id;
     }
 
+    void RenderGraph::clear() {
+        resources_.clear();
+        passes_.clear();
+        compiled_passes_.clear();
+        final_barriers_.clear();
+        compiled_ = false;
+    }
+
     void RenderGraph::add_pass(const std::string &name,
                                std::span<const RGResourceUsage> resources,
                                std::function<void(rhi::CommandBuffer &)> execute) {
