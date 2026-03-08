@@ -80,7 +80,7 @@ namespace himalaya::rhi {
 
     void DescriptorManager::create_layouts() {
         // --- Set 0: GlobalUBO (binding 0) + LightBuffer (binding 1) + MaterialBuffer (binding 2) ---
-        const VkDescriptorSetLayoutBinding set0_bindings[] = {
+        constexpr VkDescriptorSetLayoutBinding set0_bindings[] = {
             {
                 .binding = 0,
                 .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
@@ -101,7 +101,7 @@ namespace himalaya::rhi {
             },
         };
 
-        const VkDescriptorSetLayoutCreateInfo set0_info{
+        constexpr VkDescriptorSetLayoutCreateInfo set0_info{
             .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
             .bindingCount = 3,
             .pBindings = set0_bindings,
@@ -111,19 +111,19 @@ namespace himalaya::rhi {
 
         // --- Set 1: bindless sampler2D array (binding 0) ---
         // Flags: VARIABLE_DESCRIPTOR_COUNT + PARTIALLY_BOUND + UPDATE_AFTER_BIND
-        const VkDescriptorSetLayoutBinding set1_binding{
+        constexpr VkDescriptorSetLayoutBinding set1_binding{
             .binding = 0,
             .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
             .descriptorCount = kMaxBindlessTextures,
             .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
         };
 
-        const VkDescriptorBindingFlags binding_flags =
+        constexpr VkDescriptorBindingFlags binding_flags =
             VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT |
             VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT |
             VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT;
 
-        const VkDescriptorSetLayoutBindingFlagsCreateInfo set1_binding_flags{
+        constexpr VkDescriptorSetLayoutBindingFlagsCreateInfo set1_binding_flags{
             .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO,
             .bindingCount = 1,
             .pBindingFlags = &binding_flags,
