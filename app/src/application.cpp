@@ -208,89 +208,74 @@ namespace himalaya::app {
     }
 
     void Application::render() {
-        auto &frame = context_.current_frame();
-        const rhi::CommandBuffer cmd(frame.command_buffer);
+        const auto &frame = context_.current_frame();
+        rhi::CommandBuffer cmd(frame.command_buffer);
         cmd.begin();
 
-        // Transition swapchain image: UNDEFINED → COLOR_ATTACHMENT_OPTIMAL
-        VkImageMemoryBarrier2 barrier{};
-        barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-        barrier.srcStageMask = VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT;
-        barrier.srcAccessMask = 0;
-        barrier.dstStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
-        barrier.dstAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
-        barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        barrier.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-        barrier.image = swapchain_.images[image_index_];
-        barrier.subresourceRange = {
-            VK_IMAGE_ASPECT_COLOR_BIT,
-            0,
-            1,
-            0,
-            1
+        // Build render graph
+        render_graph_.clear();
+
+        const auto swapchain_image = render_graph_.import_image(
+            "Swapchain", swapchain_image_handles_[image_index_],
+            VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+
+        const std::array scene_resources = {
+            framework::RGResourceUsage{
+                swapchain_image,
+                framework::RGAccessType::Write,
+                framework::RGStage::ColorAttachment
+            },
         };
+        render_graph_.add_pass("Triangle",
+                               scene_resources,
+                               [this](const rhi::CommandBuffer &pass_cmd) {
+                                   VkRenderingAttachmentInfo color_attachment{};
+                                   color_attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+                                   color_attachment.imageView = swapchain_.image_views[image_index_];
+                                   color_attachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+                                   color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+                                   color_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+                                   color_attachment.clearValue.color = {{0.0f, 0.0f, 0.0f, 1.0f}};
 
-        VkDependencyInfo dep_info{};
-        dep_info.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-        dep_info.imageMemoryBarrierCount = 1;
-        dep_info.pImageMemoryBarriers = &barrier;
+                                   VkRenderingInfo rendering_info{};
+                                   rendering_info.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
+                                   rendering_info.renderArea = {{0, 0}, swapchain_.extent};
+                                   rendering_info.layerCount = 1;
+                                   rendering_info.colorAttachmentCount = 1;
+                                   rendering_info.pColorAttachments = &color_attachment;
 
-        cmd.pipeline_barrier(dep_info);
+                                   pass_cmd.begin_rendering(rendering_info);
 
-        // Dynamic rendering: clear swapchain image
-        VkRenderingAttachmentInfo color_attachment{};
-        color_attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-        color_attachment.imageView = swapchain_.image_views[image_index_];
-        color_attachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-        color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-        color_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-        color_attachment.clearValue.color = {{0.0f, 0.0f, 0.0f, 1.0f}};
+                                   pass_cmd.bind_pipeline(triangle_pipeline_);
 
-        VkRenderingInfo rendering_info{};
-        rendering_info.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
-        rendering_info.renderArea = {{0, 0}, swapchain_.extent};
-        rendering_info.layerCount = 1;
-        rendering_info.colorAttachmentCount = 1;
-        rendering_info.pColorAttachments = &color_attachment;
+                                   VkViewport viewport{};
+                                   viewport.x = 0.0f;
+                                   viewport.y = static_cast<float>(swapchain_.extent.height);
+                                   viewport.width = static_cast<float>(swapchain_.extent.width);
+                                   viewport.height = -static_cast<float>(swapchain_.extent.height);
+                                   viewport.minDepth = 0.0f;
+                                   viewport.maxDepth = 1.0f;
+                                   pass_cmd.set_viewport(viewport);
+                                   pass_cmd.set_scissor({{0, 0}, swapchain_.extent});
 
-        cmd.begin_rendering(rendering_info);
+                                   pass_cmd.set_cull_mode(VK_CULL_MODE_BACK_BIT);
+                                   pass_cmd.set_front_face(VK_FRONT_FACE_COUNTER_CLOCKWISE);
+                                   pass_cmd.set_depth_test_enable(false);
+                                   pass_cmd.set_depth_write_enable(false);
+                                   pass_cmd.set_depth_compare_op(VK_COMPARE_OP_NEVER);
 
-        // Draw triangle
-        cmd.bind_pipeline(triangle_pipeline_);
+                                   pass_cmd.bind_vertex_buffer(0,
+                                                               resource_manager_.get_buffer(vertex_buffer_).buffer);
+                                   pass_cmd.draw(3);
 
-        VkViewport viewport{};
-        viewport.x = 0.0f;
-        viewport.y = static_cast<float>(swapchain_.extent.height);
-        viewport.width = static_cast<float>(swapchain_.extent.width);
-        viewport.height = -static_cast<float>(swapchain_.extent.height);
-        viewport.minDepth = 0.0f;
-        viewport.maxDepth = 1.0f;
-        cmd.set_viewport(viewport);
-        cmd.set_scissor({{0, 0}, swapchain_.extent});
+                                   // ImGui rendering (same pass for now, split in next step)
+                                   imgui_backend_.render(pass_cmd.handle());
 
-        cmd.set_cull_mode(VK_CULL_MODE_BACK_BIT);
-        cmd.set_front_face(VK_FRONT_FACE_COUNTER_CLOCKWISE);
-        cmd.set_depth_test_enable(false);
-        cmd.set_depth_write_enable(false);
-        cmd.set_depth_compare_op(VK_COMPARE_OP_NEVER);
+                                   pass_cmd.end_rendering();
+                               });
 
-        cmd.bind_vertex_buffer(0, resource_manager_.get_buffer(vertex_buffer_).buffer);
-        cmd.draw(3);
-
-        // ImGui rendering (same pass, drawn on top of scene)
-        imgui_backend_.render(cmd.handle());
-
-        cmd.end_rendering();
-
-        // Transition swapchain image: COLOR_ATTACHMENT_OPTIMAL → PRESENT_SRC_KHR
-        barrier.srcStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
-        barrier.srcAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
-        barrier.dstStageMask = VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT;
-        barrier.dstAccessMask = 0;
-        barrier.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-        barrier.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-
-        cmd.pipeline_barrier(dep_info);
+        render_graph_.compile();
+        render_graph_.execute(cmd);
 
         cmd.end();
 
