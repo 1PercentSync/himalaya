@@ -38,7 +38,7 @@
 - [x] `clear()`：每帧重建前清除所有 pass 和资源引用
 - [x] `get_image()` / `get_buffer()`：在 execute 回调内通过 `RGResourceId` 获取底层句柄
 - [x] 帧循环重构：acquire → RG compile/execute → submit → present
-- [ ] 三角形渲染迁移到 RG 的一个 pass 中
+- [x] 三角形渲染迁移到 RG 的一个 pass 中
 - [ ] ImGui 迁移到 RG 的最后一个独立 pass 中
 - [ ] Shader 编译增加 shaderc includer 支持（自定义 includer，从 shaders/ 解析 `#include`）
 - [ ] CommandBuffer 新增 `begin_debug_label()` / `end_debug_label()` 方法
