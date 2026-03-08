@@ -72,6 +72,43 @@ namespace himalaya::rhi {
                                 layout, first_set, count, sets, 0, nullptr);
     }
 
+    namespace {
+        PFN_vkCmdBeginDebugUtilsLabelEXT pfn_begin_label = nullptr;
+        PFN_vkCmdEndDebugUtilsLabelEXT pfn_end_label = nullptr;
+    }
+
+    // Loads extension function pointers via vkGetInstanceProcAddr.
+    // vulkan-1.lib does not export VK_EXT_debug_utils command-level functions.
+    // ReSharper disable once CppParameterMayBeConst
+    void CommandBuffer::init_debug_functions(VkInstance instance) {
+#ifndef NDEBUG
+        pfn_begin_label = reinterpret_cast<PFN_vkCmdBeginDebugUtilsLabelEXT>(
+            vkGetInstanceProcAddr(instance, "vkCmdBeginDebugUtilsLabelEXT"));
+        pfn_end_label = reinterpret_cast<PFN_vkCmdEndDebugUtilsLabelEXT>(
+            vkGetInstanceProcAddr(instance, "vkCmdEndDebugUtilsLabelEXT"));
+#endif
+    }
+
+    void CommandBuffer::begin_debug_label(const char *name, const std::array<float, 4> color) const {
+#ifndef NDEBUG
+        if (pfn_begin_label) {
+            VkDebugUtilsLabelEXT label{};
+            label.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT;
+            label.pLabelName = name;
+            std::ranges::copy(color, label.color);
+            pfn_begin_label(cmd_, &label);
+        }
+#endif
+    }
+
+    void CommandBuffer::end_debug_label() const {
+#ifndef NDEBUG
+        if (pfn_end_label) {
+            pfn_end_label(cmd_);
+        }
+#endif
+    }
+
     void CommandBuffer::set_cull_mode(const VkCullModeFlags cull_mode) const {
         vkCmdSetCullMode(cmd_, cull_mode);
     }

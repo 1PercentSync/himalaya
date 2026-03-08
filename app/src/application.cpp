@@ -66,6 +66,7 @@ namespace himalaya::app {
         window_ = glfwCreateWindow(kInitialWidth, kInitialHeight, kWindowTitle, nullptr, nullptr);
 
         context_.init(window_);
+        rhi::CommandBuffer::init_debug_functions(context_.instance);
         swapchain_.init(context_, window_);
 
         // Framebuffer resize detection via GLFW callback

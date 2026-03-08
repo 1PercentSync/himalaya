@@ -7,6 +7,8 @@
 
 #include <vulkan/vulkan.h>
 
+#include <array>
+
 namespace himalaya::rhi {
     struct Pipeline;
 
@@ -102,6 +104,34 @@ namespace himalaya::rhi {
          */
         void bind_descriptor_sets(VkPipelineLayout layout, uint32_t first_set,
                                   const VkDescriptorSet *sets, uint32_t count) const;
+
+        // --- Debug labels (VK_EXT_debug_utils, debug builds only) ---
+
+        /**
+         * @brief Loads VK_EXT_debug_utils function pointers for debug labels.
+         *
+         * Must be called once after instance creation. No-op in release builds.
+         *
+         * @param instance Vulkan instance with VK_EXT_debug_utils enabled.
+         */
+        static void init_debug_functions(VkInstance instance);
+
+        /**
+         * @brief Begins a named debug label region for GPU profiler grouping.
+         *
+         * No-op in release builds (VK_EXT_debug_utils not enabled).
+         *
+         * @param name  Label name (visible in RenderDoc, Nsight, etc.).
+         * @param color RGBA color for the label region.
+         */
+        void begin_debug_label(const char *name, std::array<float, 4> color = {1.0f, 1.0f, 1.0f, 1.0f}) const;
+
+        /**
+         * @brief Ends the current debug label region.
+         *
+         * No-op in release builds.
+         */
+        void end_debug_label() const;
 
         // --- Extended Dynamic State ---
 
