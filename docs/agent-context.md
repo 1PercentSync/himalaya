@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段二 — 基础渲染管线（加载 glTF 场景、基础 Lit shader 渲染、相机漫游）
-- **进度**：Step 2 进行中（10/12）
+- **进度**：Step 2 进行中（11/12）
 
 ### 下一个任务
 
-Step 2：Descriptor 管理 → bind_descriptor_sets() → 详见 `tasks/m1-phase2.md` 的 Step 2 复选框列表
+Step 2：Descriptor 管理 → 验证（编译+初始化/销毁无 validation 报错） → 详见 `tasks/m1-phase2.md` 的 Step 2 复选框列表
 
 ---
 
