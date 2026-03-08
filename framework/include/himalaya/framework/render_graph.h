@@ -135,6 +135,17 @@ namespace himalaya::framework {
                       std::span<const RGResourceUsage> resources,
                       std::function<void(rhi::CommandBuffer &)> execute);
 
+        /**
+         * @brief Compiles the graph: computes image layout transitions between passes.
+         *
+         * Walks all passes in registration order, tracks each image's current layout,
+         * and emits barriers where layout changes are needed. Also computes final
+         * transitions to restore imported images to their declared final_layout.
+         *
+         * Must be called after all import/add_pass calls and before execute().
+         */
+        void compile();
+
     private:
         /** @brief Internal storage for an imported resource. */
         struct RGResource {
@@ -153,10 +164,49 @@ namespace himalaya::framework {
             std::function<void(rhi::CommandBuffer &)> execute;
         };
 
+        /** @brief A compiled image barrier to insert during execute(). */
+        struct CompiledBarrier {
+            uint32_t resource_index; ///< Index into resources_.
+            VkImageLayout old_layout;
+            VkImageLayout new_layout;
+            VkPipelineStageFlags2 src_stage;
+            VkAccessFlags2 src_access;
+            VkPipelineStageFlags2 dst_stage;
+            VkAccessFlags2 dst_access;
+        };
+
+        /** @brief Compiled data for a single pass. */
+        struct CompiledPass {
+            std::vector<CompiledBarrier> barriers; ///< Barriers to insert before this pass.
+        };
+
+        /** @brief Resolved Vulkan parameters for a resource usage. */
+        struct ResolvedUsage {
+            VkImageLayout layout;
+            VkPipelineStageFlags2 stage;
+            VkAccessFlags2 access;
+        };
+
+        /**
+         * @brief Maps (RGAccessType, RGStage) to Vulkan barrier parameters.
+         *
+         * Implemented on-demand: asserts for unhandled combinations.
+         */
+        static ResolvedUsage resolve_usage(RGAccessType access, RGStage stage);
+
         /** @brief All resources imported this frame, indexed by RGResourceId::index. */
         std::vector<RGResource> resources_;
 
         /** @brief All passes registered this frame, in execution order. */
         std::vector<RGPass> passes_;
+
+        /** @brief Per-pass compiled barrier data, populated by compile(). */
+        std::vector<CompiledPass> compiled_passes_;
+
+        /** @brief Final layout transitions for imported images, populated by compile(). */
+        std::vector<CompiledBarrier> final_barriers_;
+
+        /** @brief Whether compile() has been called since the last clear(). */
+        bool compiled_ = false;
     };
 } // namespace himalaya::framework
