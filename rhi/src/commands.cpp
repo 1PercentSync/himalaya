@@ -63,6 +63,15 @@ namespace himalaya::rhi {
         vkCmdPipelineBarrier2(cmd_, &dependency_info);
     }
 
+    // ReSharper disable once CppParameterMayBeConst
+    void CommandBuffer::bind_descriptor_sets(VkPipelineLayout layout,
+                                             const uint32_t first_set,
+                                             const VkDescriptorSet *sets,
+                                             const uint32_t count) const {
+        vkCmdBindDescriptorSets(cmd_, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                layout, first_set, count, sets, 0, nullptr);
+    }
+
     void CommandBuffer::set_cull_mode(const VkCullModeFlags cull_mode) const {
         vkCmdSetCullMode(cmd_, cull_mode);
     }
