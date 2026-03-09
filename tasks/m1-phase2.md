@@ -71,7 +71,7 @@
 - [x] 批量上传：Context 新增 `begin_immediate()` / `end_immediate()` scope，`upload_buffer()` 改为录制模式，旧三角形上传代码同步适配
 - [x] Default 纹理创建（1×1 white、flat normal、black），Texture 模块初始化时注册到 bindless
 - [x] Sampler 创建：从 glTF sampler 定义创建对应 VkSampler（缺失时使用 default）
-- [ ] 验证：改造三角形 shader 添加 hardcoded bindless index 采样，纹理正确显示在三角形上
+- [x] 验证：改造三角形 shader 添加 hardcoded bindless index 采样，纹理正确显示在三角形上
 
 ## Step 6：材质系统 + glTF 场景加载 + Unlit 渲染
 
