@@ -1,44 +1,34 @@
 {
-  "name": "himalaya",
-  "version-string": "1.0.0",
-  "builtin-baseline": "62159a45e18f3a9ac0548628dcaf74fcb60c6ff9",
-  "dependencies": [
-    {
-      "name": "glfw3",
-      "version>=": "3.4#1"
-    },
-    {
-      "name": "glm",
-      "version>=": "1.0.3"
-    },
-    {
-      "name": "spdlog",
-      "version>=": "1.17.0"
-    },
-    {
-      "name": "vulkan-memory-allocator",
-      "version>=": "3.3.0"
-    },
-    {
-      "name": "shaderc",
-      "version>=": "2025.2"
-    },
-    {
-      "name": "imgui",
-      "version>=": "1.91.9",
-      "features": [
-        "vulkan-binding",
-        "glfw-binding",
-        "docking-experimental"
-      ]
-    },
-    {
-      "name": "mikktspace",
-      "version>=": "2020-10-06#3"
-    },
-    {
-      "name": "stb",
-      "version>=": "2024-07-29#1"
-    }
-  ]
+  "name" : "himalaya",
+  "version-string" : "1.0.0",
+  "builtin-baseline" : "62159a45e18f3a9ac0548628dcaf74fcb60c6ff9",
+  "dependencies" : [ {
+    "name" : "glfw3",
+    "version>=" : "3.4#1"
+  }, {
+    "name" : "glm",
+    "version>=" : "1.0.3"
+  }, {
+    "name" : "spdlog",
+    "version>=" : "1.17.0"
+  }, {
+    "name" : "vulkan-memory-allocator",
+    "version>=" : "3.3.0"
+  }, {
+    "name" : "shaderc",
+    "version>=" : "2025.2"
+  }, {
+    "name" : "imgui",
+    "version>=" : "1.91.9",
+    "features" : [ "vulkan-binding", "glfw-binding", "docking-experimental" ]
+  }, {
+    "name" : "mikktspace",
+    "version>=" : "2020-10-06#3"
+  }, {
+    "name" : "stb",
+    "version>=" : "2024-07-29#1"
+  }, {
+    "name" : "fastgltf",
+    "version>=" : "0.9.0"
+  } ]
 }
