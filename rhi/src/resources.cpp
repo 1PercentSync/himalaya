@@ -24,14 +24,21 @@ namespace himalaya::rhi {
         buffers_.clear();
         free_buffer_slots_.clear();
 
-        // Destroy all remaining images
+        // Destroy all remaining images (skip externally owned images)
         uint32_t leaked_images = 0;
         for (auto &img: images_) {
             if (img.image != VK_NULL_HANDLE) {
-                if (img.view != VK_NULL_HANDLE) {
-                    vkDestroyImageView(context_->device, img.view, nullptr);
+                if (img.allocation != VK_NULL_HANDLE) {
+                    // Owned image: destroy view, image, and VMA allocation
+                    if (img.view != VK_NULL_HANDLE) {
+                        vkDestroyImageView(context_->device, img.view, nullptr);
+                    }
+                    vmaDestroyImage(context_->allocator, img.image, img.allocation);
+                } else {
+                    // External image: only release the slot, do not destroy Vulkan objects
+                    spdlog::warn("External image slot still registered at destroy time "
+                        "(forgot to call unregister_external_image?)");
                 }
-                vmaDestroyImage(context_->allocator, img.image, img.allocation);
                 img.image = VK_NULL_HANDLE;
                 ++leaked_images;
             }
@@ -319,6 +326,8 @@ namespace himalaya::rhi {
         auto &slot = images_[handle.index];
         assert(slot.generation == handle.generation && "Stale image handle (use-after-free)");
         assert(slot.image != VK_NULL_HANDLE && "Double-free on image slot");
+        assert(slot.allocation != VK_NULL_HANDLE
+            && "Cannot destroy_image on an external image (use unregister_external_image instead)");
 
         if (slot.view != VK_NULL_HANDLE) {
             vkDestroyImageView(context_->device, slot.view, nullptr);
