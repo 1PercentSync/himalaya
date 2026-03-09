@@ -18,7 +18,6 @@
 #include <vector>
 
 namespace himalaya::framework {
-
     // ---- Shared Types ----
 
     /**
@@ -119,14 +118,14 @@ namespace himalaya::framework {
      * std140 layout, 288 bytes aligned to 16.
      */
     struct GlobalUniformData {
-        glm::mat4 view;                             ///< offset   0
-        glm::mat4 projection;                       ///< offset  64
-        glm::mat4 view_projection;                  ///< offset 128
-        glm::mat4 inv_view_projection;              ///< offset 192
-        glm::vec4 camera_position_and_exposure;     ///< offset 256 — xyz = position, w = exposure
-        glm::vec2 screen_size;                      ///< offset 272
-        float time;                                 ///< offset 280 — elapsed time in seconds
-        float _padding = 0.0f;                      ///< offset 284 — std140 padding to 288 bytes
+        glm::mat4 view; ///< offset   0
+        glm::mat4 projection; ///< offset  64
+        glm::mat4 view_projection; ///< offset 128
+        glm::mat4 inv_view_projection; ///< offset 192
+        glm::vec4 camera_position_and_exposure; ///< offset 256 — xyz = position, w = exposure
+        glm::vec2 screen_size; ///< offset 272
+        float time; ///< offset 280 — elapsed time in seconds
+        float _padding = 0.0f; ///< offset 284 — std140 padding to 288 bytes
     };
 
     /**
@@ -135,8 +134,8 @@ namespace himalaya::framework {
      * std430 layout, 32 bytes per element, aligned to 16.
      */
     struct alignas(16) GPUDirectionalLight {
-        glm::vec4 direction_and_intensity;          ///< xyz = direction, w = intensity
-        glm::vec4 color_and_shadow;                 ///< xyz = color, w = cast_shadows (0.0 / 1.0)
+        glm::vec4 direction_and_intensity; ///< xyz = direction, w = intensity
+        glm::vec4 color_and_shadow; ///< xyz = color, w = cast_shadows (0.0 / 1.0)
     };
 
     /**
@@ -146,8 +145,7 @@ namespace himalaya::framework {
      * Sent via vkCmdPushConstants for each draw call.
      */
     struct PushConstantData {
-        glm::mat4 model;                            ///< 64 bytes — vertex shader
-        uint32_t material_index;                    ///<  4 bytes — fragment shader
+        glm::mat4 model; ///< 64 bytes — vertex shader
+        uint32_t material_index; ///<  4 bytes — fragment shader
     };
-
 } // namespace himalaya::framework
