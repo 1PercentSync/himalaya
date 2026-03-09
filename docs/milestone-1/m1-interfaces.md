@@ -216,14 +216,18 @@ public:
 };
 ```
 
-#### ShaderCompiler 扩展接口
+#### ShaderCompiler 接口
 
 ```cpp
 class ShaderCompiler {
 public:
-    // --- 已有接口省略 ---
+    // 配置 #include 解析根目录（初始化时调用一次）
+    void set_include_path(const std::string& path);
 
-    // 从文件路径加载并编译 shader（封装文件读取 + compile）
+    // 从文件路径加载并编译 shader（唯一公开编译入口）
+    // path 相对于 set_include_path() 设置的根目录，与 FileIncluder 的解析规则一致
+    // 例：set_include_path("shaders") 后，compile_from_file("forward/forward.vert", Vertex)
+    //     读取 shaders/forward/forward.vert，filename 传 "forward/forward.vert" 给内部 compile()
     std::vector<uint32_t> compile_from_file(const std::string& path, ShaderStage stage);
 };
 ```
