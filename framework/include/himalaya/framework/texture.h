@@ -5,11 +5,28 @@
  * @brief Texture loading, GPU upload, mip generation, and bindless registration.
  */
 
+#include <himalaya/rhi/types.h>
+
 #include <cstdint>
 #include <memory>
 #include <string>
 
+namespace himalaya::rhi {
+    class ResourceManager;
+}
+
 namespace himalaya::framework {
+    /**
+     * @brief Determines the GPU format for a texture based on its role.
+     *
+     * Color data (base color, emissive) uses SRGB for correct gamma.
+     * Linear data (normal, roughness, occlusion) uses UNORM for raw values.
+     */
+    enum class TextureRole {
+        Color, ///< R8G8B8A8_SRGB (gamma-correct color data)
+        Linear, ///< R8G8B8A8_UNORM (linear data: normals, roughness, etc.)
+    };
+
     /**
      * @brief CPU-side image pixel data loaded from disk.
      *
@@ -36,4 +53,19 @@ namespace himalaya::framework {
      * ImageData on failure (check with valid()).
      */
     [[nodiscard]] ImageData load_image(const std::string &path);
+
+    /**
+     * @brief Creates a GPU texture from CPU pixel data.
+     *
+     * Creates the image, uploads pixel data via staging buffer, and generates
+     * the full mip chain. The returned image is in SHADER_READ_ONLY layout.
+     *
+     * @param resource_manager RHI resource manager for image/buffer operations.
+     * @param data             CPU pixel data (must be valid).
+     * @param role             Texture role determining the GPU format.
+     * @return Handle to the created GPU image.
+     */
+    [[nodiscard]] rhi::ImageHandle create_texture(rhi::ResourceManager &resource_manager,
+                                                  const ImageData &data,
+                                                  TextureRole role);
 } // namespace himalaya::framework
