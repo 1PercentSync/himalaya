@@ -148,4 +148,11 @@ namespace himalaya::framework {
         glm::mat4 model; ///< 64 bytes — vertex shader
         uint32_t material_index; ///<  4 bytes — fragment shader
     };
+
+    // ---- GPU struct size guards ----
+    // These must match the shader-side layout exactly. A mismatch silently
+    // corrupts GPU reads, so catch it at compile time.
+    static_assert(sizeof(GlobalUniformData) == 288, "GlobalUniformData must be 288 bytes (std140)");
+    static_assert(sizeof(GPUDirectionalLight) == 32, "GPUDirectionalLight must be 32 bytes (std430)");
+    static_assert(sizeof(PushConstantData) == 68, "PushConstantData must be 68 bytes");
 } // namespace himalaya::framework
