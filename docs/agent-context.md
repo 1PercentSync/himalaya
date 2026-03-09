@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段二 — 基础渲染管线（加载 glTF 场景、基础 Lit shader 渲染、相机漫游）
-- **进度**：Step 5 进行中（11/14）
+- **进度**：Step 5 进行中（12/14）
 
 ### 下一个任务
 
-Step 5 第十二项：Default 纹理创建（1×1 white、flat normal、black），Texture 模块初始化时注册到 bindless
+Step 5 第十三项：Sampler 创建 — 从 glTF sampler 定义创建对应 VkSampler（缺失时使用 default）
 
 ---
 
