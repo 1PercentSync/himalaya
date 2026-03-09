@@ -1,4 +1,5 @@
 #include <himalaya/framework/texture.h>
+#include <himalaya/rhi/descriptors.h>
 #include <himalaya/rhi/resources.h>
 
 #include <spdlog/spdlog.h>
@@ -24,9 +25,11 @@ namespace himalaya::framework {
         };
     }
 
-    rhi::ImageHandle create_texture(rhi::ResourceManager &resource_manager,
-                                    const ImageData &data,
-                                    const TextureRole role) {
+    TextureResult create_texture(rhi::ResourceManager &resource_manager,
+                                 rhi::DescriptorManager &descriptor_manager,
+                                 const ImageData &data,
+                                 const TextureRole role,
+                                 const rhi::SamplerHandle sampler) {
         assert(data.valid() && "ImageData must be valid");
 
         const auto format = (role == TextureRole::Color)
@@ -46,12 +49,13 @@ namespace himalaya::framework {
             .usage = rhi::ImageUsage::Sampled | rhi::ImageUsage::TransferSrc | rhi::ImageUsage::TransferDst,
         };
 
-        const auto handle = resource_manager.create_image(desc);
-        resource_manager.upload_image(handle, data.pixels.get(), data.size_bytes());
+        const auto image = resource_manager.create_image(desc);
+        resource_manager.upload_image(image, data.pixels.get(), data.size_bytes());
         if (mip_levels > 1) {
-            resource_manager.generate_mips(handle);
+            resource_manager.generate_mips(image);
         }
 
-        return handle;
+        const auto bindless_index = descriptor_manager.register_texture(image, sampler);
+        return {image, bindless_index};
     }
 } // namespace himalaya::framework
