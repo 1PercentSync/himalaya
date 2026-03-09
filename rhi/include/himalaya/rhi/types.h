@@ -7,6 +7,8 @@
 
 #include <cstdint>
 
+#include <vulkan/vulkan.h>
+
 namespace himalaya::rhi {
 
     // ---- Resource Handles (generation-based) ----
@@ -135,5 +137,51 @@ namespace himalaya::rhi {
         /** @brief GPU-writable, CPU-readable. For readback (e.g. screenshots). */
         GpuToCpu,
     };
+
+    // ---- Format conversion utilities ----
+
+    /**
+     * @brief Converts a Format enum value to the corresponding VkFormat.
+     *
+     * Used by ResourceManager for resource creation and by the Render Graph
+     * for barrier construction. Defined alongside the Format enum to keep
+     * the mapping in a single location.
+     */
+    inline VkFormat to_vk_format(const Format format) {
+        switch (format) {
+            case Format::Undefined: return VK_FORMAT_UNDEFINED;
+            case Format::R8Unorm: return VK_FORMAT_R8_UNORM;
+            case Format::R8G8Unorm: return VK_FORMAT_R8G8_UNORM;
+            case Format::R8G8B8A8Unorm: return VK_FORMAT_R8G8B8A8_UNORM;
+            case Format::R8G8B8A8Srgb: return VK_FORMAT_R8G8B8A8_SRGB;
+            case Format::B8G8R8A8Unorm: return VK_FORMAT_B8G8R8A8_UNORM;
+            case Format::B8G8R8A8Srgb: return VK_FORMAT_B8G8R8A8_SRGB;
+            case Format::R16Sfloat: return VK_FORMAT_R16_SFLOAT;
+            case Format::R16G16Sfloat: return VK_FORMAT_R16G16_SFLOAT;
+            case Format::R16G16B16A16Sfloat: return VK_FORMAT_R16G16B16A16_SFLOAT;
+            case Format::R32Sfloat: return VK_FORMAT_R32_SFLOAT;
+            case Format::R32G32Sfloat: return VK_FORMAT_R32G32_SFLOAT;
+            case Format::R32G32B32A32Sfloat: return VK_FORMAT_R32G32B32A32_SFLOAT;
+            case Format::D32Sfloat: return VK_FORMAT_D32_SFLOAT;
+            case Format::D24UnormS8Uint: return VK_FORMAT_D24_UNORM_S8_UINT;
+        }
+        return VK_FORMAT_UNDEFINED;
+    }
+
+    /**
+     * @brief Derives the VkImageAspectFlags from a Format enum value.
+     *
+     * Depth/stencil formats yield VK_IMAGE_ASPECT_DEPTH_BIT;
+     * all other formats yield VK_IMAGE_ASPECT_COLOR_BIT.
+     */
+    inline VkImageAspectFlags aspect_from_format(const Format format) {
+        switch (format) {
+            case Format::D32Sfloat:
+            case Format::D24UnormS8Uint:
+                return VK_IMAGE_ASPECT_DEPTH_BIT;
+            default:
+                return VK_IMAGE_ASPECT_COLOR_BIT;
+        }
+    }
 
 } // namespace himalaya::rhi

@@ -276,11 +276,7 @@ namespace himalaya::framework {
             const auto &res = resources_[b.resource_index];
             const auto &image = resource_manager_->get_image(res.image_handle);
 
-            // Derive aspect mask from format
-            const VkImageAspectFlags aspect =
-                    (image.desc.format == rhi::Format::D32Sfloat || image.desc.format == rhi::Format::D24UnormS8Uint)
-                        ? VK_IMAGE_ASPECT_DEPTH_BIT
-                        : VK_IMAGE_ASPECT_COLOR_BIT;
+            const VkImageAspectFlags aspect = rhi::aspect_from_format(image.desc.format);
 
             VkImageMemoryBarrier2 barrier{};
             barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
