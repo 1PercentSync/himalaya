@@ -1,6 +1,7 @@
 #include <himalaya/rhi/context.h>
 
 #include <algorithm>
+#include <cassert>
 #include <string>
 #include <vector>
 
@@ -393,6 +394,51 @@ namespace himalaya::rhi {
         VK_CHECK(vkAllocateCommandBuffers(device, &alloc_info, &immediate_command_buffer));
 
         spdlog::info("Immediate command pool created");
+    }
+
+    // Resets and begins the immediate command buffer for batch recording.
+    // Upload methods record into this buffer; end_immediate() submits everything at once.
+    CommandBuffer Context::begin_immediate() {
+        assert(!immediate_active_ && "Immediate scope already active");
+        immediate_active_ = true;
+
+        VK_CHECK(vkResetCommandBuffer(immediate_command_buffer, 0));
+
+        VkCommandBufferBeginInfo begin_info{};
+        begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+        begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+        VK_CHECK(vkBeginCommandBuffer(immediate_command_buffer, &begin_info));
+
+        return CommandBuffer(immediate_command_buffer);
+    }
+
+    // Submits the recorded immediate commands, waits for GPU completion,
+    // then destroys all staging buffers collected during the scope.
+    void Context::end_immediate() {
+        assert(immediate_active_ && "No active immediate scope");
+
+        VK_CHECK(vkEndCommandBuffer(immediate_command_buffer));
+
+        VkSubmitInfo submit_info{};
+        submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+        submit_info.commandBufferCount = 1;
+        submit_info.pCommandBuffers = &immediate_command_buffer;
+
+        VK_CHECK(vkQueueSubmit(graphics_queue, 1, &submit_info, VK_NULL_HANDLE));
+        VK_CHECK(vkQueueWaitIdle(graphics_queue));
+
+        for (auto &[buffer, allocation]: staging_buffers_) {
+            vmaDestroyBuffer(allocator, buffer, allocation);
+        }
+        staging_buffers_.clear();
+        immediate_active_ = false;
+    }
+
+    // ReSharper disable CppParameterMayBeConst
+    void Context::push_staging_buffer(VkBuffer buffer, VmaAllocation allocation) {
+        // ReSharper restore CppParameterMayBeConst
+        assert(immediate_active_ && "push_staging_buffer requires an active immediate scope");
+        staging_buffers_.push_back({buffer, allocation});
     }
 
     // Sums usage and budget across all device-local heaps.

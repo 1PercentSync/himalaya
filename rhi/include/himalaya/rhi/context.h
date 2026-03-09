@@ -6,13 +6,14 @@
  */
 
 #include <array>
-#include <cstdint>
 #include <functional>
 #include <string>
 #include <vector>
 
 #include <vulkan/vulkan.h>
 #include <vk_mem_alloc.h>
+
+#include <himalaya/rhi/commands.h>
 
 struct GLFWwindow;
 
@@ -174,6 +175,45 @@ namespace himalaya::rhi {
          */
         [[nodiscard]] VramInfo query_vram_usage() const;
 
+        // --- Immediate command scope ---
+
+        /**
+         * @brief Begins an immediate command recording scope.
+         *
+         * Resets and begins the immediate command buffer. Resource upload methods
+         * (upload_buffer, upload_image, generate_mips) must only be called within
+         * an active immediate scope. Staging buffers created by upload methods are
+         * collected and destroyed when end_immediate() completes.
+         *
+         * @return CommandBuffer wrapping the immediate command buffer.
+         */
+        CommandBuffer begin_immediate();
+
+        /**
+         * @brief Ends the immediate scope: submits commands and waits for completion.
+         *
+         * Ends the command buffer, submits it to the graphics queue, waits for
+         * the GPU to finish (vkQueueWaitIdle), and destroys all staging buffers
+         * collected during the scope.
+         */
+        void end_immediate();
+
+        /**
+         * @brief Returns whether an immediate command scope is currently active.
+         */
+        [[nodiscard]] bool is_immediate_active() const { return immediate_active_; }
+
+        /**
+         * @brief Registers a staging buffer for deferred cleanup at end_immediate().
+         *
+         * Called by ResourceManager upload methods to defer staging buffer
+         * destruction until after the GPU has finished executing.
+         *
+         * @param buffer     Staging VkBuffer handle.
+         * @param allocation VMA allocation backing the staging buffer.
+         */
+        void push_staging_buffer(VkBuffer buffer, VmaAllocation allocation);
+
     private:
         /** @brief Creates VkInstance with validation layers and debug_utils extension. */
         void create_instance();
@@ -195,5 +235,17 @@ namespace himalaya::rhi {
 
         /** @brief Creates the immediate command pool for one-shot blocking GPU operations. */
         void create_immediate_pool();
+
+        /** @brief Whether an immediate command scope is currently active. */
+        bool immediate_active_ = false;
+
+        /** @brief Staging buffer pending cleanup at end_immediate(). */
+        struct StagingEntry {
+            VkBuffer buffer;
+            VmaAllocation allocation;
+        };
+
+        /** @brief Staging buffers collected during the current immediate scope. */
+        std::vector<StagingEntry> staging_buffers_;
     };
 } // namespace himalaya::rhi

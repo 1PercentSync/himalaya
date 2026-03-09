@@ -355,11 +355,11 @@ namespace himalaya::rhi {
         // ---- Upload ----
 
         /**
-         * @brief Uploads CPU data to a GPU-only buffer via a staging buffer.
+         * @brief Records a staging-buffer copy into the active immediate command scope.
          *
-         * Creates a temporary staging buffer, copies data into it, submits a
-         * transfer command, waits for completion, and destroys the staging buffer.
-         * Suitable for one-time uploads (e.g. vertex/index data at load time).
+         * Must be called within a Context::begin_immediate() / end_immediate() scope.
+         * Creates a staging buffer, copies data into it, and records a vkCmdCopyBuffer.
+         * The staging buffer is registered with Context for deferred cleanup.
          *
          * @param handle  Destination buffer (must have TransferDst usage).
          * @param data    Source data pointer.
@@ -369,10 +369,12 @@ namespace himalaya::rhi {
         void upload_buffer(BufferHandle handle, const void *data, uint64_t size, uint64_t offset = 0) const;
 
         /**
-         * @brief Uploads CPU pixel data to a GPU image (mip level 0) via a staging buffer.
+         * @brief Records staging-buffer-to-image copy into the active immediate scope.
          *
-         * Transitions the image from UNDEFINED to TRANSFER_DST, copies data,
-         * then transitions to SHADER_READ_ONLY. Only writes mip level 0.
+         * Must be called within a Context::begin_immediate() / end_immediate() scope.
+         * Transitions the image from UNDEFINED to TRANSFER_DST, copies mip level 0,
+         * then transitions to SHADER_READ_ONLY. The staging buffer is registered
+         * with Context for deferred cleanup.
          *
          * @param handle Destination image (must have TransferDst usage).
          * @param data   Source pixel data pointer.
@@ -381,12 +383,12 @@ namespace himalaya::rhi {
         void upload_image(ImageHandle handle, const void *data, uint64_t size) const;
 
         /**
-         * @brief Generates mip levels by successively blitting from the previous level.
+         * @brief Records mip generation commands into the active immediate scope.
          *
-         * Expects mip level 0 to contain valid data (in SHADER_READ_ONLY layout
-         * after upload_image). Uses vkCmdBlitImage with linear filtering for
-         * each level. Image must have TransferSrc and TransferDst usage flags
-         * and more than 1 mip level.
+         * Must be called within a Context::begin_immediate() / end_immediate() scope.
+         * Expects mip level 0 in SHADER_READ_ONLY layout (after upload_image).
+         * Uses vkCmdBlitImage with linear filtering for each level.
+         * Image must have TransferSrc and TransferDst usage flags and more than 1 mip level.
          *
          * @param handle Image with populated mip level 0.
          */

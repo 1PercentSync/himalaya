@@ -128,7 +128,10 @@ namespace himalaya::app {
             .usage = rhi::BufferUsage::VertexBuffer | rhi::BufferUsage::TransferDst,
             .memory = rhi::MemoryUsage::GpuOnly,
         });
+
+        context_.begin_immediate();
         resource_manager_.upload_buffer(vertex_buffer_, kTriangleVertices.data(), sizeof(kTriangleVertices));
+        context_.end_immediate();
 
         const auto vert_source = read_file("shaders/triangle.vert");
         const auto frag_source = read_file("shaders/triangle.frag");

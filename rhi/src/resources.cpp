@@ -423,6 +423,8 @@ namespace himalaya::rhi {
                                         const void *data,
                                         const uint64_t size,
                                         const uint64_t offset) const {
+        assert(context_->is_immediate_active()
+            && "upload_buffer must be called within begin_immediate/end_immediate scope");
         assert(data && "Upload source data must not be null");
         assert(size > 0 && "Upload size must be greater than zero");
 
@@ -457,41 +459,26 @@ namespace himalaya::rhi {
         // 2. Copy data into the mapped staging buffer
         std::memcpy(staging_info.pMappedData, data, size);
 
-        // 3. Record copy command into the immediate command buffer
-        // ReSharper disable once CppLocalVariableMayBeConst
-        VkCommandBuffer cmd = context_->immediate_command_buffer;
-
-        VK_CHECK(vkResetCommandBuffer(cmd, 0));
-
-        VkCommandBufferBeginInfo begin_info{};
-        begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-        begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-        VK_CHECK(vkBeginCommandBuffer(cmd, &begin_info));
-
+        // 3. Record copy command into the active immediate command buffer
         VkBufferCopy copy_region{};
         copy_region.srcOffset = 0;
         copy_region.dstOffset = offset;
         copy_region.size = size;
-        vkCmdCopyBuffer(cmd, staging_buffer, dst.buffer, 1, &copy_region);
+        vkCmdCopyBuffer(context_->immediate_command_buffer,
+                        staging_buffer,
+                        dst.buffer,
+                        1,
+                        &copy_region);
 
-        VK_CHECK(vkEndCommandBuffer(cmd));
-
-        // 4. Submit and wait for completion
-        VkSubmitInfo submit_info{};
-        submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-        submit_info.commandBufferCount = 1;
-        submit_info.pCommandBuffers = &cmd;
-
-        VK_CHECK(vkQueueSubmit(context_->graphics_queue, 1, &submit_info, VK_NULL_HANDLE));
-        VK_CHECK(vkQueueWaitIdle(context_->graphics_queue));
-
-        // 5. Cleanup staging buffer
-        vmaDestroyBuffer(context_->allocator, staging_buffer, staging_allocation);
+        // 4. Register staging buffer for deferred cleanup at end_immediate()
+        context_->push_staging_buffer(staging_buffer, staging_allocation);
     }
 
     void ResourceManager::upload_image(const ImageHandle handle,
                                        const void *data,
                                        const uint64_t size) const {
+        assert(context_->is_immediate_active()
+            && "upload_image must be called within begin_immediate/end_immediate scope");
         assert(data && "Upload source data must not be null");
         assert(size > 0 && "Upload size must be greater than zero");
 
@@ -524,15 +511,9 @@ namespace himalaya::rhi {
 
         std::memcpy(staging_info.pMappedData, data, size);
 
-        // 2. Record commands
+        // 2. Record commands into the active immediate command buffer
+        // ReSharper disable once CppLocalVariableMayBeConst
         VkCommandBuffer cmd = context_->immediate_command_buffer;
-        VK_CHECK(vkResetCommandBuffer(cmd, 0));
-
-        VkCommandBufferBeginInfo begin_info{};
-        begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-        begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-        VK_CHECK(vkBeginCommandBuffer(cmd, &begin_info));
-
         const VkImageAspectFlags aspect = aspect_from_format(dst.desc.format);
 
         // Transition mip 0: UNDEFINED -> TRANSFER_DST_OPTIMAL
@@ -579,21 +560,14 @@ namespace himalaya::rhi {
         dep.pImageMemoryBarriers = &to_read;
         vkCmdPipelineBarrier2(cmd, &dep);
 
-        VK_CHECK(vkEndCommandBuffer(cmd));
-
-        // 3. Submit and wait
-        VkSubmitInfo submit_info{};
-        submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-        submit_info.commandBufferCount = 1;
-        submit_info.pCommandBuffers = &cmd;
-
-        VK_CHECK(vkQueueSubmit(context_->graphics_queue, 1, &submit_info, VK_NULL_HANDLE));
-        VK_CHECK(vkQueueWaitIdle(context_->graphics_queue));
-
-        // 4. Cleanup
-        vmaDestroyBuffer(context_->allocator, staging_buffer, staging_allocation);
+        // 3. Register staging buffer for deferred cleanup at end_immediate()
+        context_->push_staging_buffer(staging_buffer, staging_allocation);
     }
+
     void ResourceManager::generate_mips(const ImageHandle handle) const {
+        assert(context_->is_immediate_active()
+            && "generate_mips must be called within begin_immediate/end_immediate scope");
+
         const auto &img = get_image(handle);
         assert(has_flag(img.desc.usage, ImageUsage::TransferSrc)
             && "Image must have TransferSrc usage for mip generation");
@@ -603,13 +577,9 @@ namespace himalaya::rhi {
 
         const VkImageAspectFlags aspect = aspect_from_format(img.desc.format);
 
+        // Record into the active immediate command buffer
+        // ReSharper disable once CppLocalVariableMayBeConst
         VkCommandBuffer cmd = context_->immediate_command_buffer;
-        VK_CHECK(vkResetCommandBuffer(cmd, 0));
-
-        VkCommandBufferBeginInfo begin_info{};
-        begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-        begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-        VK_CHECK(vkBeginCommandBuffer(cmd, &begin_info));
 
         // Transition mip 0: SHADER_READ_ONLY -> TRANSFER_SRC (blit source)
         VkImageMemoryBarrier2 barrier{};
@@ -690,16 +660,5 @@ namespace himalaya::rhi {
         barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
         barrier.subresourceRange = {aspect, 0, img.desc.mip_levels, 0, 1};
         vkCmdPipelineBarrier2(cmd, &dep);
-
-        VK_CHECK(vkEndCommandBuffer(cmd));
-
-        // Submit and wait
-        VkSubmitInfo submit_info{};
-        submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-        submit_info.commandBufferCount = 1;
-        submit_info.pCommandBuffers = &cmd;
-
-        VK_CHECK(vkQueueSubmit(context_->graphics_queue, 1, &submit_info, VK_NULL_HANDLE));
-        VK_CHECK(vkQueueWaitIdle(context_->graphics_queue));
     }
 } // namespace himalaya::rhi
