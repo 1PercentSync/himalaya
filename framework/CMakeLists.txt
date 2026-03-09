@@ -5,12 +5,17 @@ target_sources(himalaya_framework PRIVATE
         src/imgui_backend.cpp
         src/mesh.cpp
         src/render_graph.cpp
+        src/stb_impl.cpp
+        src/texture.cpp
 )
 
 target_include_directories(himalaya_framework PUBLIC include)
 
 find_package(imgui CONFIG REQUIRED)
 find_package(mikktspace CONFIG REQUIRED)
+find_package(Stb REQUIRED)
+
+target_include_directories(himalaya_framework PRIVATE ${Stb_INCLUDE_DIR})
 
 target_link_libraries(himalaya_framework
         PUBLIC himalaya_rhi imgui::imgui
