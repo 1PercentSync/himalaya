@@ -5,7 +5,9 @@
  * @brief Main application class: window management, frame loop, init/destroy sequence.
  */
 
+#include <himalaya/app/camera_controller.h>
 #include <himalaya/app/debug_ui.h>
+#include <himalaya/framework/camera.h>
 #include <himalaya/framework/imgui_backend.h>
 #include <himalaya/framework/render_graph.h>
 #include <himalaya/rhi/context.h>
@@ -18,7 +20,6 @@
 struct GLFWwindow;
 
 namespace himalaya::app {
-
     /**
      * @brief Top-level application managing the window, subsystems, and frame loop.
      *
@@ -46,7 +47,7 @@ namespace himalaya::app {
         // --- Window ---
 
         /** @brief GLFW window handle. */
-        GLFWwindow* window_ = nullptr;
+        GLFWwindow *window_ = nullptr;
 
         /** @brief Set by the GLFW framebuffer size callback when a resize occurs. */
         bool framebuffer_resized_ = false;
@@ -75,6 +76,12 @@ namespace himalaya::app {
 
         // --- App modules ---
 
+        /** @brief Camera state (position, orientation, matrices). */
+        framework::Camera camera_;
+
+        /** @brief Free-roaming camera controller. */
+        CameraController camera_controller_;
+
         /** @brief Debug UI panel. */
         DebugUI debug_ui_;
 
@@ -88,6 +95,9 @@ namespace himalaya::app {
 
         /** @brief Triangle vertex buffer handle. */
         rhi::BufferHandle vertex_buffer_;
+
+        /** @brief Per-frame GlobalUBO buffers (CpuToGpu, one per frame in flight). */
+        std::array<rhi::BufferHandle, rhi::kMaxFramesInFlight> global_ubo_buffers_;
 
         /** @brief Whether VSync was toggled this frame (triggers swapchain recreate). */
         bool vsync_changed_ = false;
@@ -132,5 +142,4 @@ namespace himalaya::app {
          */
         void unregister_swapchain_images();
     };
-
 } // namespace himalaya::app

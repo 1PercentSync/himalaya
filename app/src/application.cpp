@@ -5,6 +5,7 @@
 
 #include <himalaya/app/application.h>
 
+#include <himalaya/framework/scene_data.h>
 #include <himalaya/rhi/commands.h>
 
 #include <array>
@@ -31,17 +32,17 @@ namespace himalaya::app {
 
     // --- Phase 1 temporary types (removed in Step 7) ---
 
-    /** @brief Interleaved vertex attributes: position (vec2) + color (vec3). */
+    /** @brief Interleaved vertex attributes: position (vec3) + color (vec3). */
     struct Vertex {
-        glm::vec2 position;
+        glm::vec3 position;
         glm::vec3 color;
     };
 
-    /** @brief Triangle vertex data matching the hardcoded shader values. */
+    /** @brief Triangle vertex data on the z=0 plane, visible from default camera position. */
     constexpr std::array kTriangleVertices = {
-        Vertex{{0.0f, 0.5f}, {1.0f, 0.0f, 0.0f}}, // top — red
-        Vertex{{-0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}}, // bottom-left — green
-        Vertex{{0.5f, -0.5f}, {0.0f, 0.0f, 1.0f}}, // bottom-right — blue
+        Vertex{{0.0f, 0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}}, // top — red
+        Vertex{{-0.5f, -0.5f, 0.0f}, {0.0f, 1.0f, 0.0f}}, // bottom-left — green
+        Vertex{{0.5f, -0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}}, // bottom-right — blue
     };
 
     /** @brief Reads an entire file into a string. */
@@ -86,6 +87,41 @@ namespace himalaya::app {
 
         shader_compiler_.set_include_path("shaders");
 
+        // --- GlobalUBO buffers (per-frame, CpuToGpu) ---
+        for (auto &ubo: global_ubo_buffers_) {
+            ubo = resource_manager_.create_buffer({
+                .size = sizeof(framework::GlobalUniformData),
+                .usage = rhi::BufferUsage::UniformBuffer,
+                .memory = rhi::MemoryUsage::CpuToGpu,
+            });
+
+            // Write descriptor to point Set 0 Binding 0 at this UBO
+            const auto &buf = resource_manager_.get_buffer(ubo);
+            const VkDescriptorBufferInfo buffer_info{
+                .buffer = buf.buffer,
+                .offset = 0,
+                .range = sizeof(framework::GlobalUniformData),
+            };
+            const VkWriteDescriptorSet write{
+                .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                .dstSet = descriptor_manager_.get_set0(static_cast<uint32_t>(&ubo - global_ubo_buffers_.data())),
+                .dstBinding = 0,
+                .descriptorCount = 1,
+                .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                .pBufferInfo = &buffer_info,
+            };
+            vkUpdateDescriptorSets(context_.device,
+                                   1,
+                                   &write,
+                                   0,
+                                   nullptr);
+        }
+
+        // --- Camera ---
+        camera_.aspect = static_cast<float>(swapchain_.extent.width) / static_cast<float>(swapchain_.extent.height);
+        camera_.update_all();
+        camera_controller_.init(window_, &camera_);
+
         // --- Phase 1 temporary resources ---
         vertex_buffer_ = resource_manager_.create_buffer({
             .size = sizeof(kTriangleVertices),
@@ -102,13 +138,16 @@ namespace himalaya::app {
         const auto frag_spirv = shader_compiler_.compile(
             frag_source, rhi::ShaderStage::Fragment, "triangle.frag");
 
+        // ReSharper disable once CppLocalVariableMayBeConst
         VkShaderModule vert_module = rhi::create_shader_module(context_.device, vert_spirv);
+        // ReSharper disable once CppLocalVariableMayBeConst
         VkShaderModule frag_module = rhi::create_shader_module(context_.device, frag_spirv);
 
         rhi::GraphicsPipelineDesc pipeline_desc;
         pipeline_desc.vertex_shader = vert_module;
         pipeline_desc.fragment_shader = frag_module;
         pipeline_desc.color_formats = {swapchain_.format};
+        pipeline_desc.descriptor_set_layouts = {descriptor_manager_.get_global_set_layouts()[0]};
 
         pipeline_desc.vertex_bindings = {
             {
@@ -118,7 +157,7 @@ namespace himalaya::app {
             }
         };
         pipeline_desc.vertex_attributes = {
-            {.location = 0, .binding = 0, .format = VK_FORMAT_R32G32_SFLOAT, .offset = offsetof(Vertex, position)},
+            {.location = 0, .binding = 0, .format = VK_FORMAT_R32G32B32_SFLOAT, .offset = offsetof(Vertex, position)},
             {.location = 1, .binding = 0, .format = VK_FORMAT_R32G32B32_SFLOAT, .offset = offsetof(Vertex, color)},
         };
 
@@ -134,6 +173,9 @@ namespace himalaya::app {
         imgui_backend_.destroy();
         triangle_pipeline_.destroy(context_.device);
         resource_manager_.destroy_buffer(vertex_buffer_);
+        for (const auto ubo: global_ubo_buffers_) {
+            resource_manager_.destroy_buffer(ubo);
+        }
         unregister_swapchain_images();
         descriptor_manager_.destroy();
         resource_manager_.destroy();
@@ -198,9 +240,32 @@ namespace himalaya::app {
     }
 
     void Application::update() {
+        const float delta_time = ImGui::GetIO().DeltaTime;
+
+        // Update camera
+        camera_.aspect = static_cast<float>(swapchain_.extent.width) / static_cast<float>(swapchain_.extent.height);
+        camera_controller_.update(delta_time);
+
+        // Fill GlobalUBO for this frame
+        const auto &ubo_buf = resource_manager_.get_buffer(global_ubo_buffers_[context_.frame_index]);
+
+        framework::GlobalUniformData ubo_data{};
+        ubo_data.view = camera_.view;
+        ubo_data.projection = camera_.projection;
+        ubo_data.view_projection = camera_.view_projection;
+        ubo_data.inv_view_projection = camera_.inv_view_projection;
+        ubo_data.camera_position_and_exposure = glm::vec4(camera_.position, 1.0f);
+        ubo_data.screen_size = glm::vec2(
+            static_cast<float>(swapchain_.extent.width),
+            static_cast<float>(swapchain_.extent.height));
+        ubo_data.time = static_cast<float>(glfwGetTime());
+
+        std::memcpy(ubo_buf.allocation_info.pMappedData, &ubo_data, sizeof(ubo_data));
+
+        // Debug UI
         // ReSharper disable once CppUseStructuredBinding
         const auto actions = debug_ui_.draw({
-            .delta_time = ImGui::GetIO().DeltaTime,
+            .delta_time = delta_time,
             .context = context_,
             .swapchain = swapchain_,
         });
@@ -250,6 +315,10 @@ namespace himalaya::app {
                                    pass_cmd.begin_rendering(rendering_info);
 
                                    pass_cmd.bind_pipeline(triangle_pipeline_);
+
+                                   // ReSharper disable once CppLocalVariableMayBeConst
+                                   VkDescriptorSet set0 = descriptor_manager_.get_set0(context_.frame_index);
+                                   pass_cmd.bind_descriptor_sets(triangle_pipeline_.layout, 0, &set0, 1);
 
                                    VkViewport viewport{};
                                    viewport.x = 0.0f;
