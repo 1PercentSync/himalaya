@@ -18,9 +18,13 @@ namespace himalaya::rhi {
         // Resolves #include directives by reading files from a configured root directory.
         // Relative includes (#include "...") resolve relative to the requesting file's directory.
         // Standard includes (#include <...>) resolve directly from the root. No fallback.
+        // Collects all resolved files and their content for cache invalidation.
         class FileIncluder final : public shaderc::CompileOptions::IncluderInterface {
         public:
-            explicit FileIncluder(std::filesystem::path root) : root_(std::move(root)) {}
+            explicit FileIncluder(std::filesystem::path root,
+                                  std::vector<std::pair<std::string, std::string> > *included_files)
+                : root_(std::move(root)), included_files_(included_files) {
+            }
 
             shaderc_include_result *GetInclude(
                 const char *requested_source,
@@ -59,6 +63,11 @@ namespace himalaya::rhi {
                     std::istreambuf_iterator<char>(file),
                     std::istreambuf_iterator<char>());
 
+                // Track included file for cache invalidation
+                if (included_files_) {
+                    included_files_->emplace_back(data->source_name, data->content);
+                }
+
                 result->source_name = data->source_name.c_str();
                 result->source_name_length = data->source_name.size();
                 result->content = data->content.c_str();
@@ -73,6 +82,7 @@ namespace himalaya::rhi {
 
         private:
             std::filesystem::path root_;
+            std::vector<std::pair<std::string, std::string> > *included_files_;
         };
     } // anonymous namespace
 
@@ -90,9 +100,12 @@ namespace himalaya::rhi {
     static std::string make_cache_key(const std::string &source, const ShaderStage stage) {
         char prefix;
         switch (stage) {
-            case ShaderStage::Vertex:   prefix = 'V'; break;
-            case ShaderStage::Fragment: prefix = 'F'; break;
-            case ShaderStage::Compute:  prefix = 'C'; break;
+            case ShaderStage::Vertex: prefix = 'V';
+                break;
+            case ShaderStage::Fragment: prefix = 'F';
+                break;
+            case ShaderStage::Compute: prefix = 'C';
+                break;
             default: std::abort();
         }
         return prefix + source;
@@ -102,7 +115,24 @@ namespace himalaya::rhi {
         include_path_ = path;
     }
 
-    // Compiles GLSL to SPIR-V using shaderc, with in-memory caching.
+    // Validates that all files included during a previous compilation still have
+    // the same content. Returns false if any file changed or cannot be read.
+    static bool validate_includes(const std::filesystem::path &include_root,
+                                  const std::vector<std::pair<std::string, std::string> > &included_files) {
+        for (const auto &[path, cached_content]: included_files) {
+            std::ifstream file(include_root / path);
+            if (!file.is_open()) return false;
+            std::string current{
+                std::istreambuf_iterator<char>(file),
+                std::istreambuf_iterator<char>()
+            };
+            if (current != cached_content) return false;
+        }
+        return true;
+    }
+
+    // Compiles GLSL to SPIR-V using shaderc, with include-aware in-memory caching.
+    // Cache entries are invalidated when any transitively included file changes.
     // Debug: no optimization + debug info for RenderDoc shader source mapping.
     // Release: performance optimization for production shader quality.
     std::vector<uint32_t> ShaderCompiler::compile(
@@ -110,9 +140,16 @@ namespace himalaya::rhi {
         const ShaderStage stage,
         const std::string &filename) {
         auto key = make_cache_key(source, stage);
+
+        // Check cache: main source match + verify included files unchanged
         if (const auto it = cache_.find(key); it != cache_.end()) {
-            spdlog::debug("Shader cache hit: {}", filename);
-            return it->second;
+            if (it->second.included_files.empty() || include_path_.empty() ||
+                validate_includes(include_path_, it->second.included_files)) {
+                spdlog::debug("Shader cache hit: {}", filename);
+                return it->second.spirv;
+            }
+            spdlog::debug("Shader cache invalidated (include changed): {}", filename);
+            cache_.erase(it);
         }
 
         const shaderc::Compiler compiler;
@@ -126,8 +163,10 @@ namespace himalaya::rhi {
         options.SetGenerateDebugInfo();
 #endif
 
+        // Track included files for cache invalidation on future lookups
+        std::vector<std::pair<std::string, std::string> > included_files;
         if (!include_path_.empty()) {
-            options.SetIncluder(std::make_unique<FileIncluder>(include_path_));
+            options.SetIncluder(std::make_unique<FileIncluder>(include_path_, &included_files));
         }
 
         const auto result = compiler.CompileGlslToSpv(
@@ -148,7 +187,7 @@ namespace himalaya::rhi {
         spdlog::info("Shader compiled: {}", filename);
 
         std::vector spirv(result.cbegin(), result.cend());
-        cache_[std::move(key)] = spirv;
+        cache_[std::move(key)] = {spirv, std::move(included_files)};
         return spirv;
     }
 

@@ -9,6 +9,7 @@
 
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include <vulkan/vulkan.h>
@@ -51,8 +52,26 @@ namespace himalaya::rhi {
             const std::string &filename);
 
     private:
-        /** @brief SPIR-V cache. Key is stage prefix + full source text (collision-free). */
-        std::unordered_map<std::string, std::vector<uint32_t>> cache_;
+        /**
+         * @brief Cached compilation result with tracked include dependencies.
+         *
+         * On cache lookup, all previously included files are re-read and compared
+         * to detect changes in transitive dependencies (e.g. shared headers).
+         */
+        struct CacheEntry {
+            std::vector<uint32_t> spirv;
+
+            /**
+             * @brief Included files resolved during compilation.
+             *
+             * Each pair is (path relative to include root, file content at compile time).
+             * Used to detect stale cache entries when included files change.
+             */
+            std::vector<std::pair<std::string, std::string>> included_files;
+        };
+
+        /** @brief SPIR-V cache. Key is stage prefix + main source text. */
+        std::unordered_map<std::string, CacheEntry> cache_;
 
         /** @brief Root directory for #include resolution. Empty disables includer. */
         std::string include_path_;
