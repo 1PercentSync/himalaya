@@ -10,7 +10,9 @@ target_sources(himalaya_framework PRIVATE
 target_include_directories(himalaya_framework PUBLIC include)
 
 find_package(imgui CONFIG REQUIRED)
+find_package(mikktspace CONFIG REQUIRED)
 
 target_link_libraries(himalaya_framework
         PUBLIC himalaya_rhi imgui::imgui
+        PRIVATE mikktspace::mikktspace
 )

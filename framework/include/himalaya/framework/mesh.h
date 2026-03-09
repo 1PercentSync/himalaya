@@ -11,6 +11,7 @@
 #include <vulkan/vulkan.h>
 
 #include <array>
+#include <span>
 
 namespace himalaya::framework {
     /**
@@ -62,4 +63,12 @@ namespace himalaya::framework {
         /** @brief Number of indices in the index buffer. */
         uint32_t index_count = 0;
     };
+
+    /**
+     * @brief Generates tangent vectors for vertices using MikkTSpace.
+     *
+     * Overwrites the tangent field of each vertex. Requires valid position,
+     * normal, and uv0 data. Indices define the triangle topology.
+     */
+    void generate_tangents(std::span<Vertex> vertices, std::span<const uint32_t> indices);
 } // namespace himalaya::framework
