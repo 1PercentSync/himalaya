@@ -198,14 +198,23 @@ namespace himalaya::framework {
                 // ReSharper disable once CppUseStructuredBinding
                 const auto resolved = resolve_usage(usage.access, usage.stage);
 
-                // Emit barrier if layout changes or there is a write hazard
-                const bool layout_change = state.current_layout != resolved.layout;
-                const bool write_hazard = (state.last_access & VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT) != 0 ||
-                                          (state.last_access & VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT) != 0 ||
-                                          (state.last_access & VK_ACCESS_2_TRANSFER_WRITE_BIT) != 0 ||
-                                          (state.last_access & VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT) != 0;
+                // Emit barrier on layout change or any data hazard (RAW, WAW, WAR).
+                // RAR (read-after-read) is the only case that needs no barrier.
+                constexpr VkAccessFlags2 kWriteFlags =
+                    VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT |
+                    VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT |
+                    VK_ACCESS_2_TRANSFER_WRITE_BIT |
+                    VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT;
 
-                if (layout_change || write_hazard) {
+                const bool layout_change = state.current_layout != resolved.layout;
+                const bool prev_wrote = (state.last_access & kWriteFlags) != 0;
+                const bool current_writes = (resolved.access & kWriteFlags) != 0;
+                // RAW / WAW: previous access included a write
+                // WAR: current access includes a write and resource was previously accessed
+                const bool has_hazard = prev_wrote
+                                        || (current_writes && state.last_access != VK_ACCESS_2_NONE);
+
+                if (layout_change || has_hazard) {
                     compiled.barriers.push_back({
                         .resource_index = res_idx,
                         .old_layout = state.current_layout,
