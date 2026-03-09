@@ -66,6 +66,7 @@ namespace himalaya::rhi {
             const std::string &source,
             ShaderStage stage,
             const std::string &filename);
+
         /**
          * @brief Cached compilation result with tracked include dependencies.
          *
