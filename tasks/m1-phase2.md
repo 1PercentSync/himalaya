@@ -66,7 +66,7 @@
 - [x] stb_image 加载 JPEG/PNG → RGBA8 像素数据（强制 4 通道）
 - [x] 上传到 GPU image（staging buffer）
 - [x] GPU 端 mip 生成（`vkCmdBlitImage` 逐级降采样 + layout transition 链）
-- [ ] 纹理加载接口接受 `TextureRole` 枚举（Color/Linear），根据角色选择 format
+- [x] 纹理加载接口接受 `TextureRole` 枚举（Color/Linear），根据角色选择 format
 - [ ] 注册到 DescriptorManager 获取 `BindlessIndex`
 - [ ] 批量上传：Context 新增 `begin_immediate()` / `end_immediate()` scope，`upload_buffer()` 改为录制模式，旧三角形上传代码同步适配
 - [ ] Default 纹理创建（1×1 white、flat normal、black），Texture 模块初始化时注册到 bindless
