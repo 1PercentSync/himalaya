@@ -3,6 +3,7 @@ add_library(himalaya_framework STATIC)
 target_sources(himalaya_framework PRIVATE
         src/camera.cpp
         src/imgui_backend.cpp
+        src/mesh.cpp
         src/render_graph.cpp
 )
 
