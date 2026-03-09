@@ -49,7 +49,7 @@
 ## Step 4：Camera + 场景数据接口
 
 - [x] 创建 `framework/include/himalaya/framework/camera.h` + `framework/src/camera.cpp`（Camera 结构体 + reverse-Z 投影矩阵）
-- [ ] 创建 `framework/include/himalaya/framework/scene_data.h`（SceneRenderData、MeshInstance、DirectionalLight、PointLight、ReflectionProbe、LightmapInfo、CullResult、AABB、GPU 数据结构）
+- [x] 创建 `framework/include/himalaya/framework/scene_data.h`（SceneRenderData、MeshInstance、DirectionalLight、CullResult、AABB、GPU 数据结构）
 - [ ] 创建 `app/camera_controller.h/cpp`（WASD 移动 + 鼠标旋转自由漫游）
 - [ ] CameraController 检查 ImGui WantCaptureMouse/WantCaptureKeyboard，为 true 时跳过相机输入
 - [ ] `GLM_FORCE_DEPTH_ZERO_TO_ONE` 编译定义（`rhi/CMakeLists.txt` PUBLIC 传播）

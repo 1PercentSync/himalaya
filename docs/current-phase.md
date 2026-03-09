@@ -136,7 +136,7 @@ private:
   - `update_projection()`：自定义 reverse-Z 透视投影（不用 `glm::perspective`，near 映射到 1、far 映射到 0）
   - `update_view_projection()`：view × projection + 逆矩阵
 - 创建 `framework/include/himalaya/framework/scene_data.h`（纯头文件）
-  - 场景数据：SceneRenderData、MeshInstance、DirectionalLight、PointLight、ReflectionProbe、LightmapInfo、CullResult、AABB
+  - 场景数据：SceneRenderData、MeshInstance、DirectionalLight、CullResult、AABB（PointLight、ReflectionProbe、LightmapInfo 延迟到实际需要时再加）
   - GPU 数据结构：GlobalUniformData、GPUDirectionalLight、PushConstantData（与 shader 端 `bindings.glsl` 一一对应）
 - 创建 `app/camera_controller.h/cpp`（WASD 移动 + 鼠标旋转的自由漫游控制器）
   - 检查 `ImGui::GetIO().WantCaptureMouse` / `WantCaptureKeyboard`，为 true 时跳过相机输入处理

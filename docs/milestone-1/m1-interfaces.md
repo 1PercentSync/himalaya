@@ -256,6 +256,15 @@ struct DirectionalLight {
     bool cast_shadows;
 };
 
+```
+
+> PointLight、ReflectionProbe、LightmapInfo 延迟到实际需要时再定义（YAGNI）。
+> 接口设计保留在此文档作为参考，但不提前写入代码。
+
+<details>
+<summary>延迟定义的类型（参考）</summary>
+
+```cpp
 struct PointLight {
     vec3 position;
     vec3 color;
@@ -263,13 +272,7 @@ struct PointLight {
     float radius;
     bool cast_shadows;
 };
-```
 
-> PointLight 在 M1 不使用（只有方向光），但结构体存在不影响任何实现。
-
-#### 探针与 Lightmap
-
-```cpp
 struct ReflectionProbe {
     vec3 position;
     AABB influence_bounds;      // 视差校正用
@@ -282,6 +285,8 @@ struct LightmapInfo {
 };
 ```
 
+</details>
+
 #### 场景渲染数据（总入口）
 
 ```cpp
@@ -289,11 +294,7 @@ struct SceneRenderData {
     // 应用层填充，渲染器只读
     std::span<const MeshInstance> mesh_instances;
     std::span<const DirectionalLight> directional_lights;
-    std::span<const PointLight> point_lights;
-    std::span<const ReflectionProbe> reflection_probes;
     Camera camera;
-    LightmapInfo lightmap;
-    BindlessIndex sky_cubemap;
 };
 ```
 
