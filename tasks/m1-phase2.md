@@ -53,7 +53,7 @@
 - [x] 创建 `app/camera_controller.h/cpp`（WASD 移动 + 鼠标旋转自由漫游）
 - [x] CameraController 检查 ImGui WantCaptureMouse/WantCaptureKeyboard，为 true 时跳过相机输入
 - [x] `GLM_FORCE_DEPTH_ZERO_TO_ONE` 编译定义（`rhi/CMakeLists.txt` PUBLIC 传播）
-- [ ] 三角形接入 Camera：顶点改 3D、shader 读 GlobalUBO VP 矩阵、每帧填充并绑定 Set 0
+- [x] 三角形接入 Camera：顶点改 3D、shader 读 GlobalUBO VP 矩阵、每帧填充并绑定 Set 0
 - [ ] 验证：相机能自由移动，三角形随视角变化正确透视
 
 ## Step 5：Mesh + 纹理加载
