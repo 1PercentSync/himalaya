@@ -512,15 +512,17 @@ struct alignas(16) GPUMaterialData {
 // Context 新增方法
 class Context {
 public:
-    // 开始一段 immediate command 录制，返回可用的 CommandBuffer
-    CommandBuffer begin_immediate();
+    // 开始一段 immediate command 录制（纯状态切换，不返回 CommandBuffer）
+    void begin_immediate();
 
     // 提交录制的命令并 vkQueueWaitIdle 等待完成
-    void end_immediate(CommandBuffer& cmd);
+    void end_immediate();
 };
 ```
 
-`upload_buffer()` 改为录制模式：在活跃的 begin/end_immediate scope 内调用时，只录制 copy 命令到当前 command buffer，不自行 submit。staging buffer 由 Context 收集，`end_immediate()` submit + wait 完成后统一销毁。scope 外调用 `upload_buffer()` 会 assert 失败。
+`begin_immediate()` 是纯状态切换（设置 scope 标志、reset/begin 内部 command buffer），不返回 `CommandBuffer`。所有命令录制通过 `ResourceManager` 的 `upload_buffer()` / `upload_image()` / `generate_mips()` 方法完成，它们内部直接访问 `Context::immediate_command_buffer` 录制。调用方无需也不应手动录制 immediate command。
+
+`upload_buffer()` 等方法为录制模式：在活跃的 begin/end_immediate scope 内调用时，只录制 copy 命令到内部 command buffer，不自行 submit。staging buffer 由 Context 收集，`end_immediate()` submit + wait 完成后统一销毁。scope 外调用 `upload_buffer()` 会 assert 失败。
 
 ---
 
