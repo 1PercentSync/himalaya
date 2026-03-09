@@ -32,17 +32,18 @@ namespace himalaya::app {
 
     // --- Phase 1 temporary types (removed in Step 7) ---
 
-    /** @brief Interleaved vertex attributes: position (vec3) + color (vec3). */
+    /** @brief Interleaved vertex attributes: position (vec3) + color (vec3) + uv (vec2). */
     struct Vertex {
         glm::vec3 position;
         glm::vec3 color;
+        glm::vec2 uv;
     };
 
     /** @brief Triangle vertex data on the z=0 plane, visible from default camera position. */
     constexpr std::array kTriangleVertices = {
-        Vertex{{0.0f, 0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}}, // top — red
-        Vertex{{-0.5f, -0.5f, 0.0f}, {0.0f, 1.0f, 0.0f}}, // bottom-left — green
-        Vertex{{0.5f, -0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}}, // bottom-right — blue
+        Vertex{{0.0f, 0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.5f, 0.0f}},   // top — red
+        Vertex{{-0.5f, -0.5f, 0.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, 1.0f}}, // bottom-left — green
+        Vertex{{0.5f, -0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},  // bottom-right — blue
     };
 
     /** @brief Reads an entire file into a string. */
@@ -163,7 +164,8 @@ namespace himalaya::app {
         pipeline_desc.vertex_shader = vert_module;
         pipeline_desc.fragment_shader = frag_module;
         pipeline_desc.color_formats = {swapchain_.format};
-        pipeline_desc.descriptor_set_layouts = {descriptor_manager_.get_global_set_layouts()[0]};
+        const auto set_layouts = descriptor_manager_.get_global_set_layouts();
+        pipeline_desc.descriptor_set_layouts = {set_layouts[0], set_layouts[1]};
 
         pipeline_desc.vertex_bindings = {
             {
@@ -175,6 +177,7 @@ namespace himalaya::app {
         pipeline_desc.vertex_attributes = {
             {.location = 0, .binding = 0, .format = VK_FORMAT_R32G32B32_SFLOAT, .offset = offsetof(Vertex, position)},
             {.location = 1, .binding = 0, .format = VK_FORMAT_R32G32B32_SFLOAT, .offset = offsetof(Vertex, color)},
+            {.location = 2, .binding = 0, .format = VK_FORMAT_R32G32_SFLOAT, .offset = offsetof(Vertex, uv)},
         };
 
         triangle_pipeline_ = rhi::create_graphics_pipeline(context_.device, pipeline_desc);
@@ -342,9 +345,11 @@ namespace himalaya::app {
 
                                    pass_cmd.bind_pipeline(triangle_pipeline_);
 
-                                   // ReSharper disable once CppLocalVariableMayBeConst
-                                   VkDescriptorSet set0 = descriptor_manager_.get_set0(context_.frame_index);
-                                   pass_cmd.bind_descriptor_sets(triangle_pipeline_.layout, 0, &set0, 1);
+                                   const VkDescriptorSet sets[] = {
+                                       descriptor_manager_.get_set0(context_.frame_index),
+                                       descriptor_manager_.get_set1(),
+                                   };
+                                   pass_cmd.bind_descriptor_sets(triangle_pipeline_.layout, 0, sets, 2);
 
                                    VkViewport viewport{};
                                    viewport.x = 0.0f;
