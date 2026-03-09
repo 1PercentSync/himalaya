@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段二 — 基础渲染管线（加载 glTF 场景、基础 Lit shader 渲染、相机漫游）
-- **进度**：Step 5 进行中（3/14）
+- **进度**：Step 5 进行中（4/14）
 
 ### 下一个任务
 
-Step 5 第四项：MikkTSpace 集成（mesh 缺失 tangent 时从 position + normal + uv0 自动生成）
+Step 5 第五项：创建 `framework/include/himalaya/framework/texture.h` + `framework/src/texture.cpp`
 
 ---
 
