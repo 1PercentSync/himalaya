@@ -115,6 +115,28 @@ namespace himalaya::rhi {
         include_path_ = path;
     }
 
+    // Reads a shader file relative to include_path_ and delegates to compile().
+    std::vector<uint32_t> ShaderCompiler::compile_from_file(
+        const std::string &path,
+        const ShaderStage stage) {
+        const auto full_path = include_path_.empty()
+            ? std::filesystem::path(path)
+            : std::filesystem::path(include_path_) / path;
+
+        std::ifstream file(full_path);
+        if (!file.is_open()) {
+            spdlog::error("Failed to open shader file: {}", full_path.string());
+            return {};
+        }
+
+        std::string source{
+            std::istreambuf_iterator<char>(file),
+            std::istreambuf_iterator<char>()
+        };
+
+        return compile(source, stage, path);
+    }
+
     // Validates that all files included during a previous compilation still have
     // the same content. Returns false if any file changed or cannot be read.
     static bool validate_includes(const std::filesystem::path &include_root,

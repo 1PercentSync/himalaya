@@ -9,8 +9,6 @@
 #include <himalaya/rhi/commands.h>
 
 #include <array>
-#include <fstream>
-#include <sstream>
 
 #include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
@@ -45,18 +43,6 @@ namespace himalaya::app {
         Vertex{{-0.5f, -0.5f, 0.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, 1.0f}}, // bottom-left — green
         Vertex{{0.5f, -0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},  // bottom-right — blue
     };
-
-    /** @brief Reads an entire file into a string. */
-    static std::string read_file(const std::string &path) {
-        const std::ifstream file(path);
-        if (!file.is_open()) {
-            spdlog::error("Failed to open file: {}", path);
-            return {};
-        }
-        std::ostringstream ss;
-        ss << file.rdbuf();
-        return ss.str();
-    }
 
     // ---- Init / Destroy ----
 
@@ -147,13 +133,10 @@ namespace himalaya::app {
                                                                default_sampler_);
         context_.end_immediate();
 
-        const auto vert_source = read_file("shaders/triangle.vert");
-        const auto frag_source = read_file("shaders/triangle.frag");
-
-        const auto vert_spirv = shader_compiler_.compile(
-            vert_source, rhi::ShaderStage::Vertex, "triangle.vert");
-        const auto frag_spirv = shader_compiler_.compile(
-            frag_source, rhi::ShaderStage::Fragment, "triangle.frag");
+        const auto vert_spirv = shader_compiler_.compile_from_file(
+            "triangle.vert", rhi::ShaderStage::Vertex);
+        const auto frag_spirv = shader_compiler_.compile_from_file(
+            "triangle.frag", rhi::ShaderStage::Fragment);
 
         // ReSharper disable once CppLocalVariableMayBeConst
         VkShaderModule vert_module = rhi::create_shader_module(context_.device, vert_spirv);

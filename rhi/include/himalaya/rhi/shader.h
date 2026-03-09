@@ -36,9 +36,25 @@ namespace himalaya::rhi {
         void set_include_path(const std::string &path);
 
         /**
+         * @brief Reads a shader source file and compiles it to SPIR-V bytecode.
+         *
+         * The path is relative to the include root set via set_include_path().
+         * Internally reads the file, then delegates to compile() which handles
+         * caching and include tracking.
+         *
+         * @param path  Shader file path, relative to the include root.
+         * @param stage Target shader stage.
+         * @return SPIR-V bytecode as uint32_t words, or empty vector on failure.
+         */
+        [[nodiscard]] std::vector<uint32_t> compile_from_file(
+            const std::string &path,
+            ShaderStage stage);
+
+    private:
+        /**
          * @brief Compiles GLSL source code to SPIR-V bytecode.
          *
-         * Logs detailed error messages via spdlog on compilation failure.
+         * Internal implementation with include-aware caching.
          *
          * @param source   GLSL source code string.
          * @param stage    Target shader stage.
@@ -50,8 +66,6 @@ namespace himalaya::rhi {
             const std::string &source,
             ShaderStage stage,
             const std::string &filename);
-
-    private:
         /**
          * @brief Cached compilation result with tracked include dependencies.
          *
