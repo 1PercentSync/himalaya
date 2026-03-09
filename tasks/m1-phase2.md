@@ -81,7 +81,7 @@
 - [ ] `MaterialInstance` 管理（template_id + buffer offset）
 - [ ] 缺失纹理字段填入 default 纹理的 BindlessIndex
 - [ ] 创建 `app/scene_loader.h/cpp`
-- [ ] 场景路径通过 `argc/argv` 传入，不传参时使用默认路径
+- [ ] 场景路径由 `Application::init(scene_path)` 接收，main.cpp 解析 argc/argv，默认 `assets/Sponza/Sponza.gltf`
 - [ ] 加载失败 log error + abort，不做 fallback
 - [ ] fastgltf 解析 glTF 文件
 - [ ] 遍历 mesh：转换为统一顶点格式，创建 vertex/index buffer

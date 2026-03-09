@@ -264,6 +264,8 @@ DescriptorManager 持有全局 set layout，Pipeline 创建时通过 `GraphicsPi
 
 M1 只有一种材质（标准 PBR），材质参数用固定的 `GPUMaterialData` 结构体定义（CPU 端 struct + shader 端 struct 一一对应）。不引入运行时参数描述系统（`MaterialParamType` / `MaterialParamDesc`）——shader 端必须在编译时知道 struct 布局，运行时描述只增加 CPU 端复杂度而无法带来 GPU 端灵活性。
 
+**GPUMaterialData 定义位置**：`material_system.h`（而非 `scene_data.h`）。`scene_data.h` 中的 GPU 结构体（`GlobalUniformData`、`GPUDirectionalLight`、`PushConstantData`）是每帧/每次绘制流经渲染管线的数据——renderer-app contract。`GPUMaterialData` 则是材质系统的内部 GPU 布局：由 `MaterialSystem` 创建、写入 Material SSBO、管理生命周期，其他模块仅通过 push constant 的 `material_index` 间接访问。放在 `material_system.h` 遵循"谁拥有谁定义"原则，MaterialSystem 是唯一生产者。
+
 **为什么不做完整数据驱动：** M1 只有标准 PBR 一种材质，复杂的数据驱动系统（材质定义文件、自动生成 shader 变体）投入产出比不高。
 
 **升级路径（固定 stride + 多 shader 解读）：** 引入第二种着色模型（卡通、SSS 等）时，采用固定 stride 方案：所有材质 struct 填充到相同大小（当前 64 字节），每个 shader variant 在同一 binding 上定义自己的 typed struct（如 `PBRMaterial`、`ToonMaterial`），通过 `materials[material_index]` 统一寻址。descriptor、pipeline layout、寻址方式均不变。如果新模型超出当前 stride，整体提升（如 64→128 字节）。内存浪费可忽略（几百个材质 × 几十字节 = 几 KB）。
@@ -506,7 +508,9 @@ Context 内部维护 `std::vector<std::pair<VkBuffer, VmaAllocation>> pending_st
 
 ## 场景加载与错误处理
 
-**场景路径**：命令行参数（`argc/argv`），不传参时使用写死的默认路径。CLion Run Configuration 切换场景。长期方向是 GUI 文件选择器。
+**场景路径**：命令行参数，不传参时使用写死的默认路径（`assets/Sponza/Sponza.gltf`）。长期方向是 GUI 文件选择器。
+
+**参数传递方式**：`main.cpp` 负责解析 `argc/argv`，`Application::init()` 只接收已解析的 `const std::string& scene_path`。Application 不感知命令行解析细节。
 
 **错误处理策略**：加载失败（glTF 解析失败、纹理文件缺失、shader 编译失败）一律 log error + abort。开发期使用已知资产，加载失败 = 代码或路径有 bug，应立刻暴露。不做 fallback 到 default 资源——那会掩盖问题。
 

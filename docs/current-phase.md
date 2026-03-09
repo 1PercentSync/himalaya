@@ -173,7 +173,7 @@ private:
   - `MaterialInstance` 管理（template_id + buffer offset）
   - 缺失纹理字段填入 default 纹理的 BindlessIndex（包括 occlusion_tex 和 emissive_tex 占位）
 - 创建 `app/scene_loader.h/cpp`
-  - 场景路径通过命令行参数传入（`argc/argv`），不传参时使用写死的默认路径
+  - 场景路径由 `Application::init(const std::string& scene_path)` 接收（main.cpp 负责解析 argc/argv），默认路径 `assets/Sponza/Sponza.gltf`
   - 加载失败（glTF 解析、纹理缺失等）log error + abort，不做 fallback
   - fastgltf 解析 glTF 文件
   - 遍历 mesh：转换为统一顶点格式，创建 vertex/index buffer
@@ -285,7 +285,8 @@ shaders/
 | 默认方向光 | Application 检测 SceneRenderData 无方向光时填入保底光源。scene_loader 不捏造不存在的数据 |
 | Descriptor Pool 分离 | 两个独立 pool：普通 pool (Set 0, 2 UBO + 4 SSBO) + UPDATE_AFTER_BIND pool (Set 1, 4096 COMBINED_IMAGE_SAMPLER) |
 | GPUMaterialData 对齐 | std430 布局 64 字节。emissive_factor 用 vec4 避免 vec3 对齐问题。C++ 侧 alignas(16) |
-| 场景路径 | `argc/argv` + 写死默认路径。CLion Run Configuration 切换场景。长期方向 GUI 文件选择器 |
+| 场景路径 | main.cpp 解析 argc/argv，Application::init 只接收 scene_path 字符串。默认路径 `assets/Sponza/Sponza.gltf`。长期方向 GUI 文件选择器 |
+| GPUMaterialData 位置 | 定义在 `material_system.h`。scene_data.h 放每帧/每次绘制的 renderer-app contract，GPUMaterialData 是材质系统内部 GPU 布局，遵循"谁拥有谁定义" |
 | 加载错误处理 | 加载失败（glTF / 纹理 / shader）一律 log error + abort。开发期不做 fallback |
 | Step 5→6 视觉验证 | Step 5 用三角形 shader + bindless 验证纹理链路。Step 6 用 unlit shader 验证完整数据管线（顶点、变换、材质）。Step 7 加光照和剔除 |
 | PushConstant 演进 | 阶段二 68 bytes（model + material_index）。阶段六迁移到 per-instance SSBO，为 lightmap 和 M2 motion vectors 预留空间 |
