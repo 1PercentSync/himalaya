@@ -10,6 +10,7 @@
 #include <himalaya/framework/camera.h>
 #include <himalaya/framework/imgui_backend.h>
 #include <himalaya/framework/render_graph.h>
+#include <himalaya/framework/texture.h>
 #include <himalaya/rhi/context.h>
 #include <himalaya/rhi/descriptors.h>
 #include <himalaya/rhi/pipeline.h>
@@ -84,6 +85,14 @@ namespace himalaya::app {
 
         /** @brief Debug UI panel. */
         DebugUI debug_ui_;
+
+        // --- Shared resources ---
+
+        /** @brief Default sampler (linear filter, repeat wrap, linear mip). */
+        rhi::SamplerHandle default_sampler_;
+
+        /** @brief Default 1x1 textures (white, flat normal, black). */
+        framework::DefaultTextures default_textures_;
 
         // --- Phase 1 temporary resources (removed in Step 7) ---
 

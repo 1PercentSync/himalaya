@@ -58,4 +58,51 @@ namespace himalaya::framework {
         const auto bindless_index = descriptor_manager.register_texture(image, sampler);
         return {image, bindless_index};
     }
+
+    namespace {
+        // Creates a 1x1 R8G8B8A8_UNORM texture and registers it to the bindless array.
+        // Must be called within begin_immediate/end_immediate scope.
+        TextureResult create_solid_texture(rhi::ResourceManager &resource_manager,
+                                           rhi::DescriptorManager &descriptor_manager,
+                                           const rhi::SamplerHandle sampler,
+                                           const uint8_t r, const uint8_t g,
+                                           // ReSharper disable once CppDFAConstantParameter
+                                           const uint8_t b, const uint8_t a) {
+            const rhi::ImageDesc desc{
+                .width = 1,
+                .height = 1,
+                .depth = 1,
+                .mip_levels = 1,
+                .sample_count = 1,
+                .format = rhi::Format::R8G8B8A8Unorm,
+                .usage = rhi::ImageUsage::Sampled | rhi::ImageUsage::TransferDst,
+            };
+
+            const auto image = resource_manager.create_image(desc);
+            const uint8_t pixels[4] = {r, g, b, a};
+            resource_manager.upload_image(image, pixels, sizeof(pixels));
+
+            const auto bindless_index = descriptor_manager.register_texture(image, sampler);
+            return {image, bindless_index};
+        }
+    }
+
+    DefaultTextures create_default_textures(rhi::ResourceManager &resource_manager,
+                                            rhi::DescriptorManager &descriptor_manager,
+                                            const rhi::SamplerHandle sampler) {
+        DefaultTextures defaults{};
+        defaults.white = create_solid_texture(resource_manager, descriptor_manager, sampler,
+                                              255, 255, 255, 255);
+        defaults.flat_normal = create_solid_texture(resource_manager, descriptor_manager, sampler,
+                                                    128, 128, 255, 255);
+        defaults.black = create_solid_texture(resource_manager, descriptor_manager, sampler,
+                                              0, 0, 0, 255);
+
+        spdlog::info("Default textures created (white={}, flat_normal={}, black={})",
+                     defaults.white.bindless_index.index,
+                     defaults.flat_normal.bindless_index.index,
+                     defaults.black.bindless_index.index);
+
+        return defaults;
+    }
 } // namespace himalaya::framework

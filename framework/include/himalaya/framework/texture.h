@@ -66,6 +66,7 @@ namespace himalaya::framework {
     /**
      * @brief Creates a GPU texture from CPU pixel data and registers it to bindless.
      *
+     * Must be called within a Context::begin_immediate() / end_immediate() scope.
      * Full pipeline: create image → upload via staging → generate mips → register
      * to bindless array. The image ends in SHADER_READ_ONLY layout.
      *
@@ -81,4 +82,37 @@ namespace himalaya::framework {
                                                const ImageData &data,
                                                TextureRole role,
                                                rhi::SamplerHandle sampler);
+
+    /**
+     * @brief Holds the three default 1x1 textures and their bindless indices.
+     *
+     * These provide neutral values for missing material texture slots:
+     * the shader can always sample without special-casing.
+     */
+    struct DefaultTextures {
+        /** @brief 1x1 (1,1,1,1) — neutral base color / metallic-roughness / occlusion. */
+        TextureResult white;
+
+        /** @brief 1x1 (0.5,0.5,1,1) — tangent-space Z-up, no perturbation. */
+        TextureResult flat_normal;
+
+        /** @brief 1x1 (0,0,0,1) — no emission. */
+        TextureResult black;
+    };
+
+    /**
+     * @brief Creates three default 1x1 textures and registers them to the bindless array.
+     *
+     * Must be called within a Context::begin_immediate() / end_immediate() scope.
+     * All textures are R8G8B8A8_UNORM (pixel values are at extremes where
+     * SRGB and linear interpretations agree).
+     *
+     * @param resource_manager   RHI resource manager for image creation and upload.
+     * @param descriptor_manager Descriptor manager for bindless registration.
+     * @param sampler            Sampler to pair with the textures.
+     * @return DefaultTextures holding the three image handles and bindless indices.
+     */
+    [[nodiscard]] DefaultTextures create_default_textures(rhi::ResourceManager &resource_manager,
+                                                          rhi::DescriptorManager &descriptor_manager,
+                                                          rhi::SamplerHandle sampler);
 } // namespace himalaya::framework

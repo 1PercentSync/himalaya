@@ -122,6 +122,16 @@ namespace himalaya::app {
         camera_.update_all();
         camera_controller_.init(window_, &camera_);
 
+        // --- Default sampler and textures ---
+        default_sampler_ = resource_manager_.create_sampler({
+            .mag_filter = rhi::Filter::Linear,
+            .min_filter = rhi::Filter::Linear,
+            .mip_mode = rhi::SamplerMipMode::Linear,
+            .wrap_u = rhi::SamplerWrapMode::Repeat,
+            .wrap_v = rhi::SamplerWrapMode::Repeat,
+            .max_anisotropy = 0.0f,
+        });
+
         // --- Phase 1 temporary resources ---
         vertex_buffer_ = resource_manager_.create_buffer({
             .size = sizeof(kTriangleVertices),
@@ -131,6 +141,9 @@ namespace himalaya::app {
 
         context_.begin_immediate();
         resource_manager_.upload_buffer(vertex_buffer_, kTriangleVertices.data(), sizeof(kTriangleVertices));
+        default_textures_ = framework::create_default_textures(resource_manager_,
+                                                               descriptor_manager_,
+                                                               default_sampler_);
         context_.end_immediate();
 
         const auto vert_source = read_file("shaders/triangle.vert");
@@ -179,6 +192,16 @@ namespace himalaya::app {
         for (const auto ubo: global_ubo_buffers_) {
             resource_manager_.destroy_buffer(ubo);
         }
+
+        // Default textures: unregister from bindless, then destroy images
+        descriptor_manager_.unregister_texture(default_textures_.white.bindless_index);
+        descriptor_manager_.unregister_texture(default_textures_.flat_normal.bindless_index);
+        descriptor_manager_.unregister_texture(default_textures_.black.bindless_index);
+        resource_manager_.destroy_image(default_textures_.white.image);
+        resource_manager_.destroy_image(default_textures_.flat_normal.image);
+        resource_manager_.destroy_image(default_textures_.black.image);
+        resource_manager_.destroy_sampler(default_sampler_);
+
         unregister_swapchain_images();
         descriptor_manager_.destroy();
         resource_manager_.destroy();
