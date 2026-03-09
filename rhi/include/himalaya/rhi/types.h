@@ -46,18 +46,6 @@ namespace himalaya::rhi {
     };
 
     /**
-     * @brief Pipeline resource handle.
-     * @see ImageHandle for generation-based semantics.
-     */
-    struct PipelineHandle {
-        uint32_t index = UINT32_MAX;
-        uint32_t generation = 0;
-
-        [[nodiscard]] bool valid() const { return index != UINT32_MAX; }
-        bool operator==(const PipelineHandle &) const = default;
-    };
-
-    /**
      * @brief Sampler resource handle.
      * @see ImageHandle for generation-based semantics.
      */
