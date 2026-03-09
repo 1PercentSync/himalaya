@@ -191,10 +191,8 @@ namespace himalaya::rhi {
          * (upload_buffer, upload_image, generate_mips) must only be called within
          * an active immediate scope. Staging buffers created by upload methods are
          * collected and destroyed when end_immediate() completes.
-         *
-         * @return CommandBuffer wrapping the immediate command buffer.
          */
-        CommandBuffer begin_immediate();
+        void begin_immediate();
 
         /**
          * @brief Ends the immediate scope: submits commands and waits for completion.

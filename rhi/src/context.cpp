@@ -393,7 +393,7 @@ namespace himalaya::rhi {
 
     // Resets and begins the immediate command buffer for batch recording.
     // Upload methods record into this buffer; end_immediate() submits everything at once.
-    CommandBuffer Context::begin_immediate() {
+    void Context::begin_immediate() {
         assert(!immediate_active_ && "Immediate scope already active");
         immediate_active_ = true;
 
@@ -403,8 +403,6 @@ namespace himalaya::rhi {
         begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
         begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
         VK_CHECK(vkBeginCommandBuffer(immediate_command_buffer, &begin_info));
-
-        return CommandBuffer(immediate_command_buffer);
     }
 
     // Submits the recorded immediate commands, waits for GPU completion,
