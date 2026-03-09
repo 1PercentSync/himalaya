@@ -62,7 +62,7 @@
 - [x] 统一顶点格式定义（position vec3 + normal vec3 + uv0 vec2 + tangent vec4 + uv1 vec2）
 - [x] Mesh 数据结构（vertex buffer handle、index buffer handle、顶点/索引数量）
 - [x] MikkTSpace 集成：mesh 缺失 tangent 时从 position + normal + uv0 自动生成
-- [ ] 创建 `framework/include/himalaya/framework/texture.h` + `framework/src/texture.cpp`
+- [x] 创建 `framework/include/himalaya/framework/texture.h` + `framework/src/texture.cpp`
 - [ ] stb_image 加载 JPEG/PNG → RGBA8 像素数据（强制 4 通道）
 - [ ] 上传到 GPU image（staging buffer）
 - [ ] GPU 端 mip 生成（`vkCmdBlitImage` 逐级降采样 + layout transition 链）
