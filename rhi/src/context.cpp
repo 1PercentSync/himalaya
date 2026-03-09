@@ -29,17 +29,12 @@ namespace himalaya::rhi {
         VK_EXT_MEMORY_BUDGET_EXTENSION_NAME,
     };
 
-    /**
-     * Derives Vulkan debug messenger severity flags from the current spdlog log level,
-     * so the validation layer only delivers messages that spdlog would actually display.
-     */
-    static VkDebugUtilsMessageSeverityFlagsEXT severity_flags_from_log_level(const spdlog::level::level_enum level) {
-        VkDebugUtilsMessageSeverityFlagsEXT flags = VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
-        if (level <= spdlog::level::warn) flags |= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT;
-        if (level <= spdlog::level::info) flags |= VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT;
-        if (level <= spdlog::level::debug) flags |= VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT;
-        return flags;
-    }
+    /** @brief All severity levels — let the callback do spdlog-level filtering at runtime. */
+    constexpr VkDebugUtilsMessageSeverityFlagsEXT kAllSeverityFlags =
+        VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
+        VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT |
+        VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
+        VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
 
     void Context::init(GLFWwindow *window) {
         create_instance();
@@ -146,7 +141,7 @@ namespace himalaya::rhi {
 
         VkDebugUtilsMessengerCreateInfoEXT create_info{};
         create_info.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
-        create_info.messageSeverity = severity_flags_from_log_level(spdlog::get_level());
+        create_info.messageSeverity = kAllSeverityFlags;
         create_info.messageType =
                 // VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |        // loader/layer lifecycle noise
                 VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
