@@ -380,6 +380,18 @@ namespace himalaya::rhi {
          */
         void upload_image(ImageHandle handle, const void *data, uint64_t size) const;
 
+        /**
+         * @brief Generates mip levels by successively blitting from the previous level.
+         *
+         * Expects mip level 0 to contain valid data (in SHADER_READ_ONLY layout
+         * after upload_image). Uses vkCmdBlitImage with linear filtering for
+         * each level. Image must have TransferSrc and TransferDst usage flags
+         * and more than 1 mip level.
+         *
+         * @param handle Image with populated mip level 0.
+         */
+        void generate_mips(ImageHandle handle) const;
+
     private:
         /** @brief Vulkan context (device, allocator, queues). */
         Context *context_ = nullptr;

@@ -593,4 +593,113 @@ namespace himalaya::rhi {
         // 4. Cleanup
         vmaDestroyBuffer(context_->allocator, staging_buffer, staging_allocation);
     }
+    void ResourceManager::generate_mips(const ImageHandle handle) const {
+        const auto &img = get_image(handle);
+        assert(has_flag(img.desc.usage, ImageUsage::TransferSrc)
+            && "Image must have TransferSrc usage for mip generation");
+        assert(has_flag(img.desc.usage, ImageUsage::TransferDst)
+            && "Image must have TransferDst usage for mip generation");
+        assert(img.desc.mip_levels > 1 && "Image must have more than 1 mip level");
+
+        const VkImageAspectFlags aspect = aspect_from_format(img.desc.format);
+
+        VkCommandBuffer cmd = context_->immediate_command_buffer;
+        VK_CHECK(vkResetCommandBuffer(cmd, 0));
+
+        VkCommandBufferBeginInfo begin_info{};
+        begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+        begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+        VK_CHECK(vkBeginCommandBuffer(cmd, &begin_info));
+
+        // Transition mip 0: SHADER_READ_ONLY -> TRANSFER_SRC (blit source)
+        VkImageMemoryBarrier2 barrier{};
+        barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+        barrier.srcStageMask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
+        barrier.srcAccessMask = VK_ACCESS_2_SHADER_SAMPLED_READ_BIT;
+        barrier.dstStageMask = VK_PIPELINE_STAGE_2_BLIT_BIT;
+        barrier.dstAccessMask = VK_ACCESS_2_TRANSFER_READ_BIT;
+        barrier.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+        barrier.image = img.image;
+        barrier.subresourceRange = {aspect, 0, 1, 0, 1};
+
+        VkDependencyInfo dep{};
+        dep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+        dep.imageMemoryBarrierCount = 1;
+        dep.pImageMemoryBarriers = &barrier;
+        vkCmdPipelineBarrier2(cmd, &dep);
+
+        auto mip_width = static_cast<int32_t>(img.desc.width);
+        auto mip_height = static_cast<int32_t>(img.desc.height);
+
+        for (uint32_t i = 1; i < img.desc.mip_levels; ++i) {
+            const int32_t next_width = std::max(mip_width / 2, 1);
+            const int32_t next_height = std::max(mip_height / 2, 1);
+
+            // Transition mip i: UNDEFINED -> TRANSFER_DST (blit destination)
+            barrier.srcStageMask = VK_PIPELINE_STAGE_2_NONE;
+            barrier.srcAccessMask = VK_ACCESS_2_NONE;
+            barrier.dstStageMask = VK_PIPELINE_STAGE_2_BLIT_BIT;
+            barrier.dstAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
+            barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+            barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+            barrier.subresourceRange = {aspect, i, 1, 0, 1};
+            vkCmdPipelineBarrier2(cmd, &dep);
+
+            // Blit from mip i-1 to mip i
+            VkImageBlit2 blit{};
+            blit.sType = VK_STRUCTURE_TYPE_IMAGE_BLIT_2;
+            blit.srcSubresource = {aspect, i - 1, 0, 1};
+            blit.srcOffsets[0] = {0, 0, 0};
+            blit.srcOffsets[1] = {mip_width, mip_height, 1};
+            blit.dstSubresource = {aspect, i, 0, 1};
+            blit.dstOffsets[0] = {0, 0, 0};
+            blit.dstOffsets[1] = {next_width, next_height, 1};
+
+            VkBlitImageInfo2 blit_info{};
+            blit_info.sType = VK_STRUCTURE_TYPE_BLIT_IMAGE_INFO_2;
+            blit_info.srcImage = img.image;
+            blit_info.srcImageLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+            blit_info.dstImage = img.image;
+            blit_info.dstImageLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+            blit_info.regionCount = 1;
+            blit_info.pRegions = &blit;
+            blit_info.filter = VK_FILTER_LINEAR;
+            vkCmdBlitImage2(cmd, &blit_info);
+
+            // Transition mip i: TRANSFER_DST -> TRANSFER_SRC (source for next level)
+            barrier.srcStageMask = VK_PIPELINE_STAGE_2_BLIT_BIT;
+            barrier.srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
+            barrier.dstStageMask = VK_PIPELINE_STAGE_2_BLIT_BIT;
+            barrier.dstAccessMask = VK_ACCESS_2_TRANSFER_READ_BIT;
+            barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+            barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+            barrier.subresourceRange = {aspect, i, 1, 0, 1};
+            vkCmdPipelineBarrier2(cmd, &dep);
+
+            mip_width = next_width;
+            mip_height = next_height;
+        }
+
+        // Transition all mip levels: TRANSFER_SRC -> SHADER_READ_ONLY
+        barrier.srcStageMask = VK_PIPELINE_STAGE_2_BLIT_BIT;
+        barrier.srcAccessMask = VK_ACCESS_2_TRANSFER_READ_BIT;
+        barrier.dstStageMask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
+        barrier.dstAccessMask = VK_ACCESS_2_SHADER_SAMPLED_READ_BIT;
+        barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+        barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        barrier.subresourceRange = {aspect, 0, img.desc.mip_levels, 0, 1};
+        vkCmdPipelineBarrier2(cmd, &dep);
+
+        VK_CHECK(vkEndCommandBuffer(cmd));
+
+        // Submit and wait
+        VkSubmitInfo submit_info{};
+        submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+        submit_info.commandBufferCount = 1;
+        submit_info.pCommandBuffers = &cmd;
+
+        VK_CHECK(vkQueueSubmit(context_->graphics_queue, 1, &submit_info, VK_NULL_HANDLE));
+        VK_CHECK(vkQueueWaitIdle(context_->graphics_queue));
+    }
 } // namespace himalaya::rhi
