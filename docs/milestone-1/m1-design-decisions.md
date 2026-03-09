@@ -258,13 +258,13 @@ DescriptorManager 持有全局 set layout，Pipeline 创建时通过 `GraphicsPi
 
 ## 材质系统
 
-**选择：代码定义 + 运行时参数布局**
+**选择：代码定义 + 固定数据结构**
 
-M1 只有一种材质（标准 PBR），材质类型在代码中定义。但材质参数的布局是运行时描述（"这个材质有哪些纹理、哪些标量参数"），而不是编译时硬编码结构体。M1 阶段这个描述在代码里硬编码，但接口是通用的。
+M1 只有一种材质（标准 PBR），材质参数用固定的 `GPUMaterialData` 结构体定义（CPU 端 struct + shader 端 struct 一一对应）。不引入运行时参数描述系统（`MaterialParamType` / `MaterialParamDesc`）——shader 端必须在编译时知道 struct 布局，运行时描述只增加 CPU 端复杂度而无法带来 GPU 端灵活性。
 
 **为什么不做完整数据驱动：** M1 只有标准 PBR 一种材质，复杂的数据驱动系统（材质定义文件、自动生成 shader 变体）投入产出比不高。
 
-**升级路径：** 以后加 Burley、SSS、卡通渲染等新着色模型时，只需添加新的参数布局描述和对应 shader，不需要改材质系统核心代码。后续可将硬编码描述改为从文件加载。
+**升级路径：** 以后加卡通渲染、SSS 等新着色模型时，新增对应的 GPU 材质数据结构和 shader 变体即可。
 
 ### 材质数据流
 
@@ -561,7 +561,7 @@ Context 内部维护 `std::vector<std::pair<VkBuffer, VmaAllocation>> pending_st
 | 对象生命周期 | 显式 `destroy()` | 销毁顺序可控 |
 | 帧同步 | 2 Frames in Flight | 低延迟，够用 |
 | 顶点格式 | 统一格式（position + normal + uv0 + tangent + uv1） | 简化 pipeline 管理，M1 够用 |
-| 材质系统 | 代码定义 + 运行时参数布局 + 全局 SSBO（阶段二起） | 完整数据流早建立 |
+| 材质系统 | 代码定义 + 固定数据结构 + 全局 SSBO（阶段二起） | 简单直接，GPU 端无法运行时灵活 |
 | Shader 变体 | 运行时编译 + 热重载 | 开发效率优先 |
 | 场景数据 | 渲染列表（完整结构一次定义，按需填充） | 简单解耦够用 |
 | Temporal 数据 | 手动 Double Buffer | M1 只有 SSAO 需要 |

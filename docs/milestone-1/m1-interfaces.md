@@ -459,20 +459,6 @@ public:
 
 ### Layer 1 — 材质系统（framework/material_system.h）
 
-#### 参数描述
-
-```cpp
-enum class MaterialParamType {
-    FLOAT, VEC2, VEC3, VEC4, TEXTURE
-};
-
-struct MaterialParamDesc {
-    std::string name;
-    MaterialParamType type;
-    uint32_t offset;            // 在材质数据 buffer 中的偏移
-};
-```
-
 #### 材质模板（定义着色模型）
 
 ```cpp
@@ -481,7 +467,7 @@ struct MaterialTemplate {
     PipelineHandle pipeline;
     PipelineHandle depth_prepass_pipeline;
     PipelineHandle shadow_pipeline;
-    std::vector<MaterialParamDesc> params;
+    uint32_t material_data_size;  // GPU 材质数据结构体大小（字节）
 };
 ```
 
