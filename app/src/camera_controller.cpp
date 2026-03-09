@@ -4,6 +4,7 @@
 #include <glm/glm.hpp>
 
 #include <GLFW/glfw3.h>
+#include <imgui.h>
 
 #include <algorithm>
 
@@ -14,9 +15,12 @@ namespace himalaya::app {
     }
 
     void CameraController::update(const float delta_time) {
+        const ImGuiIO &io = ImGui::GetIO();
+
         // --- Mouse rotation (right-click hold) ---
 
-        const bool right_pressed = glfwGetMouseButton(window_, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS;
+        const bool right_pressed = !io.WantCaptureMouse &&
+                                   glfwGetMouseButton(window_, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS;
 
         double cursor_x, cursor_y;
         glfwGetCursorPos(window_, &cursor_x, &cursor_y);
