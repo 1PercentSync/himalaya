@@ -21,9 +21,8 @@
 | 项目 | 说明 |
 |------|------|
 | Light Probes | 动态物体接收间接光的基础，采样 Lightmap 插值结果 |
-| Per-object motion vectors | 动态物体运动后所有 temporal 效果（DLSS/FSR、Motion Blur、temporal filtering）正常工作的基础设施 |
+| Per-object motion vectors | 动态物体运动后所有 temporal 效果（DLSS/FSR、Motion Blur、temporal filtering）正常工作的基础设施。M2 已接入的 DLSS/FSR 效果完整化 |
 | Per-Object Motion Blur | 替换 Camera Motion Blur，物体移动有独立的运动模糊 |
-| DLSS SDK 接入 | M2 已有 FSR 和统一接口层，再接 DLSS 就是多一个后端。有了 per-object motion vectors 之后 DLSS 效果才完整 |
 | MSAA + TAA/upscaler 组合模式 | 开放质量档位配置选项（纯 MSAA / 纯 Upscaler / MSAA + Upscaler） |
 
 ---

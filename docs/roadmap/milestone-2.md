@@ -43,6 +43,6 @@
 | POM | 砖墙、石板路等表面深度感显著提升 |
 | Gaussian DOF | 按深度做模糊的基础景深效果 |
 | Camera Motion Blur | 基于相机运动的模糊（静态场景 + 相机移动只需相机 reprojection） |
-| DLSS SDK 接入 | M2 已有 FSR 和统一接口层，再接 DLSS 就是多一个后端，N 卡首选 |
+| DLSS SDK 接入 | M2 已有 FSR 和统一接口层，再接 DLSS 就是多一个后端，N 卡首选。静态场景仅需 camera motion vectors |
 | Lens Flare | 基于 Bloom 降采样数据，复用 Bloom 中间结果，低成本画面点缀 |
 | 2D 云层 | 噪声纹理铺在天空球上，配合 Bruneton 天空给出不错的室外画面 |

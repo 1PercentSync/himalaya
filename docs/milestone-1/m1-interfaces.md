@@ -227,8 +227,8 @@ public:
 
     // 从文件路径加载并编译 shader（唯一公开编译入口）
     // path 相对于 set_include_path() 设置的根目录，与 FileIncluder 的解析规则一致
-    // 例：set_include_path("shaders") 后，compile_from_file("forward/forward.vert", Vertex)
-    //     读取 shaders/forward/forward.vert，filename 传 "forward/forward.vert" 给内部 compile()
+    // 例：set_include_path("shaders") 后，compile_from_file("forward.vert", Vertex)
+    //     读取 shaders/forward.vert，filename 传 "forward.vert" 给内部 compile()
     std::vector<uint32_t> compile_from_file(const std::string& path, ShaderStage stage);
 };
 ```
@@ -418,7 +418,7 @@ public:
 
 ```cpp
 // Debug utils (VK_EXT_debug_utils)
-void begin_debug_label(const std::string& name, std::array<float, 4> color = {0, 0, 0, 1});
+void begin_debug_label(const std::string& name, std::array<float, 4> color);
 void end_debug_label();
 ```
 
@@ -440,7 +440,7 @@ public:
 
     // 初始化：创建 pipeline、固定资源等
     // 调用一次，或资源变化时重新调用
-    virtual void setup(RHIDevice& device) = 0;
+    virtual void setup(Context& context) = 0;
 
     // 注册到 Render Graph：声明输入输出资源
     virtual void register_resources(RenderGraph& graph) = 0;
