@@ -339,9 +339,11 @@ namespace himalaya::rhi {
         return images_[handle.index];
     }
 
-    ImageHandle ResourceManager::register_external_image(const VkImage image, const VkImageView view,
-                                                         const ImageDesc &desc) {
+    // ReSharper disable CppParameterMayBeConst
+    ImageHandle ResourceManager::register_external_image(VkImage image, VkImageView view, const ImageDesc &desc) {
+        // ReSharper restore CppParameterMayBeConst
         const uint32_t index = allocate_image_slot();
+        // ReSharper disable once CppUseStructuredBinding
         auto &slot = images_[index];
         slot.image = image;
         slot.view = view;
@@ -456,6 +458,7 @@ namespace himalaya::rhi {
         std::memcpy(staging_info.pMappedData, data, size);
 
         // 3. Record copy command into the immediate command buffer
+        // ReSharper disable once CppLocalVariableMayBeConst
         VkCommandBuffer cmd = context_->immediate_command_buffer;
 
         VK_CHECK(vkResetCommandBuffer(cmd, 0));
@@ -483,6 +486,111 @@ namespace himalaya::rhi {
         VK_CHECK(vkQueueWaitIdle(context_->graphics_queue));
 
         // 5. Cleanup staging buffer
+        vmaDestroyBuffer(context_->allocator, staging_buffer, staging_allocation);
+    }
+
+    void ResourceManager::upload_image(const ImageHandle handle,
+                                       const void *data,
+                                       const uint64_t size) const {
+        assert(data && "Upload source data must not be null");
+        assert(size > 0 && "Upload size must be greater than zero");
+
+        const auto &dst = get_image(handle);
+        assert(has_flag(dst.desc.usage, ImageUsage::TransferDst)
+            && "Destination image must have TransferDst usage");
+
+        // 1. Create staging buffer
+        VkBufferCreateInfo staging_buffer_info{};
+        staging_buffer_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        staging_buffer_info.size = size;
+        staging_buffer_info.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+        staging_buffer_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+        VmaAllocationCreateInfo staging_alloc_info{};
+        staging_alloc_info.usage = VMA_MEMORY_USAGE_AUTO;
+        staging_alloc_info.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT
+                                   | VMA_ALLOCATION_CREATE_MAPPED_BIT;
+
+        VkBuffer staging_buffer = VK_NULL_HANDLE;
+        VmaAllocation staging_allocation = VK_NULL_HANDLE;
+        VmaAllocationInfo staging_info{};
+
+        VK_CHECK(vmaCreateBuffer(context_->allocator,
+            &staging_buffer_info,
+            &staging_alloc_info,
+            &staging_buffer,
+            &staging_allocation,
+            &staging_info));
+
+        std::memcpy(staging_info.pMappedData, data, size);
+
+        // 2. Record commands
+        VkCommandBuffer cmd = context_->immediate_command_buffer;
+        VK_CHECK(vkResetCommandBuffer(cmd, 0));
+
+        VkCommandBufferBeginInfo begin_info{};
+        begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+        begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+        VK_CHECK(vkBeginCommandBuffer(cmd, &begin_info));
+
+        const VkImageAspectFlags aspect = aspect_from_format(dst.desc.format);
+
+        // Transition mip 0: UNDEFINED -> TRANSFER_DST_OPTIMAL
+        VkImageMemoryBarrier2 to_transfer{};
+        to_transfer.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+        to_transfer.srcStageMask = VK_PIPELINE_STAGE_2_NONE;
+        to_transfer.srcAccessMask = VK_ACCESS_2_NONE;
+        to_transfer.dstStageMask = VK_PIPELINE_STAGE_2_COPY_BIT;
+        to_transfer.dstAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
+        to_transfer.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        to_transfer.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+        to_transfer.image = dst.image;
+        to_transfer.subresourceRange = {aspect, 0, 1, 0, 1};
+
+        VkDependencyInfo dep{};
+        dep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+        dep.imageMemoryBarrierCount = 1;
+        dep.pImageMemoryBarriers = &to_transfer;
+        vkCmdPipelineBarrier2(cmd, &dep);
+
+        // Copy staging buffer to image mip 0
+        VkBufferImageCopy region{};
+        region.bufferOffset = 0;
+        region.bufferRowLength = 0;
+        region.bufferImageHeight = 0;
+        region.imageSubresource = {aspect, 0, 0, 1};
+        region.imageOffset = {0, 0, 0};
+        region.imageExtent = {dst.desc.width, dst.desc.height, 1};
+        vkCmdCopyBufferToImage(cmd, staging_buffer, dst.image,
+                               VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+
+        // Transition mip 0: TRANSFER_DST_OPTIMAL -> SHADER_READ_ONLY_OPTIMAL
+        VkImageMemoryBarrier2 to_read{};
+        to_read.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+        to_read.srcStageMask = VK_PIPELINE_STAGE_2_COPY_BIT;
+        to_read.srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
+        to_read.dstStageMask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
+        to_read.dstAccessMask = VK_ACCESS_2_SHADER_SAMPLED_READ_BIT;
+        to_read.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+        to_read.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        to_read.image = dst.image;
+        to_read.subresourceRange = {aspect, 0, 1, 0, 1};
+
+        dep.pImageMemoryBarriers = &to_read;
+        vkCmdPipelineBarrier2(cmd, &dep);
+
+        VK_CHECK(vkEndCommandBuffer(cmd));
+
+        // 3. Submit and wait
+        VkSubmitInfo submit_info{};
+        submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+        submit_info.commandBufferCount = 1;
+        submit_info.pCommandBuffers = &cmd;
+
+        VK_CHECK(vkQueueSubmit(context_->graphics_queue, 1, &submit_info, VK_NULL_HANDLE));
+        VK_CHECK(vkQueueWaitIdle(context_->graphics_queue));
+
+        // 4. Cleanup
         vmaDestroyBuffer(context_->allocator, staging_buffer, staging_allocation);
     }
 } // namespace himalaya::rhi

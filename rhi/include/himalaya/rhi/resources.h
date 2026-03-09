@@ -368,6 +368,18 @@ namespace himalaya::rhi {
          */
         void upload_buffer(BufferHandle handle, const void *data, uint64_t size, uint64_t offset = 0) const;
 
+        /**
+         * @brief Uploads CPU pixel data to a GPU image (mip level 0) via a staging buffer.
+         *
+         * Transitions the image from UNDEFINED to TRANSFER_DST, copies data,
+         * then transitions to SHADER_READ_ONLY. Only writes mip level 0.
+         *
+         * @param handle Destination image (must have TransferDst usage).
+         * @param data   Source pixel data pointer.
+         * @param size   Number of bytes to upload.
+         */
+        void upload_image(ImageHandle handle, const void *data, uint64_t size) const;
+
     private:
         /** @brief Vulkan context (device, allocator, queues). */
         Context *context_ = nullptr;
