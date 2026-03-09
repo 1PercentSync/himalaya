@@ -5,6 +5,8 @@
  * @brief Unified vertex format and mesh data management.
  */
 
+#include <himalaya/rhi/types.h>
+
 #include <glm/glm.hpp>
 #include <vulkan/vulkan.h>
 
@@ -38,5 +40,26 @@ namespace himalaya::framework {
 
         /** @brief Returns the vertex input attribute descriptions for all 5 attributes. */
         [[nodiscard]] static std::array<VkVertexInputAttributeDescription, 5> attribute_descriptions();
+    };
+
+    /**
+     * @brief GPU-resident mesh data.
+     *
+     * Holds RHI buffer handles for vertex and index data, along with
+     * counts needed for draw calls. Buffers are owned externally
+     * (e.g. by SceneLoader) and destroyed via ResourceManager.
+     */
+    struct Mesh {
+        /** @brief Handle to the GPU vertex buffer (Vertex[]). */
+        rhi::BufferHandle vertex_buffer;
+
+        /** @brief Handle to the GPU index buffer (uint32_t[]). */
+        rhi::BufferHandle index_buffer;
+
+        /** @brief Number of vertices in the vertex buffer. */
+        uint32_t vertex_count = 0;
+
+        /** @brief Number of indices in the index buffer. */
+        uint32_t index_count = 0;
     };
 } // namespace himalaya::framework
