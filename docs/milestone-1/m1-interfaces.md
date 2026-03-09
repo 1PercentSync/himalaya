@@ -142,15 +142,16 @@ shaders/
 上层代码持有和传递这些轻量句柄，不直接接触 Vulkan 类型。内部实现是资源池的索引 + generation 计数器。generation 用于检测 use-after-free：资源销毁时 slot 的 generation 递增，使用句柄时比对 generation，不匹配则为过期句柄。
 
 ```cpp
-// 资源句柄（generation-based）
+// 资源句柄（generation-based）— 用于资源池管理的资源
 struct ImageHandle    { uint32_t index = UINT32_MAX; uint32_t generation = 0; bool valid() const; };
 struct BufferHandle   { uint32_t index = UINT32_MAX; uint32_t generation = 0; bool valid() const; };
-struct PipelineHandle { uint32_t index = UINT32_MAX; uint32_t generation = 0; bool valid() const; };
 struct SamplerHandle  { uint32_t index = UINT32_MAX; uint32_t generation = 0; bool valid() const; };
 
 // Bindless 系统返回的纹理索引，shader 里用这个访问纹理
 struct BindlessIndex { uint32_t index = UINT32_MAX; };
 ```
+
+Pipeline 不使用 handle 体系——所有权单一明确（pass / MaterialTemplate 直接持有 `Pipeline` 值类型），详见 `m1-design-decisions.md`「资源句柄设计」。
 
 #### 资源创建描述
 
@@ -464,9 +465,9 @@ public:
 ```cpp
 struct MaterialTemplate {
     std::string name;           // 如 "StandardPBR"
-    PipelineHandle pipeline;
-    PipelineHandle depth_prepass_pipeline;
-    PipelineHandle shadow_pipeline;
+    Pipeline pipeline;
+    Pipeline depth_prepass_pipeline;
+    Pipeline shadow_pipeline;
     uint32_t material_data_size;  // GPU 材质数据结构体大小（字节）
 };
 ```

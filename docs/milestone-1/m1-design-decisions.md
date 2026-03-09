@@ -512,7 +512,9 @@ Context 内部维护 `std::vector<std::pair<VkBuffer, VmaAllocation>> pending_st
 
 **选择：Generation-based 句柄**
 
-所有资源句柄（Image、Buffer、Pipeline、Sampler）包含 index + generation 两个字段。资源池每个 slot 维护 generation 计数器，资源销毁时 generation 递增，使用句柄时比对 generation。
+资源池管理的资源句柄（Image、Buffer、Sampler）包含 index + generation 两个字段。资源池每个 slot 维护 generation 计数器，资源销毁时 generation 递增，使用句柄时比对 generation。
+
+Pipeline 不纳入资源池管理——Pipeline 所有权始终是单一且明确的（pass 或 MaterialTemplate 持有），不像 Image/Buffer 被多个 pass、descriptor set、render graph 交叉引用。生命周期保护由 Vulkan Validation Layer 兜底（检测已销毁 VkPipeline 的使用、设备销毁时的泄漏报告），无需 generation 机制。
 
 **为什么加 generation：** 检测所有 use-after-free 错误——旧句柄引用已销毁并被新资源复用的 slot 时立即报错，而非静默访问错误资源。开销仅为一次 `uint32_t` 比较。
 
