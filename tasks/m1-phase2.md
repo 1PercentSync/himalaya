@@ -75,11 +75,13 @@
 
 ## Step 6：材质系统 + glTF 场景加载 + Unlit 渲染
 
-- [ ] 创建 `framework/include/himalaya/framework/material_system.h` + `framework/src/material_system.cpp`
-- [ ] `GPUMaterialData` 结构体（64 字节, alignas(16)：vec4×2 + float×2 + uint×5 + padding）
-- [ ] 全局 Material SSBO 管理（场景加载后一次性分配恰好大小的 buffer）
-- [ ] `MaterialInstance` 管理（template_id + buffer offset）
-- [ ] 缺失纹理字段填入 default 纹理的 BindlessIndex
+- [x] 创建 `framework/include/himalaya/framework/material_system.h` + `framework/src/material_system.cpp`
+- [x] `GPUMaterialData` 结构体（80 字节, alignas(16)：含 normal_scale/occlusion_strength/alpha_cutoff/alpha_mode）
+- [x] `AlphaMode` 枚举（Opaque/Mask/Blend）
+- [x] 全局 Material SSBO 管理（场景加载后一次性分配恰好大小的 buffer）
+- [x] `MaterialInstance` 管理（template_id + buffer_offset + alpha_mode + double_sided）
+- [x] 缺失纹理字段填入 default 纹理的 BindlessIndex
+- [x] `DescriptorManager::write_set0_buffer()` — 将 buffer descriptor 写入收敛到 RHI 层
 - [ ] 创建 `app/scene_loader.h/cpp`
 - [ ] 场景路径由 `Application::init(scene_path)` 接收，main.cpp 解析 argc/argv，默认 `assets/Sponza/Sponza.gltf`
 - [ ] 加载失败 log error + abort，不做 fallback
