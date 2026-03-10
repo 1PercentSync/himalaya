@@ -451,13 +451,13 @@ namespace himalaya::app {
 
                                    pass_cmd.begin_rendering(rendering_info);
 
-                                   pass_cmd.bind_pipeline(triangle_pipeline_);
+                                   pass_cmd.bind_pipeline(unlit_pipeline_);
 
                                    const VkDescriptorSet sets[] = {
                                        descriptor_manager_.get_set0(context_.frame_index),
                                        descriptor_manager_.get_set1(),
                                    };
-                                   pass_cmd.bind_descriptor_sets(triangle_pipeline_.layout, 0, sets, 2);
+                                   pass_cmd.bind_descriptor_sets(unlit_pipeline_.layout, 0, sets, 2);
 
                                    VkViewport viewport{};
                                    viewport.x = 0.0f;
@@ -469,15 +469,39 @@ namespace himalaya::app {
                                    pass_cmd.set_viewport(viewport);
                                    pass_cmd.set_scissor({{0, 0}, swapchain_.extent});
 
-                                   pass_cmd.set_cull_mode(VK_CULL_MODE_BACK_BIT);
                                    pass_cmd.set_front_face(VK_FRONT_FACE_COUNTER_CLOCKWISE);
                                    pass_cmd.set_depth_test_enable(true);
                                    pass_cmd.set_depth_write_enable(true);
                                    pass_cmd.set_depth_compare_op(VK_COMPARE_OP_GREATER);
 
-                                   pass_cmd.bind_vertex_buffer(0,
-                                                               resource_manager_.get_buffer(vertex_buffer_).buffer);
-                                   pass_cmd.draw(3);
+                                   const auto meshes = scene_loader_.meshes();
+                                   const auto materials = scene_loader_.material_instances();
+
+                                   for (const auto &instance : scene_render_data_.mesh_instances) {
+                                       const auto &mesh = meshes[instance.mesh_id];
+                                       const auto &material = materials[instance.material_id];
+
+                                       pass_cmd.set_cull_mode(
+                                           material.double_sided
+                                               ? VK_CULL_MODE_NONE
+                                               : VK_CULL_MODE_BACK_BIT);
+
+                                       const framework::PushConstantData pc{
+                                           .model = instance.transform,
+                                           .material_index = material.buffer_offset,
+                                       };
+                                       pass_cmd.push_constants(
+                                           unlit_pipeline_.layout,
+                                           VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+                                           &pc, sizeof(pc));
+
+                                       pass_cmd.bind_vertex_buffer(
+                                           0, resource_manager_.get_buffer(mesh.vertex_buffer).buffer);
+                                       pass_cmd.bind_index_buffer(
+                                           resource_manager_.get_buffer(mesh.index_buffer).buffer,
+                                           VK_INDEX_TYPE_UINT32);
+                                       pass_cmd.draw_indexed(mesh.index_count);
+                                   }
 
                                    pass_cmd.end_rendering();
                                });
