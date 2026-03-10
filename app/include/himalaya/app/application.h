@@ -60,47 +60,47 @@ namespace himalaya::app {
         // --- RHI infrastructure ---
 
         /** @brief Vulkan context: instance, device, queues, allocator. */
-        rhi::Context context_;
+        rhi::Context context_{};
 
         /** @brief Swapchain: presentation surface, images, and image views. */
-        rhi::Swapchain swapchain_;
+        rhi::Swapchain swapchain_{};
 
         /** @brief GPU resource pool: buffers, images, and samplers. */
-        rhi::ResourceManager resource_manager_;
+        rhi::ResourceManager resource_manager_{};
 
         /** @brief Descriptor set layouts, pools, and bindless texture management. */
-        rhi::DescriptorManager descriptor_manager_;
+        rhi::DescriptorManager descriptor_manager_{};
 
         // --- Framework ---
 
         /** @brief ImGui integration backend. */
-        framework::ImGuiBackend imgui_backend_;
+        framework::ImGuiBackend imgui_backend_{};
 
         /** @brief Render graph for pass orchestration and automatic barriers. */
-        framework::RenderGraph render_graph_;
+        framework::RenderGraph render_graph_{};
 
         /** @brief Material SSBO management (Set 0, Binding 2). */
-        framework::MaterialSystem material_system_;
+        framework::MaterialSystem material_system_{};
 
         // --- App modules ---
 
         /** @brief Camera state (position, orientation, matrices). */
-        framework::Camera camera_;
+        framework::Camera camera_{};
 
         /** @brief Free-roaming camera controller. */
-        CameraController camera_controller_;
+        CameraController camera_controller_{};
 
         /** @brief Debug UI panel. */
-        DebugUI debug_ui_;
+        DebugUI debug_ui_{};
 
         /** @brief glTF scene loader and resource owner. */
-        SceneLoader scene_loader_;
+        SceneLoader scene_loader_{};
 
         /** @brief Per-frame scene render data (populated in update()). */
-        framework::SceneRenderData scene_render_data_;
+        framework::SceneRenderData scene_render_data_{};
 
         /** @brief Per-frame frustum culling result (populated in update()). */
-        framework::CullResult cull_result_;
+        framework::CullResult cull_result_{};
 
         /** @brief Fallback directional light when the scene provides none. */
         std::vector<framework::DirectionalLight> default_lights_;
@@ -114,21 +114,21 @@ namespace himalaya::app {
         rhi::SamplerHandle default_sampler_;
 
         /** @brief Default 1x1 textures (white, flat normal, black). */
-        framework::DefaultTextures default_textures_;
+        framework::DefaultTextures default_textures_{};
 
         /** @brief Unlit graphics pipeline (forward.vert + forward.frag). */
-        rhi::Pipeline unlit_pipeline_;
+        rhi::Pipeline unlit_pipeline_{};
 
         /** @brief Shader compiler instance. */
-        rhi::ShaderCompiler shader_compiler_;
+        rhi::ShaderCompiler shader_compiler_{};
 
         // --- Per-frame buffers ---
 
         /** @brief Per-frame GlobalUBO buffers (CpuToGpu, one per frame in flight). */
-        std::array<rhi::BufferHandle, rhi::kMaxFramesInFlight> global_ubo_buffers_;
+        std::array<rhi::BufferHandle, rhi::kMaxFramesInFlight> global_ubo_buffers_{};
 
         /** @brief Per-frame LightBuffer SSBOs (CpuToGpu, one per frame in flight). */
-        std::array<rhi::BufferHandle, rhi::kMaxFramesInFlight> light_buffers_;
+        std::array<rhi::BufferHandle, rhi::kMaxFramesInFlight> light_buffers_{};
 
         /** @brief Whether VSync was toggled this frame (triggers swapchain recreate). */
         bool vsync_changed_ = false;
