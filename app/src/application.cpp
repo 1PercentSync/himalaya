@@ -71,7 +71,10 @@ namespace himalaya::app {
                 .memory = rhi::MemoryUsage::CpuToGpu,
             });
             descriptor_manager_.write_set0_buffer(
-                i, 0, global_ubo_buffers_[i], sizeof(framework::GlobalUniformData));
+                i,
+                0,
+                global_ubo_buffers_[i],
+                sizeof(framework::GlobalUniformData));
         }
 
         // --- LightBuffer SSBOs (per-frame, CpuToGpu) ---
@@ -381,7 +384,7 @@ namespace himalaya::app {
                                    const auto meshes = scene_loader_.meshes();
                                    const auto materials = scene_loader_.material_instances();
 
-                                   for (const auto &instance : scene_render_data_.mesh_instances) {
+                                   for (const auto &instance: scene_render_data_.mesh_instances) {
                                        const auto &mesh = meshes[instance.mesh_id];
                                        const auto &material = materials[instance.material_id];
 
