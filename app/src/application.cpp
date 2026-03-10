@@ -120,6 +120,8 @@ namespace himalaya::app {
             .max_lod = VK_LOD_CLAMP_NONE,
         });
 
+        material_system_.init(&resource_manager_, &descriptor_manager_);
+
         // --- Phase 1 temporary resources ---
         vertex_buffer_ = resource_manager_.create_buffer({
             .size = sizeof(kTriangleVertices),
@@ -132,9 +134,9 @@ namespace himalaya::app {
         default_textures_ = framework::create_default_textures(resource_manager_,
                                                                descriptor_manager_,
                                                                default_sampler_);
+        scene_loader_.load(scene_path, resource_manager_, descriptor_manager_,
+                           material_system_, default_textures_, default_sampler_);
         context_.end_immediate();
-
-        spdlog::info("Scene path: {}", scene_path);
 
         const auto vert_spirv = shader_compiler_.compile_from_file(
             "triangle.vert", rhi::ShaderStage::Vertex);
@@ -176,6 +178,8 @@ namespace himalaya::app {
         vkQueueWaitIdle(context_.graphics_queue);
 
         imgui_backend_.destroy();
+        scene_loader_.destroy();
+        material_system_.destroy();
         triangle_pipeline_.destroy(context_.device);
         resource_manager_.destroy_buffer(vertex_buffer_);
         for (const auto ubo: global_ubo_buffers_) {
@@ -276,6 +280,11 @@ namespace himalaya::app {
         ubo_data.time = static_cast<float>(glfwGetTime());
 
         std::memcpy(ubo_buf.allocation_info.pMappedData, &ubo_data, sizeof(ubo_data));
+
+        // Fill SceneRenderData for render passes
+        scene_render_data_.mesh_instances = scene_loader_.mesh_instances();
+        scene_render_data_.directional_lights = scene_loader_.directional_lights();
+        scene_render_data_.camera = camera_;
 
         // Debug UI
         // ReSharper disable once CppUseStructuredBinding

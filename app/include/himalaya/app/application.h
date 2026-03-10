@@ -79,6 +79,9 @@ namespace himalaya::app {
         /** @brief Render graph for pass orchestration and automatic barriers. */
         framework::RenderGraph render_graph_;
 
+        /** @brief Material SSBO management (Set 0, Binding 2). */
+        framework::MaterialSystem material_system_;
+
         // --- App modules ---
 
         /** @brief Camera state (position, orientation, matrices). */
@@ -92,6 +95,9 @@ namespace himalaya::app {
 
         /** @brief glTF scene loader and resource owner. */
         SceneLoader scene_loader_;
+
+        /** @brief Per-frame scene render data (populated in update()). */
+        framework::SceneRenderData scene_render_data_;
 
         // --- Shared resources ---
 
