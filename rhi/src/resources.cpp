@@ -239,6 +239,7 @@ namespace himalaya::rhi {
     ImageHandle ResourceManager::create_image(const ImageDesc &desc) {
         assert(desc.width > 0 && desc.height > 0 && "Image dimensions must be greater than zero");
         assert(desc.depth > 0 && "Image depth must be greater than zero");
+        assert(desc.depth == 1 && "3D images (depth > 1) not yet supported — remove this assert when adding VK_IMAGE_TYPE_3D");
         assert(desc.mip_levels > 0 && "Image mip_levels must be greater than zero");
         assert(desc.sample_count > 0 && "Image sample_count must be greater than zero");
 
