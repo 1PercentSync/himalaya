@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段二 — 基础渲染管线（加载 glTF 场景、基础 Lit shader 渲染、相机漫游）
-- **进度**：Step 6 进行中（11/26），fastgltf 解析完成
+- **进度**：Step 6 进行中（12/26），mesh 加载完成
 
 ### 下一个任务
 
-Step 6 下一项：遍历 mesh — 转换为统一顶点格式，创建 vertex/index buffer
+Step 6 下一项：遍历 material — 提取 PBR 参数和纹理引用，创建 MaterialInstance
 
 ---
 
