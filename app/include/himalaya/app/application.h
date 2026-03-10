@@ -158,6 +158,16 @@ namespace himalaya::app {
         void end_frame();
 
         /**
+         * @brief Handles window resize: waits for GPU idle, destroys old resolution-dependent
+         *        resources, recreates swapchain, and rebuilds those resources.
+         *
+         * Called from both begin_frame() (acquire failure) and end_frame() (present failure
+         * or explicit resize/vsync toggle). Uses vkQueueWaitIdle for immediate destruction
+         * instead of deferred deletion, since idle guarantees no GPU references.
+         */
+        void handle_resize();
+
+        /**
          * @brief Registers all swapchain images as external images in ResourceManager.
          */
         void register_swapchain_images();

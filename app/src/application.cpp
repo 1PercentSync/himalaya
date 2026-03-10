@@ -242,11 +242,7 @@ namespace himalaya::app {
             frame.image_available_semaphore, VK_NULL_HANDLE, &image_index_);
 
         if (acquire_result == VK_ERROR_OUT_OF_DATE_KHR) {
-            destroy_depth_buffer();
-            unregister_swapchain_images();
-            swapchain_.recreate(context_, window_);
-            register_swapchain_images();
-            create_depth_buffer();
+            handle_resize();
             return false;
         }
         if (acquire_result != VK_SUCCESS && acquire_result != VK_SUBOPTIMAL_KHR) {
@@ -450,11 +446,7 @@ namespace himalaya::app {
             vsync_changed_) {
             framebuffer_resized_ = false;
             vsync_changed_ = false;
-            destroy_depth_buffer();
-            unregister_swapchain_images();
-            swapchain_.recreate(context_, window_);
-            register_swapchain_images();
-            create_depth_buffer();
+            handle_resize();
         } else if (present_result != VK_SUCCESS) {
             std::abort();
         }
@@ -502,6 +494,20 @@ namespace himalaya::app {
             resource_manager_.unregister_external_image(handle);
         }
         swapchain_image_handles_.clear();
+    }
+
+    // ---- Resize handling ----
+
+    // vkQueueWaitIdle guarantees no GPU references, so we destroy immediately
+    // (not deferred). All resolution-dependent resources are rebuilt after
+    // the swapchain is recreated.
+    void Application::handle_resize() {
+        vkQueueWaitIdle(context_.graphics_queue);
+        destroy_depth_buffer();
+        unregister_swapchain_images();
+        swapchain_.recreate(context_, window_);
+        register_swapchain_images();
+        create_depth_buffer();
     }
 
     // ---- Depth buffer management ----
