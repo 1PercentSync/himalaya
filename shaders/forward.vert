@@ -32,13 +32,12 @@ void main() {
 
     frag_world_pos = world_pos.xyz;
 
-    // Transform normal by the upper-left 3x3 of the model matrix.
-    // Correct for uniform scale; non-uniform scale would need inverse-transpose.
-    mat3 normal_matrix = mat3(pc.model);
+    // Inverse-transpose handles non-uniform scale correctly.
+    mat3 normal_matrix = transpose(inverse(mat3(pc.model)));
     frag_normal = normalize(normal_matrix * in_normal);
 
     frag_uv0 = in_uv0;
 
-    // Pass tangent direction in world space, preserve handedness in w
+    // Tangent uses the same normal matrix; preserve handedness in w
     frag_tangent = vec4(normalize(normal_matrix * in_tangent.xyz), in_tangent.w);
 }
