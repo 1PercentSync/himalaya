@@ -331,7 +331,7 @@ struct GlobalUniformData {
     glm::vec4 camera_position_and_exposure;     // offset 256 — xyz = position, w = exposure
     glm::vec2 screen_size;                      // offset 272
     float time;                                 // offset 280 — 程序运行时间（秒），M2 水面/云层等动画用
-    // std140 padding to 288 bytes
+    uint32_t directional_light_count;           // offset 284 — 活跃方向光数量
 };
 
 // GPU 方向光 — std430 layout, 32 bytes per element
@@ -547,6 +547,7 @@ layout(set = 0, binding = 0) uniform GlobalUBO {
     vec4 camera_position_and_exposure;      // xyz = position, w = exposure
     vec2 screen_size;
     float time;                             // 程序运行时间（秒）
+    uint directional_light_count;           // 活跃方向光数量
 } global;
 
 layout(set = 0, binding = 1) readonly buffer LightBuffer {
