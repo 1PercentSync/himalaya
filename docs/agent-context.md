@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 6 下一项：Reverse-Z 配置：depth clear 0.0f，compare op GREATER
+Step 6 下一项：提取 `handle_resize()` 私有方法（vkQueueWaitIdle 后立即销毁旧资源，acquire 失败和帧末共用）
 
 ---
 
