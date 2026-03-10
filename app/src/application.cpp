@@ -184,6 +184,7 @@ namespace himalaya::app {
         pipeline_desc.vertex_shader = vert_module;
         pipeline_desc.fragment_shader = frag_module;
         pipeline_desc.color_formats = {swapchain_.format};
+        pipeline_desc.depth_format = VK_FORMAT_D32_SFLOAT;
         const auto set_layouts = descriptor_manager_.get_global_set_layouts();
         pipeline_desc.descriptor_set_layouts = {set_layouts[0], set_layouts[1]};
 
@@ -363,14 +364,23 @@ namespace himalaya::app {
             "Swapchain", swapchain_image_handles_[image_index_],
             VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 
+        const auto depth_image = render_graph_.import_image(
+            "Depth", depth_image_,
+            VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
+
         const std::array scene_resources = {
             framework::RGResourceUsage{
                 swapchain_image,
                 framework::RGAccessType::Write,
                 framework::RGStage::ColorAttachment
             },
+            framework::RGResourceUsage{
+                depth_image,
+                framework::RGAccessType::ReadWrite,
+                framework::RGStage::DepthAttachment
+            },
         };
-        render_graph_.add_pass("Triangle",
+        render_graph_.add_pass("Unlit",
                                scene_resources,
                                [this](const rhi::CommandBuffer &pass_cmd) {
                                    VkRenderingAttachmentInfo color_attachment{};
@@ -381,12 +391,21 @@ namespace himalaya::app {
                                    color_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
                                    color_attachment.clearValue.color = {{0.0f, 0.0f, 0.0f, 1.0f}};
 
+                                   VkRenderingAttachmentInfo depth_attachment{};
+                                   depth_attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+                                   depth_attachment.imageView = resource_manager_.get_image(depth_image_).view;
+                                   depth_attachment.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
+                                   depth_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+                                   depth_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+                                   depth_attachment.clearValue.depthStencil = {0.0f, 0};
+
                                    VkRenderingInfo rendering_info{};
                                    rendering_info.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
                                    rendering_info.renderArea = {{0, 0}, swapchain_.extent};
                                    rendering_info.layerCount = 1;
                                    rendering_info.colorAttachmentCount = 1;
                                    rendering_info.pColorAttachments = &color_attachment;
+                                   rendering_info.pDepthAttachment = &depth_attachment;
 
                                    pass_cmd.begin_rendering(rendering_info);
 
@@ -410,9 +429,9 @@ namespace himalaya::app {
 
                                    pass_cmd.set_cull_mode(VK_CULL_MODE_BACK_BIT);
                                    pass_cmd.set_front_face(VK_FRONT_FACE_COUNTER_CLOCKWISE);
-                                   pass_cmd.set_depth_test_enable(false);
-                                   pass_cmd.set_depth_write_enable(false);
-                                   pass_cmd.set_depth_compare_op(VK_COMPARE_OP_NEVER);
+                                   pass_cmd.set_depth_test_enable(true);
+                                   pass_cmd.set_depth_write_enable(true);
+                                   pass_cmd.set_depth_compare_op(VK_COMPARE_OP_GREATER);
 
                                    pass_cmd.bind_vertex_buffer(0,
                                                                resource_manager_.get_buffer(vertex_buffer_).buffer);
