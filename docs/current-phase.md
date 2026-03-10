@@ -199,7 +199,7 @@ private:
 - 移除旧的三角形渲染代码和 triangle shader（被 unlit pass 取代）
 - **验证**：glTF 场景渲染出有纹理的画面（无光照，验证数据管线完整性：顶点、变换、材质、bindless 全链路）
 
-### Step 7：Forward 光照 + 视锥剔除
+### Step 7：Forward 光照 + 视锥剔除 + Debug UI 参数控制
 
 - 升级 `shaders/forward.frag`：在 unlit 基础上加入 Lambert 光照（从 LightBuffer SSBO 读取方向光参数，不硬编码）+ 法线贴图采样（TBN 矩阵）
 - Application 提供保底方向光（检测 SceneRenderData 无方向光时填入默认值），scene_loader 忠实还原 glTF（无光源则输出空数组）
@@ -207,7 +207,11 @@ private:
   - AABB vs 6 frustum planes 测试
   - 输入 SceneRenderData + Camera，输出 CullResult
 - Draw loop 改为遍历 CullResult 的 visible indices
-- **验证**：glTF 场景正确渲染，有纹理和基础光照，相机移动时视锥剔除生效
+- GlobalUBO 扩展 `ambient_intensity` 字段（288→304 bytes），shader 从 UBO 读取 ambient 和 exposure
+- DebugUI 扩展四个面板：Camera（位置/朝向/FOV/Near/Far）、Scene（统计）、Lighting（力切默认光/角度/强度/左键拖动）、Rendering（Ambient/Exposure）
+- Slider Ctrl+Click 文本输入延迟提交（deferred slider 辅助函数），回车才生效
+- CameraController 输入检查改用 `WantTextInput`（替代 `WantCaptureKeyboard`），兼容 ImGui NavEnableKeyboard
+- **验证**：glTF 场景正确渲染，有纹理和基础光照，相机移动时视锥剔除生效，Debug UI 各面板功能正常
 
 ---
 
@@ -293,3 +297,7 @@ shaders/
 | PushConstant 演进 | 阶段二 68 bytes（model + material_index）。阶段六迁移到 per-instance SSBO，为 lightmap 和 M2 motion vectors 预留空间 |
 | shaderc includer | `set_include_path()` 配置根目录，严格路径解析（relative 相对当前文件，standard 相对根目录，不回退）。私有类不暴露到头文件 |
 | Debug label | `begin_debug_label(name, color)` + `end_debug_label()`。扩展函数动态加载（`init_debug_functions`），`#ifndef NDEBUG` 守卫。color 必填，RG 按 pass 索引黄金角分配 hue |
+| 默认光 yaw/pitch | Application 用 yaw/pitch 参数化 default light direction，每帧重算。左键拖动修改角度（不隐藏光标），pitch 限制 [-90°, 0°]（光源从上方照射） |
+| Deferred slider | Slider Ctrl+Click 文本输入模式下，每帧恢复原值，Enter/失焦时才提交。slider 拖动仍实时生效 |
+| WantTextInput | CameraController 用 `WantTextInput`（非 `WantCaptureKeyboard`）判断是否跳过 WASD。`WantCaptureKeyboard` 在 NavEnableKeyboard 下因焦点控件常驻 true，会永久阻断移动 |
+| DebugUIContext 引用 | Camera/ambient/exposure/force_default_light 通过非 const 引用传入 DebugUIContext，const struct 不阻止引用成员写入。灯光 display values 按值传入（Application 计算） |

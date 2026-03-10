@@ -118,4 +118,4 @@
 - [x] 验证：glTF 场景正确渲染，有纹理和基础光照，相机移动时视锥剔除生效
 - [x] 审查阶段二全部代码，提取可通过 ImGui/键鼠 操控的参数（审计完成，方案已定）
 - [x] Debug UI：GlobalUBO 扩展（ambient_intensity）+ shader 修改 + Camera/Scene Stats 面板
-- [ ] Debug UI：Lighting + Render Params 面板 + 左键拖动光照方向
+- [x] Debug UI：Lighting + Render Params 面板 + 左键拖动光照方向

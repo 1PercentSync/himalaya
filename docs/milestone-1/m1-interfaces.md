@@ -321,7 +321,7 @@ struct CullResult {
 CPU 侧数据结构的 GPU 布局镜像，必须与 shader 端一一对应。
 
 ```cpp
-// GlobalUBO — std140 layout, 288 bytes (aligned to 16)
+// GlobalUBO — std140 layout, 304 bytes (aligned to 16)
 // 对应 shader: Set 0, Binding 0
 struct GlobalUniformData {
     glm::mat4 view;                             // offset   0
@@ -332,6 +332,8 @@ struct GlobalUniformData {
     glm::vec2 screen_size;                      // offset 272
     float time;                                 // offset 280 — 程序运行时间（秒），M2 水面/云层等动画用
     uint32_t directional_light_count;           // offset 284 — 活跃方向光数量
+    float ambient_intensity;                    // offset 288 — 环境光强度乘数
+    float _pad[3];                              // padding to 304 bytes (std140 16-byte)
 };
 
 // GPU 方向光 — std430 layout, 32 bytes per element
