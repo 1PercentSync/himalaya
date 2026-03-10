@@ -93,7 +93,7 @@
 - [x] 使用 fastgltf `LoadExternalBuffers` + `LoadExternalImages` 统一处理嵌入式与外部资源
 - [x] Sampler 不做 ResourceManager 层去重（glTF 同一 sampler index 自然去重）
 - [x] SceneLoader 持有所有资源句柄列表，提供 `destroy()` 一次性清理
-- [ ] 填充 SceneRenderData
+- [x] 填充 SceneRenderData
 - [ ] CommandBuffer 新增 `bind_index_buffer()`、`draw_indexed()`、`push_constants()` 方法
 - [ ] 创建 `shaders/common/bindings.glsl`（全局绑定布局：Set 0 + Set 1 + push constant）
 - [ ] 创建 `shaders/forward.vert`（MVP 变换，输出 world position / normal / uv0 / tangent）
