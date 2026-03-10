@@ -9,12 +9,15 @@
 #include <himalaya/rhi/resources.h>
 
 #include <fastgltf/core.hpp>
+#include <fastgltf/math.hpp>
 #include <fastgltf/tools.hpp>
 #include <fastgltf/types.hpp>
 #include <spdlog/spdlog.h>
 
 #include <cassert>
+#include <cstring>
 #include <filesystem>
+#include <limits>
 #include <map>
 
 namespace himalaya::app {
@@ -160,6 +163,35 @@ namespace himalaya::app {
             return desc;
         }
 
+        // Converts a fastgltf 4x4 matrix to glm::mat4.
+        // Both use column-major layout with 16 contiguous floats.
+        glm::mat4 convert_matrix(const fastgltf::math::fmat4x4 &m) {
+            glm::mat4 result;
+            static_assert(sizeof(result) == sizeof(m), "Matrix size mismatch");
+            std::memcpy(&result, &m, sizeof(result));
+            return result;
+        }
+
+        // Transforms a local-space AABB to world space by the given matrix.
+        // Computes the axis-aligned bounding box of the 8 transformed corners.
+        framework::AABB transform_aabb(const framework::AABB &local, const glm::mat4 &transform) {
+            glm::vec3 new_min(std::numeric_limits<float>::max());
+            glm::vec3 new_max(std::numeric_limits<float>::lowest());
+
+            for (int i = 0; i < 8; ++i) {
+                const glm::vec3 corner(
+                    (i & 1) ? local.max.x : local.min.x,
+                    (i & 2) ? local.max.y : local.min.y,
+                    (i & 4) ? local.max.z : local.min.z
+                );
+                const auto world = glm::vec3(transform * glm::vec4(corner, 1.0f));
+                new_min = glm::min(new_min, world);
+                new_max = glm::max(new_max, world);
+            }
+
+            return {new_min, new_max};
+        }
+
         // Converts fastgltf AlphaMode to our framework AlphaMode.
         framework::AlphaMode convert_alpha_mode(const fastgltf::AlphaMode mode) {
             switch (mode) {
@@ -214,8 +246,20 @@ namespace himalaya::app {
                      gltf.textures.size(),
                      gltf.nodes.size());
 
+        // Per-primitive metadata tracked during mesh loading for node traversal.
+        // Parallel to meshes_: [i] corresponds to meshes_[i].
+        std::vector<uint32_t> primitive_material_ids;
+        std::vector<framework::AABB> primitive_local_bounds;
+
+        // Maps glTF mesh index to the starting index of its primitives in meshes_.
+        // Has gltf.meshes.size() + 1 entries (last entry = sentinel = total count).
+        // Primitive range for glTF mesh m: [mesh_prim_offsets[m], mesh_prim_offsets[m+1])
+        std::vector<uint32_t> mesh_prim_offsets;
+        mesh_prim_offsets.reserve(gltf.meshes.size() + 1);
+
         // --- Load meshes (one Mesh per glTF primitive) ---
         for (const auto &gltf_mesh: gltf.meshes) {
+            mesh_prim_offsets.push_back(static_cast<uint32_t>(meshes_.size()));
             for (const auto &primitive: gltf_mesh.primitives) {
                 // Position (required by glTF spec)
                 const auto pos_it = primitive.findAttribute("POSITION");
@@ -229,10 +273,16 @@ namespace himalaya::app {
 
                 std::vector<framework::Vertex> vertices(vertex_count);
 
+                // Compute local AABB from position data for frustum culling
+                glm::vec3 local_min(std::numeric_limits<float>::max());
+                glm::vec3 local_max(std::numeric_limits<float>::lowest());
+
                 {
                     size_t i = 0;
                     for (auto p: fastgltf::iterateAccessor<fastgltf::math::fvec3>(gltf, pos_accessor)) {
                         vertices[i].position = {p.x(), p.y(), p.z()};
+                        local_min = glm::min(local_min, vertices[i].position);
+                        local_max = glm::max(local_max, vertices[i].position);
                         ++i;
                     }
                 }
@@ -336,8 +386,20 @@ namespace himalaya::app {
 
                 buffers_.push_back(vb);
                 buffers_.push_back(ib);
+
+                // Track per-primitive metadata for node traversal
+                if (!primitive.materialIndex.has_value()) {
+                    spdlog::error("Mesh '{}' primitive has no material (required by renderer)",
+                                  std::string(gltf_mesh.name));
+                    std::abort();
+                }
+                primitive_material_ids.push_back(static_cast<uint32_t>(*primitive.materialIndex));
+                primitive_local_bounds.push_back({local_min, local_max});
             }
         }
+
+        // Sentinel for the last mesh's primitive range
+        mesh_prim_offsets.push_back(static_cast<uint32_t>(meshes_.size()));
 
         spdlog::info("Loaded {} mesh primitives", meshes_.size());
 
@@ -451,6 +513,37 @@ namespace himalaya::app {
 
         spdlog::info("Loaded {} materials, {} GPU textures",
                      material_instances_.size(), images_.size());
+
+        // --- Traverse nodes: compute world transforms, create MeshInstances ---
+        if (!gltf.scenes.empty()) {
+            const auto scene_index = gltf.defaultScene.value_or(0);
+
+            fastgltf::iterateSceneNodes(
+                gltf, scene_index, fastgltf::math::fmat4x4(1.0f),
+                [&](fastgltf::Node &node, const fastgltf::math::fmat4x4 &world_transform) {
+                    if (!node.meshIndex.has_value()) return;
+
+                    const auto gltf_mesh_idx = *node.meshIndex;
+                    const auto world_mat = convert_matrix(world_transform);
+                    const uint32_t prim_start = mesh_prim_offsets[gltf_mesh_idx];
+                    const uint32_t prim_end = mesh_prim_offsets[gltf_mesh_idx + 1];
+
+                    for (uint32_t i = prim_start; i < prim_end; ++i) {
+                        mesh_instances_.push_back({
+                            .mesh_id = i,
+                            .material_id = primitive_material_ids[i],
+                            .transform = world_mat,
+                            .prev_transform = world_mat,
+                            .world_bounds = transform_aabb(primitive_local_bounds[i], world_mat),
+                        });
+                    }
+                });
+
+            spdlog::info("Created {} mesh instances from {} nodes",
+                         mesh_instances_.size(), gltf.nodes.size());
+        } else {
+            spdlog::warn("No scenes in glTF file, no mesh instances created");
+        }
     }
 
     void SceneLoader::destroy() {
