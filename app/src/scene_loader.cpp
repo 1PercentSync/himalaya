@@ -15,7 +15,6 @@
 #include <spdlog/spdlog.h>
 
 #include <cassert>
-#include <cstring>
 #include <filesystem>
 #include <limits>
 #include <map>
