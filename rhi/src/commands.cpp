@@ -40,6 +40,13 @@ namespace himalaya::rhi {
         vkCmdBindVertexBuffers(cmd_, binding, 1, &buffer, &offset);
     }
 
+    // ReSharper disable once CppParameterMayBeConst
+    void CommandBuffer::bind_index_buffer(VkBuffer buffer,
+                                          const VkIndexType index_type,
+                                          const VkDeviceSize offset) const {
+        vkCmdBindIndexBuffer(cmd_, buffer, offset, index_type);
+    }
+
     void CommandBuffer::draw(const uint32_t vertex_count,
                              const uint32_t instance_count,
                              const uint32_t first_vertex,
@@ -49,6 +56,19 @@ namespace himalaya::rhi {
                   instance_count,
                   first_vertex,
                   first_instance);
+    }
+
+    void CommandBuffer::draw_indexed(const uint32_t index_count,
+                                     const uint32_t instance_count,
+                                     const uint32_t first_index,
+                                     const int32_t vertex_offset,
+                                     const uint32_t first_instance) const {
+        vkCmdDrawIndexed(cmd_,
+                         index_count,
+                         instance_count,
+                         first_index,
+                         vertex_offset,
+                         first_instance);
     }
 
     void CommandBuffer::set_viewport(const VkViewport &viewport) const {
@@ -64,12 +84,27 @@ namespace himalaya::rhi {
     }
 
     // ReSharper disable once CppParameterMayBeConst
+    void CommandBuffer::push_constants(VkPipelineLayout layout,
+                                       const VkShaderStageFlags stages,
+                                       const void *data,
+                                       const uint32_t size,
+                                       const uint32_t offset) const {
+        vkCmdPushConstants(cmd_, layout, stages, offset, size, data);
+    }
+
+    // ReSharper disable once CppParameterMayBeConst
     void CommandBuffer::bind_descriptor_sets(VkPipelineLayout layout,
                                              const uint32_t first_set,
                                              const VkDescriptorSet *sets,
                                              const uint32_t count) const {
-        vkCmdBindDescriptorSets(cmd_, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                layout, first_set, count, sets, 0, nullptr);
+        vkCmdBindDescriptorSets(cmd_,
+                                VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                layout,
+                                first_set,
+                                count,
+                                sets,
+                                0,
+                                nullptr);
     }
 
     namespace {

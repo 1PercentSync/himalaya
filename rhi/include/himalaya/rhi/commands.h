@@ -66,6 +66,16 @@ namespace himalaya::rhi {
         void bind_vertex_buffer(uint32_t binding, VkBuffer buffer, VkDeviceSize offset = 0) const;
 
         /**
+         * @brief Binds an index buffer for subsequent indexed draw calls.
+         * @param buffer     Vulkan buffer containing index data.
+         * @param index_type Index element type (UINT16 or UINT32).
+         * @param offset     Byte offset into the buffer (default 0).
+         */
+        void bind_index_buffer(VkBuffer buffer,
+                               VkIndexType index_type,
+                               VkDeviceSize offset = 0) const;
+
+        /**
          * @brief Records a non-indexed draw call.
          * @param vertex_count   Number of vertices to draw.
          * @param instance_count Number of instances (default 1).
@@ -74,6 +84,20 @@ namespace himalaya::rhi {
          */
         void draw(uint32_t vertex_count, uint32_t instance_count = 1,
                   uint32_t first_vertex = 0, uint32_t first_instance = 0) const;
+
+        /**
+         * @brief Records an indexed draw call.
+         * @param index_count    Number of indices to draw.
+         * @param instance_count Number of instances (default 1).
+         * @param first_index    Starting index in the index buffer (default 0).
+         * @param vertex_offset  Value added to each index before fetching vertices (default 0).
+         * @param first_instance First instance ID (default 0).
+         */
+        void draw_indexed(uint32_t index_count,
+                          uint32_t instance_count = 1,
+                          uint32_t first_index = 0,
+                          int32_t vertex_offset = 0,
+                          uint32_t first_instance = 0) const;
 
         /**
          * @brief Sets the dynamic viewport state.
@@ -92,6 +116,21 @@ namespace himalaya::rhi {
          * @param dependency_info Barrier specification (image/buffer/memory barriers).
          */
         void pipeline_barrier(const VkDependencyInfo &dependency_info) const;
+
+        // --- Push constants ---
+
+        /**
+         * @brief Updates push constant data for the bound pipeline.
+         * @param layout Pipeline layout defining the push constant ranges.
+         * @param stages Shader stages that will access the push constants.
+         * @param data   Pointer to the push constant data.
+         * @param size   Size of the push constant data in bytes.
+         * @param offset Byte offset into the push constant block (default 0).
+         */
+        void push_constants(VkPipelineLayout layout,
+                            VkShaderStageFlags stages,
+                            const void *data, uint32_t size,
+                            uint32_t offset = 0) const;
 
         // --- Descriptor binding ---
 
