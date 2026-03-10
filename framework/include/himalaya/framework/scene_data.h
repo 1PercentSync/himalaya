@@ -125,7 +125,7 @@ namespace himalaya::framework {
         glm::vec4 camera_position_and_exposure; ///< offset 256 — xyz = position, w = exposure
         glm::vec2 screen_size; ///< offset 272
         float time; ///< offset 280 — elapsed time in seconds
-        float _padding = 0.0f; ///< offset 284 — std140 padding to 288 bytes
+        uint32_t directional_light_count = 0; ///< offset 284 — number of active directional lights
     };
 
     /**

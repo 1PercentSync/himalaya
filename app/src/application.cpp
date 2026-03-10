@@ -263,13 +263,14 @@ namespace himalaya::app {
             static_cast<float>(swapchain_.extent.height));
         ubo_data.time = static_cast<float>(glfwGetTime());
 
-        std::memcpy(ubo_buf.allocation_info.pMappedData, &ubo_data, sizeof(ubo_data));
-
         // Fill LightBuffer for this frame
         const auto &light_buf = resource_manager_.get_buffer(light_buffers_[context_.frame_index]);
         const auto lights = scene_loader_.directional_lights();
         const auto light_count = static_cast<uint32_t>(
             std::min(lights.size(), static_cast<size_t>(kMaxDirectionalLights)));
+
+        ubo_data.directional_light_count = light_count;
+        std::memcpy(ubo_buf.allocation_info.pMappedData, &ubo_data, sizeof(ubo_data));
         if (light_count > 0) {
             std::array<framework::GPUDirectionalLight, kMaxDirectionalLights> gpu_lights{};
             for (uint32_t i = 0; i < light_count; ++i) {
