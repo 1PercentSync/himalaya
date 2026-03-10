@@ -81,11 +81,22 @@ namespace himalaya::rhi {
         [[nodiscard]] BindlessIndex register_texture(ImageHandle image, SamplerHandle sampler);
 
         /**
+         * @brief Writes a buffer descriptor to a Set 0 binding for a specific frame.
+         *
+         * Use this for per-frame resources (GlobalUBO, LightBuffer) where each
+         * frame in flight has its own buffer.
+         *
+         * @param frame_index Frame in flight index (0 to kMaxFramesInFlight-1).
+         * @param binding     Binding index within Set 0 (0 = GlobalUBO, 1 = LightBuffer, 2 = MaterialBuffer).
+         * @param buffer      Buffer handle to bind.
+         * @param range       Byte range of the buffer to expose to the shader.
+         */
+        void write_set0_buffer(uint32_t frame_index, uint32_t binding, BufferHandle buffer, uint64_t range) const;
+
+        /**
          * @brief Writes a buffer descriptor to a Set 0 binding across all frames in flight.
          *
-         * Resolves the BufferHandle internally via ResourceManager.
-         * Descriptor type is inferred from the binding index (0 = UBO, 1/2 = SSBO).
-         * Writes to both per-frame Set 0 instances.
+         * Use this for frame-invariant resources (MaterialBuffer) shared across all frames.
          *
          * @param binding Binding index within Set 0 (0 = GlobalUBO, 1 = LightBuffer, 2 = MaterialBuffer).
          * @param buffer  Buffer handle to bind.

@@ -64,33 +64,14 @@ namespace himalaya::app {
         shader_compiler_.set_include_path("shaders");
 
         // --- GlobalUBO buffers (per-frame, CpuToGpu) ---
-        for (auto &ubo: global_ubo_buffers_) {
-            ubo = resource_manager_.create_buffer({
+        for (uint32_t i = 0; i < rhi::kMaxFramesInFlight; ++i) {
+            global_ubo_buffers_[i] = resource_manager_.create_buffer({
                 .size = sizeof(framework::GlobalUniformData),
                 .usage = rhi::BufferUsage::UniformBuffer,
                 .memory = rhi::MemoryUsage::CpuToGpu,
             });
-
-            // Write descriptor to point Set 0 Binding 0 at this UBO
-            const auto &buf = resource_manager_.get_buffer(ubo);
-            const VkDescriptorBufferInfo buffer_info{
-                .buffer = buf.buffer,
-                .offset = 0,
-                .range = sizeof(framework::GlobalUniformData),
-            };
-            const VkWriteDescriptorSet write{
-                .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-                .dstSet = descriptor_manager_.get_set0(static_cast<uint32_t>(&ubo - global_ubo_buffers_.data())),
-                .dstBinding = 0,
-                .descriptorCount = 1,
-                .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-                .pBufferInfo = &buffer_info,
-            };
-            vkUpdateDescriptorSets(context_.device,
-                                   1,
-                                   &write,
-                                   0,
-                                   nullptr);
+            descriptor_manager_.write_set0_buffer(
+                i, 0, global_ubo_buffers_[i], sizeof(framework::GlobalUniformData));
         }
 
         // --- LightBuffer SSBOs (per-frame, CpuToGpu) ---
@@ -102,23 +83,7 @@ namespace himalaya::app {
                 .usage = rhi::BufferUsage::StorageBuffer,
                 .memory = rhi::MemoryUsage::CpuToGpu,
             });
-
-            // Each frame's Set 0 Binding 1 points to its own light buffer
-            const auto &buf = resource_manager_.get_buffer(light_buffers_[i]);
-            const VkDescriptorBufferInfo buffer_info{
-                .buffer = buf.buffer,
-                .offset = 0,
-                .range = light_buffer_size,
-            };
-            const VkWriteDescriptorSet write{
-                .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-                .dstSet = descriptor_manager_.get_set0(i),
-                .dstBinding = 1,
-                .descriptorCount = 1,
-                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-                .pBufferInfo = &buffer_info,
-            };
-            vkUpdateDescriptorSets(context_.device, 1, &write, 0, nullptr);
+            descriptor_manager_.write_set0_buffer(i, 1, light_buffers_[i], light_buffer_size);
         }
 
         // --- Camera ---
