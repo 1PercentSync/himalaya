@@ -90,9 +90,9 @@
 - [x] 遍历 material：提取 PBR 参数和纹理引用，创建 MaterialInstance
 - [x] 遍历 node：计算世界变换矩阵，填充 MeshInstance（含 world_bounds 计算）
 - [x] glTF 每个 primitive 展开为独立 MeshInstance
-- [ ] 使用 fastgltf `LoadExternalBuffers` + `LoadExternalImages` 统一处理嵌入式与外部资源
-- [ ] Sampler 不做 ResourceManager 层去重（glTF 同一 sampler index 自然去重）
-- [ ] SceneLoader 持有所有资源句柄列表，提供 `destroy()` 一次性清理
+- [x] 使用 fastgltf `LoadExternalBuffers` + `LoadExternalImages` 统一处理嵌入式与外部资源
+- [x] Sampler 不做 ResourceManager 层去重（glTF 同一 sampler index 自然去重）
+- [x] SceneLoader 持有所有资源句柄列表，提供 `destroy()` 一次性清理
 - [ ] 填充 SceneRenderData
 - [ ] CommandBuffer 新增 `bind_index_buffer()`、`draw_indexed()`、`push_constants()` 方法
 - [ ] 创建 `shaders/common/bindings.glsl`（全局绑定布局：Set 0 + Set 1 + push constant）
