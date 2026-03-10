@@ -116,4 +116,6 @@
 - [x] AABB vs 6 frustum planes 视锥剔除
 - [x] Draw loop 改为遍历 CullResult 的 visible indices
 - [x] 验证：glTF 场景正确渲染，有纹理和基础光照，相机移动时视锥剔除生效
-- [ ] 审查阶段二全部代码，提取可通过 ImGui/键鼠操控的参数
+- [x] 审查阶段二全部代码，提取可通过 ImGui/键鼠 操控的参数（审计完成，方案已定）
+- [x] Debug UI：GlobalUBO 扩展（ambient_intensity）+ shader 修改 + Camera/Scene Stats 面板
+- [ ] Debug UI：Lighting + Render Params 面板 + 左键拖动光照方向
