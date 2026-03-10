@@ -28,6 +28,9 @@ namespace himalaya::app {
     /** @brief Default log level. Change to debug/info for more verbose Vulkan diagnostics. */
     constexpr auto kLogLevel = spdlog::level::warn;
 
+    /** @brief Maximum directional lights the LightBuffer can hold. */
+    constexpr uint32_t kMaxDirectionalLights = 4;
+
     // --- Phase 1 temporary types (removed in Step 7) ---
 
     /** @brief Interleaved vertex attributes: position (vec3) + color (vec3) + uv (vec2). */
@@ -39,9 +42,9 @@ namespace himalaya::app {
 
     /** @brief Triangle vertex data on the z=0 plane, visible from default camera position. */
     constexpr std::array kTriangleVertices = {
-        Vertex{{0.0f, 0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.5f, 0.0f}},   // top — red
+        Vertex{{0.0f, 0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.5f, 0.0f}}, // top — red
         Vertex{{-0.5f, -0.5f, 0.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, 1.0f}}, // bottom-left — green
-        Vertex{{0.5f, -0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},  // bottom-right — blue
+        Vertex{{0.5f, -0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}}, // bottom-right — blue
     };
 
     // ---- Init / Destroy ----
@@ -103,6 +106,34 @@ namespace himalaya::app {
                                    &write,
                                    0,
                                    nullptr);
+        }
+
+        // --- LightBuffer SSBOs (per-frame, CpuToGpu) ---
+        constexpr auto light_buffer_size = static_cast<uint64_t>(kMaxDirectionalLights) *
+                                           sizeof(framework::GPUDirectionalLight);
+        for (uint32_t i = 0; i < rhi::kMaxFramesInFlight; ++i) {
+            light_buffers_[i] = resource_manager_.create_buffer({
+                .size = light_buffer_size,
+                .usage = rhi::BufferUsage::StorageBuffer,
+                .memory = rhi::MemoryUsage::CpuToGpu,
+            });
+
+            // Each frame's Set 0 Binding 1 points to its own light buffer
+            const auto &buf = resource_manager_.get_buffer(light_buffers_[i]);
+            const VkDescriptorBufferInfo buffer_info{
+                .buffer = buf.buffer,
+                .offset = 0,
+                .range = light_buffer_size,
+            };
+            const VkWriteDescriptorSet write{
+                .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                .dstSet = descriptor_manager_.get_set0(i),
+                .dstBinding = 1,
+                .descriptorCount = 1,
+                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                .pBufferInfo = &buffer_info,
+            };
+            vkUpdateDescriptorSets(context_.device, 1, &write, 0, nullptr);
         }
 
         // --- Camera ---
@@ -185,6 +216,9 @@ namespace himalaya::app {
         resource_manager_.destroy_buffer(vertex_buffer_);
         for (const auto ubo: global_ubo_buffers_) {
             resource_manager_.destroy_buffer(ubo);
+        }
+        for (const auto buf: light_buffers_) {
+            resource_manager_.destroy_buffer(buf);
         }
 
         // Default textures: unregister from bindless, then destroy images
@@ -280,6 +314,24 @@ namespace himalaya::app {
         ubo_data.time = static_cast<float>(glfwGetTime());
 
         std::memcpy(ubo_buf.allocation_info.pMappedData, &ubo_data, sizeof(ubo_data));
+
+        // Fill LightBuffer for this frame
+        const auto &light_buf = resource_manager_.get_buffer(light_buffers_[context_.frame_index]);
+        const auto lights = scene_loader_.directional_lights();
+        const auto light_count = static_cast<uint32_t>(
+            std::min(lights.size(), static_cast<size_t>(kMaxDirectionalLights)));
+        if (light_count > 0) {
+            std::array<framework::GPUDirectionalLight, kMaxDirectionalLights> gpu_lights{};
+            for (uint32_t i = 0; i < light_count; ++i) {
+                gpu_lights[i].direction_and_intensity = glm::vec4(
+                    lights[i].direction, lights[i].intensity);
+                gpu_lights[i].color_and_shadow = glm::vec4(
+                    lights[i].color, lights[i].cast_shadows ? 1.0f : 0.0f);
+            }
+            std::memcpy(light_buf.allocation_info.pMappedData,
+                        gpu_lights.data(),
+                        light_count * sizeof(framework::GPUDirectionalLight));
+        }
 
         // Fill SceneRenderData for render passes
         scene_render_data_.mesh_instances = scene_loader_.mesh_instances();

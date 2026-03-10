@@ -124,6 +124,9 @@ namespace himalaya::app {
         /** @brief Per-frame GlobalUBO buffers (CpuToGpu, one per frame in flight). */
         std::array<rhi::BufferHandle, rhi::kMaxFramesInFlight> global_ubo_buffers_;
 
+        /** @brief Per-frame LightBuffer SSBOs (CpuToGpu, one per frame in flight). */
+        std::array<rhi::BufferHandle, rhi::kMaxFramesInFlight> light_buffers_;
+
         /** @brief Whether VSync was toggled this frame (triggers swapchain recreate). */
         bool vsync_changed_ = false;
 
