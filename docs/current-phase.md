@@ -168,9 +168,10 @@ private:
 ### Step 6：材质系统 + glTF 场景加载 + Unlit 渲染
 
 - 创建 `framework/include/himalaya/framework/material_system.h` + `framework/src/material_system.cpp`
-  - `GPUMaterialData` 结构体（std430 layout, 64 字节, alignas(16)）：base_color_factor(vec4) + emissive_factor(vec4, w unused) + metallic/roughness(float×2) + 5 个纹理 BindlessIndex(uint×5) + padding
+  - `GPUMaterialData` 结构体（std430 layout, 80 字节, alignas(16)）：base_color_factor(vec4) + emissive_factor(vec4) + metallic/roughness/normal_scale/occlusion_strength(float×4) + 5 个纹理 BindlessIndex(uint×5) + alpha_cutoff(float) + alpha_mode(uint) + padding
+  - `AlphaMode` 枚举（Opaque/Mask/Blend）
   - 全局 Material SSBO 管理（场景加载后知道材质总数，一次性创建恰好大小的 buffer）
-  - `MaterialInstance` 管理（template_id + buffer offset）
+  - `MaterialInstance` 管理（template_id + buffer_offset + alpha_mode + double_sided）
   - 缺失纹理字段填入 default 纹理的 BindlessIndex（包括 occlusion_tex 和 emissive_tex 占位）
 - 创建 `app/scene_loader.h/cpp`
   - 场景路径由 `Application::init(const std::string& scene_path)` 接收（main.cpp 负责解析 argc/argv），默认路径 `assets/Sponza/Sponza.gltf`
@@ -284,7 +285,7 @@ shaders/
 | CameraController 输入 | 检查 ImGui WantCaptureMouse/WantCaptureKeyboard 避免输入冲突 |
 | 默认方向光 | Application 检测 SceneRenderData 无方向光时填入保底光源。scene_loader 不捏造不存在的数据 |
 | Descriptor Pool 分离 | 两个独立 pool：普通 pool (Set 0, 2 UBO + 4 SSBO) + UPDATE_AFTER_BIND pool (Set 1, 4096 COMBINED_IMAGE_SAMPLER) |
-| GPUMaterialData 对齐 | std430 布局 64 字节。emissive_factor 用 vec4 避免 vec3 对齐问题。C++ 侧 alignas(16) |
+| GPUMaterialData 对齐 | std430 布局 80 字节。emissive_factor 用 vec4 避免 vec3 对齐问题。含 normal_scale、occlusion_strength、alpha_cutoff、alpha_mode。C++ 侧 alignas(16) |
 | 场景路径 | main.cpp 解析 argc/argv，Application::init 只接收 scene_path 字符串。默认路径 `assets/Sponza/Sponza.gltf`。长期方向 GUI 文件选择器 |
 | GPUMaterialData 位置 | 定义在 `material_system.h`。scene_data.h 放每帧/每次绘制的 renderer-app contract，GPUMaterialData 是材质系统内部 GPU 布局，遵循"谁拥有谁定义" |
 | 加载错误处理 | 加载失败（glTF / 纹理 / shader）一律 log error + abort。开发期不做 fallback |

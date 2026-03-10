@@ -476,31 +476,39 @@ struct MaterialTemplate {
 
 ```cpp
 struct MaterialInstance {
-    uint32_t template_id;
-    uint32_t material_buffer_offset;  // 在全局材质 SSBO 中的偏移
-    // 参数值写在全局材质 SSBO 的对应偏移处
+    uint32_t template_id;              // 着色模型标识（0 = standard PBR）
+    uint32_t buffer_offset;            // GPUMaterialData 数组索引
+    AlphaMode alpha_mode;              // pass 路由（opaque / mask / transparent）
+    bool double_sided;                 // 控制面剔除
 };
 ```
 
 #### GPU 端材质数据布局（shader 读取）
 
 ```cpp
-// std430 layout, total 64 bytes, aligned to 16 bytes
+// std430 layout, total 80 bytes, aligned to 16 bytes
 struct alignas(16) GPUMaterialData {
-    vec4  base_color_factor;           // offset  0  — glTF baseColorFactor
-    vec4  emissive_factor;             // offset 16  — xyz = glTF emissiveFactor, w unused (= 0)
+    vec4  base_color_factor;           // offset  0  — glTF baseColorFactor (RGBA)
+    vec4  emissive_factor;             // offset 16  — xyz = emissiveFactor, w unused
+
     float metallic_factor;             // offset 32  — glTF metallicFactor
     float roughness_factor;            // offset 36  — glTF roughnessFactor
-    uint  base_color_tex;              // offset 40  — bindless index
-    uint  normal_tex;                  // offset 44  — bindless index
-    uint  metallic_roughness_tex;      // offset 48  — bindless index
-    uint  occlusion_tex;               // offset 52  — bindless index
-    uint  emissive_tex;                // offset 56  — bindless index
-    uint  _padding;                    // offset 60  — padding to 64 bytes (struct align = 16)
+    float normal_scale;                // offset 40  — glTF normalTexture.scale
+    float occlusion_strength;          // offset 44  — glTF occlusionTexture.strength
+
+    uint  base_color_tex;              // offset 48  — bindless index
+    uint  emissive_tex;                // offset 52  — bindless index
+    uint  metallic_roughness_tex;      // offset 56  — bindless index
+    uint  normal_tex;                  // offset 60  — bindless index
+
+    uint  occlusion_tex;               // offset 64  — bindless index
+    float alpha_cutoff;                // offset 68  — glTF alphaCutoff (Mask mode)
+    uint  alpha_mode;                  // offset 72  — 0=Opaque, 1=Mask, 2=Blend
+    uint  _padding;                    // offset 76  — padding to 80 bytes
 };
 ```
 
-> emissive_factor 使用 vec4 而非 vec3 以避免 std430 对齐问题（vec3 对齐 16 字节会引入隐式 padding）。occlusion_tex 和 emissive_tex 在阶段二数据流中填充，shader 中阶段三 PBR 光照完善时启用读取。M1 阶段 GPUMaterialData 是定长结构体。以后材质类型增多时可扩展（加字段）或改为更灵活的布局。
+> emissive_factor 使用 vec4 而非 vec3 以避免 std430 对齐问题（vec3 对齐 16 字节会引入隐式 padding）。alpha_mode 同时存在于 GPU（shader 判断 discard）和 CPU（MaterialInstance，draw call 路由）两侧。M1 阶段 GPUMaterialData 是定长结构体，以后材质类型增多时可扩展或改为更灵活的布局。
 
 ---
 
