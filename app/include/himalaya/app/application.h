@@ -105,6 +105,39 @@ namespace himalaya::app {
         /** @brief Fallback directional light when the scene provides none. */
         std::vector<framework::DirectionalLight> default_lights_;
 
+        // --- Rendering parameters (controlled via DebugUI) ---
+
+        /** @brief Ambient light multiplier (written to GlobalUBO each frame). */
+        float ambient_intensity_ = 0.03f;
+
+        /** @brief Exposure multiplier (written to GlobalUBO camera_position_and_exposure.w). */
+        float exposure_ = 1.0f;
+
+        // --- Default light control ---
+
+        /** @brief Yaw angle for the default directional light (radians). */
+        float light_yaw_ = glm::radians(-45.0f);
+
+        /** @brief Pitch angle for the default directional light (radians, negative = downward). */
+        float light_pitch_ = glm::radians(-55.0f);
+
+        /** @brief Intensity of the default directional light. */
+        float light_intensity_ = 1.0f;
+
+        /** @brief When true, use the default light even if the scene provides lights. */
+        bool force_default_light_ = false;
+
+        // --- Light direction viewport drag state ---
+
+        /** @brief Previous cursor X for left-click light drag delta. */
+        double light_last_cursor_x_ = 0.0;
+
+        /** @brief Previous cursor Y for left-click light drag delta. */
+        double light_last_cursor_y_ = 0.0;
+
+        /** @brief Whether the left mouse button is being held for light dragging. */
+        bool light_dragging_ = false;
+
         // --- Shared resources ---
 
         /** @brief Depth buffer (D32Sfloat, recreated on resize). */
@@ -188,5 +221,14 @@ namespace himalaya::app {
 
         /** @brief Destroys the depth buffer (called before resize recreation). */
         void destroy_depth_buffer();
+
+        /**
+         * @brief Processes left-click drag to rotate the default directional light.
+         * @param using_default Whether the default light is currently active.
+         *
+         * Only processes input when using_default is true. Does not hide the cursor
+         * (unlike right-click camera rotation).
+         */
+        void update_light_input(bool using_default);
     };
 } // namespace himalaya::app

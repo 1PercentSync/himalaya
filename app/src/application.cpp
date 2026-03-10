@@ -10,7 +10,9 @@
 #include <himalaya/framework/scene_data.h>
 #include <himalaya/rhi/commands.h>
 
+#include <algorithm>
 #include <array>
+#include <cmath>
 
 #include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
@@ -250,6 +252,29 @@ namespace himalaya::app {
         camera_.aspect = static_cast<float>(swapchain_.extent.width) / static_cast<float>(swapchain_.extent.height);
         camera_controller_.update(delta_time);
 
+        // Determine light source
+        const auto scene_lights = scene_loader_.directional_lights();
+        const bool has_scene_lights = !scene_lights.empty();
+        const bool using_default = !has_scene_lights || force_default_light_;
+
+        // Left-click drag to rotate default light direction
+        update_light_input(using_default);
+
+        // Recompute default light direction from yaw/pitch each frame
+        if (default_lights_.empty()) default_lights_.resize(1);
+        default_lights_[0].direction = glm::normalize(glm::vec3(
+            std::sin(light_yaw_) * std::cos(light_pitch_),
+            std::sin(light_pitch_),
+            -std::cos(light_yaw_) * std::cos(light_pitch_)));
+        default_lights_[0].color = glm::vec3(1.0f);
+        default_lights_[0].intensity = light_intensity_;
+        default_lights_[0].cast_shadows = false;
+
+        // Choose active light source
+        const auto lights = using_default
+            ? std::span<const framework::DirectionalLight>(default_lights_)
+            : scene_lights;
+
         // Fill GlobalUBO for this frame
         const auto &ubo_buf = resource_manager_.get_buffer(global_ubo_buffers_[context_.frame_index]);
 
@@ -258,31 +283,20 @@ namespace himalaya::app {
         ubo_data.projection = camera_.projection;
         ubo_data.view_projection = camera_.view_projection;
         ubo_data.inv_view_projection = camera_.inv_view_projection;
-        ubo_data.camera_position_and_exposure = glm::vec4(camera_.position, 1.0f);
+        ubo_data.camera_position_and_exposure = glm::vec4(camera_.position, exposure_);
         ubo_data.screen_size = glm::vec2(
             static_cast<float>(swapchain_.extent.width),
             static_cast<float>(swapchain_.extent.height));
         ubo_data.time = static_cast<float>(glfwGetTime());
+        ubo_data.ambient_intensity = ambient_intensity_;
 
-        // Fill LightBuffer for this frame (use default light if scene has none)
-        const auto &light_buf = resource_manager_.get_buffer(light_buffers_[context_.frame_index]);
-        auto lights = scene_loader_.directional_lights();
-        if (lights.empty()) {
-            if (default_lights_.empty()) {
-                default_lights_.push_back({
-                    .direction = glm::normalize(glm::vec3(-0.5f, -1.0f, -0.5f)),
-                    .color = glm::vec3(1.0f),
-                    .intensity = 1.0f,
-                    .cast_shadows = false,
-                });
-            }
-            lights = default_lights_;
-        }
         const auto light_count = static_cast<uint32_t>(
             std::min(lights.size(), static_cast<size_t>(kMaxDirectionalLights)));
-
         ubo_data.directional_light_count = light_count;
         std::memcpy(ubo_buf.allocation_info.pMappedData, &ubo_data, sizeof(ubo_data));
+
+        // Fill LightBuffer for this frame
+        const auto &light_buf = resource_manager_.get_buffer(light_buffers_[context_.frame_index]);
         if (light_count > 0) {
             std::array<framework::GPUDirectionalLight, kMaxDirectionalLights> gpu_lights{};
             for (uint32_t i = 0; i < light_count; ++i) {
@@ -319,6 +333,19 @@ namespace himalaya::app {
         const auto visible_transparent = static_cast<uint32_t>(cull_result_.visible_transparent_indices.size());
         const auto total_instances = static_cast<uint32_t>(instances.size());
 
+        // Compute light display values for debug UI
+        float display_yaw_deg, display_pitch_deg, display_intensity;
+        if (using_default) {
+            display_yaw_deg = glm::degrees(light_yaw_);
+            display_pitch_deg = glm::degrees(light_pitch_);
+            display_intensity = light_intensity_;
+        } else {
+            const auto& dir = scene_lights[0].direction;
+            display_pitch_deg = glm::degrees(std::asin(dir.y));
+            display_yaw_deg = glm::degrees(std::atan2(dir.x, -dir.z));
+            display_intensity = scene_lights[0].intensity;
+        }
+
         // Debug UI
         // ReSharper disable once CppUseStructuredBinding
         const auto actions = debug_ui_.draw({
@@ -326,6 +353,14 @@ namespace himalaya::app {
             .context = context_,
             .swapchain = swapchain_,
             .camera = camera_,
+            .light_yaw_deg = display_yaw_deg,
+            .light_pitch_deg = display_pitch_deg,
+            .light_intensity = display_intensity,
+            .default_intensity = light_intensity_,
+            .force_default_light = force_default_light_,
+            .has_scene_lights = has_scene_lights,
+            .ambient_intensity = ambient_intensity_,
+            .exposure = exposure_,
             .scene_stats = {
                 .total_instances = total_instances,
                 .total_meshes = static_cast<uint32_t>(meshes.size()),
@@ -622,6 +657,44 @@ namespace himalaya::app {
         if (depth_image_.valid()) {
             resource_manager_.destroy_image(depth_image_);
             depth_image_ = {};
+        }
+    }
+    // ---- Light direction input ----
+
+    void Application::update_light_input(const bool using_default) {
+        if (!using_default) {
+            light_dragging_ = false;
+            return;
+        }
+
+        const ImGuiIO& io = ImGui::GetIO();
+        const bool left_pressed = !io.WantCaptureMouse &&
+                                  glfwGetMouseButton(window_, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS;
+
+        double cursor_x, cursor_y;
+        glfwGetCursorPos(window_, &cursor_x, &cursor_y);
+
+        if (left_pressed) {
+            if (!light_dragging_) {
+                // Just pressed: record starting position (no cursor hiding)
+                light_dragging_ = true;
+                light_last_cursor_x_ = cursor_x;
+                light_last_cursor_y_ = cursor_y;
+            }
+
+            const auto dx = static_cast<float>(cursor_x - light_last_cursor_x_);
+            const auto dy = static_cast<float>(cursor_y - light_last_cursor_y_);
+            light_last_cursor_x_ = cursor_x;
+            light_last_cursor_y_ = cursor_y;
+
+            constexpr float kSensitivity = 0.003f;
+            light_yaw_ += dx * kSensitivity;
+            light_pitch_ -= dy * kSensitivity;
+
+            // Clamp pitch to [-90°, 0°] — light must come from above
+            light_pitch_ = std::clamp(light_pitch_, glm::radians(-90.0f), 0.0f);
+        } else {
+            light_dragging_ = false;
         }
     }
 } // namespace himalaya::app

@@ -41,6 +41,36 @@ namespace himalaya::app {
         /** @brief Camera state for position/orientation display and parameter sliders. */
         framework::Camera& camera;
 
+        // --- Lighting (display values computed by Application) ---
+
+        /** @brief Active light yaw in degrees (default or glTF). */
+        float light_yaw_deg;
+
+        /** @brief Active light pitch in degrees (default or glTF). */
+        float light_pitch_deg;
+
+        /** @brief Active light intensity (default or glTF). */
+        float light_intensity;
+
+        // --- Lighting (controls, only effective when using default light) ---
+
+        /** @brief Editable reference to the default light intensity. */
+        float& default_intensity;
+
+        /** @brief Checkbox state: force default light even with scene lights. */
+        bool& force_default_light;
+
+        /** @brief True if the scene provides directional lights (enables force checkbox). */
+        bool has_scene_lights;
+
+        // --- Render params (controls) ---
+
+        /** @brief Editable reference to the ambient light multiplier. */
+        float& ambient_intensity;
+
+        /** @brief Editable reference to the exposure multiplier. */
+        float& exposure;
+
         // --- Scene statistics (display) ---
 
         /** @brief Per-frame scene statistics computed after frustum culling. */

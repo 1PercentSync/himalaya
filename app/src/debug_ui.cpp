@@ -150,6 +150,40 @@ namespace himalaya::app {
             ImGui::Text("Triangles: %u", stats.rendered_triangles);
         }
 
+        // Lighting section
+        ImGui::Separator();
+        if (ImGui::CollapsingHeader("Lighting", ImGuiTreeNodeFlags_DefaultOpen)) {
+            const bool using_default = !ctx.has_scene_lights || ctx.force_default_light;
+
+            // Force Default Light checkbox (disabled when scene has no lights)
+            ImGui::BeginDisabled(!ctx.has_scene_lights);
+            ImGui::Checkbox("Force Default Light", &ctx.force_default_light);
+            ImGui::EndDisabled();
+
+            ImGui::Text("Yaw: %.1f%s  Pitch: %.1f%s",
+                        ctx.light_yaw_deg, "\xC2\xB0",
+                        ctx.light_pitch_deg, "\xC2\xB0");
+
+            // Intensity slider (editable only when using default light)
+            if (using_default) {
+                slider_float_deferred("Intensity", &ctx.default_intensity,
+                                      0.0f, 10.0f, "%.2f");
+            } else {
+                ImGui::BeginDisabled();
+                float display = ctx.light_intensity;
+                ImGui::SliderFloat("Intensity", &display, 0.0f, 10.0f, "%.2f");
+                ImGui::EndDisabled();
+            }
+        }
+
+        // Rendering section
+        ImGui::Separator();
+        if (ImGui::CollapsingHeader("Rendering", ImGuiTreeNodeFlags_DefaultOpen)) {
+            slider_float_deferred("Ambient", &ctx.ambient_intensity, 0.0f, 1.0f, "%.3f");
+            slider_float_deferred("Exposure", &ctx.exposure, 0.1f, 10.0f, "%.2f",
+                                  ImGuiSliderFlags_Logarithmic);
+        }
+
         ImGui::End();
 
         return actions;
