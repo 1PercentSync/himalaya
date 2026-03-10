@@ -180,7 +180,7 @@ struct SamplerDesc {
     SamplerWrapMode wrap_u;     // REPEAT, CLAMP_TO_EDGE, MIRRORED_REPEAT
     SamplerWrapMode wrap_v;     // REPEAT, CLAMP_TO_EDGE, MIRRORED_REPEAT
     float max_anisotropy;       // 0 表示不启用各向异性
-    float max_lod;              // 0 = 仅基础级别（禁用 mip），1000.0 = 不限制
+    float max_lod;              // 0 = 仅基础级别（禁用 mip），VK_LOD_CLAMP_NONE = 不限制
 };
 ```
 
