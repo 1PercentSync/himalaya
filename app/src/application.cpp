@@ -659,6 +659,7 @@ namespace himalaya::app {
             depth_image_ = {};
         }
     }
+
     // ---- Light direction input ----
 
     void Application::update_light_input(const bool using_default) {
