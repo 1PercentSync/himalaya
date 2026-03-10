@@ -5,6 +5,7 @@
 
 #include <himalaya/app/application.h>
 
+#include <himalaya/framework/culling.h>
 #include <himalaya/framework/mesh.h>
 #include <himalaya/framework/scene_data.h>
 #include <himalaya/rhi/commands.h>
@@ -300,6 +301,10 @@ namespace himalaya::app {
         scene_render_data_.directional_lights = lights;
         scene_render_data_.camera = camera_;
 
+        // Frustum culling
+        cull_result_ = framework::cull_frustum(scene_render_data_,
+                                               scene_loader_.material_instances());
+
         // Debug UI
         // ReSharper disable once CppUseStructuredBinding
         const auto actions = debug_ui_.draw({
@@ -395,8 +400,11 @@ namespace himalaya::app {
 
                                    const auto meshes = scene_loader_.meshes();
                                    const auto materials = scene_loader_.material_instances();
+                                   const auto &instances = scene_render_data_.mesh_instances;
 
-                                   for (const auto &instance: scene_render_data_.mesh_instances) {
+                                   // Draw visible opaque, then visible transparent (back-to-front)
+                                   auto draw_instance = [&](const uint32_t idx) {
+                                       const auto &instance = instances[idx];
                                        const auto &mesh = meshes[instance.mesh_id];
                                        const auto &material = materials[instance.material_id];
 
@@ -420,7 +428,12 @@ namespace himalaya::app {
                                            resource_manager_.get_buffer(mesh.index_buffer).buffer,
                                            VK_INDEX_TYPE_UINT32);
                                        pass_cmd.draw_indexed(mesh.index_count);
-                                   }
+                                   };
+
+                                   for (const auto idx: cull_result_.visible_opaque_indices)
+                                       draw_instance(idx);
+                                   for (const auto idx: cull_result_.visible_transparent_indices)
+                                       draw_instance(idx);
 
                                    pass_cmd.end_rendering();
                                });
