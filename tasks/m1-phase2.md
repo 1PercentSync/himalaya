@@ -83,7 +83,7 @@
 - [x] 缺失纹理字段填入 default 纹理的 BindlessIndex
 - [x] `DescriptorManager::write_set0_buffer()` — 将 buffer descriptor 写入收敛到 RHI 层
 - [x] 创建 `app/scene_loader.h/cpp`
-- [ ] 场景路径由 `Application::init(scene_path)` 接收，main.cpp 解析 argc/argv，默认 `assets/Sponza/Sponza.gltf`
+- [x] 场景路径由 `Application::init(scene_path)` 接收，main.cpp 解析 argc/argv，默认 `assets/Sponza/Sponza.gltf`
 - [ ] 加载失败 log error + abort，不做 fallback
 - [ ] fastgltf 解析 glTF 文件
 - [ ] 遍历 mesh：转换为统一顶点格式，创建 vertex/index buffer
