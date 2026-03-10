@@ -110,9 +110,10 @@
 
 ## Step 7：Forward 光照 + 视锥剔除
 
-- [ ] 升级 `shaders/forward.frag`：加入 Lambert 光照（从 LightBuffer 读取方向光）+ 法线贴图 TBN
-- [ ] Application 提供保底方向光（检测无光源时填默认值），scene_loader 忠实还原 glTF
+- [x] 升级 `shaders/forward.frag`：加入 Lambert 光照（从 LightBuffer 读取方向光）+ 法线贴图 TBN
+- [x] Application 提供保底方向光（检测无光源时填默认值），scene_loader 忠实还原 glTF
 - [ ] 创建 `framework/include/himalaya/framework/culling.h` + `framework/src/culling.cpp`
 - [ ] AABB vs 6 frustum planes 视锥剔除
 - [ ] Draw loop 改为遍历 CullResult 的 visible indices
 - [ ] 验证：glTF 场景正确渲染，有纹理和基础光照，相机移动时视锥剔除生效
+- [ ] 审查阶段二全部代码，提取可通过 ImGui/键鼠操控的参数
