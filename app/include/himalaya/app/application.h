@@ -101,6 +101,9 @@ namespace himalaya::app {
 
         // --- Shared resources ---
 
+        /** @brief Depth buffer (D32Sfloat, recreated on resize). */
+        rhi::ImageHandle depth_image_;
+
         /** @brief Default sampler (linear filter, repeat wrap, linear mip). */
         rhi::SamplerHandle default_sampler_;
 
@@ -163,5 +166,11 @@ namespace himalaya::app {
          * @brief Unregisters all swapchain images from ResourceManager.
          */
         void unregister_swapchain_images();
+
+        /** @brief Creates the depth buffer matching the current swapchain extent. */
+        void create_depth_buffer();
+
+        /** @brief Destroys the depth buffer (called before resize recreation). */
+        void destroy_depth_buffer();
     };
 } // namespace himalaya::app

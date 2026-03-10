@@ -71,6 +71,7 @@ namespace himalaya::app {
         descriptor_manager_.init(&context_, &resource_manager_);
         render_graph_.init(&resource_manager_);
         register_swapchain_images();
+        create_depth_buffer();
 
         shader_compiler_.set_include_path("shaders");
 
@@ -195,6 +196,7 @@ namespace himalaya::app {
         resource_manager_.destroy_image(default_textures_.black.image);
         resource_manager_.destroy_sampler(default_sampler_);
 
+        destroy_depth_buffer();
         unregister_swapchain_images();
         descriptor_manager_.destroy();
         resource_manager_.destroy();
@@ -240,9 +242,11 @@ namespace himalaya::app {
             frame.image_available_semaphore, VK_NULL_HANDLE, &image_index_);
 
         if (acquire_result == VK_ERROR_OUT_OF_DATE_KHR) {
+            destroy_depth_buffer();
             unregister_swapchain_images();
             swapchain_.recreate(context_, window_);
             register_swapchain_images();
+            create_depth_buffer();
             return false;
         }
         if (acquire_result != VK_SUCCESS && acquire_result != VK_SUBOPTIMAL_KHR) {
@@ -446,9 +450,11 @@ namespace himalaya::app {
             vsync_changed_) {
             framebuffer_resized_ = false;
             vsync_changed_ = false;
+            destroy_depth_buffer();
             unregister_swapchain_images();
             swapchain_.recreate(context_, window_);
             register_swapchain_images();
+            create_depth_buffer();
         } else if (present_result != VK_SUCCESS) {
             std::abort();
         }
@@ -496,5 +502,26 @@ namespace himalaya::app {
             resource_manager_.unregister_external_image(handle);
         }
         swapchain_image_handles_.clear();
+    }
+
+    // ---- Depth buffer management ----
+
+    void Application::create_depth_buffer() {
+        depth_image_ = resource_manager_.create_image({
+            .width = swapchain_.extent.width,
+            .height = swapchain_.extent.height,
+            .depth = 1,
+            .mip_levels = 1,
+            .sample_count = 1,
+            .format = rhi::Format::D32Sfloat,
+            .usage = rhi::ImageUsage::DepthAttachment,
+        });
+    }
+
+    void Application::destroy_depth_buffer() {
+        if (depth_image_.valid()) {
+            resource_manager_.destroy_image(depth_image_);
+            depth_image_ = {};
+        }
     }
 } // namespace himalaya::app
