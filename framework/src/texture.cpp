@@ -25,6 +25,22 @@ namespace himalaya::framework {
         };
     }
 
+    ImageData load_image_from_memory(const uint8_t *buffer, const size_t byte_length) {
+        int w, h, channels;
+        auto *raw = stbi_load_from_memory(buffer, static_cast<int>(byte_length),
+                                          &w, &h, &channels, 4);
+        if (!raw) {
+            spdlog::error("Failed to decode image from memory: {}", stbi_failure_reason());
+            return {};
+        }
+
+        return {
+            .pixels = {raw, stbi_image_free},
+            .width = static_cast<uint32_t>(w),
+            .height = static_cast<uint32_t>(h),
+        };
+    }
+
     TextureResult create_texture(rhi::ResourceManager &resource_manager,
                                  rhi::DescriptorManager &descriptor_manager,
                                  const ImageData &data,

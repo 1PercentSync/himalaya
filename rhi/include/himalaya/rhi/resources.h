@@ -168,6 +168,9 @@ namespace himalaya::rhi {
 
         /** @brief Max anisotropy level (0 = disabled). */
         float max_anisotropy;
+
+        /** @brief Maximum mip level accessible (0 = base level only, 1000.0f = no clamping). */
+        float max_lod;
     };
 
     // ---- Internal Resource Storage ----

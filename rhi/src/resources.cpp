@@ -358,7 +358,7 @@ namespace himalaya::rhi {
         sampler_info.addressModeU = to_vk_wrap_mode(desc.wrap_u);
         sampler_info.addressModeV = to_vk_wrap_mode(desc.wrap_v);
         sampler_info.addressModeW = to_vk_wrap_mode(desc.wrap_u);
-        sampler_info.maxLod = VK_LOD_CLAMP_NONE;
+        sampler_info.maxLod = desc.max_lod;
 
         if (desc.max_anisotropy > 0.0f) {
             sampler_info.anisotropyEnable = VK_TRUE;

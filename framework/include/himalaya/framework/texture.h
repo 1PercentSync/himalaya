@@ -6,8 +6,6 @@
  */
 
 #include <himalaya/rhi/types.h>
-
-#include <cstdint>
 #include <memory>
 #include <string>
 
@@ -54,6 +52,18 @@ namespace himalaya::framework {
      * ImageData on failure (check with valid()).
      */
     [[nodiscard]] ImageData load_image(const std::string &path);
+
+    /**
+     * @brief Loads an image from an in-memory buffer as RGBA8.
+     *
+     * Decodes JPEG/PNG/etc. from raw bytes using stb_image. Forces 4
+     * channels regardless of source format. Returns invalid ImageData
+     * on failure (check with valid()).
+     *
+     * @param buffer      Pointer to the encoded image data.
+     * @param byte_length Size of the buffer in bytes.
+     */
+    [[nodiscard]] ImageData load_image_from_memory(const uint8_t *buffer, size_t byte_length);
 
     /**
      * @brief Result of creating and registering a texture.
