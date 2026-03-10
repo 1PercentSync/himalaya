@@ -98,7 +98,7 @@
 - [x] 创建 `shaders/common/bindings.glsl`（全局绑定布局：Set 0 + Set 1 + push constant）
 - [x] 创建 `shaders/forward.vert`（MVP 变换，输出 world position / normal / uv0 / tangent）
 - [x] 创建 unlit shader（forward.frag 雏形）：采样 base_color_tex × base_color_factor，无光照
-- [ ] Depth buffer 创建（D32Sfloat，imported resource 导入 RG，resize 时 Application 重建）
+- [x] Depth buffer 创建（D32Sfloat，imported resource 导入 RG，resize 时 Application 重建）
 - [ ] Reverse-Z 配置：depth clear 0.0f，compare op GREATER（投影矩阵已在 Step 4 Camera 中实现）
 - [ ] 提取 `handle_resize()` 私有方法（vkQueueWaitIdle 后立即销毁旧资源，acquire 失败和帧末共用）
 - [ ] GlobalUBO × 2 + LightBuffer × 2 管理（CpuToGpu memory，descriptor 初始化写一次，每帧 memcpy）
