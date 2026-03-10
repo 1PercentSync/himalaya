@@ -228,7 +228,7 @@ namespace himalaya::app {
         constexpr auto options = fastgltf::Options::LoadExternalBuffers
                                  | fastgltf::Options::LoadExternalImages;
 
-        fastgltf::Parser parser;
+        fastgltf::Parser parser(fastgltf::Extensions::KHR_lights_punctual);
         const auto base_dir = std::filesystem::path(path).parent_path();
         auto asset = parser.loadGltf(gltf_data.get(), base_dir, options);
         if (asset.error() != fastgltf::Error::None) {
@@ -532,10 +532,27 @@ namespace himalaya::app {
         fastgltf::iterateSceneNodes(
             gltf, scene_index, fastgltf::math::fmat4x4(1.0f),
             [&](fastgltf::Node &node, const fastgltf::math::fmat4x4 &world_transform) {
+                const auto world_mat = convert_matrix(world_transform);
+
+                // Extract directional lights from KHR_lights_punctual
+                if (node.lightIndex.has_value()) {
+                    const auto &light = gltf.lights[*node.lightIndex];
+                    if (light.type == fastgltf::LightType::Directional) {
+                        // glTF lights point along -Z of their node transform
+                        const auto direction = glm::normalize(
+                            glm::vec3(world_mat * glm::vec4(0.0f, 0.0f, -1.0f, 0.0f)));
+                        directional_lights_.push_back({
+                            .direction = direction,
+                            .color = {light.color.x(), light.color.y(), light.color.z()},
+                            .intensity = light.intensity,
+                            .cast_shadows = false,
+                        });
+                    }
+                }
+
                 if (!node.meshIndex.has_value()) return;
 
                 const auto gltf_mesh_idx = *node.meshIndex;
-                const auto world_mat = convert_matrix(world_transform);
                 const uint32_t prim_start = mesh_data.prim_offsets[gltf_mesh_idx];
                 const uint32_t prim_end = mesh_data.prim_offsets[gltf_mesh_idx + 1];
 
@@ -550,8 +567,8 @@ namespace himalaya::app {
                 }
             });
 
-        spdlog::info("Created {} mesh instances from {} nodes",
-                     mesh_instances_.size(), gltf.nodes.size());
+        spdlog::info("Created {} mesh instances, {} directional lights from {} nodes",
+                     mesh_instances_.size(), directional_lights_.size(), gltf.nodes.size());
     }
 
     void SceneLoader::destroy() {

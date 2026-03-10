@@ -99,6 +99,9 @@ namespace himalaya::app {
         /** @brief Per-frame scene render data (populated in update()). */
         framework::SceneRenderData scene_render_data_;
 
+        /** @brief Fallback directional light when the scene provides none. */
+        std::vector<framework::DirectionalLight> default_lights_;
+
         // --- Shared resources ---
 
         /** @brief Depth buffer (D32Sfloat, recreated on resize). */

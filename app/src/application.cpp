@@ -263,9 +263,20 @@ namespace himalaya::app {
             static_cast<float>(swapchain_.extent.height));
         ubo_data.time = static_cast<float>(glfwGetTime());
 
-        // Fill LightBuffer for this frame
+        // Fill LightBuffer for this frame (use default light if scene has none)
         const auto &light_buf = resource_manager_.get_buffer(light_buffers_[context_.frame_index]);
-        const auto lights = scene_loader_.directional_lights();
+        auto lights = scene_loader_.directional_lights();
+        if (lights.empty()) {
+            if (default_lights_.empty()) {
+                default_lights_.push_back({
+                    .direction = glm::normalize(glm::vec3(-0.5f, -1.0f, -0.5f)),
+                    .color = glm::vec3(1.0f),
+                    .intensity = 1.0f,
+                    .cast_shadows = false,
+                });
+            }
+            lights = default_lights_;
+        }
         const auto light_count = static_cast<uint32_t>(
             std::min(lights.size(), static_cast<size_t>(kMaxDirectionalLights)));
 
@@ -286,7 +297,7 @@ namespace himalaya::app {
 
         // Fill SceneRenderData for render passes
         scene_render_data_.mesh_instances = scene_loader_.mesh_instances();
-        scene_render_data_.directional_lights = scene_loader_.directional_lights();
+        scene_render_data_.directional_lights = lights;
         scene_render_data_.camera = camera_;
 
         // Debug UI
