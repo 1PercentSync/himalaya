@@ -268,7 +268,7 @@ M1 只有一种材质（标准 PBR），材质参数用固定的 `GPUMaterialDat
 
 **为什么不做完整数据驱动：** M1 只有标准 PBR 一种材质，复杂的数据驱动系统（材质定义文件、自动生成 shader 变体）投入产出比不高。
 
-**升级路径（固定 stride + 多 shader 解读）：** 引入第二种着色模型（卡通、SSS 等）时，采用固定 stride 方案：所有材质 struct 填充到相同大小（当前 64 字节），每个 shader variant 在同一 binding 上定义自己的 typed struct（如 `PBRMaterial`、`ToonMaterial`），通过 `materials[material_index]` 统一寻址。descriptor、pipeline layout、寻址方式均不变。如果新模型超出当前 stride，整体提升（如 64→128 字节）。内存浪费可忽略（几百个材质 × 几十字节 = 几 KB）。
+**升级路径（固定 stride + 多 shader 解读）：** 引入第二种着色模型（卡通、SSS 等）时，采用固定 stride 方案：所有材质 struct 填充到相同大小（当前 80 字节），每个 shader variant 在同一 binding 上定义自己的 typed struct（如 `PBRMaterial`、`ToonMaterial`），通过 `materials[material_index]` 统一寻址。descriptor、pipeline layout、寻址方式均不变。如果新模型超出当前 stride，整体提升（如 80→128 字节）。内存浪费可忽略（几百个材质 × 几十字节 = 几 KB）。
 
 **排除的方案：** 每种模型各自 SSBO（破坏全局 Set 0 layout 一致性，descriptor 管理变复杂）；变长 buffer + byte offset 寻址（shader 失去 typed struct，需手动解包，易错）。
 
