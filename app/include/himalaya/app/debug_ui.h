@@ -5,6 +5,7 @@
  * @brief Debug UI panel: frame stats, GPU info, runtime controls.
  */
 
+#include <cstdint>
 #include <vector>
 
 namespace himalaya::rhi {
@@ -12,13 +13,18 @@ namespace himalaya::rhi {
     class Swapchain;
 } // namespace himalaya::rhi
 
+namespace himalaya::framework {
+    struct Camera;
+} // namespace himalaya::framework
+
 namespace himalaya::app {
 
     /**
-     * @brief Read-only data passed to DebugUI each frame.
+     * @brief Data passed to DebugUI each frame.
      *
      * DebugUI receives everything it needs through this struct
-     * rather than holding references to subsystems.
+     * rather than holding references to subsystems. Contains both
+     * display-only values and mutable references for interactive controls.
      */
     struct DebugUIContext {
         /** @brief Frame delta time in seconds (from ImGui::GetIO().DeltaTime). */
@@ -29,6 +35,25 @@ namespace himalaya::app {
 
         /** @brief Swapchain for resolution and VSync state. */
         rhi::Swapchain& swapchain;
+
+        // --- Camera (display + control) ---
+
+        /** @brief Camera state for position/orientation display and parameter sliders. */
+        framework::Camera& camera;
+
+        // --- Scene statistics (display) ---
+
+        /** @brief Per-frame scene statistics computed after frustum culling. */
+        struct SceneStats {
+            uint32_t total_instances;
+            uint32_t total_meshes;
+            uint32_t total_materials;
+            uint32_t visible_opaque;
+            uint32_t visible_transparent;
+            uint32_t culled;
+            uint32_t draw_calls;
+            uint32_t rendered_triangles;
+        } scene_stats;
     };
 
     /**

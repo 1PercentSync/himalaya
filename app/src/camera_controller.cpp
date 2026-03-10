@@ -52,7 +52,11 @@ namespace himalaya::app {
 
         // --- Keyboard movement ---
 
-        if (!io.WantCaptureKeyboard) {
+        // WantTextInput (not WantCaptureKeyboard) — with NavEnableKeyboard,
+        // WantCaptureKeyboard is true whenever any widget is focused, which
+        // blocks WASD permanently. WantTextInput only fires during actual
+        // text entry (e.g. Ctrl+Click on a slider).
+        if (!io.WantTextInput) {
             const glm::vec3 forward = camera_->forward();
             const glm::vec3 right = camera_->right();
             constexpr glm::vec3 world_up{0.0f, 1.0f, 0.0f};

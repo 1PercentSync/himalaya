@@ -305,12 +305,37 @@ namespace himalaya::app {
         cull_result_ = framework::cull_frustum(scene_render_data_,
                                                scene_loader_.material_instances());
 
+        // Compute scene statistics for debug UI
+        const auto meshes = scene_loader_.meshes();
+        const auto& instances = scene_render_data_.mesh_instances;
+
+        uint32_t rendered_triangles = 0;
+        for (const auto idx : cull_result_.visible_opaque_indices)
+            rendered_triangles += meshes[instances[idx].mesh_id].index_count / 3;
+        for (const auto idx : cull_result_.visible_transparent_indices)
+            rendered_triangles += meshes[instances[idx].mesh_id].index_count / 3;
+
+        const auto visible_opaque = static_cast<uint32_t>(cull_result_.visible_opaque_indices.size());
+        const auto visible_transparent = static_cast<uint32_t>(cull_result_.visible_transparent_indices.size());
+        const auto total_instances = static_cast<uint32_t>(instances.size());
+
         // Debug UI
         // ReSharper disable once CppUseStructuredBinding
         const auto actions = debug_ui_.draw({
             .delta_time = delta_time,
             .context = context_,
             .swapchain = swapchain_,
+            .camera = camera_,
+            .scene_stats = {
+                .total_instances = total_instances,
+                .total_meshes = static_cast<uint32_t>(meshes.size()),
+                .total_materials = static_cast<uint32_t>(scene_loader_.material_instances().size()),
+                .visible_opaque = visible_opaque,
+                .visible_transparent = visible_transparent,
+                .culled = total_instances - visible_opaque - visible_transparent,
+                .draw_calls = visible_opaque + visible_transparent,
+                .rendered_triangles = rendered_triangles,
+            },
         });
 
         if (actions.vsync_toggled) {

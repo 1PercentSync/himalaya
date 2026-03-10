@@ -115,7 +115,7 @@ namespace himalaya::framework {
     /**
      * @brief Per-frame global uniform data (Set 0, Binding 0).
      *
-     * std140 layout, 288 bytes aligned to 16.
+     * std140 layout, 304 bytes aligned to 16.
      */
     struct GlobalUniformData {
         glm::mat4 view; ///< offset   0
@@ -126,6 +126,8 @@ namespace himalaya::framework {
         glm::vec2 screen_size; ///< offset 272
         float time; ///< offset 280 — elapsed time in seconds
         uint32_t directional_light_count = 0; ///< offset 284 — number of active directional lights
+        float ambient_intensity = 0.03f; ///< offset 288 — ambient light multiplier
+        float _pad[3]{}; ///< padding to 304 bytes (std140 requires multiple of 16)
     };
 
     /**
@@ -152,7 +154,7 @@ namespace himalaya::framework {
     // ---- GPU struct size guards ----
     // These must match the shader-side layout exactly. A mismatch silently
     // corrupts GPU reads, so catch it at compile time.
-    static_assert(sizeof(GlobalUniformData) == 288, "GlobalUniformData must be 288 bytes (std140)");
+    static_assert(sizeof(GlobalUniformData) == 304, "GlobalUniformData must be 304 bytes (std140)");
     static_assert(sizeof(GPUDirectionalLight) == 32, "GPUDirectionalLight must be 32 bytes (std430)");
     static_assert(sizeof(PushConstantData) == 68, "PushConstantData must be 68 bytes");
 } // namespace himalaya::framework
