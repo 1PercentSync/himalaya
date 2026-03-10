@@ -52,21 +52,23 @@ namespace himalaya::app {
 
         // --- Keyboard movement ---
 
-        const glm::vec3 forward = camera_->forward();
-        const glm::vec3 right = camera_->right();
-        constexpr glm::vec3 world_up{0.0f, 1.0f, 0.0f};
+        if (!io.WantCaptureKeyboard) {
+            const glm::vec3 forward = camera_->forward();
+            const glm::vec3 right = camera_->right();
+            constexpr glm::vec3 world_up{0.0f, 1.0f, 0.0f};
 
-        glm::vec3 move{0.0f};
+            glm::vec3 move{0.0f};
 
-        if (glfwGetKey(window_, GLFW_KEY_W) == GLFW_PRESS) move += forward;
-        if (glfwGetKey(window_, GLFW_KEY_S) == GLFW_PRESS) move -= forward;
-        if (glfwGetKey(window_, GLFW_KEY_D) == GLFW_PRESS) move += right;
-        if (glfwGetKey(window_, GLFW_KEY_A) == GLFW_PRESS) move -= right;
-        if (glfwGetKey(window_, GLFW_KEY_SPACE) == GLFW_PRESS) move += world_up;
-        if (glfwGetKey(window_, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS) move -= world_up;
+            if (glfwGetKey(window_, GLFW_KEY_W) == GLFW_PRESS) move += forward;
+            if (glfwGetKey(window_, GLFW_KEY_S) == GLFW_PRESS) move -= forward;
+            if (glfwGetKey(window_, GLFW_KEY_D) == GLFW_PRESS) move += right;
+            if (glfwGetKey(window_, GLFW_KEY_A) == GLFW_PRESS) move -= right;
+            if (glfwGetKey(window_, GLFW_KEY_SPACE) == GLFW_PRESS) move += world_up;
+            if (glfwGetKey(window_, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS) move -= world_up;
 
-        if (glm::dot(move, move) > 0.0f) {
-            camera_->position += glm::normalize(move) * move_speed * delta_time;
+            if (glm::dot(move, move) > 0.0f) {
+                camera_->position += glm::normalize(move) * move_speed * delta_time;
+            }
         }
 
         // --- Update camera matrices ---
