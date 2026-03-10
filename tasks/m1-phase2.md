@@ -106,7 +106,7 @@
 - [x] Pipeline 创建（使用 `DescriptorManager::get_global_set_layouts()`）
 - [x] Draw loop：遍历物体，push constant 传 model matrix + material_index，draw call
 - [x] 移除旧的三角形渲染代码和 triangle shader
-- [ ] 验证：glTF 场景渲染出有纹理的画面（无光照，验证数据管线完整性）
+- [x] 验证：glTF 场景渲染出有纹理的画面（无光照，验证数据管线完整性）
 
 ## Step 7：Forward 光照 + 视锥剔除
 
