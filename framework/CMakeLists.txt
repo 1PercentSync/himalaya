@@ -2,6 +2,7 @@ add_library(himalaya_framework STATIC)
 
 target_sources(himalaya_framework PRIVATE
         src/camera.cpp
+        src/culling.cpp
         src/imgui_backend.cpp
         src/material_system.cpp
         src/mesh.cpp
