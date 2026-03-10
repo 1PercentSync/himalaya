@@ -88,7 +88,7 @@
 - [x] fastgltf 解析 glTF 文件
 - [x] 遍历 mesh：转换为统一顶点格式，创建 vertex/index buffer
 - [x] 遍历 material：提取 PBR 参数和纹理引用，创建 MaterialInstance
-- [ ] 遍历 node：计算世界变换矩阵，填充 MeshInstance（含 world_bounds 计算）
+- [x] 遍历 node：计算世界变换矩阵，填充 MeshInstance（含 world_bounds 计算）
 - [ ] glTF 每个 primitive 展开为独立 MeshInstance
 - [ ] 使用 fastgltf `LoadExternalBuffers` + `LoadExternalImages` 统一处理嵌入式与外部资源
 - [ ] Sampler 不做 ResourceManager 层去重（glTF 同一 sampler index 自然去重）
