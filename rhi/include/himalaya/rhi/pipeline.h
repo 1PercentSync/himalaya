@@ -40,6 +40,9 @@ namespace himalaya::rhi {
         /** @brief Primitive topology. */
         VkPrimitiveTopology topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
 
+        /** @brief MSAA sample count (1 = no MSAA, must be a valid VkSampleCountFlagBits value). */
+        uint32_t sample_count;
+
         /** @brief Enable alpha blending on the first color attachment. */
         bool blend_enable = false;
 

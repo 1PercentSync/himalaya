@@ -59,10 +59,10 @@ namespace himalaya::rhi {
         rasterization.polygonMode = VK_POLYGON_MODE_FILL;
         rasterization.lineWidth = 1.0f;
 
-        // --- Multisample (no MSAA) ---
+        // --- Multisample ---
         VkPipelineMultisampleStateCreateInfo multisample{};
         multisample.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
-        multisample.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+        multisample.rasterizationSamples = static_cast<VkSampleCountFlagBits>(desc.sample_count);
 
         // --- Depth stencil (test/write/compare are dynamic) ---
         VkPipelineDepthStencilStateCreateInfo depth_stencil{};

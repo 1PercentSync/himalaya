@@ -129,6 +129,7 @@ namespace himalaya::app {
             unlit_desc.fragment_shader = unlit_frag_module;
             unlit_desc.color_formats = {swapchain_.format};
             unlit_desc.depth_format = VK_FORMAT_D32_SFLOAT;
+            unlit_desc.sample_count = 1;
 
             const auto binding = framework::Vertex::binding_description();
             const auto attributes = framework::Vertex::attribute_descriptions();
