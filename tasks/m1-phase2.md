@@ -85,7 +85,7 @@
 - [x] 创建 `app/scene_loader.h/cpp`
 - [x] 场景路径由 `Application::init(scene_path)` 接收，main.cpp 解析 argc/argv，默认 `assets/Sponza/Sponza.gltf`
 - [x] 加载失败 log error + abort，不做 fallback
-- [ ] fastgltf 解析 glTF 文件
+- [x] fastgltf 解析 glTF 文件
 - [ ] 遍历 mesh：转换为统一顶点格式，创建 vertex/index buffer
 - [ ] 遍历 material：提取 PBR 参数和纹理引用，创建 MaterialInstance
 - [ ] 遍历 node：计算世界变换矩阵，填充 MeshInstance（含 world_bounds 计算）
