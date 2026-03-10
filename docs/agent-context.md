@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段二 — 基础渲染管线（加载 glTF 场景、基础 Lit shader 渲染、相机漫游）
-- **进度**：Step 7 进行中（2/7）
+- **进度**：Step 7 进行中（6/7）
 
 ### 下一个任务
 
-Step 7 第三项：创建 `framework/include/himalaya/framework/culling.h` + `framework/src/culling.cpp`
+Step 7 第七项：审查阶段二全部代码，提取可通过 ImGui/键鼠操控的参数
 
 ---
 
