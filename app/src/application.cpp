@@ -117,6 +117,7 @@ namespace himalaya::app {
             .wrap_u = rhi::SamplerWrapMode::Repeat,
             .wrap_v = rhi::SamplerWrapMode::Repeat,
             .max_anisotropy = 0.0f,
+            .max_lod = VK_LOD_CLAMP_NONE,
         });
 
         // --- Phase 1 temporary resources ---

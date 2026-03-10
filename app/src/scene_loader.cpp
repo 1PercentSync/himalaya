@@ -13,9 +13,164 @@
 #include <fastgltf/types.hpp>
 #include <spdlog/spdlog.h>
 
+#include <cassert>
 #include <filesystem>
+#include <map>
 
 namespace himalaya::app {
+    namespace {
+        // Decodes a glTF image from any source type into CPU RGBA8 pixel data.
+        // Handles URI (fallback), Array, Vector, BufferView, and ByteView sources.
+        framework::ImageData decode_gltf_image(const fastgltf::Asset &gltf,
+                                               const fastgltf::Image &image,
+                                               const std::filesystem::path &base_dir) {
+            framework::ImageData result;
+
+            std::visit(fastgltf::visitor{
+                           [&](const fastgltf::sources::URI &) {
+                               assert(false && "URI source should not appear with LoadExternalImages");
+                           },
+                           [&](const fastgltf::sources::Array &array) {
+                               result = framework::load_image_from_memory(
+                                   reinterpret_cast<const uint8_t *>(array.bytes.data()),
+                                   array.bytes.size_bytes());
+                           },
+                           [&](const fastgltf::sources::Vector &vec) {
+                               result = framework::load_image_from_memory(
+                                   reinterpret_cast<const uint8_t *>(vec.bytes.data()),
+                                   vec.bytes.size());
+                           },
+                           [&](const fastgltf::sources::BufferView &bv) {
+                               const auto &view = gltf.bufferViews[bv.bufferViewIndex];
+                               const auto &buffer = gltf.buffers[view.bufferIndex];
+                               std::visit(fastgltf::visitor{
+                                              [&](const fastgltf::sources::Array &arr) {
+                                                  result = framework::load_image_from_memory(
+                                                      reinterpret_cast<const uint8_t *>(arr.bytes.data()) + view.
+                                                      byteOffset,
+                                                      view.byteLength);
+                                              },
+                                              [&](const fastgltf::sources::Vector &v) {
+                                                  result = framework::load_image_from_memory(
+                                                      reinterpret_cast<const uint8_t *>(v.bytes.data()) + view.
+                                                      byteOffset,
+                                                      view.byteLength);
+                                              },
+                                              [&](const fastgltf::sources::ByteView &bytes) {
+                                                  result = framework::load_image_from_memory(
+                                                      reinterpret_cast<const uint8_t *>(bytes.bytes.data()) + view.
+                                                      byteOffset,
+                                                      view.byteLength);
+                                              },
+                                              [](auto &&) {
+                                                  spdlog::error("Unsupported buffer data source for image");
+                                                  std::abort();
+                                              }
+                                          }, buffer.data);
+                           },
+                           [&](const fastgltf::sources::ByteView &bytes) {
+                               result = framework::load_image_from_memory(
+                                   reinterpret_cast<const uint8_t *>(bytes.bytes.data()),
+                                   bytes.bytes.size());
+                           },
+                           [](auto &&) {
+                               spdlog::error("Unsupported image source type");
+                               std::abort();
+                           }
+                       }, image.data);
+
+            if (!result.valid()) {
+                spdlog::error("Failed to decode glTF image '{}'",
+                              std::string(image.name));
+                std::abort();
+            }
+
+            return result;
+        }
+
+        // Converts a fastgltf sampler to our SamplerDesc.
+        // Missing filter/wrap values use glTF defaults (linear filter, repeat wrap).
+        rhi::SamplerDesc convert_gltf_sampler(const fastgltf::Sampler &sampler) {
+            rhi::SamplerDesc desc{};
+
+            // Mag filter (default: Linear)
+            if (sampler.magFilter.has_value()) {
+                desc.mag_filter = (*sampler.magFilter == fastgltf::Filter::Nearest)
+                                      ? rhi::Filter::Nearest
+                                      : rhi::Filter::Linear;
+            } else {
+                desc.mag_filter = rhi::Filter::Linear;
+            }
+
+            // Min filter encodes both minification and mip mode (default: Linear + Linear).
+            // Nearest/Linear without MipMap suffix means no mipmapping — clamp max_lod to 0.
+            if (sampler.minFilter.has_value()) {
+                switch (*sampler.minFilter) {
+                    case fastgltf::Filter::Nearest:
+                        desc.min_filter = rhi::Filter::Nearest;
+                        desc.mip_mode = rhi::SamplerMipMode::Nearest;
+                        desc.max_lod = 0.0f;
+                        break;
+                    case fastgltf::Filter::Linear:
+                        desc.min_filter = rhi::Filter::Linear;
+                        desc.mip_mode = rhi::SamplerMipMode::Nearest;
+                        desc.max_lod = 0.0f;
+                        break;
+                    case fastgltf::Filter::NearestMipMapNearest:
+                        desc.min_filter = rhi::Filter::Nearest;
+                        desc.mip_mode = rhi::SamplerMipMode::Nearest;
+                        desc.max_lod = VK_LOD_CLAMP_NONE;
+                        break;
+                    case fastgltf::Filter::LinearMipMapNearest:
+                        desc.min_filter = rhi::Filter::Linear;
+                        desc.mip_mode = rhi::SamplerMipMode::Nearest;
+                        desc.max_lod = VK_LOD_CLAMP_NONE;
+                        break;
+                    case fastgltf::Filter::NearestMipMapLinear:
+                        desc.min_filter = rhi::Filter::Nearest;
+                        desc.mip_mode = rhi::SamplerMipMode::Linear;
+                        desc.max_lod = VK_LOD_CLAMP_NONE;
+                        break;
+                    case fastgltf::Filter::LinearMipMapLinear:
+                        desc.min_filter = rhi::Filter::Linear;
+                        desc.mip_mode = rhi::SamplerMipMode::Linear;
+                        desc.max_lod = VK_LOD_CLAMP_NONE;
+                        break;
+                }
+            } else {
+                desc.min_filter = rhi::Filter::Linear;
+                desc.mip_mode = rhi::SamplerMipMode::Linear;
+                desc.max_lod = VK_LOD_CLAMP_NONE;
+            }
+
+            // Wrap modes
+            auto convert_wrap = [](const fastgltf::Wrap wrap) -> rhi::SamplerWrapMode {
+                switch (wrap) {
+                    case fastgltf::Wrap::ClampToEdge: return rhi::SamplerWrapMode::ClampToEdge;
+                    case fastgltf::Wrap::MirroredRepeat: return rhi::SamplerWrapMode::MirroredRepeat;
+                    case fastgltf::Wrap::Repeat: return rhi::SamplerWrapMode::Repeat;
+                }
+                return rhi::SamplerWrapMode::Repeat;
+            };
+
+            desc.wrap_u = convert_wrap(sampler.wrapS);
+            desc.wrap_v = convert_wrap(sampler.wrapT);
+            desc.max_anisotropy = 0.0f;
+
+            return desc;
+        }
+
+        // Converts fastgltf AlphaMode to our framework AlphaMode.
+        framework::AlphaMode convert_alpha_mode(const fastgltf::AlphaMode mode) {
+            switch (mode) {
+                case fastgltf::AlphaMode::Opaque: return framework::AlphaMode::Opaque;
+                case fastgltf::AlphaMode::Mask: return framework::AlphaMode::Mask;
+                case fastgltf::AlphaMode::Blend: return framework::AlphaMode::Blend;
+            }
+            return framework::AlphaMode::Opaque;
+        }
+    }
+
     void SceneLoader::load(const std::string &path,
                            rhi::ResourceManager &resource_manager,
                            rhi::DescriptorManager &descriptor_manager,
@@ -33,8 +188,8 @@ namespace himalaya::app {
         }
 
         // Parse glTF
-        auto data = fastgltf::GltfDataBuffer::FromPath(path);
-        if (data.error() != fastgltf::Error::None) {
+        auto gltf_data = fastgltf::GltfDataBuffer::FromPath(path);
+        if (gltf_data.error() != fastgltf::Error::None) {
             spdlog::error("Failed to read glTF file: {}", path);
             std::abort();
         }
@@ -43,9 +198,8 @@ namespace himalaya::app {
                                  | fastgltf::Options::LoadExternalImages;
 
         fastgltf::Parser parser;
-        auto asset = parser.loadGltf(data.get(),
-                                     std::filesystem::path(path).parent_path(),
-                                     options);
+        const auto base_dir = std::filesystem::path(path).parent_path();
+        auto asset = parser.loadGltf(gltf_data.get(), base_dir, options);
         if (asset.error() != fastgltf::Error::None) {
             spdlog::error("Failed to parse glTF '{}' (error {})",
                           path, static_cast<int>(asset.error()));
@@ -186,6 +340,117 @@ namespace himalaya::app {
         }
 
         spdlog::info("Loaded {} mesh primitives", meshes_.size());
+
+        // --- Load samplers (one per glTF sampler, naturally deduplicated) ---
+        for (const auto &s: gltf.samplers) {
+            samplers_.push_back(resource_manager.create_sampler(convert_gltf_sampler(s)));
+        }
+
+        spdlog::info("Created {} samplers", samplers_.size());
+
+        // --- Load materials ---
+        // Texture cache: (gltf_texture_index, role) → bindless index.
+        // Avoids creating duplicate GPU textures when multiple materials
+        // reference the same glTF texture with the same role.
+        std::map<std::pair<size_t, framework::TextureRole>, rhi::BindlessIndex> tex_cache;
+
+        // Resolves a glTF texture reference to a bindless index, loading
+        // the image on demand and caching the result.
+        auto resolve_texture = [&](const size_t texture_index, const framework::TextureRole role) -> uint32_t {
+            const auto key = std::make_pair(texture_index, role);
+            if (const auto it = tex_cache.find(key); it != tex_cache.end()) {
+                return it->second.index;
+            }
+
+            const auto &tex = gltf.textures[texture_index];
+            assert(tex.imageIndex.has_value() && "glTF texture must have an image source");
+
+            const auto sampler = tex.samplerIndex.has_value() ? samplers_[*tex.samplerIndex] : default_sampler;
+
+            const auto pixels = decode_gltf_image(gltf, gltf.images[*tex.imageIndex], base_dir);
+            const auto [image, bindless_index] = framework::create_texture(
+                resource_manager, descriptor_manager, pixels, role, sampler);
+
+            images_.push_back(image);
+            bindless_indices_.push_back(bindless_index);
+            tex_cache[key] = bindless_index;
+            return bindless_index.index;
+        };
+
+        std::vector<framework::GPUMaterialData> gpu_materials;
+        gpu_materials.reserve(gltf.materials.size());
+
+        for (const auto &mat: gltf.materials) {
+            framework::GPUMaterialData data{};
+            // ReSharper disable once CppUseStructuredBinding
+            const auto &pbr = mat.pbrData;
+
+            // PBR metallic-roughness parameters
+            data.base_color_factor = {
+                pbr.baseColorFactor[0],
+                pbr.baseColorFactor[1],
+                pbr.baseColorFactor[2],
+                pbr.baseColorFactor[3]
+            };
+            data.emissive_factor = {
+                mat.emissiveFactor[0],
+                mat.emissiveFactor[1],
+                mat.emissiveFactor[2],
+                0.0f
+            };
+            data.metallic_factor = pbr.metallicFactor;
+            data.roughness_factor = pbr.roughnessFactor;
+            data.normal_scale = mat.normalTexture.has_value() ? mat.normalTexture->scale : 1.0f;
+            data.occlusion_strength = mat.occlusionTexture.has_value() ? mat.occlusionTexture->strength : 1.0f;
+            data.alpha_cutoff = mat.alphaCutoff;
+            data.alpha_mode = static_cast<uint32_t>(convert_alpha_mode(mat.alphaMode));
+            data._padding = 0;
+
+            // Texture references (UINT32_MAX = unset, filled by fill_material_defaults)
+            data.base_color_tex = pbr.baseColorTexture.has_value()
+                                      ? resolve_texture(pbr.baseColorTexture->textureIndex,
+                                                        framework::TextureRole::Color)
+                                      : UINT32_MAX;
+            data.metallic_roughness_tex = pbr.metallicRoughnessTexture.has_value()
+                                              ? resolve_texture(pbr.metallicRoughnessTexture->textureIndex,
+                                                                framework::TextureRole::Linear)
+                                              : UINT32_MAX;
+            data.normal_tex = mat.normalTexture.has_value()
+                                  ? resolve_texture(mat.normalTexture->textureIndex,
+                                                    framework::TextureRole::Linear)
+                                  : UINT32_MAX;
+            data.occlusion_tex = mat.occlusionTexture.has_value()
+                                     ? resolve_texture(mat.occlusionTexture->textureIndex,
+                                                       framework::TextureRole::Linear)
+                                     : UINT32_MAX;
+            data.emissive_tex = mat.emissiveTexture.has_value()
+                                    ? resolve_texture(mat.emissiveTexture->textureIndex,
+                                                      framework::TextureRole::Color)
+                                    : UINT32_MAX;
+
+            // Fill unset texture slots with default textures
+            framework::fill_material_defaults(data,
+                                              default_textures.white.bindless_index,
+                                              default_textures.flat_normal.bindless_index,
+                                              default_textures.black.bindless_index);
+
+            gpu_materials.push_back(data);
+
+            material_instances_.push_back({
+                .template_id = 0,
+                .buffer_offset = static_cast<uint32_t>(material_instances_.size()),
+                .alpha_mode = convert_alpha_mode(mat.alphaMode),
+                .double_sided = mat.doubleSided,
+            });
+        }
+
+        // Upload all material data to the GPU SSBO
+        if (!gpu_materials.empty()) {
+            material_system.upload_materials(gpu_materials);
+        }
+
+        spdlog::info("Loaded {} materials, {} GPU textures",
+                     material_instances_.size(), images_.size());
     }
 
     void SceneLoader::destroy() {
