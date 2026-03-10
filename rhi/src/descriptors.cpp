@@ -111,6 +111,42 @@ namespace himalaya::rhi {
         free_bindless_indices_.push_back(index.index);
     }
 
+    void DescriptorManager::write_set0_buffer(const uint32_t binding,
+                                              const BufferHandle buffer,
+                                              const uint64_t range) const {
+        assert(binding <= 2 && "Set 0 only has bindings 0-2");
+
+        const auto &buf = resource_manager_->get_buffer(buffer);
+
+        const VkDescriptorBufferInfo buffer_info{
+            .buffer = buf.buffer,
+            .offset = 0,
+            .range = static_cast<VkDeviceSize>(range),
+        };
+
+        // Binding 0 is UBO, bindings 1-2 are SSBO (matches create_layouts)
+        const VkDescriptorType type = (binding == 0)
+                                          ? VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER
+                                          : VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+
+        for (uint32_t i = 0; i < kMaxFramesInFlight; ++i) {
+            const VkWriteDescriptorSet write{
+                .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                .dstSet = set0_sets_[i],
+                .dstBinding = binding,
+                .descriptorCount = 1,
+                .descriptorType = type,
+                .pBufferInfo = &buffer_info,
+            };
+
+            vkUpdateDescriptorSets(context_->device,
+                                   1,
+                                   &write,
+                                   0,
+                                   nullptr);
+        }
+    }
+
     void DescriptorManager::create_layouts() {
         // --- Set 0: GlobalUBO (binding 0) + LightBuffer (binding 1) + MaterialBuffer (binding 2) ---
         constexpr VkDescriptorSetLayoutBinding set0_bindings[] = {
