@@ -92,7 +92,7 @@ namespace himalaya::app {
 
         // Converts a fastgltf sampler to our SamplerDesc.
         // Missing filter/wrap values use glTF defaults (linear filter, repeat wrap).
-        rhi::SamplerDesc convert_gltf_sampler(const fastgltf::Sampler &sampler) {
+        rhi::SamplerDesc convert_gltf_sampler(const fastgltf::Sampler &sampler, const float max_anisotropy) {
             rhi::SamplerDesc desc{};
 
             // Mag filter (default: Linear)
@@ -157,7 +157,7 @@ namespace himalaya::app {
 
             desc.wrap_u = convert_wrap(sampler.wrapS);
             desc.wrap_v = convert_wrap(sampler.wrapT);
-            desc.max_anisotropy = 0.0f;
+            desc.max_anisotropy = max_anisotropy;
 
             return desc;
         }
@@ -408,7 +408,8 @@ namespace himalaya::app {
                                      const rhi::SamplerHandle default_sampler) {
         // Load samplers (one per glTF sampler, naturally deduplicated by index)
         for (const auto &s: gltf.samplers) {
-            samplers_.push_back(resource_manager_->create_sampler(convert_gltf_sampler(s)));
+            samplers_.push_back(resource_manager_->create_sampler(
+                convert_gltf_sampler(s, resource_manager_->max_sampler_anisotropy())));
         }
 
         spdlog::info("Created {} samplers", samplers_.size());

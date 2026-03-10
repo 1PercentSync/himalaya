@@ -375,6 +375,10 @@ namespace himalaya::rhi {
         return {index, slot.generation};
     }
 
+    float ResourceManager::max_sampler_anisotropy() const {
+        return context_->max_sampler_anisotropy;
+    }
+
     void ResourceManager::destroy_sampler(const SamplerHandle handle) {
         assert(handle.valid() && "Invalid sampler handle");
         assert(handle.index < samplers_.size() && "Sampler handle index out of range");

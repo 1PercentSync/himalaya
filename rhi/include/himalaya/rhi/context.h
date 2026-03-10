@@ -14,8 +14,6 @@
 #include <vk_mem_alloc.h>
 #include <spdlog/spdlog.h>
 
-#include <himalaya/rhi/commands.h>
-
 struct GLFWwindow;
 
 /**
@@ -135,6 +133,9 @@ namespace himalaya::rhi {
 
         /** @brief Human-readable GPU name, populated during init. */
         std::string gpu_name;
+
+        /** @brief Device-supported maximum sampler anisotropy (e.g. 16.0f). */
+        float max_sampler_anisotropy;
 
         /** @brief Logical device. */
         VkDevice device = VK_NULL_HANDLE;

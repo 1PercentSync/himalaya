@@ -252,6 +252,7 @@ namespace himalaya::rhi {
         VkPhysicalDeviceProperties props;
         vkGetPhysicalDeviceProperties(physical_device, &props);
         gpu_name = props.deviceName;
+        max_sampler_anisotropy = props.limits.maxSamplerAnisotropy;
         spdlog::info("Selected GPU: {} (score: {})", gpu_name, best_score);
     }
 
@@ -297,18 +298,24 @@ namespace himalaya::rhi {
         features_12.runtimeDescriptorArray = VK_TRUE;
         features_12.shaderSampledImageArrayNonUniformIndexing = VK_TRUE;
 
-        // Vulkan 1.3 core features: dynamic rendering + synchronization2
+        // Vulkan 1.3 core features: dynamic rendering + synchronization2 + demote-to-helper
         // Extended Dynamic State is unconditionally available in 1.3+ (no feature bit needed)
         VkPhysicalDeviceVulkan13Features features_13{};
         features_13.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
         features_13.dynamicRendering = VK_TRUE;
         features_13.synchronization2 = VK_TRUE;
+        features_13.shaderDemoteToHelperInvocation = VK_TRUE;
+
+        // Vulkan 1.0 core features
+        VkPhysicalDeviceFeatures features_10{};
+        features_10.samplerAnisotropy = VK_TRUE;
 
         features_12.pNext = &features_13;
 
         VkDeviceCreateInfo device_info{};
         device_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
         device_info.pNext = &features_12;
+        device_info.pEnabledFeatures = &features_10;
         device_info.queueCreateInfoCount = 1;
         device_info.pQueueCreateInfos = &queue_info;
         device_info.enabledExtensionCount = static_cast<uint32_t>(std::size(kRequiredDeviceExtensions));

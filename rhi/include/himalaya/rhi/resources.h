@@ -355,6 +355,9 @@ namespace himalaya::rhi {
          */
         [[nodiscard]] const Sampler &get_sampler(SamplerHandle handle) const;
 
+        /** @brief Returns the device-supported maximum sampler anisotropy. */
+        [[nodiscard]] float max_sampler_anisotropy() const;
+
         // ---- Upload ----
 
         /**
