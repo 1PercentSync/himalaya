@@ -95,7 +95,7 @@
 - [x] SceneLoader 持有所有资源句柄列表，提供 `destroy()` 一次性清理
 - [x] 填充 SceneRenderData
 - [x] CommandBuffer 新增 `bind_index_buffer()`、`draw_indexed()`、`push_constants()` 方法
-- [ ] 创建 `shaders/common/bindings.glsl`（全局绑定布局：Set 0 + Set 1 + push constant）
+- [x] 创建 `shaders/common/bindings.glsl`（全局绑定布局：Set 0 + Set 1 + push constant）
 - [ ] 创建 `shaders/forward.vert`（MVP 变换，输出 world position / normal / uv0 / tangent）
 - [ ] 创建 unlit shader（forward.frag 雏形）：采样 base_color_tex × base_color_factor，无光照
 - [ ] Depth buffer 创建（D32Sfloat，imported resource 导入 RG，resize 时 Application 重建）
