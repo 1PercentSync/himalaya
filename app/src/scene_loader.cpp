@@ -10,6 +10,9 @@
 
 #include <spdlog/spdlog.h>
 
+#include <cstdlib>
+#include <filesystem>
+
 namespace himalaya::app {
     void SceneLoader::load(const std::string &path,
                            rhi::ResourceManager &resource_manager,
@@ -21,6 +24,11 @@ namespace himalaya::app {
         descriptor_manager_ = &descriptor_manager;
 
         spdlog::info("Loading scene: {}", path);
+
+        if (!std::filesystem::exists(path)) {
+            spdlog::error("Scene file not found: {}", path);
+            std::abort();
+        }
     }
 
     void SceneLoader::destroy() {
