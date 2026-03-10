@@ -5,6 +5,7 @@
 
 #include <himalaya/app/application.h>
 
+#include <himalaya/framework/mesh.h>
 #include <himalaya/framework/scene_data.h>
 #include <himalaya/rhi/commands.h>
 
@@ -205,6 +206,46 @@ namespace himalaya::app {
 
         vkDestroyShaderModule(context_.device, frag_module, nullptr);
         vkDestroyShaderModule(context_.device, vert_module, nullptr);
+
+        // --- Unlit pipeline (forward.vert + forward.frag) ---
+        {
+            const auto unlit_vert = shader_compiler_.compile_from_file(
+                "forward.vert", rhi::ShaderStage::Vertex);
+            const auto unlit_frag = shader_compiler_.compile_from_file(
+                "forward.frag", rhi::ShaderStage::Fragment);
+
+            // ReSharper disable once CppLocalVariableMayBeConst
+            VkShaderModule unlit_vert_module = rhi::create_shader_module(context_.device, unlit_vert);
+            // ReSharper disable once CppLocalVariableMayBeConst
+            VkShaderModule unlit_frag_module = rhi::create_shader_module(context_.device, unlit_frag);
+
+            rhi::GraphicsPipelineDesc unlit_desc;
+            unlit_desc.vertex_shader = unlit_vert_module;
+            unlit_desc.fragment_shader = unlit_frag_module;
+            unlit_desc.color_formats = {swapchain_.format};
+            unlit_desc.depth_format = VK_FORMAT_D32_SFLOAT;
+
+            const auto binding = framework::Vertex::binding_description();
+            const auto attributes = framework::Vertex::attribute_descriptions();
+            unlit_desc.vertex_bindings = {binding};
+            unlit_desc.vertex_attributes = {attributes.begin(), attributes.end()};
+
+            const auto unlit_set_layouts = descriptor_manager_.get_global_set_layouts();
+            unlit_desc.descriptor_set_layouts = {unlit_set_layouts[0], unlit_set_layouts[1]};
+
+            unlit_desc.push_constant_ranges = {
+                {
+                    .stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+                    .offset = 0,
+                    .size = sizeof(framework::PushConstantData),
+                },
+            };
+
+            unlit_pipeline_ = rhi::create_graphics_pipeline(context_.device, unlit_desc);
+
+            vkDestroyShaderModule(context_.device, unlit_frag_module, nullptr);
+            vkDestroyShaderModule(context_.device, unlit_vert_module, nullptr);
+        }
     }
 
     void Application::destroy() {
@@ -213,6 +254,7 @@ namespace himalaya::app {
         imgui_backend_.destroy();
         scene_loader_.destroy();
         material_system_.destroy();
+        unlit_pipeline_.destroy(context_.device);
         triangle_pipeline_.destroy(context_.device);
         resource_manager_.destroy_buffer(vertex_buffer_);
         for (const auto ubo: global_ubo_buffers_) {

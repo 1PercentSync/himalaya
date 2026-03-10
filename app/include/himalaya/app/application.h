@@ -110,6 +110,9 @@ namespace himalaya::app {
         /** @brief Default 1x1 textures (white, flat normal, black). */
         framework::DefaultTextures default_textures_;
 
+        /** @brief Unlit graphics pipeline (forward.vert + forward.frag). */
+        rhi::Pipeline unlit_pipeline_;
+
         // --- Phase 1 temporary resources (removed in Step 7) ---
 
         /** @brief Shader compiler instance. */
