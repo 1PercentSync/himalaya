@@ -32,22 +32,6 @@ namespace himalaya::app {
     /** @brief Maximum directional lights the LightBuffer can hold. */
     constexpr uint32_t kMaxDirectionalLights = 4;
 
-    // --- Phase 1 temporary types (removed in Step 7) ---
-
-    /** @brief Interleaved vertex attributes: position (vec3) + color (vec3) + uv (vec2). */
-    struct Vertex {
-        glm::vec3 position;
-        glm::vec3 color;
-        glm::vec2 uv;
-    };
-
-    /** @brief Triangle vertex data on the z=0 plane, visible from default camera position. */
-    constexpr std::array kTriangleVertices = {
-        Vertex{{0.0f, 0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.5f, 0.0f}}, // top — red
-        Vertex{{-0.5f, -0.5f, 0.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, 1.0f}}, // bottom-left — green
-        Vertex{{0.5f, -0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}}, // bottom-right — blue
-    };
-
     // ---- Init / Destroy ----
 
     void Application::init(const std::string &scene_path) {
@@ -155,57 +139,13 @@ namespace himalaya::app {
 
         material_system_.init(&resource_manager_, &descriptor_manager_);
 
-        // --- Phase 1 temporary resources ---
-        vertex_buffer_ = resource_manager_.create_buffer({
-            .size = sizeof(kTriangleVertices),
-            .usage = rhi::BufferUsage::VertexBuffer | rhi::BufferUsage::TransferDst,
-            .memory = rhi::MemoryUsage::GpuOnly,
-        });
-
         context_.begin_immediate();
-        resource_manager_.upload_buffer(vertex_buffer_, kTriangleVertices.data(), sizeof(kTriangleVertices));
         default_textures_ = framework::create_default_textures(resource_manager_,
                                                                descriptor_manager_,
                                                                default_sampler_);
         scene_loader_.load(scene_path, resource_manager_, descriptor_manager_,
                            material_system_, default_textures_, default_sampler_);
         context_.end_immediate();
-
-        const auto vert_spirv = shader_compiler_.compile_from_file(
-            "triangle.vert", rhi::ShaderStage::Vertex);
-        const auto frag_spirv = shader_compiler_.compile_from_file(
-            "triangle.frag", rhi::ShaderStage::Fragment);
-
-        // ReSharper disable once CppLocalVariableMayBeConst
-        VkShaderModule vert_module = rhi::create_shader_module(context_.device, vert_spirv);
-        // ReSharper disable once CppLocalVariableMayBeConst
-        VkShaderModule frag_module = rhi::create_shader_module(context_.device, frag_spirv);
-
-        rhi::GraphicsPipelineDesc pipeline_desc;
-        pipeline_desc.vertex_shader = vert_module;
-        pipeline_desc.fragment_shader = frag_module;
-        pipeline_desc.color_formats = {swapchain_.format};
-        pipeline_desc.depth_format = VK_FORMAT_D32_SFLOAT;
-        const auto set_layouts = descriptor_manager_.get_global_set_layouts();
-        pipeline_desc.descriptor_set_layouts = {set_layouts[0], set_layouts[1]};
-
-        pipeline_desc.vertex_bindings = {
-            {
-                .binding = 0,
-                .stride = sizeof(Vertex),
-                .inputRate = VK_VERTEX_INPUT_RATE_VERTEX,
-            }
-        };
-        pipeline_desc.vertex_attributes = {
-            {.location = 0, .binding = 0, .format = VK_FORMAT_R32G32B32_SFLOAT, .offset = offsetof(Vertex, position)},
-            {.location = 1, .binding = 0, .format = VK_FORMAT_R32G32B32_SFLOAT, .offset = offsetof(Vertex, color)},
-            {.location = 2, .binding = 0, .format = VK_FORMAT_R32G32_SFLOAT, .offset = offsetof(Vertex, uv)},
-        };
-
-        triangle_pipeline_ = rhi::create_graphics_pipeline(context_.device, pipeline_desc);
-
-        vkDestroyShaderModule(context_.device, frag_module, nullptr);
-        vkDestroyShaderModule(context_.device, vert_module, nullptr);
 
         // --- Unlit pipeline (forward.vert + forward.frag) ---
         {
@@ -255,8 +195,6 @@ namespace himalaya::app {
         scene_loader_.destroy();
         material_system_.destroy();
         unlit_pipeline_.destroy(context_.device);
-        triangle_pipeline_.destroy(context_.device);
-        resource_manager_.destroy_buffer(vertex_buffer_);
         for (const auto ubo: global_ubo_buffers_) {
             resource_manager_.destroy_buffer(ubo);
         }

@@ -113,16 +113,10 @@ namespace himalaya::app {
         /** @brief Unlit graphics pipeline (forward.vert + forward.frag). */
         rhi::Pipeline unlit_pipeline_;
 
-        // --- Phase 1 temporary resources (removed in Step 7) ---
-
         /** @brief Shader compiler instance. */
         rhi::ShaderCompiler shader_compiler_;
 
-        /** @brief Triangle graphics pipeline. */
-        rhi::Pipeline triangle_pipeline_;
-
-        /** @brief Triangle vertex buffer handle. */
-        rhi::BufferHandle vertex_buffer_;
+        // --- Per-frame buffers ---
 
         /** @brief Per-frame GlobalUBO buffers (CpuToGpu, one per frame in flight). */
         std::array<rhi::BufferHandle, rhi::kMaxFramesInFlight> global_ubo_buffers_;
