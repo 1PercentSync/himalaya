@@ -46,7 +46,7 @@ namespace himalaya::app {
 
     // ---- Init / Destroy ----
 
-    void Application::init() {
+    void Application::init(const std::string &scene_path) {
         spdlog::set_level(kLogLevel);
         glfwInit();
         glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
@@ -132,6 +132,8 @@ namespace himalaya::app {
                                                                descriptor_manager_,
                                                                default_sampler_);
         context_.end_immediate();
+
+        spdlog::info("Scene path: {}", scene_path);
 
         const auto vert_spirv = shader_compiler_.compile_from_file(
             "triangle.vert", rhi::ShaderStage::Vertex);

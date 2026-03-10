@@ -7,6 +7,7 @@
 
 #include <himalaya/app/camera_controller.h>
 #include <himalaya/app/debug_ui.h>
+#include <himalaya/app/scene_loader.h>
 #include <himalaya/framework/camera.h>
 #include <himalaya/framework/imgui_backend.h>
 #include <himalaya/framework/render_graph.h>
@@ -30,8 +31,11 @@ namespace himalaya::app {
      */
     class Application {
     public:
-        /** @brief Initializes GLFW, all subsystems, and temporary resources. */
-        void init();
+        /**
+         * @brief Initializes GLFW, all subsystems, and loads the scene.
+         * @param scene_path Path to the glTF scene file.
+         */
+        void init(const std::string &scene_path);
 
         /**
          * @brief Runs the main frame loop until the window is closed.
@@ -85,6 +89,9 @@ namespace himalaya::app {
 
         /** @brief Debug UI panel. */
         DebugUI debug_ui_;
+
+        /** @brief glTF scene loader and resource owner. */
+        SceneLoader scene_loader_;
 
         // --- Shared resources ---
 
