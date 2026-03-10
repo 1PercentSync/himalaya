@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段二 — 基础渲染管线（加载 glTF 场景、基础 Lit shader 渲染、相机漫游）
-- **进度**：Step 6 进行中（25/26），handle_resize 完成
+- **进度**：Step 6 进行中（26/26），LightBuffer 完成
 
 ### 下一个任务
 
-Step 6 下一项：GlobalUBO × 2 + LightBuffer × 2 管理（CpuToGpu memory，descriptor 初始化写一次，每帧 memcpy）
+Step 6 下一项：Unlit pass 注册到 Render Graph（使用 depth attachment）
 
 ---
 

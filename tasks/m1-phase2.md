@@ -101,7 +101,7 @@
 - [x] Depth buffer 创建（D32Sfloat，imported resource 导入 RG，resize 时 Application 重建）
 - [ ] Reverse-Z 配置：depth clear 0.0f，compare op GREATER（投影矩阵已在 Step 4 Camera 中实现）→ 在「Unlit pass 注册到 Render Graph」中落实
 - [x] 提取 `handle_resize()` 私有方法（vkQueueWaitIdle 后立即销毁旧资源，acquire 失败和帧末共用）
-- [ ] GlobalUBO × 2 + LightBuffer × 2 管理（CpuToGpu memory，descriptor 初始化写一次，每帧 memcpy）
+- [x] GlobalUBO × 2 + LightBuffer × 2 管理（CpuToGpu memory，descriptor 初始化写一次，每帧 memcpy）
 - [ ] Unlit pass 注册到 Render Graph（使用 depth attachment）
 - [ ] Pipeline 创建（使用 `DescriptorManager::get_global_set_layouts()`）
 - [ ] Draw loop：遍历物体，push constant 传 model matrix + material_index，draw call
