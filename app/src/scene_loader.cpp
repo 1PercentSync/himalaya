@@ -245,20 +245,17 @@ namespace himalaya::app {
                      gltf.textures.size(),
                      gltf.nodes.size());
 
-        // Per-primitive metadata tracked during mesh loading for node traversal.
-        // Parallel to meshes_: [i] corresponds to meshes_[i].
-        std::vector<uint32_t> primitive_material_ids;
-        std::vector<framework::AABB> primitive_local_bounds;
+        const auto mesh_data = load_meshes(gltf);
+        load_materials(gltf, base_dir.string(), material_system, default_textures, default_sampler);
+        build_mesh_instances(gltf, mesh_data);
+    }
 
-        // Maps glTF mesh index to the starting index of its primitives in meshes_.
-        // Has gltf.meshes.size() + 1 entries (last entry = sentinel = total count).
-        // Primitive range for glTF mesh m: [mesh_prim_offsets[m], mesh_prim_offsets[m+1])
-        std::vector<uint32_t> mesh_prim_offsets;
-        mesh_prim_offsets.reserve(gltf.meshes.size() + 1);
+    SceneLoader::MeshLoadResult SceneLoader::load_meshes(const fastgltf::Asset &gltf) {
+        MeshLoadResult result;
+        result.prim_offsets.reserve(gltf.meshes.size() + 1);
 
-        // --- Load meshes (one Mesh per glTF primitive) ---
         for (const auto &gltf_mesh: gltf.meshes) {
-            mesh_prim_offsets.push_back(static_cast<uint32_t>(meshes_.size()));
+            result.prim_offsets.push_back(static_cast<uint32_t>(meshes_.size()));
             for (const auto &primitive: gltf_mesh.primitives) {
                 // Position (required by glTF spec)
                 const auto pos_it = primitive.findAttribute("POSITION");
@@ -362,19 +359,19 @@ namespace himalaya::app {
                 const auto vb_size = vertices.size() * sizeof(framework::Vertex);
                 const auto ib_size = indices.size() * sizeof(uint32_t);
 
-                auto vb = resource_manager.create_buffer({
+                auto vb = resource_manager_->create_buffer({
                     .size = vb_size,
                     .usage = rhi::BufferUsage::VertexBuffer | rhi::BufferUsage::TransferDst,
                     .memory = rhi::MemoryUsage::GpuOnly,
                 });
-                auto ib = resource_manager.create_buffer({
+                auto ib = resource_manager_->create_buffer({
                     .size = ib_size,
                     .usage = rhi::BufferUsage::IndexBuffer | rhi::BufferUsage::TransferDst,
                     .memory = rhi::MemoryUsage::GpuOnly,
                 });
 
-                resource_manager.upload_buffer(vb, vertices.data(), vb_size);
-                resource_manager.upload_buffer(ib, indices.data(), ib_size);
+                resource_manager_->upload_buffer(vb, vertices.data(), vb_size);
+                resource_manager_->upload_buffer(ib, indices.data(), ib_size);
 
                 meshes_.push_back({
                     .vertex_buffer = vb,
@@ -392,24 +389,30 @@ namespace himalaya::app {
                                   std::string(gltf_mesh.name));
                     std::abort();
                 }
-                primitive_material_ids.push_back(static_cast<uint32_t>(*primitive.materialIndex));
-                primitive_local_bounds.push_back({local_min, local_max});
+                result.material_ids.push_back(static_cast<uint32_t>(*primitive.materialIndex));
+                result.local_bounds.push_back({local_min, local_max});
             }
         }
 
         // Sentinel for the last mesh's primitive range
-        mesh_prim_offsets.push_back(static_cast<uint32_t>(meshes_.size()));
+        result.prim_offsets.push_back(static_cast<uint32_t>(meshes_.size()));
 
         spdlog::info("Loaded {} mesh primitives", meshes_.size());
+        return result;
+    }
 
-        // --- Load samplers (one per glTF sampler, naturally deduplicated) ---
+    void SceneLoader::load_materials(const fastgltf::Asset &gltf,
+                                     const std::string &base_dir,
+                                     framework::MaterialSystem &material_system,
+                                     const framework::DefaultTextures &default_textures,
+                                     const rhi::SamplerHandle default_sampler) {
+        // Load samplers (one per glTF sampler, naturally deduplicated by index)
         for (const auto &s: gltf.samplers) {
-            samplers_.push_back(resource_manager.create_sampler(convert_gltf_sampler(s)));
+            samplers_.push_back(resource_manager_->create_sampler(convert_gltf_sampler(s)));
         }
 
         spdlog::info("Created {} samplers", samplers_.size());
 
-        // --- Load materials ---
         // Texture cache: (gltf_texture_index, role) → bindless index.
         // Avoids creating duplicate GPU textures when multiple materials
         // reference the same glTF texture with the same role.
@@ -429,8 +432,11 @@ namespace himalaya::app {
             const auto sampler = tex.samplerIndex.has_value() ? samplers_[*tex.samplerIndex] : default_sampler;
 
             const auto pixels = decode_gltf_image(gltf, gltf.images[*tex.imageIndex], base_dir);
-            const auto [image, bindless_index] = framework::create_texture(
-                resource_manager, descriptor_manager, pixels, role, sampler);
+            const auto [image, bindless_index] = framework::create_texture(*resource_manager_,
+                                                                           *descriptor_manager_,
+                                                                           pixels,
+                                                                           role,
+                                                                           sampler);
 
             images_.push_back(image);
             bindless_indices_.push_back(bindless_index);
@@ -512,37 +518,39 @@ namespace himalaya::app {
 
         spdlog::info("Loaded {} materials, {} GPU textures",
                      material_instances_.size(), images_.size());
+    }
 
-        // --- Traverse nodes: compute world transforms, create MeshInstances ---
-        if (!gltf.scenes.empty()) {
-            const auto scene_index = gltf.defaultScene.value_or(0);
-
-            fastgltf::iterateSceneNodes(
-                gltf, scene_index, fastgltf::math::fmat4x4(1.0f),
-                [&](fastgltf::Node &node, const fastgltf::math::fmat4x4 &world_transform) {
-                    if (!node.meshIndex.has_value()) return;
-
-                    const auto gltf_mesh_idx = *node.meshIndex;
-                    const auto world_mat = convert_matrix(world_transform);
-                    const uint32_t prim_start = mesh_prim_offsets[gltf_mesh_idx];
-                    const uint32_t prim_end = mesh_prim_offsets[gltf_mesh_idx + 1];
-
-                    for (uint32_t i = prim_start; i < prim_end; ++i) {
-                        mesh_instances_.push_back({
-                            .mesh_id = i,
-                            .material_id = primitive_material_ids[i],
-                            .transform = world_mat,
-                            .prev_transform = world_mat,
-                            .world_bounds = transform_aabb(primitive_local_bounds[i], world_mat),
-                        });
-                    }
-                });
-
-            spdlog::info("Created {} mesh instances from {} nodes",
-                         mesh_instances_.size(), gltf.nodes.size());
-        } else {
+    void SceneLoader::build_mesh_instances(fastgltf::Asset &gltf, const MeshLoadResult &mesh_data) {
+        if (gltf.scenes.empty()) {
             spdlog::warn("No scenes in glTF file, no mesh instances created");
+            return;
         }
+
+        const auto scene_index = gltf.defaultScene.value_or(0);
+
+        fastgltf::iterateSceneNodes(
+            gltf, scene_index, fastgltf::math::fmat4x4(1.0f),
+            [&](fastgltf::Node &node, const fastgltf::math::fmat4x4 &world_transform) {
+                if (!node.meshIndex.has_value()) return;
+
+                const auto gltf_mesh_idx = *node.meshIndex;
+                const auto world_mat = convert_matrix(world_transform);
+                const uint32_t prim_start = mesh_data.prim_offsets[gltf_mesh_idx];
+                const uint32_t prim_end = mesh_data.prim_offsets[gltf_mesh_idx + 1];
+
+                for (uint32_t i = prim_start; i < prim_end; ++i) {
+                    mesh_instances_.push_back({
+                        .mesh_id = i,
+                        .material_id = mesh_data.material_ids[i],
+                        .transform = world_mat,
+                        .prev_transform = world_mat,
+                        .world_bounds = transform_aabb(mesh_data.local_bounds[i], world_mat),
+                    });
+                }
+            });
+
+        spdlog::info("Created {} mesh instances from {} nodes",
+                     mesh_instances_.size(), gltf.nodes.size());
     }
 
     void SceneLoader::destroy() {

@@ -15,6 +15,10 @@
 #include <string>
 #include <vector>
 
+namespace fastgltf {
+    struct Asset;
+}
+
 namespace himalaya::rhi {
     class DescriptorManager;
     class ResourceManager;
@@ -112,5 +116,33 @@ namespace himalaya::app {
 
         /** @brief Sampler handles created from glTF sampler definitions. */
         std::vector<rhi::SamplerHandle> samplers_;
+
+        // ---- Private loading stages ----
+
+        /** @brief Intermediate data from mesh loading, consumed by build_mesh_instances(). */
+        struct MeshLoadResult {
+            /** @brief glTF mesh index → starting index in meshes_. Last entry = sentinel. */
+            std::vector<uint32_t> prim_offsets;
+
+            /** @brief Per-primitive material index (parallel to meshes_). */
+            std::vector<uint32_t> material_ids;
+
+            /** @brief Per-primitive local-space AABB (parallel to meshes_). */
+            std::vector<framework::AABB> local_bounds;
+        };
+
+        /** @brief Loads all mesh primitives: vertex/index buffers, local AABBs, material IDs. */
+        MeshLoadResult load_meshes(const fastgltf::Asset &gltf);
+
+        /** @brief Loads samplers, textures, and materials from the glTF asset. */
+        void load_materials(const fastgltf::Asset &gltf,
+                            const std::string &base_dir,
+                            framework::MaterialSystem &material_system,
+                            const framework::DefaultTextures &default_textures,
+                            rhi::SamplerHandle default_sampler);
+
+        /** @brief Traverses the scene graph and creates MeshInstances with world transforms. */
+        void build_mesh_instances(fastgltf::Asset &gltf,
+                                  const MeshLoadResult &mesh_data);
     };
 } // namespace himalaya::app
