@@ -87,18 +87,20 @@ app/
 ├── CMakeLists.txt
 ├── include/himalaya/app/
 │   ├── application.h            # 主循环、窗口管理
+│   ├── renderer.h               # 渲染子系统（RG 编排、pass 管理、GPU 数据填充）
 │   ├── scene_loader.h           # glTF 加载 → 渲染列表
 │   ├── camera_controller.h      # 自由漫游相机控制
 │   └── debug_ui.h               # ImGui 面板、各 Pass 参数调整
 └── src/
     ├── main.cpp                 # 入口
     ├── application.cpp
+    ├── renderer.cpp
     ├── scene_loader.cpp
     ├── camera_controller.cpp
     └── debug_ui.cpp
 ```
 
-App 层拥有 GLFW 窗口，传 `GLFWwindow*` 给 RHI 创建 Surface。
+App 层拥有 GLFW 窗口，传 `GLFWwindow*` 给 RHI 创建 Surface。Application 持有 RHI 基础设施和 App 模块，Renderer 持有渲染子系统，详见 `m1-design-decisions.md`「App 层设计」。
 
 ---
 
@@ -429,35 +431,96 @@ RG `execute()` 自动为每个 pass 调用 `begin_debug_label(pass_name)` / `end
 
 ---
 
-### Layer 2 — Pass 接口（passes/pass_interface.h）
+### Pass 类约定
 
 > 阶段三引入。阶段二直接在 RG lambda 回调中编写渲染逻辑。
+> 阶段三使用具体类（非虚基类），Renderer 持有具体类型成员。设计决策见 `m1-design-decisions.md`「Pass 类设计」。
+
+每个 Pass 统一方法签名（非虚函数）：
 
 ```cpp
-class RenderPass {
+class ForwardPass {  // 具体类，无基类
 public:
-    virtual ~RenderPass() = default;
+    /// 一次性：创建 pipeline 等不依赖分辨率的资源
+    void setup(rhi::Context& ctx, rhi::ResourceManager& rm,
+               rhi::DescriptorManager& dm);
 
-    // 名字，用于 Render Graph 注册和调试
-    virtual std::string name() const = 0;
+    /// 创建/重建 resolution-dependent 资源（init 时在 setup 后调用，resize 时单独调用）
+    void on_resize(uint32_t width, uint32_t height);
 
-    // 初始化：创建 pipeline、固定资源等
-    // 调用一次，或资源变化时重新调用
-    virtual void setup(Context& context) = 0;
+    /// 每帧：向 RG 注册资源使用声明 + execute lambda
+    void register_resources(RenderGraph& rg, const FrameResources& fr);
 
-    // 注册到 Render Graph：声明输入输出资源
-    virtual void register_resources(RenderGraph& graph) = 0;
-
-    // 每帧执行：录制 command buffer
-    virtual void execute(CommandBuffer& cmd, RenderGraph& graph) = 0;
-
-    // 是否启用（支持运行时开关）
-    virtual bool enabled() const { return true; }
-
-    // 窗口大小变化时重建依赖分辨率的资源
-    virtual void on_resize(uint32_t width, uint32_t height) {}
+    /// 销毁 pipeline + 私有资源
+    void destroy();
 };
 ```
+
+#### FrameResources
+
+Renderer 每帧填充，传给各 pass 的 `register_resources()`。持有当前帧所有 imported / managed 的 `RGResourceId`：
+
+```cpp
+/// 当前帧的 RG 资源 ID 集合，由 Renderer 填充，各 pass 按需取用。
+/// 随阶段推进扩展（Step 4 加 msaa_color/hdr_color/depth，Step 5 加 msaa_normal/normal）。
+struct FrameResources {
+    RGResourceId swapchain;
+    RGResourceId depth;
+    // 阶段三后续 Step 扩展...
+};
+```
+
+---
+
+### Layer 3 — Renderer 接口（app/renderer.h）
+
+> 阶段三引入。Application 与 Renderer 的所有权划分见 `m1-design-decisions.md`「App 层设计」。
+
+#### RenderInput
+
+Application 每帧传递给 Renderer 的语义数据（不含 GPU 布局知识）：
+
+```cpp
+struct RenderInput {
+    uint32_t image_index;
+    uint32_t frame_index;
+    const framework::Camera& camera;
+    std::span<const framework::DirectionalLight> lights;
+    const framework::CullResult& cull_result;
+    std::span<const framework::MeshData> meshes;
+    std::span<const framework::MaterialInstance> materials;
+    float ambient_intensity;
+    float exposure;
+};
+```
+
+#### Renderer
+
+```cpp
+class Renderer {
+public:
+    void init(rhi::Context& ctx, rhi::Swapchain& swapchain,
+              rhi::ResourceManager& rm, rhi::DescriptorManager& dm,
+              framework::ImGuiBackend& imgui);
+
+    /// 填充 GPU buffers（UBO/SSBO），构建 RG，执行所有 pass。
+    void render(const rhi::CommandBuffer& cmd, const RenderInput& input);
+
+    /// Resize 两阶段：在 swapchain_.recreate() 之前调用。
+    void on_swapchain_invalidated();
+    /// Resize 两阶段：在 swapchain_.recreate() 之后调用。
+    void on_swapchain_recreated();
+
+    void destroy();
+
+    // --- 场景加载用 accessor ---
+    rhi::SamplerHandle default_sampler() const;
+    const framework::DefaultTextures& default_textures() const;
+    framework::MaterialSystem& material_system();
+};
+```
+
+命名空间：`himalaya::app`。文件位置：`app/include/himalaya/app/renderer.h` + `app/src/renderer.cpp`。
 
 ---
 

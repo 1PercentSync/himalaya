@@ -8,12 +8,12 @@
 
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
-- **Phase**：阶段二 — 基础渲染管线（加载 glTF 场景、基础 Lit shader 渲染、相机漫游）
-- **进度**：Step 7 完成（9/9），阶段二全部完成
+- **Phase**：阶段三 — PBR 光照基础（Cook-Torrance + IBL + MSAA + HDR）
+- **进度**：Step 1 待开始
 
 ### 下一个任务
 
-阶段二已全部完成。下一步：用户验收 Step 7 全部功能，然后进入阶段三或 M1 收尾。
+阶段三 Step 1：Renderer 提取（纯重构，零功能变化）。
 
 ---
 
@@ -24,9 +24,9 @@ CLAUDE.md 已自动加载，以下为额外必读：
 | 文档 | 说明 |
 |------|------|
 | `docs/milestone-1/milestone-1.md` | M1 范围、预期效果、已知局限性 |
-| `docs/current-phase.md` | 当前阶段实现步骤、文件清单、技术笔记 |
+| `docs/current-phase.md` | 当前阶段实现步骤（阶段三） |
 | `docs/milestone-1/m1-interfaces.md` | M1 接口与目标结构：文件结构、关键接口与数据结构 |
-| `tasks/m1-phase2.md` | 阶段二任务清单（复选框进度跟踪） |
+| `tasks/m1-phase3.md` | 阶段三任务清单（复选框进度跟踪） |
 
 ## 按需文档
 
@@ -51,6 +51,8 @@ CLAUDE.md 已自动加载，以下为额外必读：
 |------|------|
 | `docs/archive/conversation-initial-design.md` | 初始设计的完整对话记录 |
 | `docs/archive/m1-phase1-plan.md` | M1 阶段一实现步骤（已完成） |
+| `docs/archive/m1-phase2-plan.md` | M1 阶段二实现步骤（已完成） |
+| `docs/archive/m1-phase2-tasks.md` | M1 阶段二任务清单（已完成） |
 
 ---
 
