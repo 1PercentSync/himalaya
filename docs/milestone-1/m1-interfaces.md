@@ -396,10 +396,10 @@ enum class RGSizeMode : uint8_t { Relative, Absolute };
 
 struct RGImageDesc {
     RGSizeMode size_mode;
-    // Relative mode（render target 等屏幕尺寸相关资源）
+    // Relative mode（render target 等屏幕尺寸相关资源；阶段三全部、M2 半分辨率 SSAO/SSR）
     float width_scale;
     float height_scale;
-    // Absolute mode（Shadow Map 等固定尺寸资源）
+    // Absolute mode（Shadow Map 等固定尺寸资源；阶段四 Shadow Map 固定 2048/4096）
     uint32_t width;
     uint32_t height;
     // Common
@@ -408,6 +408,7 @@ struct RGImageDesc {
     uint32_t sample_count = 1;
     uint32_t mip_levels = 1;
 };
+// 只有 `sample_count` 和 `mip_levels` 有默认值（1 始终合法），其余字段必须显式指定。
 
 // 持久 handle，跨帧稳定（初始化时获取，每帧通过 use_managed_image 转为 RGResourceId）
 struct RGManagedHandle { uint32_t index; };
