@@ -115,7 +115,9 @@ shaders/
 │   ├── normal.glsl              # TBN 构造、normal map 解码
 │   ├── shadow.glsl              # 阴影采样（CSM、PCF）
 │   └── bindings.glsl            # 全局绑定布局定义
-├── depth_prepass.vert/frag
+├── depth_prepass.vert           # 共享 VS（invariant gl_Position）
+├── depth_prepass.frag           # Opaque FS（无 discard）
+├── depth_prepass_masked.frag    # Mask FS（alpha test + discard）
 ├── forward.vert/frag
 ├── shadow.vert/frag
 ├── ssao.comp

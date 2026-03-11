@@ -788,6 +788,101 @@ ImGui 作为 debug overlay 直接渲染到 swapchain image（不经过 MSAA 或 
 
 ---
 
+## Depth + Normal PrePass
+
+### PrePass 范围
+
+**选择：Depth + Normal PrePass 一步到位**
+
+| 方案 | 说明 |
+|------|------|
+| A. 仅 Depth PrePass | 只输出深度，不输出法线 |
+| B. Depth + Normal PrePass | 同时输出深度和法线 |
+| C. 阶段三做 A，阶段五时升级为 B | 延迟法线输出 |
+
+**选择 B。** 阶段五（SSAO / Contact Shadows）和 M2（SSR / SSGI）都依赖 resolved normal buffer。阶段三直接输出法线，pipeline 和 shader 无需后续修改。Normal buffer 格式见「Normal Buffer 格式与编码」（R10G10B10A2_UNORM, world-space）。
+
+### Alpha Mask 物体处理
+
+**选择：两批绘制（Opaque pipeline + Mask pipeline）**
+
+| 方案 | 说明 |
+|------|------|
+| A. PrePass 跳过 Alpha Mask 物体 | Mask 物体只在 forward pass 中画 |
+| B. PrePass 两批绘制 | 同一 RG pass 内先画 Opaque（无 discard），再画 Mask（有 discard），两个 pipeline |
+| C. 统一用带 discard 的 shader | 所有物体都走含 discard 的 fragment shader |
+
+**选择 B。** 核心理由：`discard` 对 GPU Early-Z 的影响。
+
+GPU Early-Z 在 fragment shader 执行之前做深度测试。`discard` 关键字破坏此优化——即使 Opaque 物体永远不走 discard 分支，只要 shader 二进制中包含 `discard` 指令，GPU/driver 就可能对该 pipeline 的所有调用禁用 Early-Z（编译期决定，非运行时分支）。因此 Opaque 和 Mask 必须使用不同 pipeline + 不同 shader。
+
+排除方案 A：PrePass 跳过 Mask 物体导致 Forward Pass 无法对其使用 EQUAL depth test、阶段五 SSAO 在 Mask 区域读到错误深度、Normal buffer 缺少 Mask 物体法线。
+
+两个 Pipeline 对比：
+
+| | Opaque Pipeline | Mask Pipeline |
+|---|---|---|
+| VS 输出 | position, normal, tangent, uv0 | 同左 |
+| FS 采样 | normal_tex（无条件，default = flat normal） | normal_tex + base_color_tex（alpha test） |
+| FS 操作 | TBN → encode world normal → 写 color attachment | alpha test → discard → TBN → encode → 写 color |
+| `discard` | **无** | **有** |
+| Early-Z | **保证** | **可能被禁用** |
+
+绘制顺序（同一 RG pass 内）：先画 Opaque（填充 depth buffer），再画 Mask（利用已有深度拒绝被遮挡 fragment）。
+
+Shader 文件：
+
+```
+shaders/
+├── depth_prepass.vert          # 共享（输出 position + normal/tangent + uv0）
+├── depth_prepass.frag          # Opaque: 采样 normal_tex → TBN → encode world normal
+└── depth_prepass_masked.frag   # Mask: alpha test + discard → 采样 normal_tex → TBN → encode
+```
+
+VS 共享——Opaque FS 也需要 uv0（用于 normal_tex 采样）。两个 FS 的差异仅为 alpha test 几行代码。
+
+### Forward Pass 深度配合
+
+**选择：EQUAL + depth write OFF + `invariant gl_Position`**
+
+| 方案 | 说明 |
+|------|------|
+| A. EQUAL + depth write OFF + `invariant gl_Position` | 经典 Z-PrePass 配合，确定性 zero overdraw |
+| B. GREATER_OR_EQUAL + depth write OFF | 容忍微小浮点差异，近零 overdraw |
+
+**选择 A。** 工作原理：
+
+```
+PrePass:  depth compare GREATER, write ON  → 写入最近表面深度 D
+Forward:  depth compare EQUAL,   write OFF → fragment depth == D ? 着色 : 拒绝
+```
+
+确定性 zero overdraw：只有恰好位于最近表面上的 fragment 通过深度测试并执行 PBR 着色。
+
+`invariant gl_Position` 保证 bit-identical 深度——GLSL `invariant` 限定符保证不同 shader program 中，相同表达式 + 相同输入 → bit-identical 输出：
+
+```glsl
+// depth_prepass.vert & forward.vert
+invariant gl_Position;
+gl_Position = global.view_projection * push.model * vec4(in_position, 1.0);
+```
+
+MSAA 兼容：`invariant` 保证两个 pass 产生相同的 sample coverage 和 per-sample depth。前提是两个 pipeline 的光栅化配置相同（相同 sample count、相同 cull mode），在本项目中自然满足。
+
+排除方案 B：GREATER_OR_EQUAL 只在一个方向容忍误差，另一方向仍有孔洞风险。`invariant` 从根本上消除浮点差异，EQUAL 是正确且完整的方案。性能代价：`invariant` 可能轻微限制编译器优化，实践中性能影响不可测量。
+
+---
+
+## Forward Pass 升级
+
+**选择：原地升级 forward.frag（Lambert → Cook-Torrance + IBL）**
+
+forward.vert 保持不变（输出 world position / normal / uv0 / tangent）。forward.frag 光照计算从 Lambert 替换为 Cook-Torrance（GGX / Smith / Schlick）+ IBL，通过 `#include` 引入 `common/brdf.glsl` + `common/lighting.glsl`。同时消费 GPUMaterialData 全部 5 个纹理字段（见「材质变体策略」章节）。
+
+不保留 Lambert 切换——如需诊断 PBR 问题，debug UI 可显示各光照分量（diffuse only、specular only、IBL only 等），比回退 Lambert 更有用。
+
+---
+
 ## IBL 管线
 
 ### 环境贴图输入
