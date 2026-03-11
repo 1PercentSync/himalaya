@@ -24,3 +24,17 @@
 - [ ] `update_managed_desc(handle, new_desc)` — 更新描述符（MSAA 切换用），desc 变化时重建 backing image
 - [ ] 迁移现有 depth buffer 从手动管理到 managed 资源，删除 Renderer 中的手动 depth 创建/销毁代码
 - [ ] 验证：现有渲染正常工作，depth buffer 由 RG managed 管理，resize 时自动重建
+
+## Step 4：MSAA + HDR + Tonemapping
+
+- [ ] 创建 MSAA color buffer（R16G16B16A16F，4x，managed 资源）
+- [ ] 创建 MSAA depth buffer（D32Sfloat，4x，managed 资源；替代 Step 2 迁移的 1x depth）
+- [ ] 创建 resolved HDR color buffer（R16G16B16A16F，1x，managed 资源）
+- [ ] 创建 resolved depth buffer（D32Sfloat，1x，managed 资源）
+- [ ] Forward pass 改为渲染到 MSAA color + MSAA depth，通过 Dynamic Rendering 的 `VkRenderingAttachmentInfo` 配置 color resolve（`AVERAGE`）和 depth resolve（`MAX_BIT`）到 resolved buffer
+- [ ] Forward pass RG 资源声明更新（4 个资源：msaa_color WRITE、msaa_depth READ_WRITE、hdr_color WRITE、depth WRITE）
+- [ ] Tonemapping shader（`shaders/tonemapping.frag`：fullscreen fragment，采样 HDR texture → exposure 调整 → ACES 拟合 → 输出 linear [0,1]，硬件自动 linear→sRGB）+ `shaders/fullscreen.vert`（fullscreen triangle，无顶点输入）
+- [ ] Tonemapping pass 类（setup 创建 pipeline、register_resources、destroy）
+- [ ] Tonemapping pass 注册到 RG（读 hdr_color，写 swapchain image）
+- [ ] MSAA 运行时切换：Renderer::handle_msaa_change()（update_managed_desc + pipeline 重建）+ DebugUI MSAA 选择控件（1x/2x/4x/8x）
+- [ ] 验证：场景以 MSAA + HDR + ACES tonemapping 渲染，高光不再截断为纯白，DebugUI 可切换 MSAA 采样数

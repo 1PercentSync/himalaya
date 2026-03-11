@@ -5,129 +5,6 @@
 
 ---
 
-## 三、MSAA 决策
-
-### 3.1 采样数配置 [已决定]
-
-| 方案 | 说明 |
-|------|------|
-| A. 固定 4x | 最常见的平衡点 |
-| B. 可配置（2x/4x/8x） | 运行时切换，需重建所有 MSAA 资源和 pipeline |
-| C. 阶段三固定 4x，后续加配置 | 先简单后灵活 |
-
-**建议倾向**：C。4x 是甜蜜点。运行时切换 MSAA 需要重建 pipeline（sample count 烘焙在 pipeline 中，除非 Vulkan 1.4 有相关 dynamic state——需要确认）和所有 MSAA render target，可以但阶段三不必做。
-
-#### 决定：方案 B — 运行时可配置（1x / 2x / 4x / 8x），默认 4x
-
-可选级别包含 1x（无 MSAA），用于调试和性能基准对比。1x 时 forward pass 不配置 resolve，只声明 2 个资源而非 4 个。
-
-切换 MSAA 时需要重建：
-
-| 需重建 | 原因 |
-|--------|------|
-| 所有 MSAA pipeline | `rasterizationSamples` 烘焙在 pipeline 中 |
-| 所有 MSAA managed 资源 | msaa_color、msaa_depth 的 sample_count 变了 |
-
-不需要重建：descriptor layout、resolved target、非 MSAA pipeline。
-
-不使用 `VK_EXT_extended_dynamic_state3`（动态 rasterization samples）。该扩展非 Vulkan 1.4 核心，MSAA 切换是低频操作，重建 pipeline 开销可忽略。
-
-**Managed 资源 desc 更新**：RG 新增 `update_managed_desc(handle, new_desc)` API。RG 内部比较 desc，变化时销毁旧 backing image 并创建新的。Handle 保持不变，Renderer 成员变量无需更新。
-
-**重建触发流程**：与 resize/vsync 统一模式。
-
-```cpp
-// Application 检测 DebugUI 的 MSAA 变更
-if (actions.msaa_changed) {
-    renderer_.handle_msaa_change(actions.new_sample_count);
-}
-
-// Renderer 处理 MSAA 变更
-void Renderer::handle_msaa_change(uint32_t new_sample_count) {
-    vkQueueWaitIdle(...);
-    // 1. 更新 MSAA managed 资源 desc
-    render_graph_.update_managed_desc(managed_msaa_color_, new_msaa_color_desc);
-    render_graph_.update_managed_desc(managed_msaa_depth_, new_msaa_depth_desc);
-    // 2. 重建所有 MSAA pipeline
-    rebuild_pipelines(new_sample_count);
-}
-```
-
-### 3.2 MSAA 与 ImGui / Tonemapping [已决定]
-
-阶段二 ImGui 直接渲染到 swapchain image。阶段三引入 MSAA 后：
-
-| 方案 | 说明 |
-|------|------|
-| A. ImGui 渲染到 resolved 后的 LDR buffer | 正常路径：MSAA forward → resolve → 后处理 → ImGui 叠加到最终 buffer |
-| B. ImGui 直接渲染到 swapchain image | 与阶段二一致，RG 最后一个 pass |
-
-**建议倾向**：B，与阶段二保持一致。ImGui 作为 debug overlay 不需要 MSAA，直接画到 swapchain image 上。
-
-**引出的重要子问题**：阶段三引入 HDR color buffer 后，渲染链变为 MSAA HDR → resolve → (future: post-processing) → copy/blit to swapchain → ImGui。阶段三还没有后处理链（阶段八才有），那 HDR color buffer resolve 之后如何到 swapchain？
-
-| 方案 | 说明 |
-|------|------|
-| A. 临时 blit/copy pass | resolve 后直接 blit 到 swapchain（可能涉及格式转换 HDR→SDR） |
-| B. 简易 tonemapping pass | 即使阶段三不做完整后处理，也加一个最简 tonemapping（如 Reinhard 一行代码）把 HDR 映射到 SDR |
-| C. 先不用 HDR buffer | 阶段三 forward pass 直接输出到 LDR（swapchain format） |
-
-**建议倾向**：B。PBR 光照输出的亮度范围是 HDR 的（镜面高光轻松超过 1.0），直接截断到 [0,1] 会丢失大量信息，高光全部 clamp 为纯白，效果很差。一个 `color / (color + 1.0)` 的 Reinhard tonemapping 只需几行 compute shader，但能让画面可看。阶段八替换为 ACES。
-
-#### 决定
-
-**ImGui**：方案 B — 渲染到 swapchain image，与阶段二一致。渲染到中间 LDR buffer 无实际优势。
-
-**Tonemapping**：阶段三实现 ACES tonemapping pass（非临时 Reinhard，直接上 ACES），作为 fullscreen fragment shader。不使用 compute shader 是因为 SRGB swapchain format 通常不支持 `VK_IMAGE_USAGE_STORAGE_BIT`。
-
-阶段三完整帧流程：
-
-```
-MSAA HDR Color (forward pass 渲染)
-    ↓ Dynamic Rendering resolve (AVERAGE)
-HDR Color (resolved, R16G16B16A16F)
-    ↓ texture() 采样
-Tonemapping pass (fullscreen fragment): exposure → ACES → output linear [0,1]
-    ↓ 硬件自动 linear → sRGB (swapchain format)
-Swapchain Image (B8G8R8A8_SRGB)
-    ↓
-ImGui pass
-    ↓
-Present
-```
-
-### 3.3 Depth Resolve 模式 [已决定]
-
-SSAO 和 Contact Shadows（阶段五）需要 resolved depth。标准 resolve 对 depth 做平均是错误的。
-
-| 方案 | 说明 |
-|------|------|
-| A. `VK_RESOLVE_MODE_MIN_BIT` | Vulkan 1.2+ 核心支持 depth resolve mode。Reverse-Z 下 MIN = 最远深度（保守） |
-| B. `VK_RESOLVE_MODE_MAX_BIT` | Reverse-Z 下 MAX = 最近深度 |
-| C. `VK_RESOLVE_MODE_SAMPLE_ZERO_BIT` | 取 sample 0，最简单 |
-| D. Custom resolve shader | 完全自定义 |
-
-**建议倾向**：A（MIN）。Reverse-Z 下，near=1 far=0，MIN 取最小值即最远的深度。对 SSAO 来说使用最远深度是保守的（宁可少遮蔽不要错误遮蔽）。这是 Vulkan 1.2 核心功能，无需扩展。
-
-但这个选择需要确认是否在所有 screen space effect 场景下都合适。用 MAX（最近深度）也有道理——Contact Shadows ray march 从最近表面出发更准确。可以阶段五再根据实际效果决定。
-
-#### 决定：方案 B — `VK_RESOLVE_MODE_MAX_BIT`（前景深度）
-
-Reverse-Z 下 MAX = 最大值 = 最近表面（前景）。经分析 M1 和 M2 所有 resolved depth 消费者：
-
-| 效果 | 阶段 | 偏好 | 原因 |
-|------|------|------|------|
-| SSAO | M1 五 | MAX 更好 | 重建位置对应可见前景表面，range check 自然处理深度不连续。MIN 反而重建"幽灵"背景位置 |
-| Contact Shadows | M1 五 | MAX | ray march 起点需要准确的前景表面位置 |
-| DOF | M1 八 | MAX | 防止背景模糊渗入前景轮廓 |
-| SSR / SSGI | M2 | MAX | ray march 起点需要准确前景表面位置 |
-| Camera Motion Blur | M2 | MAX | 防止背景速度渗入前景 |
-| God Rays | M2 | MIN | 遮挡检测用最远深度更保守 |
-
-7 个消费者中 6 个偏好 MAX。唯一偏好 MIN 的 God Rays 用 MAX 的瑕疵不可感知（God Rays 是低频柔和效果，radial blur 大量采样稀释边缘像素的深度偏差）。
-
----
-
 ## 四、资源格式决策
 
 ### 4.1 HDR Color Buffer 格式 [已决定]
@@ -810,19 +687,7 @@ Step 6: IBL Pipeline ─────────────→ Step 7: PBR Shad
 
 ### Step 4：MSAA + HDR + Tonemapping
 
-建立完整的 MSAA → HDR → Tonemapping 渲染管线。
-
-- [ ] 创建 MSAA color buffer（R16G16B16A16F，4x，managed 资源）
-- [ ] 创建 MSAA depth buffer（D32Sfloat，4x，managed 资源；替代 Step 2 迁移的 1x depth）
-- [ ] 创建 resolved HDR color buffer（R16G16B16A16F，1x，managed 资源）
-- [ ] 创建 resolved depth buffer（D32Sfloat，1x，managed 资源）
-- [ ] Forward pass 改为渲染到 MSAA color + MSAA depth，通过 Dynamic Rendering 的 `VkRenderingAttachmentInfo` 配置 color resolve（`AVERAGE`）和 depth resolve（`MAX_BIT`）到 resolved buffer
-- [ ] Forward pass RG 资源声明更新（4 个资源：msaa_color WRITE、msaa_depth READ_WRITE、hdr_color WRITE、depth WRITE）
-- [ ] Tonemapping shader（`shaders/tonemapping.frag`：fullscreen fragment，采样 HDR texture → exposure 调整 → ACES 拟合 → 输出 linear [0,1]，硬件自动 linear→sRGB）+ `shaders/fullscreen.vert`（fullscreen triangle，无顶点输入）
-- [ ] Tonemapping pass 类（setup 创建 pipeline、register_resources、destroy）
-- [ ] Tonemapping pass 注册到 RG（读 hdr_color，写 swapchain image）
-- [ ] MSAA 运行时切换：Renderer::handle_msaa_change()（update_managed_desc + pipeline 重建）+ DebugUI MSAA 选择控件（1x/2x/4x/8x）
-- [ ] 验证：场景以 MSAA + HDR + ACES tonemapping 渲染，高光不再截断为纯白，DebugUI 可切换 MSAA 采样数
+> 已迁移到 `docs/current-phase.md` 和 `tasks/m1-phase3.md`，设计决策见 `m1-design-decisions.md`「MSAA 配置策略」+「Tonemapping」+「Depth Resolve 模式」。
 
 ---
 
@@ -881,9 +746,7 @@ Step 6: IBL Pipeline ─────────────→ Step 7: PBR Shad
 | 主题 | 说明 |
 |------|------|
 | DebugUI 跟随 Step | 每个 Step 涉及的 DebugUI 变更跟随该 Step：MSAA 切换在 Step 4，渲染模式在 Step 7 |
-| Tonemapping 不用 compute | SRGB swapchain format 通常不支持 `VK_IMAGE_USAGE_STORAGE_BIT`，用 fullscreen fragment shader |
 | PrePass 在 MSAA 之后 | PrePass 直接写入 MSAA depth/normal，不需要经历 1x→4x 的中间迁移状态 |
 | IBL 不拆 Step | 4 个 compute shader 共享相同模式（immediate scope + dispatch），验证点统一，不拆 |
-| fullscreen triangle | Tonemapping 等全屏 pass 使用 hardcoded fullscreen triangle（vertex shader 生成，无顶点输入），比全屏 quad 少一个三角形 |
 | FrameResources | Step 1 定义，随 Step 推进扩展（Step 4 加 msaa_color/hdr_color/depth，Step 5 加 msaa_normal/normal） |
 | Pass 类约定 | 所有 pass 类统一方法签名：setup / on_resize / register_resources(RG&, FrameResources&) / destroy，但无虚基类 |

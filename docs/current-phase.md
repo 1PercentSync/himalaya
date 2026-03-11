@@ -77,6 +77,42 @@ render_graph_.destroy_managed_image(managed_hdr_);
 
 ---
 
+### Step 4：MSAA + HDR + Tonemapping
+
+- 建立完整的 MSAA → HDR → Tonemapping 渲染管线
+- 创建 MSAA 和 resolved 的 managed 资源
+- 实现 ACES tonemapping pass（fullscreen fragment shader）
+- 实现 MSAA 运行时切换（DebugUI 控件 + pipeline/资源重建）
+- **验证**：MSAA 渲染 + HDR tonemapped 输出正确，高光不截断，DebugUI 可切换采样数
+
+#### 阶段三帧流程
+
+```
+MSAA HDR Color (forward pass 渲染, R16G16B16A16F, 4x)
+    ↓ Dynamic Rendering resolve (AVERAGE)
+HDR Color (resolved, R16G16B16A16F, 1x)
+    ↓ texture() 采样
+Tonemapping pass (fullscreen fragment): exposure → ACES → output linear [0,1]
+    ↓ 硬件自动 linear → sRGB (swapchain format)
+Swapchain Image (B8G8R8A8_SRGB)
+    ↓
+ImGui pass
+    ↓
+Present
+```
+
+#### 设计要点
+
+MSAA 配置策略（运行时可切换 1x/2x/4x/8x）和 Tonemapping 设计见 `milestone-1/m1-design-decisions.md`「MSAA 配置策略」+「Tonemapping」。Depth resolve 模式（MAX_BIT — 前景深度）见「Depth Resolve 模式」。
+
+关键设计：
+- MSAA resolve 通过 Dynamic Rendering 原生完成（`VkRenderingAttachmentInfo` 配置 color AVERAGE + depth MAX_BIT），RG 零改动
+- Tonemapping 使用 fullscreen fragment shader（非 compute），因为 SRGB swapchain 不支持 `STORAGE_BIT`
+- MSAA 切换触发 `update_managed_desc()` + pipeline 重建，与 resize/vsync 统一模式
+- 1x MSAA 时 forward pass 不配置 resolve，只声明 2 个资源（无 MSAA target）
+
+---
+
 ## 阶段三文件清单（随 Step 推进更新）
 
 ```
@@ -87,6 +123,14 @@ app/
 └── src/
     ├── renderer.cpp             # [Step 1 新增]
     └── ...                      # application.cpp（Step 1 修改）
+shaders/
+├── fullscreen.vert              # [Step 4 新增] fullscreen triangle（无顶点输入）
+└── tonemapping.frag             # [Step 4 新增] ACES tonemapping
+passes/
+├── include/himalaya/passes/
+│   └── tonemapping_pass.h       # [Step 4 新增] Tonemapping pass 类
+└── src/
+    └── tonemapping_pass.cpp     # [Step 4 新增]
 ```
 
 ---
@@ -103,3 +147,6 @@ app/
 | Managed vs imported | Managed 资源由 RG 创建和缓存（depth、MSAA、HDR 等渲染中间产物），imported 资源由外部创建（swapchain image）。Managed 的 initial/final layout 由 RG 推导 |
 | MSAA resolve | 所有 resolve 通过 Dynamic Rendering 原生完成（RG 零改动），不引入独立 resolve pass |
 | Depth buffer 迁移 | Step 2 将阶段二手动管理的 depth buffer 迁移为 RG managed 资源 |
+| Tonemapping 策略 | ACES fullscreen fragment shader，SRGB swapchain 不支持 `STORAGE_BIT` |
+| Fullscreen triangle | Tonemapping 等全屏 pass 使用 hardcoded fullscreen triangle（vertex shader 生成，无顶点输入） |
+| FrameResources 扩展 | Step 4 扩展 FrameResources：msaa_color、msaa_depth、hdr_color、depth（resolved） |
