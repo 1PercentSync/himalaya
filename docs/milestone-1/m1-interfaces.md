@@ -109,8 +109,10 @@ App 层拥有 GLFW 窗口，传 `GLFWwindow*` 给 RHI 创建 Surface。Applicati
 ```
 shaders/
 ├── common/                      # 共享头文件 / 函数
-│   ├── brdf.glsl                # BRDF 函数（Lambert、GGX、Smith、Schlick）
-│   ├── lighting.glsl            # 光照计算（方向光、IBL）
+│   ├── constants.glsl           # 数学常量（PI、EPSILON 等）
+│   ├── brdf.glsl                # BRDF 函数（Lambert、GGX、Smith、Schlick，include constants）
+│   ├── lighting.glsl            # 光照计算（方向光、IBL，include constants + brdf）
+│   ├── normal.glsl              # TBN 构造、normal map 解码
 │   ├── shadow.glsl              # 阴影采样（CSM、PCF）
 │   └── bindings.glsl            # 全局绑定布局定义
 ├── depth_prepass.vert/frag
@@ -666,8 +668,9 @@ layout(set = 0, binding = 2) readonly buffer MaterialBuffer {
     GPUMaterialData materials[];
 };
 
-// Set 1: Bindless 纹理数组
+// Set 1: Bindless 数组
 layout(set = 1, binding = 0) uniform sampler2D textures[];
+layout(set = 1, binding = 1) uniform samplerCube cubemaps[];
 
 // Per-draw 数据
 layout(push_constant) uniform PushConstants {
@@ -690,5 +693,6 @@ Set 0 和 Set 1 均使用传统 Descriptor Set（非 Push Descriptors）。
 | 全局数据 | 每帧一次 | Set 0, Binding 0 (UBO) | 相机矩阵、屏幕尺寸、曝光值 |
 | 光源数据 | 每帧一次 | Set 0, Binding 1 (SSBO) | 方向光、点光源数组 |
 | 材质数据 | 加载时一次 | Set 0, Binding 2 (SSBO) | PBR 参数、纹理 index |
-| 纹理数据 | 加载时一次 | Set 1, Binding 0 (Bindless) | 所有纹理通过 index 访问 |
+| 2D 纹理数据 | 加载时一次 | Set 1, Binding 0 (Bindless) | 所有 2D 纹理通过 index 访问 |
+| Cubemap 数据 | 初始化 / 加载时 | Set 1, Binding 1 (Bindless) | IBL cubemap、Reflection Probes |
 | Per-draw 数据 | 每次绘制 | Push Constant | 模型矩阵、材质 index |

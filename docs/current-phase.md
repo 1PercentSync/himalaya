@@ -77,6 +77,25 @@ render_graph_.destroy_managed_image(managed_hdr_);
 
 ---
 
+### Step 3：Descriptor Layout + Compute Infra
+
+- 更新描述符布局（为 M1 全部阶段预留）
+- 新增 compute shader 基础设施（pipeline 创建 + dispatch）
+- **验证**：所有布局更新无 validation 报错，现有渲染正常；能创建并 dispatch 一个空 compute shader
+
+#### 设计要点
+
+描述符布局更新见 `milestone-1/m1-design-decisions.md`「Bindless 纹理数组」+「IBL 管线 — Descriptor Binding」。Compute 基础设施为阶段三 IBL 预计算提供前置支持。
+
+关键设计：
+- Set 1 新增 binding 1（`samplerCube[]`），与 binding 0（`sampler2D[]`）共用 `PARTIALLY_BOUND` + `UPDATE_AFTER_BIND`，去掉 `VARIABLE_DESCRIPTOR_COUNT`
+- Set 0 预留 binding 3（`sampler2DArrayShadow`）供阶段四 CSM 使用，当前不写入（`PARTIALLY_BOUND`）
+- `DescriptorManager` 新增 `register_cubemap()` / `unregister_cubemap()` API
+- `pipeline.h` 新增 `ComputePipelineDesc` + `create_compute_pipeline()`
+- `commands.h` 新增 `CommandBuffer::dispatch()`
+
+---
+
 ### Step 4：MSAA + HDR + Tonemapping
 
 - 建立完整的 MSAA → HDR → Tonemapping 渲染管线

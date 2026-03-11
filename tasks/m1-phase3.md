@@ -25,6 +25,18 @@
 - [ ] 迁移现有 depth buffer 从手动管理到 managed 资源，删除 Renderer 中的手动 depth 创建/销毁代码
 - [ ] 验证：现有渲染正常工作，depth buffer 由 RG managed 管理，resize 时自动重建
 
+## Step 3：Descriptor Layout + Compute Infra
+
+- [ ] Set 0 layout 新增 binding 3（`sampler2DArrayShadow`，阶段四 CSM 用；`PARTIALLY_BOUND` 允许当前不写入）
+- [ ] Set 0 descriptor pool 调整（从 "2 UBO + 4 SSBO" 调整为 "2 UBO + 4 SSBO + 2 COMBINED_IMAGE_SAMPLER"）
+- [ ] Set 1 layout 新增 binding 1（`samplerCube[]`，上限 256，`PARTIALLY_BOUND` + `UPDATE_AFTER_BIND`）
+- [ ] Set 1 descriptor pool 容量从 4096 扩展到 4352
+- [ ] 去掉 Set 1 binding 0 的 `VARIABLE_DESCRIPTOR_COUNT`，改为固定上限 4096 + `PARTIALLY_BOUND`
+- [ ] `DescriptorManager` 新增 `register_cubemap()` / `unregister_cubemap()` API（独立 free list 和 slot 空间）
+- [ ] `pipeline.h` 新增 `ComputePipelineDesc` 结构体 + `create_compute_pipeline()` 函数
+- [ ] `commands.h` 新增 `CommandBuffer::dispatch(group_count_x, group_count_y, group_count_z)` 方法
+- [ ] 验证：所有布局更新无 validation 报错，现有渲染正常；能创建并 dispatch 一个空 compute shader
+
 ## Step 4：MSAA + HDR + Tonemapping
 
 - [ ] 创建 MSAA color buffer（R16G16B16A16F，4x，managed 资源）
