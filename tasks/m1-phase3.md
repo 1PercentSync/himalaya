@@ -38,3 +38,17 @@
 - [ ] Tonemapping pass 注册到 RG（读 hdr_color，写 swapchain image）
 - [ ] MSAA 运行时切换：Renderer::handle_msaa_change()（update_managed_desc + pipeline 重建）+ DebugUI MSAA 选择控件（1x/2x/4x/8x）
 - [ ] 验证：场景以 MSAA + HDR + ACES tonemapping 渲染，高光不再截断为纯白，DebugUI 可切换 MSAA 采样数
+
+## Step 6：IBL Pipeline
+
+- [ ] `framework/include/himalaya/framework/ibl.h` + `framework/src/ibl.cpp` 模块骨架
+- [ ] stb_image `.hdr` 文件加载（`stbi_loadf`，RGB float 数据）+ 上传到 equirectangular 2D GPU image
+- [ ] Equirectangular → Cubemap 转换 compute shader（`shaders/ibl/equirect_to_cubemap.comp`）
+- [ ] Irradiance 余弦卷积 compute shader（`shaders/ibl/irradiance.comp`，32×32 per face，R11G11B10F）
+- [ ] Prefiltered environment map compute shader（`shaders/ibl/prefilter.comp`，256×256 per face，多 mip 级别对应不同 roughness，R16G16B16A16F）
+- [ ] BRDF Integration LUT compute shader（`shaders/ibl/brdf_lut.comp`，256×256，R16G16_UNORM）
+- [ ] IBL 模块 `init()` 方法：在 `begin_immediate()` / `end_immediate()` scope 内执行全部预计算
+- [ ] 将 irradiance/prefiltered cubemap 注册到 Set 1 binding 1（`register_cubemap()`），BRDF LUT 注册到 Set 1 binding 0（`register_texture()`）
+- [ ] `GlobalUniformData` 新增 IBL 字段（irradiance_cubemap_index、prefiltered_cubemap_index、brdf_lut_index、prefiltered_mip_count）
+- [ ] Renderer 在 `init()` 中调用 IBL 预计算，在 `destroy()` 中清理 IBL 资源
+- [ ] 验证：IBL 预计算无 validation 报错，RenderDoc 检查 cubemap 各面和 mip 级别内容正确、BRDF LUT 呈现预期的渐变图案

@@ -113,6 +113,25 @@ MSAA 配置策略（运行时可切换 1x/2x/4x/8x）和 Tonemapping 设计见 `
 
 ---
 
+### Step 6：IBL Pipeline
+
+- 实现 IBL 预计算全流程（equirect → cubemap → irradiance/prefiltered/BRDF LUT）
+- 4 个 compute shader 共享相同模式（immediate scope + dispatch），验证点统一，不拆分 Step
+- IBL 模块位于 Framework 层（`framework/ibl.h`），预计算在 `Renderer::init()` 中执行
+- **验证**：IBL 预计算无 validation 报错，RenderDoc 检查 cubemap 各面和 mip 级别内容、BRDF LUT 呈现预期渐变图案
+
+#### 设计要点
+
+IBL 管线设计（环境贴图输入、预计算策略、产物参数、模块归属）见 `milestone-1/m1-design-decisions.md`「IBL 管线」。
+
+关键设计：
+- Equirectangular .hdr 输入，GPU compute shader 转 cubemap
+- 预计算在 `begin_immediate()` / `end_immediate()` scope 内一次性完成
+- Irradiance/prefiltered cubemap 注册到 Set 1 binding 1（`register_cubemap()`），BRDF LUT 注册到 Set 1 binding 0（`register_texture()`）
+- `GlobalUniformData` 新增 IBL 字段传递 bindless index
+
+---
+
 ## 阶段三文件清单（随 Step 推进更新）
 
 ```
@@ -131,6 +150,16 @@ passes/
 │   └── tonemapping_pass.h       # [Step 4 新增] Tonemapping pass 类
 └── src/
     └── tonemapping_pass.cpp     # [Step 4 新增]
+framework/
+├── include/himalaya/framework/
+│   └── ibl.h                    # [Step 6 新增] IBL 预计算模块
+└── src/
+    └── ibl.cpp                  # [Step 6 新增]
+shaders/ibl/
+├── equirect_to_cubemap.comp     # [Step 6 新增] Equirectangular → Cubemap
+├── irradiance.comp              # [Step 6 新增] Irradiance 余弦卷积
+├── prefilter.comp               # [Step 6 新增] Prefiltered environment map
+└── brdf_lut.comp                # [Step 6 新增] BRDF Integration LUT
 ```
 
 ---
@@ -150,3 +179,4 @@ passes/
 | Tonemapping 策略 | ACES fullscreen fragment shader，SRGB swapchain 不支持 `STORAGE_BIT` |
 | Fullscreen triangle | Tonemapping 等全屏 pass 使用 hardcoded fullscreen triangle（vertex shader 生成，无顶点输入） |
 | FrameResources 扩展 | Step 4 扩展 FrameResources：msaa_color、msaa_depth、hdr_color、depth（resolved） |
+| IBL 预计算 | 4 个 compute shader 共享 immediate scope + dispatch 模式，验证点统一不拆 Step |

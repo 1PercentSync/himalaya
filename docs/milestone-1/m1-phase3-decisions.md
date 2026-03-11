@@ -5,80 +5,6 @@
 
 ---
 
-## 五、IBL 管线决策
-
-### 5.1 HDR 环境贴图输入格式 [已决定]
-
-| 方案 | 说明 | 优势 | 劣势 |
-|------|------|------|------|
-| A. Equirectangular .hdr 文件 | stb_image 加载，GPU 转 cubemap | 资源最容易获取（HDRI Haven 等） | 需要实现 equirect→cubemap 转换 |
-| B. 预处理好的 cubemap 6 面 | 离线工具处理好，直接加载 6 张图 | 加载最简单 | 需要离线工具，资源不灵活 |
-| C. .ktx2 / .dds cubemap | 预压缩格式加载 | 性能最好 | 需要额外库或离线转换 |
-
-**建议倾向**：A。.hdr equirectangular 是最常见的 HDR 环境贴图格式，网上免费资源丰富。Equirect→cubemap 转换是一个 compute shader（or fragment shader rendering to cubemap faces），约 20-30 行 shader 代码，一次性工作。stb_image 已集成，支持 .hdr 格式（`stbi_loadf` 返回 float RGB 数据）。
-
-#### 决定：方案 A
-
-### 5.2 IBL 预计算管线 [已决定]
-
-IBL Split-Sum 需要三个预计算产物：
-
-| 产物 | 说明 | 典型参数 |
-|------|------|----------|
-| Irradiance Map | 余弦加权半球卷积 | Cubemap, 32×32 per face |
-| Prefiltered Env Map | 不同 roughness 级别的模糊环境 | Cubemap, 128-256 per face, mip chain |
-| BRDF Integration LUT | 基于 roughness + NdotV 的积分查表 | 2D texture, 256×256 or 512×512, R16G16 |
-
-**问题**：预计算在哪里做？
-
-| 方案 | 说明 |
-|------|------|
-| A. GPU Compute Shader（加载时计算） | 每次环境贴图变化时 GPU 重新计算 |
-| B. 离线预计算 + 文件缓存 | 首次计算后保存到磁盘，后续直接加载 |
-| C. GPU 计算 + 运行时缓存（不持久化） | 每次启动重新计算 |
-
-**建议倾向**：C（简单起步）→ B（后续优化）。三个预计算总共几十毫秒到几百毫秒（一次性），不影响运行时性能。GPU compute shader 实现最直接，与现有的 immediate command scope 配合良好。阶段三先做 C，阶段八或 M2 做昼夜循环时如果需要频繁重算再考虑缓存。
-
-**需要进一步讨论**：
-
-- Irradiance/Prefiltered map 的 cubemap 分辨率？
-- BRDF LUT 的分辨率和格式？（R16G16_SFLOAT 还是 R16G16_UNORM？值域在 [0,1] 内所以 UNORM 够用）
-- 这些预计算资源由谁持有？（独立的 IBL 模块？Renderer？）
-
-#### 决定：方案 C（GPU 计算 + 运行时缓存）
-
-B（磁盘缓存）不做正式规划，标记为"需要时再加"。C→B 是纯优化（加一层磁盘读写），不影响架构。A（GPU 从头计算）是 C 的核心实现，也是 B 的 fallback——永远保留。
-
-M2 的 Bruneton 大气散射使 IBL 变为动态计算（太阳角度变化时重算），磁盘缓存对动态输入无意义。B 真正有价值的时机是多个静态环境快速切换或 Reflection Probes 数量增多时。
-
-预计算在 `Renderer::init()` 中执行，使用现有的 `begin_immediate()` / `end_immediate()`。
-
-##### 预计算产物参数
-
-| 产物 | 分辨率 | 格式 | 内存 | 说明 |
-|------|--------|------|------|------|
-| Irradiance Map | 32×32 per face | R11G11B10F | ~48 KB | 极其平滑的低频信号，R11G11B10F 远超需求 |
-| Prefiltered Env Map | 256×256 per face (含 mip chain) | R16G16B16A16F | ~24 MB | 高精度避免镜面反射 banding（banding 难排查，分辨率不足易排查）。分辨率提取为常量供后续配置 |
-| BRDF Integration LUT | 256×256 | R16G16_UNORM | ~256 KB | 值域 [0,1]，UNORM 足够。与环境无关，所有环境共享 |
-
-格式选择理由：Prefiltered map 用 R16G16B16A16F 而非 R11G11B10F 是因为 mip0（低 roughness）近似镜面反射，直接暴露 cubemap 内容，6-bit 尾数在平滑渐变中可能产生 banding。Irradiance map 是余弦积分后的极低频信号，不存在此风险。
-
-### 5.3 IBL 模块归属 [已决定]
-
-IBL 预计算涉及 compute shader、cubemap 处理、LUT 生成——放在哪一层？
-
-| 方案 | 说明 |
-|------|------|
-| A. Framework 层新模块 `framework/ibl.h` | 与 texture/mesh 同级的通用基础设施 |
-| B. App 层 | 与 scene_loader 一起处理环境贴图 |
-| C. Passes 层 | 作为独立的"预计算 pass" |
-
-**建议倾向**：A。IBL 预计算是渲染框架级别的基础设施（M2 的 Reflection Probes 复用相同的 cubemap 处理），不是 app 逻辑，也不是每帧运行的 pass。
-
-#### 决定：方案 A — Framework 层 `framework/ibl.h`
-
----
-
 ## 六、Shader 架构决策
 
 ### 6.1 Shader 公共文件组织 [已决定]
@@ -641,19 +567,7 @@ Step 6: IBL Pipeline ─────────────→ Step 7: PBR Shad
 
 ### Step 6：IBL Pipeline
 
-实现 IBL 预计算全流程（equirect → cubemap → irradiance/prefiltered/BRDF LUT）。
-
-- [ ] `framework/include/himalaya/framework/ibl.h` + `framework/src/ibl.cpp` 模块骨架
-- [ ] stb_image `.hdr` 文件加载（`stbi_loadf`，RGB float 数据）+ 上传到 equirectangular 2D GPU image
-- [ ] Equirectangular → Cubemap 转换 compute shader（`shaders/ibl/equirect_to_cubemap.comp`）
-- [ ] Irradiance 余弦卷积 compute shader（`shaders/ibl/irradiance.comp`，32×32 per face，R11G11B10F）
-- [ ] Prefiltered environment map compute shader（`shaders/ibl/prefilter.comp`，256×256 per face，多 mip 级别对应不同 roughness，R16G16B16A16F）
-- [ ] BRDF Integration LUT compute shader（`shaders/ibl/brdf_lut.comp`，256×256，R16G16_UNORM）
-- [ ] IBL 模块 `init()` 方法：在 `begin_immediate()` / `end_immediate()` scope 内执行全部预计算
-- [ ] 将 irradiance/prefiltered cubemap 注册到 Set 1 binding 1（`register_cubemap()`），BRDF LUT 注册到 Set 1 binding 0（`register_texture()`）
-- [ ] `GlobalUniformData` 新增 IBL 字段（irradiance_cubemap_index、prefiltered_cubemap_index、brdf_lut_index、prefiltered_mip_count）
-- [ ] Renderer 在 `init()` 中调用 IBL 预计算，在 `destroy()` 中清理 IBL 资源
-- [ ] 验证：IBL 预计算无 validation 报错，RenderDoc 检查 cubemap 各面和 mip 级别内容正确、BRDF LUT 呈现预期的渐变图案
+> 已迁移到 `docs/current-phase.md` 和 `tasks/m1-phase3.md`，设计决策见 `m1-design-decisions.md`「IBL 管线」。
 
 ---
 
@@ -678,6 +592,5 @@ Step 6: IBL Pipeline ─────────────→ Step 7: PBR Shad
 |------|------|
 | DebugUI 跟随 Step | 每个 Step 涉及的 DebugUI 变更跟随该 Step：MSAA 切换在 Step 4，渲染模式在 Step 7 |
 | PrePass 在 MSAA 之后 | PrePass 直接写入 MSAA depth/normal，不需要经历 1x→4x 的中间迁移状态 |
-| IBL 不拆 Step | 4 个 compute shader 共享相同模式（immediate scope + dispatch），验证点统一，不拆 |
 | FrameResources | Step 1 定义，随 Step 推进扩展（Step 4 加 msaa_color/hdr_color/depth，Step 5 加 msaa_normal/normal） |
 | Pass 类约定 | 所有 pass 类统一方法签名：setup / on_resize / register_resources(RG&, FrameResources&) / destroy，但无虚基类 |
