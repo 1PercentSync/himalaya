@@ -670,6 +670,9 @@ layout(set = 0, binding = 2) readonly buffer MaterialBuffer {
     GPUMaterialData materials[];
 };
 
+// 阶段四引入，阶段三预留（PARTIALLY_BOUND，不写入）
+layout(set = 0, binding = 3) uniform sampler2DArrayShadow shadow_map;
+
 // Set 1: Bindless 数组
 layout(set = 1, binding = 0) uniform sampler2D textures[];
 layout(set = 1, binding = 1) uniform samplerCube cubemaps[];
@@ -695,6 +698,7 @@ Set 0 和 Set 1 均使用传统 Descriptor Set（非 Push Descriptors）。
 | 全局数据 | 每帧一次 | Set 0, Binding 0 (UBO) | 相机矩阵、屏幕尺寸、曝光值 |
 | 光源数据 | 每帧一次 | Set 0, Binding 1 (SSBO) | 方向光、点光源数组 |
 | 材质数据 | 加载时一次 | Set 0, Binding 2 (SSBO) | PBR 参数、纹理 index |
+| 阴影数据 | 阶段四引入 | Set 0, Binding 3 (Sampler) | CSM Shadow Map Atlas（阶段三预留不写入） |
 | 2D 纹理数据 | 加载时一次 | Set 1, Binding 0 (Bindless) | 所有 2D 纹理通过 index 访问 |
 | Cubemap 数据 | 初始化 / 加载时 | Set 1, Binding 1 (Bindless) | IBL cubemap、Reflection Probes |
 | Per-draw 数据 | 每次绘制 | Push Constant | 模型矩阵、材质 index |

@@ -9,6 +9,32 @@
 
 ## 实现步骤
 
+#### 依赖关系
+
+```
+Step 1: Renderer 提取
+    ↓
+Step 2: RG Managed 资源
+    ↓
+Step 3: Descriptor Layout + Compute Infra
+    ↓
+Step 4: MSAA + HDR + Tonemapping ──→ Step 5: Depth + Normal PrePass
+    ↓                                          ↓
+Step 6: IBL Pipeline ─────────────→ Step 7: PBR Shader 升级
+```
+
+#### 总览
+
+| Step | 主题 | 验证标准 |
+|------|------|----------|
+| 1 | Renderer 提取 | 编译通过，渲染输出与阶段二一致 |
+| 2 | RG Managed 资源 | 现有渲染正常，depth buffer 改由 RG 管理 |
+| 3 | Descriptor Layout + Compute Infra | 布局更新无 validation 报错，compute shader 能创建并 dispatch |
+| 4 | MSAA + HDR + Tonemapping | MSAA 渲染 + HDR tonemapped 输出正确，DebugUI 可切换采样数 |
+| 5 | Depth + Normal PrePass | PrePass 运行，Forward zero-overdraw，normal buffer 有输出 |
+| 6 | IBL Pipeline | IBL 预计算完成，RenderDoc 可检查 cubemap 和 LUT 内容 |
+| 7 | PBR Shader 升级 | 完整 PBR 光照画面，金属表面反射环境，各 debug 模式可用 |
+
 ### Step 1：Renderer 提取
 
 - 从 Application 中提取 Renderer 类（纯重构，零功能变化）
@@ -238,7 +264,7 @@ shaders/ibl/
 | Renderer 命名空间 | `himalaya::app`，与 Application 同层 |
 | Resize 两阶段 | `on_swapchain_invalidated()` 在 `swapchain_.recreate()` 之前，`on_swapchain_recreated()` 在之后。`swapchain_image_handles_` 引用旧 VkImage，必须先注销 |
 | UBO/SSBO 填充 | 归 Renderer。`GlobalUniformData` 布局是 shader 约定，属于渲染层。Application 只传语义数据（RenderInput） |
-| FrameResources | Step 1 定义基础结构（swapchain + depth），后续 Step 扩展 |
+| FrameResources | Step 1 定义基础结构（swapchain + depth），随 Step 推进扩展（Step 4 加 msaa_color/hdr_color/depth，Step 5 加 msaa_normal/normal） |
 | Pass 类约定 | Step 1 暂无独立 pass 类（渲染逻辑仍在 RG lambda 中），Step 4 开始引入 |
 | Managed vs imported | Managed 资源由 RG 创建和缓存（depth、MSAA、HDR 等渲染中间产物），imported 资源由外部创建（swapchain image）。Managed 的 initial/final layout 由 RG 推导 |
 | MSAA resolve | 所有 resolve 通过 Dynamic Rendering 原生完成（RG 零改动），不引入独立 resolve pass |
@@ -247,3 +273,5 @@ shaders/ibl/
 | Fullscreen triangle | Tonemapping 等全屏 pass 使用 hardcoded fullscreen triangle（vertex shader 生成，无顶点输入） |
 | FrameResources 扩展 | Step 4 扩展 FrameResources：msaa_color、msaa_depth、hdr_color、depth（resolved） |
 | IBL 预计算 | 4 个 compute shader 共享 immediate scope + dispatch 模式，验证点统一不拆 Step |
+| DebugUI 跟随 Step | 每个 Step 涉及的 DebugUI 变更跟随该 Step：MSAA 切换在 Step 4，渲染模式在 Step 7 |
+| PrePass 在 MSAA 之后 | PrePass 直接写入 MSAA depth/normal，不需要经历 1x→4x 的中间迁移状态 |
