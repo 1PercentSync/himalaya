@@ -488,9 +488,9 @@ RG `execute()` 自动为每个 pass 调用 `begin_debug_label(pass_name)` / `end
 ```cpp
 class ForwardPass {  // 具体类，无基类
 public:
-    /// 一次性：创建 pipeline 等不依赖分辨率的资源
+    /// 一次性：创建 pipeline，存储服务指针（ctx_, rm_, dm_, sc_）
     void setup(rhi::Context& ctx, rhi::ResourceManager& rm,
-               rhi::DescriptorManager& dm);
+               rhi::DescriptorManager& dm, rhi::ShaderCompiler& sc);
 
     /// 创建/重建 resolution-dependent 资源（init 时在 setup 后调用，resize 时单独调用）
     void on_resize(uint32_t width, uint32_t height);
@@ -508,12 +508,10 @@ public:
 Renderer 每帧构造，传给各 pass 的 `record()`。携带一帧渲染所需的全部上下文。定义在 `framework/frame_context.h`（Layer 1）。
 
 ```cpp
-/// 一帧渲染所需的全部上下文，由 Renderer 填充，各 pass 按需取用。
+/// 一帧渲染所需的全部上下文（纯每帧数据），由 Renderer 填充，各 pass 按需取用。
+/// 长期服务引用（ResourceManager、DescriptorManager 等）不在此处，由 Pass 在 setup() 时存储指针。
 /// 随阶段推进扩展。
 struct FrameContext {
-    // --- RHI 引用 ---
-    rhi::ResourceManager& resource_manager;
-
     // --- RG 资源 ID ---
     RGResourceId swapchain;
     RGResourceId hdr_color;
@@ -534,8 +532,6 @@ struct FrameContext {
     uint32_t sample_count;
 };
 ```
-
-> FrameContext 详细设计仍有待确认的细节，见 `m1-phase3-open-questions.md`。
 
 ---
 
