@@ -36,6 +36,45 @@ run() → while loop:
   end_frame()     — submit → present → swapchain 重建检查 → advance frame
 ```
 
+### Step 2：RG Managed 资源
+
+- 实现 Render Graph 的 managed 资源管理（L1 级别：创建 + 缓存 + resize 自动重建）
+- 新增 `RGImageDesc`、`RGManagedHandle` 类型和 managed 资源 API
+- 迁移现有 depth buffer 从手动管理到 managed 资源
+- **验证**：现有渲染正常工作，depth buffer 由 RG managed 管理，resize 时自动重建
+
+#### 设计要点
+
+Managed 资源的设计决策和演进级别见 `milestone-1/m1-design-decisions.md`「Managed 资源管理」，接口定义见 `milestone-1/m1-interfaces.md`「Managed 资源类型」。
+
+关键设计：
+- 两步注册模式：`create_managed_image()` 返回持久 `RGManagedHandle`，`use_managed_image()` 每帧返回 `RGResourceId`
+- Relative 模式通过 `set_reference_resolution()` 配合 resize 自动重建
+- `update_managed_desc()` 支持 MSAA 切换时更新资源描述（Step 4 使用）
+- 不适合 RG 管理的资源（IBL 预计算产物等一次性 init 资源）不经过 RG
+
+#### 使用流程参照
+
+```cpp
+// Renderer::init() — 一次性注册
+render_graph_.set_reference_resolution(swapchain.extent);
+managed_depth_ = render_graph_.create_managed_image("Depth", depth_desc);
+managed_hdr_   = render_graph_.create_managed_image("HDR Color", hdr_desc);
+
+// Renderer::render() — 每帧使用
+render_graph_.clear();
+fr.depth     = render_graph_.use_managed_image(managed_depth_);
+fr.hdr_color = render_graph_.use_managed_image(managed_hdr_);
+
+// Renderer::on_swapchain_recreated() — resize
+render_graph_.set_reference_resolution(new_extent);
+// 内部自动重建所有尺寸变化的 relative managed images
+
+// Renderer::destroy()
+render_graph_.destroy_managed_image(managed_depth_);
+render_graph_.destroy_managed_image(managed_hdr_);
+```
+
 ---
 
 ## 阶段三文件清单（随 Step 推进更新）
@@ -61,3 +100,6 @@ app/
 | UBO/SSBO 填充 | 归 Renderer。`GlobalUniformData` 布局是 shader 约定，属于渲染层。Application 只传语义数据（RenderInput） |
 | FrameResources | Step 1 定义基础结构（swapchain + depth），后续 Step 扩展 |
 | Pass 类约定 | Step 1 暂无独立 pass 类（渲染逻辑仍在 RG lambda 中），Step 4 开始引入 |
+| Managed vs imported | Managed 资源由 RG 创建和缓存（depth、MSAA、HDR 等渲染中间产物），imported 资源由外部创建（swapchain image）。Managed 的 initial/final layout 由 RG 推导 |
+| MSAA resolve | 所有 resolve 通过 Dynamic Rendering 原生完成（RG 零改动），不引入独立 resolve pass |
+| Depth buffer 迁移 | Step 2 将阶段二手动管理的 depth buffer 迁移为 RG managed 资源 |

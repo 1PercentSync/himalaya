@@ -385,6 +385,30 @@ struct RGResourceUsage {
 // 当前帧和历史帧各自声明 READ 或 WRITE。
 ```
 
+#### Managed 资源类型
+
+```cpp
+enum class RGSizeMode : uint8_t { Relative, Absolute };
+
+struct RGImageDesc {
+    RGSizeMode size_mode;
+    // Relative mode（render target 等屏幕尺寸相关资源）
+    float width_scale;
+    float height_scale;
+    // Absolute mode（Shadow Map 等固定尺寸资源）
+    uint32_t width;
+    uint32_t height;
+    // Common
+    rhi::Format format;
+    rhi::ImageUsage usage;
+    uint32_t sample_count = 1;
+    uint32_t mip_levels = 1;
+};
+
+// 持久 handle，跨帧稳定（初始化时获取，每帧通过 use_managed_image 转为 RGResourceId）
+struct RGManagedHandle { uint32_t index; };
+```
+
 #### Render Graph 核心接口
 
 ```cpp
@@ -416,6 +440,24 @@ public:
 
     // 执行（接收外部 command buffer，RG 不持有同步资源）
     void execute(CommandBuffer& cmd);
+
+    // --- Managed 资源管理（阶段三引入） ---
+
+    // 设置基准分辨率（Relative 模式的参照）
+    void set_reference_resolution(VkExtent2D extent);
+
+    // 注册 managed image（初始化时调用，返回持久 handle）
+    RGManagedHandle create_managed_image(const char* debug_name, const RGImageDesc& desc);
+
+    // 每帧使用 managed image（返回当前帧的 RGResourceId）
+    // RG 内部推导 initial/final layout
+    RGResourceId use_managed_image(RGManagedHandle handle);
+
+    // 更新 managed 资源描述（desc 变化时销毁旧 backing image 并创建新的，handle 不变）
+    void update_managed_desc(RGManagedHandle handle, const RGImageDesc& desc);
+
+    // 销毁 managed image（Renderer::destroy() 时调用）
+    void destroy_managed_image(RGManagedHandle handle);
 };
 ```
 

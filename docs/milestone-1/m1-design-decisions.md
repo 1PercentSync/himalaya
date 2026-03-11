@@ -58,21 +58,60 @@ Render Graph 的功能按需引入，不提前建设未使用的能力：
 |------|---------|------|
 | Barrier 自动插入 | 阶段二 | 核心价值，从第一天就需要 |
 | 资源导入（import） | 阶段二 | 外部创建的资源（swapchain image、vertex buffer 等）导入 RG 追踪状态 |
-| Transient 资源管理 | 阶段三 | 首批 transient 资源（Depth/Normal/HDR Color Buffer）出现于阶段三 |
+| Managed 资源管理 | 阶段三 | 首批 RG 管理的资源（Depth/Normal/HDR Color Buffer）出现于阶段三 |
 | Temporal 资源管理 | 阶段五 | 首个 temporal pass（SSAO temporal filter）出现于阶段五 |
 
-阶段二的 RG 只管 barrier 和状态追踪，资源由外部创建后导入。这不影响后续扩展——pass 声明输入输出的接口从阶段二就固定下来，transient/temporal 是对 RG 内部的增量添加，已有 pass 不需要修改。
+阶段二的 RG 只管 barrier 和状态追踪，资源由外部创建后导入。这不影响后续扩展——pass 声明输入输出的接口从阶段二就固定下来，managed/temporal 是对 RG 内部的增量添加，已有 pass 不需要修改。
 
-#### 后续扩展 API 预览
+#### Managed 资源管理
 
-阶段三引入 transient 资源时新增：
+阶段三引入 RG managed 资源——由 RG 根据声明创建和管理的 image，跨帧缓存，resize 时自动重建。与 imported 资源的区别：imported 由外部创建、外部管理生命周期；managed 由 RG 创建、RG 管理缓存和重建。
 
-```cpp
-// 声明 RG 管理的 transient 资源（帧内创建，帧结束可回收）
-RGResourceId declare_resource(const RGResourceDesc& desc);
-```
+候选方案：
 
-阶段五引入 temporal 资源时新增：
+| 方案 | 说明 |
+|------|------|
+| A. 引入 managed 资源管理 | RG 新增 `create_managed_image()` 等 API，根据描述创建资源，跨帧缓存，resize 自动重建 |
+| B. 延迟到阶段四或五 | 阶段三仍然外部创建 + import，和阶段二一样 |
+| C. 引入简化版 | RG 只做"声明式创建"，不做内存别名 |
+
+**选择 A。** 阶段三新增大量分辨率相关资源（MSAA buffers、HDR color、normal buffer），手动管理创建/销毁/resize 重建代码量大且重复。RG managed 资源集中管理这些逻辑，降低 Renderer 的复杂度。
+
+**演进级别：**
+
+| 级别 | 内容 | 时机 |
+|------|------|------|
+| L1：RG 管理创建/缓存 | RG 根据声明创建资源，跨帧缓存（desc 不变则复用），resize 时自动重建 | **阶段三** |
+| L2：L1 + 内存别名 | 生命周期不重叠的资源共享 VkDeviceMemory（VMA `CAN_ALIAS_BIT`） | **阶段八**（Bloom 链是最自然的引入点） |
+| L3：L2 + 自动生命周期推导 | RG 分析 pass 依赖图推导首次/末次使用，自动决定别名 | **M2 考虑** |
+
+**两步注册模式：** `create_managed_image()` 在初始化时注册持久 handle；`use_managed_image()` 每帧调用，返回当前帧的 `RGResourceId`。初始化时注册、每帧使用、销毁时注销——handle 跨帧稳定，RGResourceId 每帧重建。
+
+**Initial/final layout 推导：** Managed 资源的 initial/final layout 由 RG 内部推导（与 imported 不同，不需要调用方指定），因为 RG 完全掌控这些资源的生命周期和使用模式。
+
+**现有 depth buffer 迁移：** 阶段三将阶段二手动管理的 depth buffer 迁移为 managed 资源，删除手动创建/销毁代码。
+
+接口定义详见 `m1-interfaces.md`「Managed 资源 API」。
+
+**闲置资源处理（M1 不实现，备忘）：** Pass 长期 disable 时，其 managed 资源的 backing VkImage 持续占用显存。L2 内存别名解决帧内生命周期不重叠时的复用；跨帧长期闲置可通过显式 sleep/wake 释放。阶段八实现 L2 时同步评估是否需要 sleep/wake。
+
+#### MSAA Resolve 策略
+
+MSAA resolve 需要在 RG 中表达。
+
+| 方案 | 说明 |
+|------|------|
+| A. Resolve 作为独立 RG pass | 每个 resolve 注册为独立 pass |
+| B. Resolve 内建到 RG | RG 标记 sample count，compile 时自动插入 resolve |
+| C. Resolve 集成到 Dynamic Rendering | 使用 `VkRenderingAttachmentInfo::resolveImageView` 在渲染结束时自动 resolve |
+
+**选择纯 C。** Vulkan Dynamic Rendering 原生支持 color resolve（`pResolveAttachments`），Vulkan 1.2 核心支持 depth resolve mode（MIN/MAX/SAMPLE_ZERO），zero 额外 pass 开销。Normal resolve 用 AVERAGE + 消费方 shader `normalize()` 是标准做法。
+
+**RG 零改动：** Forward pass 声明写入 MSAA target 和 resolved target（共 4 个资源），RG 只看到"谁读谁写"，自动生成正确 barrier。Resolve destination 需要的 layout 与现有 `Write + ColorAttachment` / `Write + DepthAttachment` 生成的 barrier 完全一致。Resolve 配置完全在 pass callback 内部通过 `VkRenderingAttachmentInfo` 设置。
+
+自定义 resolve（tone-mapped resolve、bilateral normal resolve 等）是高级视觉优化，M1/M2 不涉及。如需，可在对应 pass 内部替换为 custom shader，不影响 RG 和整体架构。
+
+#### Temporal 资源管理（阶段五引入）
 
 ```cpp
 // RGResourceDesc 中添加 is_temporal 标记
