@@ -906,24 +906,71 @@ VS 共享——Opaque FS 也需要 uv0（用于 normal_tex 采样）。两个 FS
 
 ## 八、Forward Pass 升级
 
-### 8.1 从阶段二 Lambert 到阶段三 Cook-Torrance
+### 8.1 从阶段二 Lambert 到阶段三 Cook-Torrance [已决定]
 
 阶段二已有 `forward.vert` + `forward.frag`（Lambert 光照）。阶段三升级为完整 PBR。
 
 **建议**：原地升级。shader 结构不变（输入相同），只是光照计算从 Lambert 扩展为 Cook-Torrance + IBL。`#include "common/brdf.glsl"` + `#include "common/lighting.glsl"` 引入新函数。
 
-### 8.2 Forward Pass 是否读 PrePass 深度做 Early-Z 优化？
+#### 决定：原地升级
 
-标准做法：PrePass 写入深度 → Forward Pass 设置 depth compare EQUAL + depth write OFF → 只着色通过深度测试的 fragment，避免 overdraw。
+forward.vert 保持不变（输出 world position / normal / uv0 / tangent）。forward.frag 光照计算从 Lambert 替换为 Cook-Torrance（GGX / Smith / Schlick）+ IBL，通过 `#include` 引入 `common/brdf.glsl` + `common/lighting.glsl`。同时消费 GPUMaterialData 全部 5 个纹理字段（见 6.2 决定）。
+
+不保留 Lambert 切换——如需诊断 PBR 问题，debug UI 可显示各光照分量（diffuse only、specular only、IBL only 等），比回退 Lambert 更有用。
+
+---
+
+### 8.2 Forward Pass 与 PrePass 的深度配合 [已决定]
+
+PrePass 写入深度后，Forward Pass 如何利用此深度避免 overdraw（被遮挡 fragment 执行昂贵 PBR 着色后被丢弃）。
 
 | 方案 | 说明 |
 |------|------|
-| A. Forward Pass depth compare EQUAL, write OFF | 经典 Z-PrePass 配合 |
-| B. Forward Pass depth compare GREATER (reverse-Z), write ON | 与阶段二一致，PrePass 深度仍提供 Early-Z 优化但不改 compare mode |
+| A. EQUAL + depth write OFF + `invariant gl_Position` | 经典 Z-PrePass 配合，确定性 zero overdraw |
+| B. GREATER_OR_EQUAL + depth write OFF | 容忍微小浮点差异，近零 overdraw |
 
-**建议倾向**：A。GREATER + write ON 意味着 forward pass 仍在写深度，虽然 GPU 的 Early-Z 硬件能在大部分情况下跳过被遮挡 fragment，但无法保证。EQUAL + write OFF 是确定性的 zero-overdraw。
+注：原文中的"GREATER + write ON"在有 PrePass 时是错误的——Reverse-Z 下 GREATER 要求 fragment depth 严格大于 buffer depth，PrePass 已写入的同一表面深度 D 无法通过 D > D 测试，导致全部 fragment 被拒绝。
 
-**注意事项**：MSAA 下 EQUAL 测试可能因浮点精度问题导致闪烁——可能需要 GREATER_OR_EQUAL。PrePass 和 Forward Pass 用相同的顶点 shader、相同的变换矩阵，产生的 depth 值应该是 bit-identical 的（只要 invariant 属性正确声明）。需要在 vertex shader 中用 `invariant gl_Position;` 保证这一点。
+**建议倾向**：A。EQUAL + write OFF 是 Z-PrePass 的业界标准做法，`invariant gl_Position` 是 GLSL 规范为此场景专门设计的保证。
+
+#### 决定：方案 A — EQUAL + depth write OFF + `invariant gl_Position`
+
+##### 工作原理
+
+```
+PrePass:  depth compare GREATER, write ON  → 写入最近表面深度 D
+Forward:  depth compare EQUAL,   write OFF → fragment depth == D ? 着色 : 拒绝
+```
+
+确定性 zero overdraw：只有恰好位于最近表面上的 fragment 通过深度测试并执行 PBR 着色。不写深度（depth buffer 已正确），省带宽。
+
+##### `invariant gl_Position` 保证 bit-identical 深度
+
+EQUAL 测试要求 PrePass 和 Forward Pass 对同一顶点产生完全相同的深度值。GLSL `invariant` 限定符保证：不同 shader program 中，相同表达式 + 相同输入 → bit-identical 输出。
+
+```glsl
+// depth_prepass.vert
+invariant gl_Position;
+gl_Position = global.view_projection * push.model * vec4(in_position, 1.0);
+
+// forward.vert
+invariant gl_Position;
+gl_Position = global.view_projection * push.model * vec4(in_position, 1.0);
+```
+
+即使两个 shader 的其他输出不同（PrePass 输出 normal，Forward 输出 position/normal/uv/tangent），`gl_Position` 的计算结果完全相同。这是 Vulkan/GLSL 规范明确定义的行为。
+
+##### MSAA 兼容性
+
+MSAA 深度测试是 per-sample 的。`invariant` 保证两个 pass 产生相同的 sample coverage 和 per-sample depth。前提是两个 pipeline 的光栅化配置相同（相同 sample count、相同 cull mode），在本项目中自然满足。
+
+##### 排除方案 B 的理由
+
+GREATER_OR_EQUAL 看似更"安全"，实际只在一个方向容忍误差（Forward 深度略大 = 略近 → 通过），另一方向仍有孔洞风险（Forward 深度略小 = 略远 → 被拒绝）。`invariant` 从根本上消除浮点差异，EQUAL 是正确且完整的方案。
+
+##### 性能代价
+
+`invariant` 可能轻微限制编译器优化（不能重排或改变精度），实践中性能影响不可测量。
 
 ---
 
