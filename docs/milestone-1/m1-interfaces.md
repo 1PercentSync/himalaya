@@ -39,6 +39,7 @@ rhi/
 framework/
 ├── include/himalaya/framework/
 │   ├── render_graph.h           # Render Graph（编排 + barrier + temporal）
+│   ├── frame_context.h          # FrameContext（一帧渲染所需的全部上下文，纯头文件）
 │   ├── material_system.h        # 材质模板、材质实例、参数布局
 │   ├── mesh.h                   # 顶点格式、Mesh 数据管理
 │   ├── texture.h                # 纹理加载、格式处理、mip 生成
@@ -59,7 +60,6 @@ framework/
 ```
 passes/
 ├── include/himalaya/passes/
-│   ├── pass_interface.h         # Pass 基础接口定义（纯接口）
 │   ├── depth_prepass.h          # Depth + Normal PrePass
 │   ├── shadow_pass.h            # CSM 阴影
 │   ├── forward_pass.h           # 主光照（Forward Lighting）
@@ -69,11 +69,10 @@ passes/
 │   ├── contact_shadows.h        # Contact Shadows
 │   ├── bloom_pass.h             # Bloom 降采样 + 升采样链
 │   ├── auto_exposure.h          # 自动曝光
-│   ├── tonemapping.h            # Tonemapping（ACES）
+│   ├── tonemapping_pass.h       # Tonemapping（ACES）
 │   ├── vignette.h               # Vignette
 │   ├── color_grading.h          # Color Grading
-│   ├── height_fog.h             # 高度雾
-│   └── msaa_resolve.h           # MSAA Resolve（Depth、Normal、Color）
+│   └── height_fog.h             # 高度雾
 └── src/
     └── ...
 ```
@@ -126,7 +125,8 @@ shaders/
 ├── bloom_downsample.comp
 ├── bloom_upsample.comp
 ├── auto_exposure.comp
-├── tonemapping.comp
+├── fullscreen.vert              # Fullscreen triangle（无顶点输入，后处理共用）
+├── tonemapping.frag             # Tonemapping（ACES，fullscreen fragment）
 ├── transparent.vert/frag
 ├── vignette.comp
 ├── color_grading.comp
@@ -134,7 +134,7 @@ shaders/
 ```
 
 - `shaders/common/bindings.glsl` 定义全局绑定布局，所有 shader 通过 `#include` 引用，确保绑定一致性
-- 后处理 shader 全部用 Compute Shader（`.comp`），不使用全屏三角形
+- 后处理 shader 优先使用 Compute Shader（`.comp`）；直接写入 SRGB swapchain 的 pass 使用 fullscreen fragment shader（SRGB format 不支持 `STORAGE_BIT`）
 - CMake 构建后拷贝到 build 目录，开发期通过编辑 build 副本触发热重载
 
 ---
@@ -455,7 +455,7 @@ public:
     RGManagedHandle create_managed_image(const char* debug_name, const RGImageDesc& desc);
 
     // 每帧使用 managed image（返回当前帧的 RGResourceId）
-    // RG 内部推导 initial/final layout
+    // 每帧统一以 UNDEFINED 作为 initial layout，不追踪帧间状态，不插入 final barrier
     RGResourceId use_managed_image(RGManagedHandle handle);
 
     // 更新 managed 资源描述（desc 变化时销毁旧 backing image 并创建新的，handle 不变）
@@ -481,7 +481,7 @@ RG `execute()` 自动为每个 pass 调用 `begin_debug_label(pass_name)` / `end
 ### Pass 类约定
 
 > 阶段三引入。阶段二直接在 RG lambda 回调中编写渲染逻辑。
-> 阶段三使用具体类（非虚基类），Renderer 持有具体类型成员。设计决策见 `m1-design-decisions.md`「Pass 类设计」。
+> 阶段三所有 pass 统一放在 Layer 2（`passes/`），使用具体类（非虚基类），Renderer 持有具体类型成员。设计决策见 `m1-design-decisions.md`「Pass 类设计」。
 
 每个 Pass 统一方法签名（非虚函数）：
 
@@ -496,26 +496,46 @@ public:
     void on_resize(uint32_t width, uint32_t height);
 
     /// 每帧：向 RG 注册资源使用声明 + execute lambda
-    void register_resources(RenderGraph& rg, const FrameResources& fr);
+    void record(RenderGraph& rg, const FrameContext& ctx);
 
     /// 销毁 pipeline + 私有资源
     void destroy();
 };
 ```
 
-#### FrameResources
+#### FrameContext
 
-Renderer 每帧填充，传给各 pass 的 `register_resources()`。持有当前帧所有 imported / managed 的 `RGResourceId`：
+Renderer 每帧构造，传给各 pass 的 `record()`。携带一帧渲染所需的全部上下文。定义在 `framework/frame_context.h`（Layer 1）。
 
 ```cpp
-/// 当前帧的 RG 资源 ID 集合，由 Renderer 填充，各 pass 按需取用。
-/// 随阶段推进扩展（Step 4 加 msaa_color/hdr_color/depth，Step 5 加 msaa_normal/normal）。
-struct FrameResources {
+/// 一帧渲染所需的全部上下文，由 Renderer 填充，各 pass 按需取用。
+/// 随阶段推进扩展。
+struct FrameContext {
+    // --- RHI 引用 ---
+    rhi::ResourceManager& resource_manager;
+
+    // --- RG 资源 ID ---
     RGResourceId swapchain;
+    RGResourceId hdr_color;
     RGResourceId depth;
-    // 阶段三后续 Step 扩展...
+    RGResourceId msaa_color;     // 1x MSAA 时 invalid
+    RGResourceId msaa_depth;     // 1x MSAA 时 invalid
+    RGResourceId msaa_normal;    // 1x MSAA 时 invalid
+    RGResourceId normal;
+
+    // --- 场景数据（非拥有引用） ---
+    std::span<const MeshData> meshes;
+    std::span<const MaterialInstance> materials;
+    const CullResult& cull_result;
+    std::span<const MeshInstance> mesh_instances;
+
+    // --- 帧参数 ---
+    uint32_t frame_index;
+    uint32_t sample_count;
 };
 ```
+
+> FrameContext 详细设计仍有待确认的细节，见 `m1-phase3-open-questions.md`。
 
 ---
 

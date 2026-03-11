@@ -18,7 +18,7 @@
 
 - [ ] `RGImageDesc` 结构体（RGSizeMode Relative/Absolute、format、usage、sample_count、mip_levels）
 - [ ] `RGManagedHandle` 类型 + `create_managed_image()` / `destroy_managed_image()` API
-- [ ] `use_managed_image()` — 每帧调用，返回 `RGResourceId`（RG 内部推导 initial/final layout）
+- [ ] `use_managed_image()` — 每帧调用，返回 `RGResourceId`（每帧以 UNDEFINED 为 initial layout，不追踪帧间状态，不插入 final barrier）
 - [ ] `set_reference_resolution(VkExtent2D)` — Relative 模式的基准分辨率
 - [ ] Resize 自动重建：`set_reference_resolution()` 被调用时，比较 desc 推导出的新旧尺寸，变化时销毁旧 backing image 并创建新的
 - [ ] `update_managed_desc(handle, new_desc)` — 更新描述符（MSAA 切换用），desc 变化时重建 backing image
@@ -37,18 +37,19 @@
 - [ ] `commands.h` 新增 `CommandBuffer::dispatch(group_count_x, group_count_y, group_count_z)` 方法
 - [ ] 验证：所有布局更新无 validation 报错，现有渲染正常；能创建并 dispatch 一个空 compute shader
 
-## Step 4：MSAA + HDR + Tonemapping
+## Step 4：MSAA + HDR + Tonemapping + Pass 类基础设施
 
-- [ ] 创建 MSAA color buffer（R16G16B16A16F，4x，managed 资源）
-- [ ] 创建 MSAA depth buffer（D32Sfloat，4x，managed 资源；替代 Step 2 迁移的 1x depth）
+- [ ] 创建 `framework/include/himalaya/framework/frame_context.h`（FrameContext 结构体：RG 资源 ID + 场景数据引用 + 帧参数）
+- [ ] 创建 MSAA color buffer（R16G16B16A16F，4x，managed 资源；1x 时不创建）
+- [ ] 创建 MSAA depth buffer（D32Sfloat，4x，managed 资源；1x 时不创建，使用 Step 2 的 1x depth）
 - [ ] 创建 resolved HDR color buffer（R16G16B16A16F，1x，managed 资源）
-- [ ] 创建 resolved depth buffer（D32Sfloat，1x，managed 资源）
-- [ ] Forward pass 改为渲染到 MSAA color + MSAA depth，通过 Dynamic Rendering 的 `VkRenderingAttachmentInfo` 配置 color resolve（`AVERAGE`）和 depth resolve（`MAX_BIT`）到 resolved buffer
-- [ ] Forward pass RG 资源声明更新（4 个资源：msaa_color WRITE、msaa_depth READ_WRITE、hdr_color WRITE、depth WRITE）
-- [ ] Tonemapping shader（`shaders/tonemapping.frag`：fullscreen fragment，采样 HDR texture → exposure 调整 → ACES 拟合 → 输出 linear [0,1]，硬件自动 linear→sRGB）+ `shaders/fullscreen.vert`（fullscreen triangle，无顶点输入）
-- [ ] Tonemapping pass 类（setup 创建 pipeline、register_resources、destroy）
-- [ ] Tonemapping pass 注册到 RG（读 hdr_color，写 swapchain image）
-- [ ] MSAA 运行时切换：Renderer::handle_msaa_change()（update_managed_desc + pipeline 重建）+ DebugUI MSAA 选择控件（1x/2x/4x/8x）
+- [ ] 提取 ForwardPass 类（`passes/forward_pass.h/cpp`）：从 Renderer 的 RG lambda 迁移渲染逻辑，实现 setup / record / destroy
+- [ ] Forward pass 改为渲染到 MSAA color + MSAA depth，通过 Dynamic Rendering 配置 color resolve（AVERAGE）；1x 时直接渲染到 hdr_color，无 resolve
+- [ ] Forward pass RG 资源声明：多采样时 3 个资源（msaa_color WRITE、msaa_depth READ_WRITE、hdr_color WRITE），1x 时 2 个资源（hdr_color WRITE、depth READ_WRITE）
+- [ ] Tonemapping shader（`shaders/tonemapping.frag` + `shaders/fullscreen.vert`）
+- [ ] TonemappingPass 类（`passes/tonemapping_pass.h/cpp`）：setup 创建 pipeline、record、destroy
+- [ ] TonemappingPass 读 hdr_color 写 swapchain image（不感知 MSAA 模式）
+- [ ] MSAA 运行时切换：Renderer::handle_msaa_change()（创建/销毁 MSAA managed 资源 + update_managed_desc + pipeline 重建）+ DebugUI MSAA 选择控件（1x/2x/4x/8x）
 - [ ] 验证：场景以 MSAA + HDR + ACES tonemapping 渲染，高光不再截断为纯白，DebugUI 可切换 MSAA 采样数
 
 ## Step 5：Depth + Normal PrePass
@@ -57,11 +58,12 @@
 - [ ] 创建 `shaders/depth_prepass.vert`（输出 position/normal/tangent/uv0，`invariant gl_Position`）
 - [ ] 创建 `shaders/depth_prepass.frag`（Opaque：采样 normal_tex → TBN → encode world normal，无 discard）
 - [ ] 创建 `shaders/depth_prepass_masked.frag`（Mask：采样 base_color_tex alpha test → discard → 采样 normal_tex → TBN → encode）
-- [ ] 创建 MSAA normal buffer（R10G10B10A2_UNORM，managed 资源）+ resolved normal buffer（R10G10B10A2_UNORM，managed 资源）
-- [ ] DepthPrePass 类（setup 创建 Opaque pipeline + Mask pipeline、on_resize、register_resources、destroy）
-- [ ] DepthPrePass 在 RG 中注册（写 msaa_depth + msaa_normal，配置 Dynamic Rendering normal resolve AVERAGE + depth resolve MAX_BIT）
+- [ ] 创建 resolved depth buffer（D32Sfloat，1x，managed 资源）
+- [ ] 创建 MSAA normal buffer（R10G10B10A2_UNORM，managed 资源；1x 时不创建）+ resolved normal buffer（R10G10B10A2_UNORM，managed 资源）
+- [ ] DepthPrePass 类（`passes/depth_prepass.h/cpp`）：setup 创建 Opaque pipeline + Mask pipeline、on_resize、record、destroy
+- [ ] DepthPrePass 配置 Dynamic Rendering 同时 resolve：depth MAX_BIT + normal AVERAGE（1x 时无 resolve，直接写 1x target）
 - [ ] PrePass 绘制：先 Opaque 批次（Early-Z 保证），再 Mask 批次（含 discard）
-- [ ] Forward pass 改为 depth compare EQUAL + depth write OFF，forward.vert 添加 `invariant gl_Position`
+- [ ] Forward pass 改为 depth compare EQUAL + depth write OFF + 移除 depth resolve 配置，资源声明改为 3 个（msaa_color Write、msaa_depth Read、hdr_color Write），forward.vert 添加 `invariant gl_Position`
 - [ ] 验证：PrePass 正确填充 depth 和 normal buffer（RenderDoc 检查），Forward pass zero-overdraw 无视觉瑕疵
 
 ## Step 6：IBL Pipeline

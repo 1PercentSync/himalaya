@@ -151,10 +151,12 @@ Present
 MSAA 配置策略（运行时可切换 1x/2x/4x/8x）和 Tonemapping 设计见 `milestone-1/m1-design-decisions.md`「MSAA 配置策略」+「Tonemapping」。Depth resolve 模式（MAX_BIT — 前景深度）见「Depth Resolve 模式」。
 
 关键设计：
-- MSAA resolve 通过 Dynamic Rendering 原生完成（`VkRenderingAttachmentInfo` 配置 color AVERAGE + depth MAX_BIT），RG 零改动
+- Step 4 不创建 resolved depth（Tonemapping 不需要 depth），Step 5 PrePass 引入时创建
+- MSAA resolve 通过 Dynamic Rendering 原生完成（`VkRenderingAttachmentInfo` 配置 color AVERAGE），RG 零改动
+- 1x MSAA 时不创建 MSAA 资源，Forward Pass 直接渲染到 hdr_color（1x）。MSAA 复杂度不向 Tonemapping 泄漏
 - Tonemapping 使用 fullscreen fragment shader（非 compute），因为 SRGB swapchain 不支持 `STORAGE_BIT`
 - MSAA 切换触发 `update_managed_desc()` + pipeline 重建，与 resize/vsync 统一模式
-- 1x MSAA 时 forward pass 不配置 resolve，只声明 2 个资源（无 MSAA target）
+- Step 4 同时引入 Pass 类基础设施：FrameContext + TonemappingPass + ForwardPass
 
 ---
 
@@ -173,9 +175,11 @@ Depth + Normal PrePass 设计、Alpha Mask 处理、Forward Pass 深度配合见
 关键设计：
 - Opaque 和 Mask 使用独立 pipeline + shader（`discard` 影响 Early-Z）
 - 绘制顺序：先 Opaque（填充 depth）再 Mask（利用已有深度）
-- Forward pass 改为 depth compare EQUAL + depth write OFF，两个 VS 都加 `invariant gl_Position` 保证 bit-identical 深度
-- Normal buffer（R10G10B10A2_UNORM, world-space）通过 Dynamic Rendering resolve AVERAGE
-- FrameResources 扩展：msaa_normal、normal（resolved）
+- PrePass 通过 Dynamic Rendering 同时 resolve depth（MAX_BIT）和 normal（AVERAGE），成为 resolved depth/normal 的唯一产生者
+- Forward pass 改为 depth compare EQUAL + depth write OFF + 不配 depth resolve，资源声明减为 3 个（msaa_color Write、msaa_depth Read、hdr_color Write）
+- 两个 VS 都加 `invariant gl_Position` 保证 bit-identical 深度
+- Normal buffer（R10G10B10A2_UNORM, world-space）
+- FrameContext 扩展：msaa_normal、normal（resolved）；1x 时无 msaa_normal
 
 ---
 
@@ -228,6 +232,21 @@ app/
 └── src/
     ├── renderer.cpp             # [Step 1 新增]
     └── ...                      # application.cpp（Step 1 修改）
+framework/
+├── include/himalaya/framework/
+│   ├── frame_context.h          # [Step 4 新增] FrameContext（纯头文件）
+│   └── ibl.h                    # [Step 6 新增] IBL 预计算模块
+└── src/
+    └── ibl.cpp                  # [Step 6 新增]
+passes/
+├── include/himalaya/passes/
+│   ├── tonemapping_pass.h       # [Step 4 新增] Tonemapping pass 类
+│   ├── forward_pass.h           # [Step 4 新增] Forward Lighting pass 类
+│   └── depth_prepass.h          # [Step 5 新增] Depth + Normal PrePass 类
+└── src/
+    ├── tonemapping_pass.cpp     # [Step 4 新增]
+    ├── forward_pass.cpp         # [Step 4 新增]
+    └── depth_prepass.cpp        # [Step 5 新增]
 shaders/
 ├── fullscreen.vert              # [Step 4 新增] fullscreen triangle（无顶点输入）
 ├── tonemapping.frag             # [Step 4 新增] ACES tonemapping
@@ -238,16 +257,6 @@ shaders/
 ├── common/brdf.glsl             # [Step 7 新增] BRDF 函数
 ├── common/lighting.glsl         # [Step 7 新增] 光照计算
 └── common/normal.glsl           # [Step 5 新增] TBN 构造、normal map 解码
-passes/
-├── include/himalaya/passes/
-│   └── tonemapping_pass.h       # [Step 4 新增] Tonemapping pass 类
-└── src/
-    └── tonemapping_pass.cpp     # [Step 4 新增]
-framework/
-├── include/himalaya/framework/
-│   └── ibl.h                    # [Step 6 新增] IBL 预计算模块
-└── src/
-    └── ibl.cpp                  # [Step 6 新增]
 shaders/ibl/
 ├── equirect_to_cubemap.comp     # [Step 6 新增] Equirectangular → Cubemap
 ├── irradiance.comp              # [Step 6 新增] Irradiance 余弦卷积
@@ -264,14 +273,17 @@ shaders/ibl/
 | Renderer 命名空间 | `himalaya::app`，与 Application 同层 |
 | Resize 两阶段 | `on_swapchain_invalidated()` 在 `swapchain_.recreate()` 之前，`on_swapchain_recreated()` 在之后。`swapchain_image_handles_` 引用旧 VkImage，必须先注销 |
 | UBO/SSBO 填充 | 归 Renderer。`GlobalUniformData` 布局是 shader 约定，属于渲染层。Application 只传语义数据（RenderInput） |
-| FrameResources | Step 1 定义基础结构（swapchain + depth），随 Step 推进扩展（Step 4 加 msaa_color/hdr_color/depth，Step 5 加 msaa_normal/normal） |
-| Pass 类约定 | Step 1 暂无独立 pass 类（渲染逻辑仍在 RG lambda 中），Step 4 开始引入 |
-| Managed vs imported | Managed 资源由 RG 创建和缓存（depth、MSAA、HDR 等渲染中间产物），imported 资源由外部创建（swapchain image）。Managed 的 initial/final layout 由 RG 推导 |
+| FrameContext | Step 4 引入 `FrameContext`（`framework/frame_context.h`），携带 RG 资源 ID + 场景数据引用 + 帧参数。替代原 `FrameResources` 设计 |
+| Pass 类约定 | Step 1 暂无独立 pass 类（渲染逻辑仍在 RG lambda 中），Step 4 引入 Pass 类（TonemappingPass + ForwardPass），所有 pass 统一放 Layer 2（`passes/`） |
+| Pass 方法 | `setup()` / `on_resize()` / `record()` / `destroy()`。`record()` 向 RG 注册资源声明 + execute lambda |
+| Managed vs imported | Managed 资源由 RG 创建和缓存（depth、MSAA、HDR 等渲染中间产物），imported 资源由外部创建（swapchain image）。Managed 每帧以 UNDEFINED 为 initial layout，不追踪帧间状态 |
 | MSAA resolve | 所有 resolve 通过 Dynamic Rendering 原生完成（RG 零改动），不引入独立 resolve pass |
+| Resolve 产生者 | Step 5+ resolved depth/normal 由 PrePass 产生，resolved hdr_color 由 Forward Pass 产生。Forward Pass 不配 depth resolve（depth write OFF，内容不变） |
+| 1x MSAA | 不创建 MSAA 资源，Forward/PrePass 直接渲染到 1x target。FrameContext 中 msaa_* 字段 invalid。Tonemapping 等下游 pass 不感知 MSAA 模式 |
 | Depth buffer 迁移 | Step 2 将阶段二手动管理的 depth buffer 迁移为 RG managed 资源 |
 | Tonemapping 策略 | ACES fullscreen fragment shader，SRGB swapchain 不支持 `STORAGE_BIT` |
 | Fullscreen triangle | Tonemapping 等全屏 pass 使用 hardcoded fullscreen triangle（vertex shader 生成，无顶点输入） |
-| FrameResources 扩展 | Step 4 扩展 FrameResources：msaa_color、msaa_depth、hdr_color、depth（resolved） |
+| Step 4 资源拓扑 | 4x 时创建 msaa_color + msaa_depth + hdr_color + depth；1x 时只创建 hdr_color + depth。Step 4 不创建 resolved depth（Step 5 PrePass 引入时创建） |
 | IBL 预计算 | 4 个 compute shader 共享 immediate scope + dispatch 模式，验证点统一不拆 Step |
 | DebugUI 跟随 Step | 每个 Step 涉及的 DebugUI 变更跟随该 Step：MSAA 切换在 Step 4，渲染模式在 Step 7 |
 | PrePass 在 MSAA 之后 | PrePass 直接写入 MSAA depth/normal，不需要经历 1x→4x 的中间迁移状态 |
