@@ -825,7 +825,7 @@ Shader 端通过 `cubemaps[global.irradiance_cubemap_index]` 和 `textures[globa
 
 ## 七、Depth + Normal PrePass 设计
 
-### 7.1 PrePass 的范围
+### 7.1 PrePass 的范围 [已决定]
 
 | 方案 | 说明 |
 |------|------|
@@ -838,17 +838,69 @@ Shader 端通过 `cubemaps[global.irradiance_cubemap_index]` 和 `textures[globa
 - 选 B 的好处：阶段三 PrePass 的 pipeline 和 shader 一步到位，阶段五直接复用。
 - 选 C 的好处：阶段三更聚焦，不引入未被消费的资源。
 
-### 7.2 Alpha Mask 物体在 PrePass 中的处理
+#### 决定：方案 B — Depth + Normal PrePass 一步到位
+
+阶段五（SSAO / Contact Shadows）和 M2（SSR / SSGI）都依赖 resolved normal buffer。阶段三直接输出法线，pipeline 和 shader 无需后续修改。Normal buffer 格式见 4.2 决定（R10G10B10A2_UNORM, world-space）。
+
+---
+
+### 7.2 Alpha Mask 物体在 PrePass 中的处理 [已决定]
 
 glTF 有 Alpha Mask 材质（`alphaMode: "MASK"`），需要在 fragment shader 中做 alpha test（discard）。
 
 | 方案 | 说明 |
 |------|------|
 | A. PrePass 跳过 Alpha Mask 物体 | Mask 物体只在 forward pass 中画 |
-| B. PrePass 两个 sub-pass | 先画 Opaque（无 fragment shader），再画 Mask（有 fragment shader 做 discard） |
-| C. PrePass 统一用带 discard 的 shader | 所有物体都走 fragment shader |
+| B. PrePass 两批绘制 | 同一 RG pass 内先画 Opaque（FS 无 discard），再画 Mask（FS 有 discard），两个 pipeline |
+| C. PrePass 统一用带 discard 的 shader | 所有物体都走同一个含 discard 的 fragment shader |
 
-**建议倾向**：B。Opaque 物体的 PrePass 可以用 null fragment shader（只写深度，fragment shader 空或不绑定），性能最好。Mask 物体需要采样 base color texture 判断 alpha，必须有 fragment shader。两者用不同 pipeline，按 alpha mode 分批绘制。
+**建议倾向**：B。
+
+#### 决定：方案 B — 两批绘制（Opaque pipeline + Mask pipeline）
+
+##### 核心理由：`discard` 对 GPU Early-Z 的影响
+
+GPU Early-Z 在 fragment shader 执行**之前**做深度测试，不通过的 fragment 直接跳过 FS。`discard` 关键字破坏此优化——GPU 无法在 FS 执行前确定 fragment 是否会被丢弃，必须先执行 FS 再决定是否写入深度。
+
+即使 Opaque 物体永远不走 discard 分支，只要 shader 二进制中包含 `discard` 指令，GPU/driver 就可能对该 pipeline 的所有调用禁用 Early-Z（编译期决定，非运行时分支）。因此 Opaque 和 Mask 必须使用不同 pipeline + 不同 shader。
+
+##### 排除方案 A 的理由
+
+PrePass 跳过 Mask 物体导致：
+- Mask 物体的深度不在 prepass buffer 中，Forward Pass 无法对其使用 EQUAL depth test
+- 阶段五 SSAO / Contact Shadows 在 Mask 物体区域读到错误深度（空洞）
+- Normal buffer 缺少 Mask 物体法线，SSAO 质量降低
+
+##### 两个 Pipeline 对比
+
+由于 7.1 选择了 Depth + Normal PrePass，Opaque 也需要 fragment shader 写法线。区别在于"FS 无 discard"vs"FS 有 discard"：
+
+| | Opaque Pipeline | Mask Pipeline |
+|---|---|---|
+| VS 输出 | position, normal, tangent, uv0 | 同左 |
+| FS 采样 | normal_tex（无条件，default = flat normal） | normal_tex + base_color_tex（alpha test） |
+| FS 操作 | TBN → encode world normal → 写 color attachment | alpha test → discard → TBN → encode → 写 color |
+| `discard` | **无** | **有** |
+| Early-Z | **保证** | **可能被禁用** |
+| Depth write | ON, Compare GREATER | ON, Compare GREATER |
+
+##### 绘制顺序
+
+同一个 RG pass 内：
+
+1. **先画 Opaque**（大多数物体）— 填充 depth buffer
+2. **再画 Mask** — Opaque 已写入的深度帮助 depth test 拒绝被遮挡的 Mask fragment
+
+##### Shader 文件
+
+```
+shaders/
+├── depth_prepass.vert          # 共享（输出 position + normal/tangent + uv0）
+├── depth_prepass.frag          # Opaque: 采样 normal_tex → TBN → encode world normal
+└── depth_prepass_masked.frag   # Mask: alpha test + discard → 采样 normal_tex → TBN → encode
+```
+
+VS 共享——Opaque FS 也需要 uv0（用于 normal_tex 采样）。两个 FS 的差异仅为 alpha test 几行代码。
 
 ---
 
