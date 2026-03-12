@@ -76,7 +76,7 @@
 
 ## Step 5：Depth + Normal PrePass
 
-- [ ] 创建 `shaders/common/normal.glsl`（TBN 构造、normal map 采样解码、R10G10B10A2 world-space 编码 `n*0.5+0.5`）
+- [x] 创建 `shaders/common/normal.glsl`（TBN 构造、normal map 采样解码、R10G10B10A2 world-space 编码 `n*0.5+0.5`）
 - [ ] 创建 `shaders/depth_prepass.vert`（输出 position/normal/tangent/uv0，`invariant gl_Position`）
 - [ ] 创建 `shaders/depth_prepass.frag`（Opaque：采样 normal_tex → TBN → encode world normal，无 discard）
 - [ ] 创建 `shaders/depth_prepass_masked.frag`（Mask：采样 base_color_tex alpha test → discard → 采样 normal_tex → TBN → encode）
