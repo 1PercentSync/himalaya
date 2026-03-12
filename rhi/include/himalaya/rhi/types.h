@@ -10,7 +10,6 @@
 #include <vulkan/vulkan.h>
 
 namespace himalaya::rhi {
-
     // ---- Resource Handles (generation-based) ----
 
     /**
@@ -42,6 +41,7 @@ namespace himalaya::rhi {
         uint32_t generation = 0;
 
         [[nodiscard]] bool valid() const { return index != UINT32_MAX; }
+
         bool operator==(const BufferHandle &) const = default;
     };
 
@@ -54,6 +54,7 @@ namespace himalaya::rhi {
         uint32_t generation = 0;
 
         [[nodiscard]] bool valid() const { return index != UINT32_MAX; }
+
         bool operator==(const SamplerHandle &) const = default;
     };
 
@@ -66,6 +67,7 @@ namespace himalaya::rhi {
         uint32_t index = UINT32_MAX;
 
         [[nodiscard]] bool valid() const { return index != UINT32_MAX; }
+
         bool operator==(const BindlessIndex &) const = default;
     };
 
@@ -175,5 +177,4 @@ namespace himalaya::rhi {
                 return VK_IMAGE_ASPECT_COLOR_BIT;
         }
     }
-
 } // namespace himalaya::rhi

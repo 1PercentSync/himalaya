@@ -226,6 +226,5 @@ namespace himalaya::app {
 
         /** @brief Unregisters all swapchain images from ResourceManager. */
         void unregister_swapchain_images();
-
     };
 } // namespace himalaya::app
