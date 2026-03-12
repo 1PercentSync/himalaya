@@ -29,7 +29,8 @@ namespace himalaya::app {
                         rhi::Swapchain &swapchain,
                         rhi::ResourceManager &rm,
                         rhi::DescriptorManager &dm,
-                        framework::ImGuiBackend &imgui) {
+                        framework::ImGuiBackend &imgui,
+                        const std::string &hdr_env_path) {
         ctx_ = &ctx;
         swapchain_ = &swapchain;
         resource_manager_ = &rm;
@@ -182,6 +183,10 @@ namespace himalaya::app {
             *resource_manager_, *descriptor_manager_, default_sampler_);
         ctx_->end_immediate();
 
+        // --- IBL precomputation (own immediate scope inside init) ---
+        ibl_.init(*ctx_, *resource_manager_, *descriptor_manager_,
+                  shader_compiler_, hdr_env_path);
+
         // --- Depth + Normal PrePass ---
         depth_prepass_.setup(*ctx_,
                              *resource_manager_,
@@ -212,6 +217,7 @@ namespace himalaya::app {
         depth_prepass_.destroy();
         forward_pass_.destroy();
         tonemapping_pass_.destroy();
+        ibl_.destroy();
 
         for (const auto ubo: global_ubo_buffers_) {
             resource_manager_->destroy_buffer(ubo);
@@ -353,6 +359,10 @@ namespace himalaya::app {
             static_cast<float>(swapchain_->extent.height));
         ubo_data.time = static_cast<float>(glfwGetTime());
         ubo_data.ibl_intensity = input.ibl_intensity;
+        ubo_data.irradiance_cubemap_index = ibl_.irradiance_cubemap_index().index;
+        ubo_data.prefiltered_cubemap_index = ibl_.prefiltered_cubemap_index().index;
+        ubo_data.brdf_lut_index = ibl_.brdf_lut_index().index;
+        ubo_data.prefiltered_mip_count = ibl_.prefiltered_mip_count();
 
         const auto light_count = static_cast<uint32_t>(
             std::min(input.lights.size(), static_cast<size_t>(kMaxDirectionalLights)));

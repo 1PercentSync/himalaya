@@ -5,6 +5,7 @@
  * @brief Rendering subsystem: pass orchestration, GPU data filling, resource ownership.
  */
 
+#include <himalaya/framework/ibl.h>
 #include <himalaya/framework/material_system.h>
 #include <himalaya/framework/render_graph.h>
 #include <himalaya/framework/texture.h>
@@ -96,7 +97,8 @@ namespace himalaya::app {
          */
         void init(rhi::Context &ctx, rhi::Swapchain &swapchain,
                   rhi::ResourceManager &rm, rhi::DescriptorManager &dm,
-                  framework::ImGuiBackend &imgui);
+                  framework::ImGuiBackend &imgui,
+                  const std::string &hdr_env_path);
 
         /**
          * @brief Fills GPU buffers and executes all render passes for one frame.
@@ -183,6 +185,9 @@ namespace himalaya::app {
 
         /** @brief Tonemapping pass (reads HDR color, writes swapchain). */
         passes::TonemappingPass tonemapping_pass_{};
+
+        /** @brief IBL precomputation module (self-manages cubemaps, LUT, bindless entries). */
+        framework::IBL ibl_{};
 
         /** @brief HDR color buffer (R16G16B16A16F, 1x, managed, auto-rebuilt on resize). */
         framework::RGManagedHandle managed_hdr_color_;
