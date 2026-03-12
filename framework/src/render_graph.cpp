@@ -226,6 +226,19 @@ namespace himalaya::framework {
         return {.index = slot};
     }
 
+    RGResourceId RenderGraph::use_managed_image(const RGManagedHandle handle) {
+        assert(handle.valid() && handle.index < managed_images_.size() && "Invalid RGManagedHandle");
+        const auto &managed = managed_images_[handle.index];
+        assert(managed.backing.valid() && "Managed image has been destroyed");
+
+        // Import with UNDEFINED initial layout (content not preserved) and
+        // UNDEFINED final layout (sentinel: compile() skips final transition).
+        return import_image(managed.debug_name,
+                            managed.backing,
+                            VK_IMAGE_LAYOUT_UNDEFINED,
+                            VK_IMAGE_LAYOUT_UNDEFINED);
+    }
+
     void RenderGraph::destroy_managed_image(const RGManagedHandle handle) {
         assert(handle.valid() && handle.index < managed_images_.size() && "Invalid RGManagedHandle");
         auto &managed = managed_images_[handle.index];
@@ -312,9 +325,14 @@ namespace himalaya::framework {
             }
         }
 
-        // Compute final layout transitions for imported images
+        // Compute final layout transitions for imported images.
+        // Managed images use UNDEFINED as final_layout sentinel — no final transition needed
+        // since their content is not preserved across frames.
         for (uint32_t i = 0; i < resources_.size(); ++i) {
             if (resources_[i].type != RGResourceType::Image) {
+                continue;
+            }
+            if (resources_[i].final_layout == VK_IMAGE_LAYOUT_UNDEFINED) {
                 continue;
             }
             // ReSharper disable once CppUseStructuredBinding

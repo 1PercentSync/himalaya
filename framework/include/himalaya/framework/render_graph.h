@@ -309,6 +309,19 @@ namespace himalaya::framework {
          */
         void destroy_managed_image(RGManagedHandle handle);
 
+        /**
+         * @brief Imports a managed image into the current frame's graph.
+         *
+         * Must be called every frame between clear() and compile() for each
+         * managed image that will be used by passes. The image starts with
+         * UNDEFINED layout (content not preserved across frames) and no
+         * final layout transition is inserted after the last pass.
+         *
+         * @param handle Managed image handle returned by create_managed_image().
+         * @return Per-frame resource ID for use in pass resource declarations.
+         */
+        RGResourceId use_managed_image(RGManagedHandle handle);
+
     private:
         /** @brief Internal storage for an imported resource. */
         struct RGResource {
