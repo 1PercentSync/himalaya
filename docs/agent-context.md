@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段三 — PBR 光照基础（Cook-Torrance + IBL + MSAA + HDR）
-- **进度**：Step 6 进行中（4 个 compute shader 全部完成，下一步 IBL init() 全流程实现）
+- **进度**：Step 6 进行中（IBL init() 全流程实现完毕，含 RHI cubemap 扩展和 bindless 注册；下一步 GlobalUniformData IBL 字段）
 
 ### 下一个任务
 
-阶段三 Step 6：IBL init() 全流程 — 创建 cubemap/irradiance/prefiltered/BRDF LUT 图像，编译 compute shader，immediate scope 内执行全部预计算 dispatch。需扩展 RHI 支持 cubemap 图像和新格式。
+阶段三 Step 6：GlobalUniformData 新增 IBL 字段 + 更新 bindings.glsl GlobalUBO 布局。
 
 ---
 
