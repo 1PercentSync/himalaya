@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段三 — PBR 光照基础（Cook-Torrance + IBL + MSAA + HDR）
-- **进度**：Step 3 进行中（descriptor + compute pipeline 完成，checkbox 1-9 done）
+- **进度**：Step 3 进行中（descriptor + compute pipeline + commands 完成，checkbox 1-10 done）
 
 ### 下一个任务
 
-阶段三 Step 3：Descriptor Layout + Compute Infra — `commands.h` 新增 `dispatch()` + `push_descriptor_set()`。
+阶段三 Step 3：Descriptor Layout + Compute Infra — 补充 `RenderGraph::resolve_usage()` 的 Compute case。
 
 ---
 
