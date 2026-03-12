@@ -79,7 +79,7 @@
 - [x] 创建 `shaders/common/normal.glsl`（TBN 构造、normal map 采样解码、R10G10B10A2 world-space 编码 `n*0.5+0.5`）
 - [x] 创建 `shaders/depth_prepass.vert`（输出 position/normal/tangent/uv0，`invariant gl_Position`）
 - [x] 创建 `shaders/depth_prepass.frag`（Opaque：采样 normal_tex → TBN → encode world normal，无 discard）
-- [ ] 创建 `shaders/depth_prepass_masked.frag`（Mask：采样 base_color_tex alpha test → discard → 采样 normal_tex → TBN → encode）
+- [x] 创建 `shaders/depth_prepass_masked.frag`（Mask：采样 base_color_tex alpha test → discard → 采样 normal_tex → TBN → encode）
 - [ ] 创建 resolved depth buffer（D32Sfloat，1x，managed 资源）
 - [ ] 创建 MSAA normal buffer（R10G10B10A2_UNORM，managed 资源；1x 时不创建）+ resolved normal buffer（R10G10B10A2_UNORM，managed 资源）
 - [ ] DepthPrePass 类（`passes/depth_prepass.h/cpp`）：setup 创建 Opaque pipeline + Mask pipeline、on_resize、record、destroy
