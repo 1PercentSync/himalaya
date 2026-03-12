@@ -20,7 +20,7 @@
 ## Step 2：RG Managed 资源 + Debug Name
 
 - [x] `RGImageDesc` 结构体（RGSizeMode Relative/Absolute、format、usage、sample_count、mip_levels）
-- [ ] `RGManagedHandle` 类型 + `create_managed_image()` / `destroy_managed_image()` API
+- [x] `RGManagedHandle` 类型 + `create_managed_image()` / `destroy_managed_image()` API
 - [ ] `use_managed_image()` — 每帧调用，返回 `RGResourceId`（每帧以 UNDEFINED 为 initial layout，不追踪帧间状态，不插入 final barrier）
 - [ ] `set_reference_resolution(VkExtent2D)` — Relative 模式的基准分辨率
 - [ ] Resize 自动重建：`set_reference_resolution()` 被调用时，比较 desc 推导出的新旧尺寸，变化时销毁旧 backing image 并创建新的
