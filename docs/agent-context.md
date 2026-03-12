@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段三 — PBR 光照基础（Cook-Torrance + IBL + MSAA + HDR）
-- **进度**：Step 3 进行中（descriptor 系统全部完成，checkbox 1-7 done）
+- **进度**：Step 3 进行中（descriptor 系统全部完成，进入 Compute Infra，checkbox 1-8 done）
 
 ### 下一个任务
 
-阶段三 Step 3：Descriptor Layout + Compute Infra — `get_global_set_layouts()` 返回三个 layout（Set 0 + Set 1 + Set 2）。
+阶段三 Step 3：Descriptor Layout + Compute Infra — `pipeline.h` 新增 `ComputePipelineDesc` + `create_compute_pipeline()`。
 
 ---
 

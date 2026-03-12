@@ -40,7 +40,7 @@
 - [x] 新增 Set 2 descriptor set layout（M1 全部 8 个 binding 预留，`PARTIALLY_BOUND`）+ Set 2 pool（普通 pool，8 COMBINED_IMAGE_SAMPLER）+ 分配 Set 2 × 1
 - [x] `DescriptorManager` 新增 `register_cubemap()` / `unregister_cubemap()` API（独立 free list 和 slot 空间）
 - [x] `DescriptorManager` 新增 Set 2 管理：`update_render_target()` 更新指定 binding 的 image + sampler
-- [ ] `get_global_set_layouts()` 返回三个 layout（Set 0 + Set 1 + Set 2），所有 pipeline layout 统一
+- [x] `get_global_set_layouts()` 返回三个 layout（Set 0 + Set 1 + Set 2），所有 pipeline layout 统一
 - [ ] `pipeline.h` 新增 `ComputePipelineDesc` 结构体（含 `descriptor_set_layouts` 字段支持自定义 layout）+ `create_compute_pipeline()` 函数
 - [ ] `commands.h` 新增 `CommandBuffer::dispatch(group_count_x, group_count_y, group_count_z)` + `CommandBuffer::push_descriptor_set()` 方法
 - [ ] 补充 `RenderGraph::resolve_usage()` 的 Compute case：Read → `SHADER_READ_ONLY_OPTIMAL` + `SHADER_SAMPLED_READ_BIT`，Write → `GENERAL` + `SHADER_STORAGE_WRITE_BIT`
