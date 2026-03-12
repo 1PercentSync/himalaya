@@ -90,7 +90,7 @@
 
 ## Step 6：IBL Pipeline + Skybox
 
-- [ ] `framework/include/himalaya/framework/ibl.h` + `framework/src/ibl.cpp` 模块骨架
+- [x] `framework/include/himalaya/framework/ibl.h` + `framework/src/ibl.cpp` 模块骨架
 - [ ] stb_image `.hdr` 文件加载（`stbi_loadf`，RGB float 数据）+ 上传到 equirectangular 2D GPU image
 - [ ] Equirectangular → Cubemap 转换 compute shader（`shaders/ibl/equirect_to_cubemap.comp`）
 - [ ] Irradiance 余弦卷积 compute shader（`shaders/ibl/irradiance.comp`，32×32 per face，R11G11B10F）
