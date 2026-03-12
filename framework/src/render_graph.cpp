@@ -198,7 +198,7 @@ namespace himalaya::framework {
             if (old_w == new_desc.width && old_h == new_desc.height) continue;
 
             resource_manager_->destroy_image(managed.backing);
-            managed.backing = resource_manager_->create_image(new_desc);
+            managed.backing = resource_manager_->create_image(new_desc, managed.debug_name);
         }
     }
 
@@ -231,7 +231,7 @@ namespace himalaya::framework {
 
         // Create the backing GPU image
         const auto image_desc = resolve_image_desc(desc);
-        const auto backing = resource_manager_->create_image(image_desc);
+        const auto backing = resource_manager_->create_image(image_desc, debug_name);
 
         // Allocate a managed slot (reuse freed slots if available)
         uint32_t slot;
@@ -285,7 +285,7 @@ namespace himalaya::framework {
             || old_resolved.usage != new_resolved.usage
             || old_resolved.mip_levels != new_resolved.mip_levels) {
             resource_manager_->destroy_image(managed.backing);
-            managed.backing = resource_manager_->create_image(new_resolved);
+            managed.backing = resource_manager_->create_image(new_resolved, managed.debug_name);
         }
     }
 

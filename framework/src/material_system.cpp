@@ -68,7 +68,7 @@ namespace himalaya::framework {
             .size = buffer_size,
             .usage = rhi::BufferUsage::StorageBuffer | rhi::BufferUsage::TransferDst,
             .memory = rhi::MemoryUsage::GpuOnly,
-        });
+        }, "Material Buffer");
 
         // Upload via staging buffer (caller must be in immediate scope)
         resource_manager_->upload_buffer(material_buffer_, materials.data(), buffer_size);

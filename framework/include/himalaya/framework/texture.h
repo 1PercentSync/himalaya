@@ -85,13 +85,15 @@ namespace himalaya::framework {
      * @param data               CPU pixel data (must be valid).
      * @param role               Texture role determining the GPU format.
      * @param sampler            Sampler to pair with the texture.
+     * @param debug_name         Human-readable name for the GPU image (must not be null).
      * @return Image handle and bindless index.
      */
     [[nodiscard]] TextureResult create_texture(rhi::ResourceManager &resource_manager,
                                                rhi::DescriptorManager &descriptor_manager,
                                                const ImageData &data,
                                                TextureRole role,
-                                               rhi::SamplerHandle sampler);
+                                               rhi::SamplerHandle sampler,
+                                               const char *debug_name);
 
     /**
      * @brief Holds the three default 1x1 textures and their bindless indices.

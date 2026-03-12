@@ -45,7 +45,8 @@ namespace himalaya::framework {
                                  rhi::DescriptorManager &descriptor_manager,
                                  const ImageData &data,
                                  const TextureRole role,
-                                 const rhi::SamplerHandle sampler) {
+                                 const rhi::SamplerHandle sampler,
+                                 const char *debug_name) {
         assert(data.valid() && "ImageData must be valid");
 
         const auto format = (role == TextureRole::Color)
@@ -65,7 +66,7 @@ namespace himalaya::framework {
             .usage = rhi::ImageUsage::Sampled | rhi::ImageUsage::TransferSrc | rhi::ImageUsage::TransferDst,
         };
 
-        const auto image = resource_manager.create_image(desc);
+        const auto image = resource_manager.create_image(desc, debug_name);
         resource_manager.upload_image(image, data.pixels.get(), data.size_bytes());
         if (mip_levels > 1) {
             resource_manager.generate_mips(image);
@@ -83,7 +84,8 @@ namespace himalaya::framework {
                                            const rhi::SamplerHandle sampler,
                                            const uint8_t r, const uint8_t g,
                                            // ReSharper disable once CppDFAConstantParameter
-                                           const uint8_t b, const uint8_t a) {
+                                           const uint8_t b, const uint8_t a,
+                                           const char *debug_name) {
             const rhi::ImageDesc desc{
                 .width = 1,
                 .height = 1,
@@ -94,7 +96,7 @@ namespace himalaya::framework {
                 .usage = rhi::ImageUsage::Sampled | rhi::ImageUsage::TransferDst,
             };
 
-            const auto image = resource_manager.create_image(desc);
+            const auto image = resource_manager.create_image(desc, debug_name);
             const uint8_t pixels[4] = {r, g, b, a};
             resource_manager.upload_image(image, pixels, sizeof(pixels));
 
@@ -108,11 +110,11 @@ namespace himalaya::framework {
                                             const rhi::SamplerHandle sampler) {
         DefaultTextures defaults{};
         defaults.white = create_solid_texture(resource_manager, descriptor_manager, sampler,
-                                              255, 255, 255, 255);
+                                              255, 255, 255, 255, "Default White");
         defaults.flat_normal = create_solid_texture(resource_manager, descriptor_manager, sampler,
-                                                    128, 128, 255, 255);
+                                                    128, 128, 255, 255, "Default Flat Normal");
         defaults.black = create_solid_texture(resource_manager, descriptor_manager, sampler,
-                                              0, 0, 0, 255);
+                                              0, 0, 0, 255, "Default Black");
 
         spdlog::info("Default textures created (white={}, flat_normal={}, black={})",
                      defaults.white.bindless_index.index,

@@ -55,12 +55,14 @@ namespace himalaya::app {
         shader_compiler_.set_include_path("shaders");
 
         // --- GlobalUBO buffers (per-frame, CpuToGpu) ---
+        constexpr const char *kGlobalUboNames[] = {"Global UBO [Frame 0]", "Global UBO [Frame 1]"};
+        static_assert(std::size(kGlobalUboNames) == rhi::kMaxFramesInFlight);
         for (uint32_t i = 0; i < rhi::kMaxFramesInFlight; ++i) {
             global_ubo_buffers_[i] = resource_manager_->create_buffer({
                 .size = sizeof(framework::GlobalUniformData),
                 .usage = rhi::BufferUsage::UniformBuffer,
                 .memory = rhi::MemoryUsage::CpuToGpu,
-            });
+            }, kGlobalUboNames[i]);
             descriptor_manager_->write_set0_buffer(
                 i, 0, global_ubo_buffers_[i],
                 sizeof(framework::GlobalUniformData));
@@ -69,12 +71,14 @@ namespace himalaya::app {
         // --- LightBuffer SSBOs (per-frame, CpuToGpu) ---
         constexpr auto light_buffer_size = static_cast<uint64_t>(kMaxDirectionalLights) *
                                            sizeof(framework::GPUDirectionalLight);
+        constexpr const char *kLightBufferNames[] = {"Light SSBO [Frame 0]", "Light SSBO [Frame 1]"};
+        static_assert(std::size(kLightBufferNames) == rhi::kMaxFramesInFlight);
         for (uint32_t i = 0; i < rhi::kMaxFramesInFlight; ++i) {
             light_buffers_[i] = resource_manager_->create_buffer({
                 .size = light_buffer_size,
                 .usage = rhi::BufferUsage::StorageBuffer,
                 .memory = rhi::MemoryUsage::CpuToGpu,
-            });
+            }, kLightBufferNames[i]);
             descriptor_manager_->write_set0_buffer(
                 i, 1, light_buffers_[i], light_buffer_size);
         }
@@ -88,7 +92,7 @@ namespace himalaya::app {
             .wrap_v = rhi::SamplerWrapMode::Repeat,
             .max_anisotropy = resource_manager_->max_sampler_anisotropy(),
             .max_lod = VK_LOD_CLAMP_NONE,
-        });
+        }, "Default Sampler");
 
         material_system_.init(resource_manager_, descriptor_manager_);
 

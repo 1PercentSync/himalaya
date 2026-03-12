@@ -359,16 +359,18 @@ namespace himalaya::app {
                 const auto vb_size = vertices.size() * sizeof(framework::Vertex);
                 const auto ib_size = indices.size() * sizeof(uint32_t);
 
+                const auto prim_label = std::string(gltf_mesh.name)
+                    + " [Prim " + std::to_string(meshes_.size()) + "]";
                 auto vb = resource_manager_->create_buffer({
                     .size = vb_size,
                     .usage = rhi::BufferUsage::VertexBuffer | rhi::BufferUsage::TransferDst,
                     .memory = rhi::MemoryUsage::GpuOnly,
-                });
+                }, (prim_label + " VB").c_str());
                 auto ib = resource_manager_->create_buffer({
                     .size = ib_size,
                     .usage = rhi::BufferUsage::IndexBuffer | rhi::BufferUsage::TransferDst,
                     .memory = rhi::MemoryUsage::GpuOnly,
-                });
+                }, (prim_label + " IB").c_str());
 
                 resource_manager_->upload_buffer(vb, vertices.data(), vb_size);
                 resource_manager_->upload_buffer(ib, indices.data(), ib_size);
@@ -407,9 +409,11 @@ namespace himalaya::app {
                                      const framework::DefaultTextures &default_textures,
                                      const rhi::SamplerHandle default_sampler) {
         // Load samplers (one per glTF sampler, naturally deduplicated by index)
-        for (const auto &s: gltf.samplers) {
+        for (size_t si = 0; si < gltf.samplers.size(); ++si) {
+            const auto sampler_name = "Sampler " + std::to_string(si);
             samplers_.push_back(resource_manager_->create_sampler(
-                convert_gltf_sampler(s, resource_manager_->max_sampler_anisotropy())));
+                convert_gltf_sampler(gltf.samplers[si], resource_manager_->max_sampler_anisotropy()),
+                sampler_name.c_str()));
         }
 
         spdlog::info("Created {} samplers", samplers_.size());
@@ -433,11 +437,13 @@ namespace himalaya::app {
             const auto sampler = tex.samplerIndex.has_value() ? samplers_[*tex.samplerIndex] : default_sampler;
 
             const auto pixels = decode_gltf_image(gltf, gltf.images[*tex.imageIndex], base_dir);
+            const auto tex_name = "Texture " + std::to_string(texture_index);
             const auto [image, bindless_index] = framework::create_texture(*resource_manager_,
                                                                            *descriptor_manager_,
                                                                            pixels,
                                                                            role,
-                                                                           sampler);
+                                                                           sampler,
+                                                                           tex_name.c_str());
 
             images_.push_back(image);
             bindless_indices_.push_back(bindless_index);
