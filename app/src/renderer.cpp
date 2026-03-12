@@ -36,8 +36,21 @@ namespace himalaya::app {
         imgui_ = &imgui;
 
         render_graph_.init(resource_manager_);
+        render_graph_.set_reference_resolution(swapchain_->extent);
         register_swapchain_images();
-        create_depth_buffer();
+
+        // Depth buffer as managed resource (auto-rebuilt on resize)
+        managed_depth_ = render_graph_.create_managed_image("Depth", {
+            .size_mode = framework::RGSizeMode::Relative,
+            .width_scale = 1.0f,
+            .height_scale = 1.0f,
+            .width = 0,
+            .height = 0,
+            .format = rhi::Format::D32Sfloat,
+            .usage = rhi::ImageUsage::DepthAttachment,
+            .sample_count = 1,
+            .mip_levels = 1,
+        });
 
         shader_compiler_.set_include_path("shaders");
 
@@ -147,7 +160,7 @@ namespace himalaya::app {
         resource_manager_->destroy_image(default_textures_.black.image);
         resource_manager_->destroy_sampler(default_sampler_);
 
-        destroy_depth_buffer();
+        render_graph_.destroy_managed_image(managed_depth_);
         unregister_swapchain_images();
     }
 
@@ -198,11 +211,7 @@ namespace himalaya::app {
             VK_IMAGE_LAYOUT_UNDEFINED,
             VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 
-        const auto depth_resource = render_graph_.import_image(
-            "Depth",
-            depth_image_,
-            VK_IMAGE_LAYOUT_UNDEFINED,
-            VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
+        const auto depth_resource = render_graph_.use_managed_image(managed_depth_);
 
         // --- Forward (unlit) pass ---
         const std::array scene_resources = {
@@ -219,7 +228,7 @@ namespace himalaya::app {
         };
         render_graph_.add_pass("Forward",
                                scene_resources,
-                               [this, &input](const rhi::CommandBuffer &pass_cmd) {
+                               [this, &input, depth_resource](const rhi::CommandBuffer &pass_cmd) {
                                    VkRenderingAttachmentInfo color_attachment{};
                                    color_attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
                                    color_attachment.imageView = swapchain_->image_views[input.image_index];
@@ -230,7 +239,8 @@ namespace himalaya::app {
 
                                    VkRenderingAttachmentInfo depth_attachment{};
                                    depth_attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-                                   depth_attachment.imageView = resource_manager_->get_image(depth_image_).view;
+                                   const auto depth_handle = render_graph_.get_image(depth_resource);
+                                   depth_attachment.imageView = resource_manager_->get_image(depth_handle).view;
                                    depth_attachment.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
                                    depth_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
                                    depth_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
@@ -343,13 +353,12 @@ namespace himalaya::app {
     // ---- Resize handling ----
 
     void Renderer::on_swapchain_invalidated() {
-        destroy_depth_buffer();
         unregister_swapchain_images();
     }
 
     void Renderer::on_swapchain_recreated() {
         register_swapchain_images();
-        create_depth_buffer();
+        render_graph_.set_reference_resolution(swapchain_->extent);
     }
 
     // ---- Accessors ----
@@ -409,24 +418,4 @@ namespace himalaya::app {
         swapchain_image_handles_.clear();
     }
 
-    // ---- Depth buffer management ----
-
-    void Renderer::create_depth_buffer() {
-        depth_image_ = resource_manager_->create_image({
-            .width = swapchain_->extent.width,
-            .height = swapchain_->extent.height,
-            .depth = 1,
-            .mip_levels = 1,
-            .sample_count = 1,
-            .format = rhi::Format::D32Sfloat,
-            .usage = rhi::ImageUsage::DepthAttachment,
-        });
-    }
-
-    void Renderer::destroy_depth_buffer() {
-        if (depth_image_.valid()) {
-            resource_manager_->destroy_image(depth_image_);
-            depth_image_ = {};
-        }
-    }
 } // namespace himalaya::app
