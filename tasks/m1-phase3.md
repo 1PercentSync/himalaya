@@ -51,7 +51,7 @@
 - [x] 创建 `framework/include/himalaya/framework/frame_context.h`（FrameContext 结构体：RG 资源 ID + 场景数据引用 + 帧参数）
 - [x] 提取 ForwardPass 类（`passes/forward_pass.h/cpp`）：从 Renderer 的 RG lambda 迁移渲染逻辑，实现 setup / record / destroy
 - [x] 创建 hdr_color managed 资源（R16G16B16A16_SFLOAT，1x）
-- [ ] 创建 `shaders/fullscreen.vert`（fullscreen triangle，无顶点输入）
+- [x] 创建 `shaders/fullscreen.vert`（fullscreen triangle，无顶点输入）
 - [ ] 创建 `shaders/tonemapping.frag`（passthrough 版本：采样 hdr_color 直接输出，不做 ACES）
 - [ ] TonemappingPass 类（`passes/tonemapping_pass.h/cpp`）：setup 接收 swapchain format 参数（物理设备协商结果，非硬编码）、创建 pipeline、record、destroy
 - [ ] ForwardPass 改为渲染到 hdr_color（不再直接渲染到 swapchain），沿用阶段二深度行为（depth compare GREATER、depth write ON）
