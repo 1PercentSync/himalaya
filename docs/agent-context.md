@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段三 — PBR 光照基础（Cook-Torrance + IBL + MSAA + HDR）
-- **进度**：Step 6 进行中（IBL init() 全流程实现完毕，含 RHI cubemap 扩展和 bindless 注册；下一步 GlobalUniformData IBL 字段）
+- **进度**：Step 6 进行中（GlobalUniformData IBL 字段 + ibl_intensity 重命名完毕；下一步 Renderer 调用 IBL init/destroy）
 
 ### 下一个任务
 
-阶段三 Step 6：GlobalUniformData 新增 IBL 字段 + 更新 bindings.glsl GlobalUBO 布局。
+阶段三 Step 6：Renderer 在 init() 中调用 IBL 预计算，在 destroy() 中清理 IBL 资源。
 
 ---
 
