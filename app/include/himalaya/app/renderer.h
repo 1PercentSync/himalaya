@@ -8,8 +8,8 @@
 #include <himalaya/framework/material_system.h>
 #include <himalaya/framework/render_graph.h>
 #include <himalaya/framework/texture.h>
+#include <himalaya/passes/forward_pass.h>
 #include <himalaya/rhi/context.h>
-#include <himalaya/rhi/pipeline.h>
 #include <himalaya/rhi/shader.h>
 
 #include <array>
@@ -158,8 +158,8 @@ namespace himalaya::app {
         /** @brief Material SSBO management (Set 0, Binding 2). */
         framework::MaterialSystem material_system_{};
 
-        /** @brief Forward lighting pipeline (forward.vert + forward.frag). */
-        rhi::Pipeline forward_pipeline_{};
+        /** @brief Forward lighting pass (renders to HDR color + depth). */
+        passes::ForwardPass forward_pass_{};
 
         /** @brief Depth buffer (D32Sfloat, managed by render graph, auto-rebuilt on resize). */
         framework::RGManagedHandle managed_depth_;

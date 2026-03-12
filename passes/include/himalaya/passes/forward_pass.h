@@ -1,0 +1,113 @@
+#pragma once
+
+/**
+ * @file forward_pass.h
+ * @brief ForwardPass: main forward lighting pass (Layer 2).
+ *
+ * Renders visible mesh instances into the HDR color buffer with depth testing.
+ * Extracted from the Renderer's inline RG lambda to a standalone pass class.
+ *
+ * Step 4a: renders to hdr_color (R16G16B16A16F), depth compare GREATER,
+ * depth write ON. Step 5 will change to EQUAL + write OFF after PrePass.
+ */
+
+#include <himalaya/rhi/pipeline.h>
+
+namespace himalaya::rhi {
+    class Context;
+    class ResourceManager;
+    class DescriptorManager;
+    class ShaderCompiler;
+} // namespace himalaya::rhi
+
+namespace himalaya::framework {
+    class RenderGraph;
+    struct FrameContext;
+} // namespace himalaya::framework
+
+namespace himalaya::passes {
+    /**
+     * @brief Forward lighting pass — draws visible meshes into HDR color + depth.
+     *
+     * MSAA-aware: setup() and on_sample_count_changed() accept sample_count
+     * to bake into the pipeline's rasterizationSamples.
+     */
+    class ForwardPass {
+    public:
+        /**
+         * @brief One-time initialization: compile shaders, create pipeline, store service pointers.
+         *
+         * @param ctx          Vulkan context.
+         * @param rm           Resource manager for buffer/image access.
+         * @param dm           Descriptor manager for set binding.
+         * @param sc           Shader compiler for GLSL → SPIR-V.
+         * @param sample_count MSAA sample count (1 = no MSAA).
+         */
+        void setup(rhi::Context &ctx,
+                   rhi::ResourceManager &rm,
+                   rhi::DescriptorManager &dm,
+                   rhi::ShaderCompiler &sc,
+                   uint32_t sample_count);
+
+        /**
+         * @brief Recreate resolution-dependent private resources.
+         *
+         * Called once after setup() and again on each swapchain resize.
+         * Step 4a has no resolution-dependent private resources; placeholder
+         * for future steps (e.g. per-pass render targets).
+         */
+        void on_resize(uint32_t width, uint32_t height);
+
+        /**
+         * @brief Rebuild pipeline when MSAA sample count changes.
+         *
+         * Caller must guarantee GPU is idle before calling (vkQueueWaitIdle).
+         *
+         * @param sample_count New MSAA sample count.
+         */
+        void on_sample_count_changed(uint32_t sample_count);
+
+        /**
+         * @brief Register RG resource usage and provide the execute callback.
+         *
+         * @param rg  Render graph to add the pass to.
+         * @param ctx Per-frame context with RG resource IDs and scene data.
+         */
+        void record(framework::RenderGraph &rg, const framework::FrameContext &ctx);
+
+        /**
+         * @brief Destroy pipeline and release owned resources.
+         */
+        void destroy();
+
+    private:
+        /**
+         * @brief Create (or recreate) the graphics pipeline.
+         *
+         * Shared by setup() and on_sample_count_changed(). Destroys the
+         * previous pipeline if one exists before creating the new one.
+         *
+         * @param sample_count MSAA sample count to bake into the pipeline.
+         */
+        void create_pipelines(uint32_t sample_count);
+
+        // ---- Service pointers (set in setup, accessed via this in lambdas) ----
+
+        /** @brief Vulkan context. */
+        rhi::Context *ctx_ = nullptr;
+
+        /** @brief Resource manager for buffer/image access during recording. */
+        rhi::ResourceManager *rm_ = nullptr;
+
+        /** @brief Descriptor manager for set binding during recording. */
+        rhi::DescriptorManager *dm_ = nullptr;
+
+        /** @brief Shader compiler for GLSL → SPIR-V compilation. */
+        rhi::ShaderCompiler *sc_ = nullptr;
+
+        // ---- Owned resources ----
+
+        /** @brief Forward lighting graphics pipeline. */
+        rhi::Pipeline pipeline_;
+    };
+} // namespace himalaya::passes

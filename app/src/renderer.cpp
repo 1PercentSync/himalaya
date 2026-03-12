@@ -5,6 +5,7 @@
 
 #include <himalaya/app/renderer.h>
 
+#include <himalaya/framework/frame_context.h>
 #include <himalaya/framework/imgui_backend.h>
 #include <himalaya/framework/mesh.h>
 #include <himalaya/framework/scene_data.h>
@@ -102,51 +103,14 @@ namespace himalaya::app {
             *resource_manager_, *descriptor_manager_, default_sampler_);
         ctx_->end_immediate();
 
-        // --- Forward pipeline (forward.vert + forward.frag) ---
-        {
-            const auto vert_spirv = shader_compiler_.compile_from_file(
-                "forward.vert", rhi::ShaderStage::Vertex);
-            const auto frag_spirv = shader_compiler_.compile_from_file(
-                "forward.frag", rhi::ShaderStage::Fragment);
-
-            // ReSharper disable once CppLocalVariableMayBeConst
-            VkShaderModule vert_module = rhi::create_shader_module(ctx_->device, vert_spirv);
-            // ReSharper disable once CppLocalVariableMayBeConst
-            VkShaderModule frag_module = rhi::create_shader_module(ctx_->device, frag_spirv);
-
-            rhi::GraphicsPipelineDesc desc;
-            desc.vertex_shader = vert_module;
-            desc.fragment_shader = frag_module;
-            desc.color_formats = {swapchain_->format};
-            desc.depth_format = VK_FORMAT_D32_SFLOAT;
-            desc.sample_count = 1;
-
-            const auto binding = framework::Vertex::binding_description();
-            const auto attributes = framework::Vertex::attribute_descriptions();
-            desc.vertex_bindings = {binding};
-            desc.vertex_attributes = {attributes.begin(), attributes.end()};
-
-            const auto set_layouts = descriptor_manager_->get_global_set_layouts();
-            desc.descriptor_set_layouts = {set_layouts.begin(), set_layouts.end()};
-
-            desc.push_constant_ranges = {
-                {
-                    .stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-                    .offset = 0,
-                    .size = sizeof(framework::PushConstantData),
-                },
-            };
-
-            forward_pipeline_ = rhi::create_graphics_pipeline(ctx_->device, desc);
-
-            vkDestroyShaderModule(ctx_->device, frag_module, nullptr);
-            vkDestroyShaderModule(ctx_->device, vert_module, nullptr);
-        }
+        // --- Forward pass ---
+        forward_pass_.setup(*ctx_, *resource_manager_, *descriptor_manager_,
+                            shader_compiler_, 1);
     }
 
     void Renderer::destroy() {
         material_system_.destroy();
-        forward_pipeline_.destroy(ctx_->device);
+        forward_pass_.destroy();
 
         for (const auto ubo: global_ubo_buffers_) {
             resource_manager_->destroy_buffer(ubo);
@@ -217,109 +181,20 @@ namespace himalaya::app {
 
         const auto depth_resource = render_graph_.use_managed_image(managed_depth_);
 
-        // --- Forward (unlit) pass ---
-        const std::array scene_resources = {
-            framework::RGResourceUsage{
-                swapchain_image,
-                framework::RGAccessType::Write,
-                framework::RGStage::ColorAttachment
-            },
-            framework::RGResourceUsage{
-                depth_resource,
-                framework::RGAccessType::ReadWrite,
-                framework::RGStage::DepthAttachment
-            },
-        };
-        render_graph_.add_pass("Forward",
-                               scene_resources,
-                               [this, &input, depth_resource](const rhi::CommandBuffer &pass_cmd) {
-                                   VkRenderingAttachmentInfo color_attachment{};
-                                   color_attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-                                   color_attachment.imageView = swapchain_->image_views[input.image_index];
-                                   color_attachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-                                   color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-                                   color_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-                                   color_attachment.clearValue.color = {{0.0f, 0.0f, 0.0f, 1.0f}};
+        // --- Construct FrameContext ---
+        framework::FrameContext frame_ctx{};
+        frame_ctx.swapchain = swapchain_image;
+        frame_ctx.hdr_color = swapchain_image; // Temporary: until hdr_color managed resource is created
+        frame_ctx.depth = depth_resource;
+        frame_ctx.meshes = input.meshes;
+        frame_ctx.materials = input.materials;
+        frame_ctx.cull_result = &input.cull_result;
+        frame_ctx.mesh_instances = input.mesh_instances;
+        frame_ctx.frame_index = input.frame_index;
+        frame_ctx.sample_count = 1;
 
-                                   VkRenderingAttachmentInfo depth_attachment{};
-                                   depth_attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-                                   const auto depth_handle = render_graph_.get_image(depth_resource);
-                                   depth_attachment.imageView = resource_manager_->get_image(depth_handle).view;
-                                   depth_attachment.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
-                                   depth_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-                                   depth_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-                                   depth_attachment.clearValue.depthStencil = {0.0f, 0};
-
-                                   VkRenderingInfo rendering_info{};
-                                   rendering_info.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
-                                   rendering_info.renderArea = {{0, 0}, swapchain_->extent};
-                                   rendering_info.layerCount = 1;
-                                   rendering_info.colorAttachmentCount = 1;
-                                   rendering_info.pColorAttachments = &color_attachment;
-                                   rendering_info.pDepthAttachment = &depth_attachment;
-
-                                   pass_cmd.begin_rendering(rendering_info);
-
-                                   pass_cmd.bind_pipeline(forward_pipeline_);
-
-                                   const VkDescriptorSet sets[] = {
-                                       descriptor_manager_->get_set0(input.frame_index),
-                                       descriptor_manager_->get_set1(),
-                                   };
-                                   pass_cmd.bind_descriptor_sets(forward_pipeline_.layout, 0, sets, 2);
-
-                                   VkViewport viewport{};
-                                   viewport.x = 0.0f;
-                                   viewport.y = static_cast<float>(swapchain_->extent.height);
-                                   viewport.width = static_cast<float>(swapchain_->extent.width);
-                                   viewport.height = -static_cast<float>(swapchain_->extent.height);
-                                   viewport.minDepth = 0.0f;
-                                   viewport.maxDepth = 1.0f;
-                                   pass_cmd.set_viewport(viewport);
-                                   pass_cmd.set_scissor({{0, 0}, swapchain_->extent});
-
-                                   pass_cmd.set_front_face(VK_FRONT_FACE_COUNTER_CLOCKWISE);
-                                   pass_cmd.set_depth_test_enable(true);
-                                   pass_cmd.set_depth_write_enable(true);
-                                   pass_cmd.set_depth_compare_op(VK_COMPARE_OP_GREATER);
-
-                                   // Draw visible opaque, then visible transparent (back-to-front)
-                                   auto draw_instance = [&](const uint32_t idx) {
-                                       const auto &instance = input.mesh_instances[idx];
-                                       const auto &mesh = input.meshes[instance.mesh_id];
-                                       const auto &material = input.materials[instance.material_id];
-
-                                       pass_cmd.set_cull_mode(
-                                           material.double_sided
-                                               ? VK_CULL_MODE_NONE
-                                               : VK_CULL_MODE_BACK_BIT);
-
-                                       const framework::PushConstantData pc{
-                                           .model = instance.transform,
-                                           .material_index = material.buffer_offset,
-                                       };
-                                       pass_cmd.push_constants(
-                                           forward_pipeline_.layout,
-                                           VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-                                           &pc,
-                                           sizeof(pc));
-
-                                       pass_cmd.bind_vertex_buffer(
-                                           0,
-                                           resource_manager_->get_buffer(mesh.vertex_buffer).buffer);
-                                       pass_cmd.bind_index_buffer(
-                                           resource_manager_->get_buffer(mesh.index_buffer).buffer,
-                                           VK_INDEX_TYPE_UINT32);
-                                       pass_cmd.draw_indexed(mesh.index_count);
-                                   };
-
-                                   for (const auto idx: input.cull_result.visible_opaque_indices)
-                                       draw_instance(idx);
-                                   for (const auto idx: input.cull_result.visible_transparent_indices)
-                                       draw_instance(idx);
-
-                                   pass_cmd.end_rendering();
-                               });
+        // --- Forward pass ---
+        forward_pass_.record(render_graph_, frame_ctx);
 
         // --- ImGui pass ---
         const std::array imgui_resources = {
