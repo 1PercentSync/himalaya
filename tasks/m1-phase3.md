@@ -107,7 +107,7 @@
 
 ## Step 7：PBR Shader 升级
 
-- [ ] 创建 `shaders/common/constants.glsl`（PI、EPSILON 等数学常量）
+- [x] 创建 `shaders/common/constants.glsl`（PI、EPSILON 等数学常量）
 - [ ] 创建 `shaders/common/brdf.glsl`（D_GGX、G_SmithGGX、F_Schlick、Lambert_diffuse，纯函数无场景数据依赖）
 - [ ] 创建 `shaders/common/lighting.glsl`（evaluate_directional_light、evaluate_ibl，内部 include constants + brdf，依赖 bindings.glsl 的光源/IBL 结构体）
 - [ ] 升级 `forward.frag`：替换 Lambert 为 Cook-Torrance（GGX / Smith Height-Correlated / Schlick）+ IBL 环境光（irradiance + prefiltered + BRDF LUT Split-Sum）
