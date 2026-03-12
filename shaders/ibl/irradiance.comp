@@ -1,0 +1,95 @@
+#version 460
+
+/**
+ * @file irradiance.comp
+ * @brief Cosine-weighted hemisphere convolution for diffuse irradiance cubemap.
+ *
+ * For each texel, integrates incoming radiance from the environment cubemap
+ * weighted by cos(theta) over the hemisphere oriented along the texel's normal.
+ * Uses uniform hemisphere sampling with a fixed sample count.
+ *
+ * Dispatch: (32/16, 32/16, 6) — 32×32 per face, 6 faces.
+ * Uses push descriptors (IBL one-time init exception).
+ */
+
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+layout(set = 0, binding = 0) uniform samplerCube u_environment;
+layout(set = 0, binding = 1, r11f_g11f_b10f) writeonly uniform image2DArray u_irradiance;
+
+const float PI = 3.14159265358979323846;
+
+/** Number of azimuthal (phi) samples per texel. */
+const uint SAMPLE_COUNT_PHI = 64;
+
+/** Number of polar (theta) samples per texel. */
+const uint SAMPLE_COUNT_THETA = 16;
+
+/**
+ * Computes the 3D direction vector for a cubemap texel.
+ * Same convention as equirect_to_cubemap.comp.
+ */
+vec3 cube_dir(uint face, vec2 uv) {
+    float u = uv.x * 2.0 - 1.0;
+    float v = uv.y * 2.0 - 1.0;
+
+    switch (face) {
+        case 0: return vec3( 1.0,   -v,   -u);
+        case 1: return vec3(-1.0,   -v,    u);
+        case 2: return vec3(   u,  1.0,    v);
+        case 3: return vec3(   u, -1.0,   -v);
+        case 4: return vec3(   u,   -v,  1.0);
+        case 5: return vec3(  -u,   -v, -1.0);
+    }
+    return vec3(0.0);
+}
+
+void main() {
+    ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+    uint  face  = gl_GlobalInvocationID.z;
+    ivec2 size  = imageSize(u_irradiance).xy;
+
+    if (pixel.x >= size.x || pixel.y >= size.y) return;
+
+    vec2 uv = (vec2(pixel) + 0.5) / vec2(size);
+    vec3 N  = normalize(cube_dir(face, uv));
+
+    // Build tangent frame from normal
+    vec3 up    = abs(N.y) < 0.999 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0);
+    vec3 right = normalize(cross(up, N));
+    up = cross(N, right);
+
+    // Uniform hemisphere integration: sum( L(w) * cos(theta) * sin(theta) )
+    // Normalization factor: PI / (SAMPLE_COUNT_PHI * SAMPLE_COUNT_THETA)
+    vec3 irradiance = vec3(0.0);
+
+    float delta_phi   = 2.0 * PI / float(SAMPLE_COUNT_PHI);
+    float delta_theta = 0.5 * PI / float(SAMPLE_COUNT_THETA);
+
+    for (uint phi_i = 0; phi_i < SAMPLE_COUNT_PHI; ++phi_i) {
+        float phi = float(phi_i) * delta_phi;
+        for (uint theta_i = 0; theta_i < SAMPLE_COUNT_THETA; ++theta_i) {
+            float theta = float(theta_i) * delta_theta;
+
+            // Spherical to cartesian (tangent space)
+            float sin_theta = sin(theta);
+            float cos_theta = cos(theta);
+            vec3 tangent_sample = vec3(sin_theta * cos(phi),
+                                       sin_theta * sin(phi),
+                                       cos_theta);
+
+            // Tangent space → world space
+            vec3 sample_dir = tangent_sample.x * right
+                            + tangent_sample.y * up
+                            + tangent_sample.z * N;
+
+            // cos(theta) weighting + sin(theta) solid angle correction
+            irradiance += texture(u_environment, sample_dir).rgb * cos_theta * sin_theta;
+        }
+    }
+
+    // Normalize: integrate over hemisphere, discrete sum → continuous integral
+    irradiance = PI * irradiance / float(SAMPLE_COUNT_PHI * SAMPLE_COUNT_THETA);
+
+    imageStore(u_irradiance, ivec3(pixel, face), vec4(irradiance, 1.0));
+}
