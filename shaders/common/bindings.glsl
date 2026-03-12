@@ -58,6 +58,7 @@ layout(set = 0, binding = 0) uniform GlobalUBO {
     uint prefiltered_cubemap_index;         // offset 296 — cubemaps[] index for prefiltered env map
     uint brdf_lut_index;                    // offset 300 — textures[] index for BRDF integration LUT
     uint prefiltered_mip_count;             // offset 304 — prefiltered env map mip levels
+    uint skybox_cubemap_index;              // offset 308 — cubemaps[] index for skybox cubemap
 } global;
 
 layout(set = 0, binding = 1) readonly buffer LightBuffer {
