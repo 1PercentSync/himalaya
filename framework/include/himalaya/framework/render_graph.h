@@ -19,6 +19,76 @@ namespace himalaya::rhi {
 } // namespace himalaya::rhi
 
 namespace himalaya::framework {
+
+    // ---- Managed Resource Types ----
+
+    /** @brief Sizing mode for managed render graph images. */
+    enum class RGSizeMode : uint8_t {
+        /**
+         * @brief Size is a fraction of the reference resolution.
+         *
+         * The actual pixel dimensions are computed as
+         * (reference_width * width_scale, reference_height * height_scale).
+         * Used for screen-sized render targets (depth, HDR color, MSAA buffers).
+         */
+        Relative,
+
+        /**
+         * @brief Size is a fixed pixel dimension.
+         *
+         * Used for resolution-independent resources (shadow maps, LUTs).
+         */
+        Absolute,
+    };
+
+    /**
+     * @brief Description for a managed render graph image.
+     *
+     * Describes the desired properties of a managed image. The render graph
+     * creates and caches the backing GPU image, automatically rebuilding it
+     * when the reference resolution changes (Relative mode) or when the
+     * description is updated via update_managed_desc().
+     *
+     * All fields must be explicitly specified (no default values),
+     * consistent with rhi::ImageDesc design.
+     */
+    struct RGImageDesc {
+        /** @brief Sizing mode (Relative to reference resolution, or Absolute pixels). */
+        RGSizeMode size_mode;
+
+        // ---- Relative mode fields ----
+
+        /** @brief Width as a fraction of reference resolution (e.g. 1.0 = full, 0.5 = half). */
+        float width_scale;
+
+        /** @brief Height as a fraction of reference resolution. */
+        float height_scale;
+
+        // ---- Absolute mode fields ----
+
+        /** @brief Fixed width in pixels (only used when size_mode == Absolute). */
+        uint32_t width;
+
+        /** @brief Fixed height in pixels (only used when size_mode == Absolute). */
+        uint32_t height;
+
+        // ---- Common fields ----
+
+        /** @brief Pixel format of the image. */
+        rhi::Format format;
+
+        /** @brief Usage flags for the backing image. */
+        rhi::ImageUsage usage;
+
+        /** @brief Samples per pixel (1 = no MSAA). */
+        uint32_t sample_count;
+
+        /** @brief Number of mip levels (1 = single level). */
+        uint32_t mip_levels;
+    };
+
+    // ---- Resource Identifiers ----
+
     /**
      * @brief Opaque identifier for a resource imported into the render graph.
      *
