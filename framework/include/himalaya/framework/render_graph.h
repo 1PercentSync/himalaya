@@ -331,6 +331,17 @@ namespace himalaya::framework {
          *
          * @param handle Handle returned by create_managed_image().
          */
+        /**
+         * @brief Returns the backing ImageHandle of a managed image.
+         *
+         * Used in resize/MSAA-change handlers to immediately obtain the new
+         * backing handle after rebuild, for updating Set 2 descriptors.
+         *
+         * @param handle Managed image handle.
+         * @return The current backing ImageHandle.
+         */
+        [[nodiscard]] rhi::ImageHandle get_managed_backing_image(RGManagedHandle handle) const;
+
         void destroy_managed_image(RGManagedHandle handle);
 
         /**

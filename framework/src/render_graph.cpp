@@ -289,6 +289,13 @@ namespace himalaya::framework {
         }
     }
 
+    rhi::ImageHandle RenderGraph::get_managed_backing_image(const RGManagedHandle handle) const {
+        assert(handle.valid() && handle.index < managed_images_.size() && "Invalid RGManagedHandle");
+        const auto &managed = managed_images_[handle.index];
+        assert(managed.backing.valid() && "Managed image has been destroyed");
+        return managed.backing;
+    }
+
     void RenderGraph::destroy_managed_image(const RGManagedHandle handle) {
         assert(handle.valid() && handle.index < managed_images_.size() && "Invalid RGManagedHandle");
         auto &managed = managed_images_[handle.index];
