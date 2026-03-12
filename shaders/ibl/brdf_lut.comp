@@ -1,0 +1,129 @@
+#version 460
+
+/**
+ * @file brdf_lut.comp
+ * @brief BRDF integration LUT for Split-Sum IBL approximation.
+ *
+ * Precomputes the integral of the BRDF (GGX/Smith/Schlick) over the
+ * hemisphere for all (NdotV, roughness) combinations. Environment-independent,
+ * shared across all materials and environments.
+ *
+ * Output:
+ *   R = scale factor for F0 (Fresnel at normal incidence)
+ *   G = bias term (added to F0 × scale)
+ *   Shader usage: specular = prefiltered * (F0 * lut.r + lut.g)
+ *
+ * Dispatch: (256/16, 256/16, 1) — 2D LUT, no cubemap faces.
+ * Uses push descriptors (IBL one-time init exception).
+ */
+
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+layout(set = 0, binding = 0, rg16) writeonly uniform image2D u_brdf_lut;
+
+const float PI = 3.14159265358979323846;
+
+/** Number of importance samples per texel. */
+const uint SAMPLE_COUNT = 1024;
+
+/**
+ * Radical inverse using the Van der Corput sequence (base 2).
+ */
+float radical_inverse_vdc(uint bits) {
+    bits = (bits << 16u) | (bits >> 16u);
+    bits = ((bits & 0x55555555u) << 1u) | ((bits & 0xAAAAAAAAu) >> 1u);
+    bits = ((bits & 0x33333333u) << 2u) | ((bits & 0xCCCCCCCCu) >> 2u);
+    bits = ((bits & 0x0F0F0F0Fu) << 4u) | ((bits & 0xF0F0F0F0u) >> 4u);
+    bits = ((bits & 0x00FF00FFu) << 8u) | ((bits & 0xFF00FF00u) >> 8u);
+    return float(bits) * 2.3283064365386963e-10;
+}
+
+/** Hammersley 2D quasi-random point set. */
+vec2 hammersley(uint i, uint n) {
+    return vec2(float(i) / float(n), radical_inverse_vdc(i));
+}
+
+/**
+ * GGX importance sampling: generates a half-vector H distributed
+ * according to the GGX NDF for the given roughness.
+ */
+vec3 importance_sample_ggx(vec2 xi, vec3 N, float roughness) {
+    float a = roughness * roughness;
+
+    float phi       = 2.0 * PI * xi.x;
+    float cos_theta = sqrt((1.0 - xi.y) / (1.0 + (a * a - 1.0) * xi.y));
+    float sin_theta = sqrt(1.0 - cos_theta * cos_theta);
+
+    vec3 H_tangent = vec3(sin_theta * cos(phi),
+                          sin_theta * sin(phi),
+                          cos_theta);
+
+    vec3 up    = abs(N.y) < 0.999 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0);
+    vec3 right = normalize(cross(up, N));
+    up = cross(N, right);
+
+    return normalize(right * H_tangent.x + up * H_tangent.y + N * H_tangent.z);
+}
+
+/**
+ * Smith height-correlated geometry function for GGX (G2 / (4 * NdotV * NdotL)).
+ * Returns the combined visibility term V = G / (4 * NdotV * NdotL).
+ */
+float geometry_smith(float NdotV, float NdotL, float roughness) {
+    float a = roughness * roughness;
+    float a2 = a * a;
+
+    float ggx_v = NdotL * sqrt(NdotV * NdotV * (1.0 - a2) + a2);
+    float ggx_l = NdotV * sqrt(NdotL * NdotL * (1.0 - a2) + a2);
+
+    return 0.5 / max(ggx_v + ggx_l, 0.001);
+}
+
+void main() {
+    ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 size  = imageSize(u_brdf_lut);
+
+    if (pixel.x >= size.x || pixel.y >= size.y) return;
+
+    // X axis = NdotV, Y axis = roughness
+    float NdotV     = (float(pixel.x) + 0.5) / float(size.x);
+    float roughness = (float(pixel.y) + 0.5) / float(size.y);
+
+    // Clamp NdotV away from 0 to avoid division by zero
+    NdotV = max(NdotV, 0.001);
+
+    // Reconstruct V from NdotV (N = +Z in tangent space)
+    vec3 V = vec3(sqrt(1.0 - NdotV * NdotV), 0.0, NdotV);
+    vec3 N = vec3(0.0, 0.0, 1.0);
+
+    float scale = 0.0; // F0 multiplier
+    float bias  = 0.0; // additive term
+
+    for (uint i = 0; i < SAMPLE_COUNT; ++i) {
+        vec2 xi = hammersley(i, SAMPLE_COUNT);
+        vec3 H  = importance_sample_ggx(xi, N, roughness);
+        vec3 L  = normalize(2.0 * dot(V, H) * H - V);
+
+        float NdotL = max(L.z, 0.0);
+        float NdotH = max(H.z, 0.0);
+        float VdotH = max(dot(V, H), 0.0);
+
+        if (NdotL > 0.0) {
+            float V_term = geometry_smith(NdotV, NdotL, roughness);
+            // G_vis = V_term * VdotH * NdotL / NdotH
+            // (cancels D(H) from the PDF; includes 4*NdotV*NdotL denominator)
+            float G_vis = V_term * VdotH * NdotL / max(NdotH, 0.001);
+
+            // Schlick Fresnel: F = F0 + (1-F0) * (1-VdotH)^5
+            // Split into F0*scale + bias
+            float Fc = pow(1.0 - VdotH, 5.0);
+            scale += G_vis * (1.0 - Fc);
+            bias  += G_vis * Fc;
+        }
+    }
+
+    scale /= float(SAMPLE_COUNT);
+    bias  /= float(SAMPLE_COUNT);
+
+    imageStore(u_brdf_lut, pixel, vec4(scale, bias, 0.0, 0.0));
+}
