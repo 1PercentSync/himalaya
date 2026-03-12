@@ -152,6 +152,18 @@ namespace himalaya::rhi {
          */
         void unregister_cubemap(BindlessIndex index);
 
+        /**
+         * @brief Updates a Set 2 render target binding with the given image and sampler.
+         *
+         * Called at init, resize, or MSAA switch to point a named render target
+         * binding to its current backing image.
+         *
+         * @param binding Binding index within Set 2 (0-7).
+         * @param image   Image handle for the render target.
+         * @param sampler Sampler handle for sampling the render target.
+         */
+        void update_render_target(uint32_t binding, ImageHandle image, SamplerHandle sampler) const;
+
     private:
         /** @brief Vulkan context (device). */
         Context *context_ = nullptr;

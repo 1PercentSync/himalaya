@@ -173,6 +173,36 @@ namespace himalaya::rhi {
         free_cubemap_indices_.push_back(index.index);
     }
 
+    void DescriptorManager::update_render_target(const uint32_t binding,
+                                                 const ImageHandle image,
+                                                 const SamplerHandle sampler) const {
+        assert(binding < kRenderTargetBindingCount && "Set 2 binding out of range");
+
+        const auto &img = resource_manager_->get_image(image);
+        const auto &smp = resource_manager_->get_sampler(sampler);
+
+        const VkDescriptorImageInfo image_info{
+            .sampler = smp.sampler,
+            .imageView = img.view,
+            .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+        };
+
+        const VkWriteDescriptorSet write{
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstSet = set2_set_,
+            .dstBinding = binding,
+            .descriptorCount = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+            .pImageInfo = &image_info,
+        };
+
+        vkUpdateDescriptorSets(context_->device,
+                               1,
+                               &write,
+                               0,
+                               nullptr);
+    }
+
     void DescriptorManager::write_set0_buffer(const uint32_t frame_index,
                                               const uint32_t binding,
                                               const BufferHandle buffer,
