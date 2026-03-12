@@ -1,4 +1,5 @@
 #version 460
+#extension GL_EXT_nonuniform_qualifier : require
 
 /**
  * Skybox fragment shader — cubemap sampling.
@@ -16,5 +17,5 @@ layout(location = 0) out vec4 out_color;
 
 void main() {
     vec3 dir = normalize(in_world_dir);
-    out_color = texture(cubemaps[global.skybox_cubemap_index], dir);
+    out_color = texture(cubemaps[nonuniformEXT(global.skybox_cubemap_index)], dir);
 }
