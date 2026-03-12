@@ -173,6 +173,11 @@ namespace himalaya::framework {
         }
     }
 
+    void RenderGraph::set_reference_resolution(const VkExtent2D extent) {
+        assert(extent.width > 0 && extent.height > 0 && "Reference resolution must be non-zero");
+        reference_extent_ = extent;
+    }
+
     rhi::ImageDesc RenderGraph::resolve_image_desc(const RGImageDesc &desc) const {
         uint32_t w, h;
         if (desc.size_mode == RGSizeMode::Relative) {

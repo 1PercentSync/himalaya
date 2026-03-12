@@ -297,6 +297,18 @@ namespace himalaya::framework {
          * @param desc       Image description (size mode, format, usage, etc.).
          * @return Persistent handle for use with use_managed_image() and destroy_managed_image().
          */
+        /**
+         * @brief Sets the reference resolution for Relative size mode.
+         *
+         * Must be called before create_managed_image() with Relative descriptors.
+         * When called with a new extent that differs from the current one,
+         * all Relative managed images whose resolved size changes are
+         * automatically rebuilt (backing image destroyed and recreated).
+         *
+         * @param extent New reference resolution (typically swapchain extent).
+         */
+        void set_reference_resolution(VkExtent2D extent);
+
         RGManagedHandle create_managed_image(const char *debug_name, const RGImageDesc &desc);
 
         /**
