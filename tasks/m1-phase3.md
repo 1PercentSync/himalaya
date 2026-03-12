@@ -99,7 +99,7 @@
 - [x] IBL 模块 `init()` 方法：在 `begin_immediate()` / `end_immediate()` scope 内执行全部预计算，使用 Push Descriptors 绑定输入/输出 image
 - [x] 将 irradiance/prefiltered cubemap 注册到 Set 1 binding 1（`register_cubemap()`），BRDF LUT 注册到 Set 1 binding 0（`register_texture()`）
 - [x] `GlobalUniformData` 新增 IBL 字段（irradiance_cubemap_index、prefiltered_cubemap_index、brdf_lut_index、prefiltered_mip_count）+ 更新 `bindings.glsl` GlobalUBO 布局 + `ambient_intensity` 重命名为 `ibl_intensity`
-- [ ] Renderer 在 `init()` 中调用 IBL 预计算，在 `destroy()` 中清理 IBL 资源
+- [x] Renderer 在 `init()` 中调用 IBL 预计算，在 `destroy()` 中清理 IBL 资源
 - [ ] 创建 `shaders/skybox.vert`（独立 VS，计算世界方向 varying，`gl_Position.z = 0.0`；不复用 `fullscreen.vert`）
 - [ ] 创建 `shaders/skybox.frag`（normalize + texture 纯采样）
 - [ ] SkyboxPass 类（`passes/skybox_pass.h/cpp`）：方法集 setup / record / destroy（不属于 MSAA 相关 pass，无 on_resize / on_sample_count_changed），渲染到 resolved 1x hdr_color，读 resolved depth（GREATER_OR_EQUAL + depth write OFF）
