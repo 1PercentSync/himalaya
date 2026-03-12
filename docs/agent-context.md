@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段三 — PBR 光照基础（Cook-Torrance + IBL + MSAA + HDR）
-- **进度**：Step 6 进行中（Renderer IBL 集成完毕；下一步 skybox.vert shader）
+- **进度**：Step 6 进行中（skybox.vert 完毕；下一步 skybox.frag shader）
 
 ### 下一个任务
 
-阶段三 Step 6：创建 `shaders/skybox.vert`（独立 VS，计算世界方向 varying，`gl_Position.z = 0.0`）。
+阶段三 Step 6：创建 `shaders/skybox.frag`（normalize + texture 纯采样）。
 
 ---
 
