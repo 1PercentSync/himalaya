@@ -1,0 +1,129 @@
+#version 460
+
+/**
+ * @file prefilter.comp
+ * @brief GGX importance-sampled prefiltered environment map for specular IBL.
+ *
+ * For each mip level, convolves the environment cubemap with a GGX lobe
+ * matching the corresponding roughness. Lower mip = lower roughness (sharper).
+ * Mip 0 copies the environment directly (roughness ≈ 0).
+ *
+ * Dispatch per mip: (mip_size/16, mip_size/16, 6).
+ * Push constant: roughness for the current mip level.
+ * Uses push descriptors (IBL one-time init exception).
+ */
+
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+layout(set = 0, binding = 0) uniform samplerCube u_environment;
+layout(set = 0, binding = 1, rgba16f) writeonly uniform image2DArray u_prefiltered;
+
+layout(push_constant) uniform PushConstants {
+    float roughness;
+} pc;
+
+const float PI = 3.14159265358979323846;
+
+/** Number of importance samples per texel. */
+const uint SAMPLE_COUNT = 1024;
+
+/**
+ * Computes the 3D direction vector for a cubemap texel.
+ * Same convention as equirect_to_cubemap.comp.
+ */
+vec3 cube_dir(uint face, vec2 uv) {
+    float u = uv.x * 2.0 - 1.0;
+    float v = uv.y * 2.0 - 1.0;
+
+    switch (face) {
+        case 0: return vec3( 1.0,   -v,   -u);
+        case 1: return vec3(-1.0,   -v,    u);
+        case 2: return vec3(   u,  1.0,    v);
+        case 3: return vec3(   u, -1.0,   -v);
+        case 4: return vec3(   u,   -v,  1.0);
+        case 5: return vec3(  -u,   -v, -1.0);
+    }
+    return vec3(0.0);
+}
+
+/**
+ * Radical inverse using the Van der Corput sequence (base 2).
+ * Used for Hammersley low-discrepancy point set generation.
+ */
+float radical_inverse_vdc(uint bits) {
+    bits = (bits << 16u) | (bits >> 16u);
+    bits = ((bits & 0x55555555u) << 1u) | ((bits & 0xAAAAAAAAu) >> 1u);
+    bits = ((bits & 0x33333333u) << 2u) | ((bits & 0xCCCCCCCCu) >> 2u);
+    bits = ((bits & 0x0F0F0F0Fu) << 4u) | ((bits & 0xF0F0F0F0u) >> 4u);
+    bits = ((bits & 0x00FF00FFu) << 8u) | ((bits & 0xFF00FF00u) >> 8u);
+    return float(bits) * 2.3283064365386963e-10; // / 0x100000000
+}
+
+/** Hammersley 2D quasi-random point set. */
+vec2 hammersley(uint i, uint n) {
+    return vec2(float(i) / float(n), radical_inverse_vdc(i));
+}
+
+/**
+ * GGX importance sampling: generates a half-vector H distributed
+ * according to the GGX NDF for the given roughness.
+ *
+ * @param xi        2D quasi-random sample in [0,1]².
+ * @param N         Surface normal (hemisphere pole).
+ * @param roughness Material roughness (alpha = roughness²).
+ * @return Half-vector H in world space.
+ */
+vec3 importance_sample_ggx(vec2 xi, vec3 N, float roughness) {
+    float a = roughness * roughness;
+
+    // GGX NDF sampling in spherical coordinates
+    float phi       = 2.0 * PI * xi.x;
+    float cos_theta = sqrt((1.0 - xi.y) / (1.0 + (a * a - 1.0) * xi.y));
+    float sin_theta = sqrt(1.0 - cos_theta * cos_theta);
+
+    // Tangent-space half vector
+    vec3 H_tangent = vec3(sin_theta * cos(phi),
+                          sin_theta * sin(phi),
+                          cos_theta);
+
+    // Build tangent frame
+    vec3 up    = abs(N.y) < 0.999 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0);
+    vec3 right = normalize(cross(up, N));
+    up = cross(N, right);
+
+    // Tangent space → world space
+    return normalize(right * H_tangent.x + up * H_tangent.y + N * H_tangent.z);
+}
+
+void main() {
+    ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+    uint  face  = gl_GlobalInvocationID.z;
+    ivec2 size  = imageSize(u_prefiltered).xy;
+
+    if (pixel.x >= size.x || pixel.y >= size.y) return;
+
+    vec2 uv = (vec2(pixel) + 0.5) / vec2(size);
+    vec3 N  = normalize(cube_dir(face, uv));
+
+    // Assume view direction equals normal (Split-Sum approximation)
+    vec3 V = N;
+
+    vec3  prefiltered_color = vec3(0.0);
+    float total_weight      = 0.0;
+
+    for (uint i = 0; i < SAMPLE_COUNT; ++i) {
+        vec2 xi = hammersley(i, SAMPLE_COUNT);
+        vec3 H  = importance_sample_ggx(xi, N, pc.roughness);
+        vec3 L  = normalize(2.0 * dot(V, H) * H - V);
+
+        float NdotL = dot(N, L);
+        if (NdotL > 0.0) {
+            prefiltered_color += texture(u_environment, L).rgb * NdotL;
+            total_weight += NdotL;
+        }
+    }
+
+    prefiltered_color /= max(total_weight, 0.001);
+
+    imageStore(u_prefiltered, ivec3(pixel, face), vec4(prefiltered_color, 1.0));
+}
