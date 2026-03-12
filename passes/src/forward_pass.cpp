@@ -101,114 +101,154 @@ namespace himalaya::passes {
     // ---- Per-frame recording ----
 
     void ForwardPass::record(framework::RenderGraph &rg, const framework::FrameContext &ctx) const {
-        // Declare resource usage: write hdr_color + read/write depth.
-        const std::array resources = {
-            framework::RGResourceUsage{
-                ctx.hdr_color,
-                framework::RGAccessType::Write,
-                framework::RGStage::ColorAttachment,
-            },
-            framework::RGResourceUsage{
-                ctx.depth,
-                framework::RGAccessType::ReadWrite,
-                framework::RGStage::DepthAttachment,
-            },
+        const bool msaa = ctx.sample_count > 1;
+
+        // Execute lambda is shared between MSAA and 1x paths — only
+        // attachment setup differs, the draw loop is identical.
+        auto execute = [this, &rg, &ctx, msaa](const rhi::CommandBuffer &cmd) {
+            // Color attachment: render to MSAA target with resolve, or directly to hdr_color
+            const auto color_target = rg.get_image(msaa ? ctx.msaa_color : ctx.hdr_color);
+
+            VkRenderingAttachmentInfo color_attachment{};
+            color_attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+            color_attachment.imageView = rm_->get_image(color_target).view;
+            color_attachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+            color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+            color_attachment.storeOp = msaa
+                                           ? VK_ATTACHMENT_STORE_OP_DONT_CARE
+                                           : VK_ATTACHMENT_STORE_OP_STORE;
+            color_attachment.clearValue.color = {{0.0f, 0.0f, 0.0f, 1.0f}};
+
+            if (msaa) {
+                const auto resolve_target = rg.get_image(ctx.hdr_color);
+                color_attachment.resolveMode = VK_RESOLVE_MODE_AVERAGE_BIT;
+                color_attachment.resolveImageView = rm_->get_image(resolve_target).view;
+                color_attachment.resolveImageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+            }
+
+            // Depth attachment: MSAA depth or 1x depth
+            const auto depth_target = rg.get_image(msaa ? ctx.msaa_depth : ctx.depth);
+
+            VkRenderingAttachmentInfo depth_attachment{};
+            depth_attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+            depth_attachment.imageView = rm_->get_image(depth_target).view;
+            depth_attachment.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
+            depth_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+            depth_attachment.storeOp = msaa
+                                           ? VK_ATTACHMENT_STORE_OP_DONT_CARE
+                                           : VK_ATTACHMENT_STORE_OP_STORE;
+            depth_attachment.clearValue.depthStencil = {0.0f, 0};
+
+            // Derive render area from the color render target
+            const auto &color_image = rm_->get_image(color_target);
+            const VkExtent2D render_extent{color_image.desc.width, color_image.desc.height};
+
+            VkRenderingInfo rendering_info{};
+            rendering_info.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
+            rendering_info.renderArea = {{0, 0}, render_extent};
+            rendering_info.layerCount = 1;
+            rendering_info.colorAttachmentCount = 1;
+            rendering_info.pColorAttachments = &color_attachment;
+            rendering_info.pDepthAttachment = &depth_attachment;
+
+            cmd.begin_rendering(rendering_info);
+            cmd.bind_pipeline(pipeline_);
+
+            const VkDescriptorSet sets[] = {
+                dm_->get_set0(ctx.frame_index),
+                dm_->get_set1(),
+            };
+            cmd.bind_descriptor_sets(pipeline_.layout, 0, sets, 2);
+
+            VkViewport viewport{};
+            viewport.x = 0.0f;
+            viewport.y = static_cast<float>(render_extent.height);
+            viewport.width = static_cast<float>(render_extent.width);
+            viewport.height = -static_cast<float>(render_extent.height);
+            viewport.minDepth = 0.0f;
+            viewport.maxDepth = 1.0f;
+            cmd.set_viewport(viewport);
+            cmd.set_scissor({{0, 0}, render_extent});
+
+            cmd.set_front_face(VK_FRONT_FACE_COUNTER_CLOCKWISE);
+            cmd.set_depth_test_enable(true);
+            cmd.set_depth_write_enable(true);
+            cmd.set_depth_compare_op(VK_COMPARE_OP_GREATER);
+
+            // Draw visible opaque instances, then visible transparent (back-to-front)
+            auto draw_instance = [&](const uint32_t idx) {
+                const auto &instance = ctx.mesh_instances[idx];
+                const auto &mesh = ctx.meshes[instance.mesh_id];
+                const auto &material = ctx.materials[instance.material_id];
+
+                cmd.set_cull_mode(
+                    material.double_sided
+                        ? VK_CULL_MODE_NONE
+                        : VK_CULL_MODE_BACK_BIT);
+
+                const framework::PushConstantData pc{
+                    .model = instance.transform,
+                    .material_index = material.buffer_offset,
+                };
+                cmd.push_constants(
+                    pipeline_.layout,
+                    VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+                    &pc,
+                    sizeof(pc));
+
+                cmd.bind_vertex_buffer(
+                    0,
+                    rm_->get_buffer(mesh.vertex_buffer).buffer);
+                cmd.bind_index_buffer(
+                    rm_->get_buffer(mesh.index_buffer).buffer,
+                    VK_INDEX_TYPE_UINT32);
+                cmd.draw_indexed(mesh.index_count);
+            };
+
+            for (const auto idx: ctx.cull_result->visible_opaque_indices)
+                draw_instance(idx);
+            for (const auto idx: ctx.cull_result->visible_transparent_indices)
+                draw_instance(idx);
+
+            cmd.end_rendering();
         };
 
-        rg.add_pass("Forward", resources,
-                    [this, &rg, &ctx](const rhi::CommandBuffer &cmd) {
-                        // Color attachment: HDR color buffer
-                        const auto hdr_handle = rg.get_image(ctx.hdr_color);
-                        VkRenderingAttachmentInfo color_attachment{};
-                        color_attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-                        color_attachment.imageView = rm_->get_image(hdr_handle).view;
-                        color_attachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-                        color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-                        color_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-                        color_attachment.clearValue.color = {{0.0f, 0.0f, 0.0f, 1.0f}};
-
-                        // Depth attachment
-                        const auto depth_handle = rg.get_image(ctx.depth);
-                        VkRenderingAttachmentInfo depth_attachment{};
-                        depth_attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-                        depth_attachment.imageView = rm_->get_image(depth_handle).view;
-                        depth_attachment.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
-                        depth_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-                        depth_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-                        depth_attachment.clearValue.depthStencil = {0.0f, 0};
-
-                        // Derive render area from the HDR color image dimensions
-                        const auto &hdr_image = rm_->get_image(hdr_handle);
-                        const VkExtent2D render_extent{hdr_image.desc.width, hdr_image.desc.height};
-
-                        VkRenderingInfo rendering_info{};
-                        rendering_info.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
-                        rendering_info.renderArea = {{0, 0}, render_extent};
-                        rendering_info.layerCount = 1;
-                        rendering_info.colorAttachmentCount = 1;
-                        rendering_info.pColorAttachments = &color_attachment;
-                        rendering_info.pDepthAttachment = &depth_attachment;
-
-                        cmd.begin_rendering(rendering_info);
-                        cmd.bind_pipeline(pipeline_);
-
-                        const VkDescriptorSet sets[] = {
-                            dm_->get_set0(ctx.frame_index),
-                            dm_->get_set1(),
-                        };
-                        cmd.bind_descriptor_sets(pipeline_.layout, 0, sets, 2);
-
-                        VkViewport viewport{};
-                        viewport.x = 0.0f;
-                        viewport.y = static_cast<float>(render_extent.height);
-                        viewport.width = static_cast<float>(render_extent.width);
-                        viewport.height = -static_cast<float>(render_extent.height);
-                        viewport.minDepth = 0.0f;
-                        viewport.maxDepth = 1.0f;
-                        cmd.set_viewport(viewport);
-                        cmd.set_scissor({{0, 0}, render_extent});
-
-                        cmd.set_front_face(VK_FRONT_FACE_COUNTER_CLOCKWISE);
-                        cmd.set_depth_test_enable(true);
-                        cmd.set_depth_write_enable(true);
-                        cmd.set_depth_compare_op(VK_COMPARE_OP_GREATER);
-
-                        // Draw visible opaque instances, then visible transparent (back-to-front)
-                        auto draw_instance = [&](const uint32_t idx) {
-                            const auto &instance = ctx.mesh_instances[idx];
-                            const auto &mesh = ctx.meshes[instance.mesh_id];
-                            const auto &material = ctx.materials[instance.material_id];
-
-                            cmd.set_cull_mode(
-                                material.double_sided
-                                    ? VK_CULL_MODE_NONE
-                                    : VK_CULL_MODE_BACK_BIT);
-
-                            const framework::PushConstantData pc{
-                                .model = instance.transform,
-                                .material_index = material.buffer_offset,
-                            };
-                            cmd.push_constants(
-                                pipeline_.layout,
-                                VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-                                &pc,
-                                sizeof(pc));
-
-                            cmd.bind_vertex_buffer(
-                                0,
-                                rm_->get_buffer(mesh.vertex_buffer).buffer);
-                            cmd.bind_index_buffer(
-                                rm_->get_buffer(mesh.index_buffer).buffer,
-                                VK_INDEX_TYPE_UINT32);
-                            cmd.draw_indexed(mesh.index_count);
-                        };
-
-                        for (const auto idx: ctx.cull_result->visible_opaque_indices)
-                            draw_instance(idx);
-                        for (const auto idx: ctx.cull_result->visible_transparent_indices)
-                            draw_instance(idx);
-
-                        cmd.end_rendering();
-                    });
+        // Resource declarations differ by MSAA mode:
+        // MSAA: msaa_color(W) + msaa_depth(RW) + hdr_color(W, resolve target)
+        // 1x:   hdr_color(W) + depth(RW)
+        if (msaa) {
+            const std::array resources = {
+                framework::RGResourceUsage{
+                    ctx.msaa_color,
+                    framework::RGAccessType::Write,
+                    framework::RGStage::ColorAttachment,
+                },
+                framework::RGResourceUsage{
+                    ctx.msaa_depth,
+                    framework::RGAccessType::ReadWrite,
+                    framework::RGStage::DepthAttachment,
+                },
+                framework::RGResourceUsage{
+                    ctx.hdr_color,
+                    framework::RGAccessType::Write,
+                    framework::RGStage::ColorAttachment,
+                },
+            };
+            rg.add_pass("Forward", resources, execute);
+        } else {
+            const std::array resources = {
+                framework::RGResourceUsage{
+                    ctx.hdr_color,
+                    framework::RGAccessType::Write,
+                    framework::RGStage::ColorAttachment,
+                },
+                framework::RGResourceUsage{
+                    ctx.depth,
+                    framework::RGAccessType::ReadWrite,
+                    framework::RGStage::DepthAttachment,
+                },
+            };
+            rg.add_pass("Forward", resources, execute);
+        }
     }
 } // namespace himalaya::passes
