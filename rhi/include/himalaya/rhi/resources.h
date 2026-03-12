@@ -270,10 +270,11 @@ namespace himalaya::rhi {
 
         /**
          * @brief Creates a GPU buffer.
-         * @param desc Buffer creation parameters.
+         * @param desc       Buffer creation parameters.
+         * @param debug_name Human-readable name for validation/RenderDoc (must not be null).
          * @return Handle to the created buffer.
          */
-        [[nodiscard]] BufferHandle create_buffer(const BufferDesc &desc);
+        [[nodiscard]] BufferHandle create_buffer(const BufferDesc &desc, const char *debug_name);
 
         /**
          * @brief Destroys a buffer and frees its GPU memory.
@@ -292,10 +293,11 @@ namespace himalaya::rhi {
 
         /**
          * @brief Creates a GPU image with a default image view.
-         * @param desc Image creation parameters.
+         * @param desc       Image creation parameters.
+         * @param debug_name Human-readable name for validation/RenderDoc (must not be null).
          * @return Handle to the created image.
          */
-        [[nodiscard]] ImageHandle create_image(const ImageDesc &desc);
+        [[nodiscard]] ImageHandle create_image(const ImageDesc &desc, const char *debug_name);
 
         /**
          * @brief Destroys an image, its view, and frees its GPU memory.
@@ -337,10 +339,11 @@ namespace himalaya::rhi {
 
         /**
          * @brief Creates a GPU sampler.
-         * @param desc Sampler creation parameters.
+         * @param desc       Sampler creation parameters.
+         * @param debug_name Human-readable name for validation/RenderDoc (must not be null).
          * @return Handle to the created sampler.
          */
-        [[nodiscard]] SamplerHandle create_sampler(const SamplerDesc &desc);
+        [[nodiscard]] SamplerHandle create_sampler(const SamplerDesc &desc, const char *debug_name);
 
         /**
          * @brief Destroys a sampler.
@@ -403,6 +406,21 @@ namespace himalaya::rhi {
     private:
         /** @brief Vulkan context (device, allocator, queues). */
         Context *context_ = nullptr;
+
+        /** @brief vkSetDebugUtilsObjectNameEXT function pointer (null if extension unavailable). */
+        PFN_vkSetDebugUtilsObjectNameEXT pfn_set_debug_name_ = nullptr;
+
+        /**
+         * @brief Assigns a debug name to a Vulkan object via VK_EXT_debug_utils.
+         *
+         * No-op if the extension function pointer was not loaded (release builds
+         * where VK_EXT_debug_utils is not enabled).
+         *
+         * @param type   Vulkan object type enum.
+         * @param handle Raw Vulkan handle cast to uint64_t.
+         * @param name   Null-terminated name string.
+         */
+        void set_debug_name(VkObjectType type, uint64_t handle, const char *name) const;
 
         // ---- Pool slot allocation ----
 

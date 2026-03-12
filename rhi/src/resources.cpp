@@ -2,13 +2,26 @@
 #include <himalaya/rhi/context.h>
 
 #include <cassert>
+#include <string>
 
 #include <spdlog/spdlog.h>
 
 namespace himalaya::rhi {
     void ResourceManager::init(Context *context) {
         context_ = context;
+        pfn_set_debug_name_ = reinterpret_cast<PFN_vkSetDebugUtilsObjectNameEXT>(
+            vkGetInstanceProcAddr(context_->instance, "vkSetDebugUtilsObjectNameEXT"));
         spdlog::info("Resource manager initialized");
+    }
+
+    void ResourceManager::set_debug_name(const VkObjectType type, const uint64_t handle, const char *name) const {
+        if (!pfn_set_debug_name_) return;
+        VkDebugUtilsObjectNameInfoEXT info{};
+        info.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT;
+        info.objectType = type;
+        info.objectHandle = handle;
+        info.pObjectName = name;
+        pfn_set_debug_name_(context_->device, &info);
     }
 
     void ResourceManager::destroy() {
@@ -184,8 +197,9 @@ namespace himalaya::rhi {
 
     // ---- Buffer operations ----
 
-    BufferHandle ResourceManager::create_buffer(const BufferDesc &desc) {
+    BufferHandle ResourceManager::create_buffer(const BufferDesc &desc, const char *debug_name) {
         assert(desc.size > 0 && "Buffer size must be greater than zero");
+        assert(debug_name && "debug_name must not be null");
 
         VkBufferCreateInfo buffer_info{};
         buffer_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
@@ -206,6 +220,8 @@ namespace himalaya::rhi {
             &slot.allocation,
             &slot.allocation_info));
         slot.desc = desc;
+
+        set_debug_name(VK_OBJECT_TYPE_BUFFER, reinterpret_cast<uint64_t>(slot.buffer), debug_name);
 
         return {index, slot.generation};
     }
@@ -236,12 +252,14 @@ namespace himalaya::rhi {
 
     // ---- Image operations ----
 
-    ImageHandle ResourceManager::create_image(const ImageDesc &desc) {
+    ImageHandle ResourceManager::create_image(const ImageDesc &desc, const char *debug_name) {
         assert(desc.width > 0 && desc.height > 0 && "Image dimensions must be greater than zero");
         assert(desc.depth > 0 && "Image depth must be greater than zero");
-        assert(desc.depth == 1 && "3D images (depth > 1) not yet supported — remove this assert when adding VK_IMAGE_TYPE_3D");
+        assert(desc.depth == 1 &&
+            "3D images (depth > 1) not yet supported — remove this assert when adding VK_IMAGE_TYPE_3D");
         assert(desc.mip_levels > 0 && "Image mip_levels must be greater than zero");
         assert(desc.sample_count > 0 && "Image sample_count must be greater than zero");
+        assert(debug_name && "debug_name must not be null");
 
         VkImageCreateInfo image_info{};
         image_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -286,6 +304,10 @@ namespace himalaya::rhi {
         view_info.subresourceRange.layerCount = 1;
 
         VK_CHECK(vkCreateImageView(context_->device, &view_info, nullptr, &slot.view));
+
+        set_debug_name(VK_OBJECT_TYPE_IMAGE, reinterpret_cast<uint64_t>(slot.image), debug_name);
+        const std::string view_name = std::string(debug_name) + " [View]";
+        set_debug_name(VK_OBJECT_TYPE_IMAGE_VIEW, reinterpret_cast<uint64_t>(slot.view), view_name.c_str());
 
         return {index, slot.generation};
     }
@@ -350,7 +372,9 @@ namespace himalaya::rhi {
 
     // ---- Sampler operations ----
 
-    SamplerHandle ResourceManager::create_sampler(const SamplerDesc &desc) {
+    SamplerHandle ResourceManager::create_sampler(const SamplerDesc &desc, const char *debug_name) {
+        assert(debug_name && "debug_name must not be null");
+
         VkSamplerCreateInfo sampler_info{};
         sampler_info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
         sampler_info.magFilter = to_vk_filter(desc.mag_filter);
@@ -372,6 +396,8 @@ namespace himalaya::rhi {
 
         VK_CHECK(vkCreateSampler(context_->device, &sampler_info, nullptr, &slot.sampler));
         slot.desc = desc;
+
+        set_debug_name(VK_OBJECT_TYPE_SAMPLER, reinterpret_cast<uint64_t>(slot.sampler), debug_name);
 
         return {index, slot.generation};
     }
