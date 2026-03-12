@@ -49,7 +49,7 @@
 ## Step 4a：FrameContext + Pass 类 + HDR 管线重组
 
 - [x] 创建 `framework/include/himalaya/framework/frame_context.h`（FrameContext 结构体：RG 资源 ID + 场景数据引用 + 帧参数）
-- [ ] 提取 ForwardPass 类（`passes/forward_pass.h/cpp`）：从 Renderer 的 RG lambda 迁移渲染逻辑，实现 setup / record / destroy
+- [x] 提取 ForwardPass 类（`passes/forward_pass.h/cpp`）：从 Renderer 的 RG lambda 迁移渲染逻辑，实现 setup / record / destroy
 - [ ] 创建 hdr_color managed 资源（R16G16B16A16_SFLOAT，1x）
 - [ ] 创建 `shaders/fullscreen.vert`（fullscreen triangle，无顶点输入）
 - [ ] 创建 `shaders/tonemapping.frag`（passthrough 版本：采样 hdr_color 直接输出，不做 ACES）
