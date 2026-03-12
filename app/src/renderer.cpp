@@ -70,7 +70,7 @@ namespace himalaya::app {
         // Clamp default MSAA sample count to GPU-supported maximum
         current_sample_count_ = std::min(current_sample_count_, ctx_->max_msaa_samples);
 
-        // MSAA color buffer (only created when sample_count > 1)
+        // MSAA buffers (only created when sample_count > 1; 1x uses hdr_color/depth directly)
         if (current_sample_count_ > 1) {
             managed_msaa_color_ = render_graph_.create_managed_image("MSAA Color", {
                 .size_mode = framework::RGSizeMode::Relative,
@@ -80,6 +80,18 @@ namespace himalaya::app {
                 .height = 0,
                 .format = rhi::Format::R16G16B16A16Sfloat,
                 .usage = rhi::ImageUsage::ColorAttachment,
+                .sample_count = current_sample_count_,
+                .mip_levels = 1,
+            });
+
+            managed_msaa_depth_ = render_graph_.create_managed_image("MSAA Depth", {
+                .size_mode = framework::RGSizeMode::Relative,
+                .width_scale = 1.0f,
+                .height_scale = 1.0f,
+                .width = 0,
+                .height = 0,
+                .format = rhi::Format::D32Sfloat,
+                .usage = rhi::ImageUsage::DepthAttachment,
                 .sample_count = current_sample_count_,
                 .mip_levels = 1,
             });
