@@ -236,6 +236,13 @@ namespace himalaya::app {
 
             slider_float_deferred("IBL", &ctx.ibl_intensity, 0.0f, 1.0f, "%.3f");
             slider_float_deferred("EV", &ctx.ev, -4.0f, 4.0f, "%.1f");
+
+            // Debug render mode combo
+            constexpr const char *kRenderModes[] = {
+                "Final", "Diffuse Only", "Specular Only", "IBL Only", "Normal", "Metallic", "Roughness", "AO",
+            };
+            ImGui::Combo("Debug View", &ctx.debug_render_mode,
+                         kRenderModes, IM_ARRAYSIZE(kRenderModes));
         }
 
         ImGui::End();

@@ -132,7 +132,8 @@ namespace himalaya::framework {
         uint32_t brdf_lut_index = 0; ///< offset 300 — textures[] index for BRDF integration LUT
         uint32_t prefiltered_mip_count = 0; ///< offset 304 — number of mip levels in prefiltered map
         uint32_t skybox_cubemap_index = 0; ///< offset 308 — cubemaps[] index for skybox cubemap
-        float _pad[2]{}; ///< padding to 320 bytes (std140 requires multiple of 16)
+        uint32_t debug_render_mode = 0; ///< offset 312 — 0=Final, 1..N debug visualization modes
+        uint32_t _pad{}; ///< padding to 320 bytes (std140 requires multiple of 16)
     };
 
     /**

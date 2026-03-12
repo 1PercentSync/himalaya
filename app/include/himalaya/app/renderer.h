@@ -74,6 +74,9 @@ namespace himalaya::app {
 
         /** @brief Exposure value (linear scale, from pow(2, EV)). */
         float exposure;
+
+        /** @brief Debug render mode (0=Final, 1+=debug visualization). */
+        uint32_t debug_render_mode;
     };
 
     /**

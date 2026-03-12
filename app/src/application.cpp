@@ -221,6 +221,7 @@ namespace himalaya::app {
             .has_scene_lights = has_scene_lights,
             .ibl_intensity = ibl_intensity_,
             .ev = ev_,
+            .debug_render_mode = debug_render_mode_,
             .current_sample_count = renderer_.current_sample_count(),
             .supported_sample_counts = context_.msaa_sample_counts,
             .scene_stats = {
@@ -260,6 +261,7 @@ namespace himalaya::app {
             .mesh_instances = scene_render_data_.mesh_instances,
             .ibl_intensity = ibl_intensity_,
             .exposure = std::pow(2.0f, ev_),
+            .debug_render_mode = static_cast<uint32_t>(debug_render_mode_),
         };
 
         renderer_.render(cmd, input);

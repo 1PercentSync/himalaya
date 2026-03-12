@@ -118,6 +118,9 @@ namespace himalaya::app {
         /** @brief Exposure value in EV (pow(2, ev) gives linear exposure multiplier). */
         float ev_ = 0.0f;
 
+        /** @brief Debug render mode (0=Final, 1+=visualization). */
+        int debug_render_mode_ = 0;
+
         // --- Default light control ---
 
         /** @brief Yaw angle for the default directional light (radians). */

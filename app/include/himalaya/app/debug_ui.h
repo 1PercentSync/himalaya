@@ -71,6 +71,9 @@ namespace himalaya::app {
         /** @brief Editable reference to the exposure value in EV stops. */
         float& ev;
 
+        /** @brief Editable reference to the debug render mode (0=Final, 1+=visualization). */
+        int& debug_render_mode;
+
         // --- MSAA (display + action) ---
 
         /** @brief Current MSAA sample count (display only; changes via DebugUIActions). */
