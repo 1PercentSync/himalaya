@@ -33,9 +33,9 @@
 
 ## Step 3：Descriptor Layout + Compute Infra
 
-- [ ] Set 1 layout 新增 binding 1（`samplerCube[]`，上限 256，`PARTIALLY_BOUND` + `UPDATE_AFTER_BIND`）
+- [x] Set 1 layout 新增 binding 1（`samplerCube[]`，上限 256，`PARTIALLY_BOUND` + `UPDATE_AFTER_BIND`）
 - [ ] Set 1 descriptor pool 容量从 4096 扩展到 4352
-- [ ] 去掉 Set 1 binding 0 的 `VARIABLE_DESCRIPTOR_COUNT`，改为固定上限 4096 + `PARTIALLY_BOUND`
+- [x] 去掉 Set 1 binding 0 的 `VARIABLE_DESCRIPTOR_COUNT`，改为固定上限 4096 + `PARTIALLY_BOUND`
 - [ ] 同步在 `bindings.glsl` 中声明 `samplerCube cubemaps[]`（Set 1 binding 1），使 shader 侧布局与 CPU 侧一致
 - [ ] 新增 Set 2 descriptor set layout（M1 全部 8 个 binding 预留，`PARTIALLY_BOUND`）+ Set 2 pool（普通 pool，8 COMBINED_IMAGE_SAMPLER）+ 分配 Set 2 × 1
 - [ ] `DescriptorManager` 新增 `register_cubemap()` / `unregister_cubemap()` API（独立 free list 和 slot 空间）
