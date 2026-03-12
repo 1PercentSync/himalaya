@@ -137,8 +137,13 @@ namespace himalaya::rhi {
         /** @brief Device-supported maximum sampler anisotropy (e.g. 16.0f). */
         float max_sampler_anisotropy;
 
-        /** @brief Maximum MSAA sample count supported by both color and depth framebuffers. */
-        uint32_t max_msaa_samples;
+        /**
+         * @brief MSAA sample count bitmask supported by both color and depth framebuffers.
+         *
+         * Each set bit corresponds to a VkSampleCountFlagBits value (1, 2, 4, 8, ...).
+         * Use `(msaa_sample_counts & VK_SAMPLE_COUNT_4_BIT)` to test specific support.
+         */
+        VkSampleCountFlags msaa_sample_counts;
 
         /** @brief Logical device. */
         VkDevice device = VK_NULL_HANDLE;

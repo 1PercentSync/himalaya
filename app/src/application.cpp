@@ -220,6 +220,8 @@ namespace himalaya::app {
             .has_scene_lights = has_scene_lights,
             .ambient_intensity = ambient_intensity_,
             .ev = ev_,
+            .current_sample_count = renderer_.current_sample_count(),
+            .supported_sample_counts = context_.msaa_sample_counts,
             .scene_stats = {
                 .total_instances = total_instances,
                 .total_meshes = static_cast<uint32_t>(meshes.size()),
@@ -234,6 +236,10 @@ namespace himalaya::app {
 
         if (actions.vsync_toggled) {
             vsync_changed_ = true;
+        }
+
+        if (actions.msaa_changed) {
+            renderer_.handle_msaa_change(actions.new_sample_count);
         }
     }
 

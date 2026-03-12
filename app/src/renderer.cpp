@@ -67,34 +67,37 @@ namespace himalaya::app {
                                                                 .mip_levels = 1,
                                                             });
 
-        // Clamp default MSAA sample count to GPU-supported maximum
-        current_sample_count_ = std::min(current_sample_count_, ctx_->max_msaa_samples);
+        // Fall back to the highest supported sample count if the default isn't available
+        while (current_sample_count_ > 1 &&
+               !(ctx_->msaa_sample_counts & current_sample_count_)) {
+            current_sample_count_ >>= 1;
+        }
 
         // MSAA buffers (only created when sample_count > 1; 1x uses hdr_color/depth directly)
         if (current_sample_count_ > 1) {
             managed_msaa_color_ = render_graph_.create_managed_image("MSAA Color", {
-                .size_mode = framework::RGSizeMode::Relative,
-                .width_scale = 1.0f,
-                .height_scale = 1.0f,
-                .width = 0,
-                .height = 0,
-                .format = rhi::Format::R16G16B16A16Sfloat,
-                .usage = rhi::ImageUsage::ColorAttachment,
-                .sample_count = current_sample_count_,
-                .mip_levels = 1,
-            });
+                                                                         .size_mode = framework::RGSizeMode::Relative,
+                                                                         .width_scale = 1.0f,
+                                                                         .height_scale = 1.0f,
+                                                                         .width = 0,
+                                                                         .height = 0,
+                                                                         .format = rhi::Format::R16G16B16A16Sfloat,
+                                                                         .usage = rhi::ImageUsage::ColorAttachment,
+                                                                         .sample_count = current_sample_count_,
+                                                                         .mip_levels = 1,
+                                                                     });
 
             managed_msaa_depth_ = render_graph_.create_managed_image("MSAA Depth", {
-                .size_mode = framework::RGSizeMode::Relative,
-                .width_scale = 1.0f,
-                .height_scale = 1.0f,
-                .width = 0,
-                .height = 0,
-                .format = rhi::Format::D32Sfloat,
-                .usage = rhi::ImageUsage::DepthAttachment,
-                .sample_count = current_sample_count_,
-                .mip_levels = 1,
-            });
+                                                                         .size_mode = framework::RGSizeMode::Relative,
+                                                                         .width_scale = 1.0f,
+                                                                         .height_scale = 1.0f,
+                                                                         .width = 0,
+                                                                         .height = 0,
+                                                                         .format = rhi::Format::D32Sfloat,
+                                                                         .usage = rhi::ImageUsage::DepthAttachment,
+                                                                         .sample_count = current_sample_count_,
+                                                                         .mip_levels = 1,
+                                                                     });
         }
 
         shader_compiler_.set_include_path("shaders");
@@ -194,6 +197,78 @@ namespace himalaya::app {
         render_graph_.destroy_managed_image(managed_hdr_color_);
         render_graph_.destroy_managed_image(managed_depth_);
         unregister_swapchain_images();
+    }
+
+    // ---- MSAA switching ----
+
+    void Renderer::handle_msaa_change(const uint32_t new_sample_count) {
+        if (new_sample_count == current_sample_count_) return;
+
+        // GPU must be idle before destroying pipelines or managed resources.
+        vkQueueWaitIdle(ctx_->graphics_queue);
+
+        const uint32_t old = current_sample_count_;
+        current_sample_count_ = new_sample_count;
+
+        if (old > 1 && new_sample_count > 1) {
+            // Multi-sample → different multi-sample: update existing resource descriptors
+            render_graph_.update_managed_desc(managed_msaa_color_, {
+                                                  .size_mode = framework::RGSizeMode::Relative,
+                                                  .width_scale = 1.0f,
+                                                  .height_scale = 1.0f,
+                                                  .width = 0,
+                                                  .height = 0,
+                                                  .format = rhi::Format::R16G16B16A16Sfloat,
+                                                  .usage = rhi::ImageUsage::ColorAttachment,
+                                                  .sample_count = new_sample_count,
+                                                  .mip_levels = 1,
+                                              });
+            render_graph_.update_managed_desc(managed_msaa_depth_, {
+                                                  .size_mode = framework::RGSizeMode::Relative,
+                                                  .width_scale = 1.0f,
+                                                  .height_scale = 1.0f,
+                                                  .width = 0, .height = 0,
+                                                  .format = rhi::Format::D32Sfloat,
+                                                  .usage = rhi::ImageUsage::DepthAttachment,
+                                                  .sample_count = new_sample_count,
+                                                  .mip_levels = 1,
+                                              });
+        } else if (old > 1) {
+            // Multi-sample → 1x: destroy MSAA resources
+            render_graph_.destroy_managed_image(managed_msaa_color_);
+            render_graph_.destroy_managed_image(managed_msaa_depth_);
+            managed_msaa_color_ = {};
+            managed_msaa_depth_ = {};
+        } else {
+            // 1x → multi-sample: create MSAA resources
+            managed_msaa_color_ = render_graph_.create_managed_image("MSAA Color", {
+                                                                         .size_mode = framework::RGSizeMode::Relative,
+                                                                         .width_scale = 1.0f,
+                                                                         .height_scale = 1.0f,
+                                                                         .width = 0, .height = 0,
+                                                                         .format = rhi::Format::R16G16B16A16Sfloat,
+                                                                         .usage = rhi::ImageUsage::ColorAttachment,
+                                                                         .sample_count = new_sample_count,
+                                                                         .mip_levels = 1,
+                                                                     });
+            managed_msaa_depth_ = render_graph_.create_managed_image("MSAA Depth", {
+                                                                         .size_mode = framework::RGSizeMode::Relative,
+                                                                         .width_scale = 1.0f,
+                                                                         .height_scale = 1.0f,
+                                                                         .width = 0, .height = 0,
+                                                                         .format = rhi::Format::D32Sfloat,
+                                                                         .usage = rhi::ImageUsage::DepthAttachment,
+                                                                         .sample_count = new_sample_count,
+                                                                         .mip_levels = 1,
+                                                                     });
+        }
+
+        // Rebuild pipelines for MSAA-affected passes
+        forward_pass_.on_sample_count_changed(new_sample_count);
+    }
+
+    uint32_t Renderer::current_sample_count() const {
+        return current_sample_count_;
     }
 
     // ---- Render ----

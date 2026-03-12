@@ -71,6 +71,14 @@ namespace himalaya::app {
         /** @brief Editable reference to the exposure value in EV stops. */
         float& ev;
 
+        // --- MSAA (display + action) ---
+
+        /** @brief Current MSAA sample count (display only; changes via DebugUIActions). */
+        uint32_t current_sample_count;
+
+        /** @brief Bitmask of GPU-supported MSAA sample counts (VkSampleCountFlags). */
+        uint32_t supported_sample_counts;
+
         // --- Scene statistics (display) ---
 
         /** @brief Per-frame scene statistics computed after frustum culling. */
@@ -94,6 +102,12 @@ namespace himalaya::app {
     struct DebugUIActions {
         /** @brief True if the VSync checkbox was toggled this frame. */
         bool vsync_toggled = false;
+
+        /** @brief True if the MSAA sample count was changed this frame. */
+        bool msaa_changed = false;
+
+        /** @brief New MSAA sample count (valid only when msaa_changed is true). */
+        uint32_t new_sample_count = 0;
     };
 
     /**

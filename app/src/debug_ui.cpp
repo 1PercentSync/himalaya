@@ -206,6 +206,34 @@ namespace himalaya::app {
         // Rendering section
         ImGui::Separator();
         if (ImGui::CollapsingHeader("Rendering", ImGuiTreeNodeFlags_DefaultOpen)) {
+            // MSAA combo box (1x/2x/4x/8x filtered by GPU support)
+            constexpr uint32_t kSampleCounts[] = {1, 2, 4, 8};
+            constexpr const char *kSampleLabels[] = {"1x", "2x", "4x", "8x"};
+            static_assert(IM_ARRAYSIZE(kSampleCounts) == IM_ARRAYSIZE(kSampleLabels));
+
+            int current_idx = 0;
+            for (int i = 0; i < IM_ARRAYSIZE(kSampleCounts); ++i) {
+                if (kSampleCounts[i] == ctx.current_sample_count) {
+                    current_idx = i;
+                    break;
+                }
+            }
+
+            if (ImGui::BeginCombo("MSAA", kSampleLabels[current_idx])) {
+                for (int i = 0; i < IM_ARRAYSIZE(kSampleCounts); ++i) {
+                    if (!(ctx.supported_sample_counts & kSampleCounts[i])) continue;
+                    const bool is_selected = (i == current_idx);
+                    if (ImGui::Selectable(kSampleLabels[i], is_selected)) {
+                        if (kSampleCounts[i] != ctx.current_sample_count) {
+                            actions.msaa_changed = true;
+                            actions.new_sample_count = kSampleCounts[i];
+                        }
+                    }
+                    if (is_selected) ImGui::SetItemDefaultFocus();
+                }
+                ImGui::EndCombo();
+            }
+
             slider_float_deferred("Ambient", &ctx.ambient_intensity, 0.0f, 1.0f, "%.3f");
             slider_float_deferred("EV", &ctx.ev, -4.0f, 4.0f, "%.1f");
         }

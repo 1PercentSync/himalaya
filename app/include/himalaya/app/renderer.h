@@ -119,7 +119,22 @@ namespace himalaya::app {
         /** @brief Destroys all owned rendering resources in reverse init order. */
         void destroy();
 
-        // --- Accessors for scene loading ---
+        /**
+         * @brief Handles MSAA sample count change: waits for GPU idle, then
+         *        creates/destroys/updates MSAA managed resources and rebuilds
+         *        affected pipelines.
+         *
+         * Safe to call between begin_frame() and render(). No-op if
+         * new_sample_count equals current_sample_count_.
+         *
+         * @param new_sample_count New MSAA sample count (1/2/4/8).
+         */
+        void handle_msaa_change(uint32_t new_sample_count);
+
+        // --- Accessors ---
+
+        /** @brief Returns the current MSAA sample count (1 = no MSAA). */
+        [[nodiscard]] uint32_t current_sample_count() const;
 
         /** @brief Returns the default sampler (linear filter, repeat wrap, linear mip). */
         [[nodiscard]] rhi::SamplerHandle default_sampler() const;
