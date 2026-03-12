@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段三 — PBR 光照基础（Cook-Torrance + IBL + MSAA + HDR）
-- **进度**：Step 2 进行中（managed 资源 API + resize 自动重建已完成）
+- **进度**：Step 2 进行中（managed 资源完整 API 已完成，下一步 get_managed_backing_image）
 
 ### 下一个任务
 
-阶段三 Step 2：`update_managed_desc(handle, new_desc)` — 更新描述符（MSAA 切换用）。
+阶段三 Step 2：`get_managed_backing_image(handle)` — 获取 backing ImageHandle。
 
 ---
 
