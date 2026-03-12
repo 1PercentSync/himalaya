@@ -465,10 +465,10 @@ struct RGImageDesc {
     // Common
     rhi::Format format;
     rhi::ImageUsage usage;
-    uint32_t sample_count = 1;
-    uint32_t mip_levels = 1;
+    uint32_t sample_count;
+    uint32_t mip_levels;
 };
-// 只有 `sample_count` 和 `mip_levels` 有默认值（1 始终合法），其余字段必须显式指定。
+// 所有字段必须显式指定，无默认值。与 RHI 层 ImageDesc 设计一致，防止遗漏。
 
 // 持久 handle，跨帧稳定（初始化时获取，每帧通过 use_managed_image 转为 RGResourceId）
 struct RGManagedHandle { uint32_t index; };
