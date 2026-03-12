@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段三 — PBR 光照基础（Cook-Torrance + IBL + MSAA + HDR）
-- **进度**：Step 2 进行中（debug_name 参数已添加，下一步回溯修改所有调用点）
+- **进度**：Step 2 进行中（debug_name 全部补齐，下一步验证）
 
 ### 下一个任务
 
-阶段三 Step 2：回溯修改所有已有 `create_image()` / `create_buffer()` / `create_sampler()` 调用点，补充 debug name。
+阶段三 Step 2 验证：编译通过，现有渲染正常工作，depth buffer 由 RG managed 管理，resize 时自动重建；Vulkan 对象在 validation 输出和 RenderDoc 中显示可读名称。
 
 ---
 
