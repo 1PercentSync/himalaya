@@ -2,6 +2,7 @@ add_library(himalaya_passes STATIC)
 
 target_sources(himalaya_passes PRIVATE
         src/forward_pass.cpp
+        src/tonemapping_pass.cpp
 )
 
 target_include_directories(himalaya_passes PUBLIC include)

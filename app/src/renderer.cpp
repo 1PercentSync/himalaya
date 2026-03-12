@@ -7,7 +7,6 @@
 
 #include <himalaya/framework/frame_context.h>
 #include <himalaya/framework/imgui_backend.h>
-#include <himalaya/framework/mesh.h>
 #include <himalaya/framework/scene_data.h>
 #include <himalaya/rhi/commands.h>
 #include <himalaya/rhi/descriptors.h>
@@ -42,29 +41,30 @@ namespace himalaya::app {
 
         // HDR color buffer as managed resource (ForwardPass writes, TonemappingPass samples)
         managed_hdr_color_ = render_graph_.create_managed_image("HDR Color", {
-            .size_mode = framework::RGSizeMode::Relative,
-            .width_scale = 1.0f,
-            .height_scale = 1.0f,
-            .width = 0,
-            .height = 0,
-            .format = rhi::Format::R16G16B16A16Sfloat,
-            .usage = rhi::ImageUsage::ColorAttachment | rhi::ImageUsage::Sampled,
-            .sample_count = 1,
-            .mip_levels = 1,
-        });
+                                                                    .size_mode = framework::RGSizeMode::Relative,
+                                                                    .width_scale = 1.0f,
+                                                                    .height_scale = 1.0f,
+                                                                    .width = 0,
+                                                                    .height = 0,
+                                                                    .format = rhi::Format::R16G16B16A16Sfloat,
+                                                                    .usage = rhi::ImageUsage::ColorAttachment |
+                                                                             rhi::ImageUsage::Sampled,
+                                                                    .sample_count = 1,
+                                                                    .mip_levels = 1,
+                                                                });
 
         // Depth buffer as managed resource (auto-rebuilt on resize)
         managed_depth_ = render_graph_.create_managed_image("Depth", {
-            .size_mode = framework::RGSizeMode::Relative,
-            .width_scale = 1.0f,
-            .height_scale = 1.0f,
-            .width = 0,
-            .height = 0,
-            .format = rhi::Format::D32Sfloat,
-            .usage = rhi::ImageUsage::DepthAttachment,
-            .sample_count = 1,
-            .mip_levels = 1,
-        });
+                                                                .size_mode = framework::RGSizeMode::Relative,
+                                                                .width_scale = 1.0f,
+                                                                .height_scale = 1.0f,
+                                                                .width = 0,
+                                                                .height = 0,
+                                                                .format = rhi::Format::D32Sfloat,
+                                                                .usage = rhi::ImageUsage::DepthAttachment,
+                                                                .sample_count = 1,
+                                                                .mip_levels = 1,
+                                                            });
 
         shader_compiler_.set_include_path("shaders");
 
@@ -73,10 +73,10 @@ namespace himalaya::app {
         static_assert(std::size(kGlobalUboNames) == rhi::kMaxFramesInFlight);
         for (uint32_t i = 0; i < rhi::kMaxFramesInFlight; ++i) {
             global_ubo_buffers_[i] = resource_manager_->create_buffer({
-                .size = sizeof(framework::GlobalUniformData),
-                .usage = rhi::BufferUsage::UniformBuffer,
-                .memory = rhi::MemoryUsage::CpuToGpu,
-            }, kGlobalUboNames[i]);
+                                                                          .size = sizeof(framework::GlobalUniformData),
+                                                                          .usage = rhi::BufferUsage::UniformBuffer,
+                                                                          .memory = rhi::MemoryUsage::CpuToGpu,
+                                                                      }, kGlobalUboNames[i]);
             descriptor_manager_->write_set0_buffer(
                 i, 0, global_ubo_buffers_[i],
                 sizeof(framework::GlobalUniformData));
@@ -89,24 +89,25 @@ namespace himalaya::app {
         static_assert(std::size(kLightBufferNames) == rhi::kMaxFramesInFlight);
         for (uint32_t i = 0; i < rhi::kMaxFramesInFlight; ++i) {
             light_buffers_[i] = resource_manager_->create_buffer({
-                .size = light_buffer_size,
-                .usage = rhi::BufferUsage::StorageBuffer,
-                .memory = rhi::MemoryUsage::CpuToGpu,
-            }, kLightBufferNames[i]);
+                                                                     .size = light_buffer_size,
+                                                                     .usage = rhi::BufferUsage::StorageBuffer,
+                                                                     .memory = rhi::MemoryUsage::CpuToGpu,
+                                                                 }, kLightBufferNames[i]);
             descriptor_manager_->write_set0_buffer(
                 i, 1, light_buffers_[i], light_buffer_size);
         }
 
         // --- Default sampler ---
         default_sampler_ = resource_manager_->create_sampler({
-            .mag_filter = rhi::Filter::Linear,
-            .min_filter = rhi::Filter::Linear,
-            .mip_mode = rhi::SamplerMipMode::Linear,
-            .wrap_u = rhi::SamplerWrapMode::Repeat,
-            .wrap_v = rhi::SamplerWrapMode::Repeat,
-            .max_anisotropy = resource_manager_->max_sampler_anisotropy(),
-            .max_lod = VK_LOD_CLAMP_NONE,
-        }, "Default Sampler");
+                                                                 .mag_filter = rhi::Filter::Linear,
+                                                                 .min_filter = rhi::Filter::Linear,
+                                                                 .mip_mode = rhi::SamplerMipMode::Linear,
+                                                                 .wrap_u = rhi::SamplerWrapMode::Repeat,
+                                                                 .wrap_v = rhi::SamplerWrapMode::Repeat,
+                                                                 .max_anisotropy =
+                                                                 resource_manager_->max_sampler_anisotropy(),
+                                                                 .max_lod = VK_LOD_CLAMP_NONE,
+                                                             }, "Default Sampler");
 
         material_system_.init(resource_manager_, descriptor_manager_);
 
@@ -117,13 +118,27 @@ namespace himalaya::app {
         ctx_->end_immediate();
 
         // --- Forward pass ---
-        forward_pass_.setup(*ctx_, *resource_manager_, *descriptor_manager_,
-                            shader_compiler_, 1);
+        forward_pass_.setup(*ctx_,
+                            *resource_manager_,
+                            *descriptor_manager_,
+                            shader_compiler_,
+                            1);
+
+        // --- Tonemapping pass ---
+        tonemapping_pass_.setup(*ctx_,
+                                *resource_manager_,
+                                *descriptor_manager_,
+                                shader_compiler_,
+                                swapchain_->format);
+
+        // --- Set 2 binding 0: hdr_color for TonemappingPass sampling ---
+        update_hdr_color_descriptor();
     }
 
     void Renderer::destroy() {
         material_system_.destroy();
         forward_pass_.destroy();
+        tonemapping_pass_.destroy();
 
         for (const auto ubo: global_ubo_buffers_) {
             resource_manager_->destroy_buffer(ubo);
@@ -211,6 +226,9 @@ namespace himalaya::app {
         // --- Forward pass ---
         forward_pass_.record(render_graph_, frame_ctx);
 
+        // --- Tonemapping pass ---
+        tonemapping_pass_.record(render_graph_, frame_ctx);
+
         // --- ImGui pass ---
         const std::array imgui_resources = {
             framework::RGResourceUsage{
@@ -253,6 +271,13 @@ namespace himalaya::app {
     void Renderer::on_swapchain_recreated() {
         register_swapchain_images();
         render_graph_.set_reference_resolution(swapchain_->extent);
+
+        // Update Set 2 binding 0 with the resized hdr_color backing image
+        update_hdr_color_descriptor();
+
+        // Notify passes of resolution change
+        forward_pass_.on_resize(swapchain_->extent.width, swapchain_->extent.height);
+        tonemapping_pass_.on_resize(swapchain_->extent.width, swapchain_->extent.height);
     }
 
     // ---- Accessors ----
@@ -267,6 +292,13 @@ namespace himalaya::app {
 
     framework::MaterialSystem &Renderer::material_system() {
         return material_system_;
+    }
+
+    // ---- HDR color descriptor update ----
+
+    void Renderer::update_hdr_color_descriptor() const {
+        const auto hdr_backing = render_graph_.get_managed_backing_image(managed_hdr_color_);
+        descriptor_manager_->update_render_target(0, hdr_backing, default_sampler_);
     }
 
     // ---- Swapchain image registration ----
@@ -311,5 +343,4 @@ namespace himalaya::app {
         }
         swapchain_image_handles_.clear();
     }
-
 } // namespace himalaya::app

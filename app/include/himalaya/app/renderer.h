@@ -9,6 +9,7 @@
 #include <himalaya/framework/render_graph.h>
 #include <himalaya/framework/texture.h>
 #include <himalaya/passes/forward_pass.h>
+#include <himalaya/passes/tonemapping_pass.h>
 #include <himalaya/rhi/context.h>
 #include <himalaya/rhi/shader.h>
 
@@ -161,6 +162,9 @@ namespace himalaya::app {
         /** @brief Forward lighting pass (renders to HDR color + depth). */
         passes::ForwardPass forward_pass_{};
 
+        /** @brief Tonemapping pass (reads HDR color, writes swapchain). */
+        passes::TonemappingPass tonemapping_pass_{};
+
         /** @brief HDR color buffer (R16G16B16A16F, managed, auto-rebuilt on resize). */
         framework::RGManagedHandle managed_hdr_color_;
 
@@ -183,6 +187,9 @@ namespace himalaya::app {
         std::vector<rhi::ImageHandle> swapchain_image_handles_;
 
         // --- Private helpers ---
+
+        /** @brief Updates Set 2 binding 0 with the current hdr_color backing image. */
+        void update_hdr_color_descriptor() const;
 
         /** @brief Registers all swapchain images as external images in ResourceManager. */
         void register_swapchain_images();
