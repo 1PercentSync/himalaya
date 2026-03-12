@@ -175,7 +175,31 @@ namespace himalaya::framework {
 
     void RenderGraph::set_reference_resolution(const VkExtent2D extent) {
         assert(extent.width > 0 && extent.height > 0 && "Reference resolution must be non-zero");
+
+        // ReSharper disable once CppUseStructuredBinding
+        const VkExtent2D old_extent = reference_extent_;
         reference_extent_ = extent;
+
+        // First call or no change — nothing to rebuild
+        if (old_extent.width == 0 || old_extent.height == 0) return;
+        if (old_extent.width == extent.width && old_extent.height == extent.height) return;
+
+        // Rebuild Relative managed images whose resolved size changed
+        for (auto &managed: managed_images_) {
+            if (!managed.backing.valid()) continue;
+            if (managed.desc.size_mode != RGSizeMode::Relative) continue;
+
+            const auto old_w = static_cast<uint32_t>(
+                static_cast<float>(old_extent.width) * managed.desc.width_scale);
+            const auto old_h = static_cast<uint32_t>(
+                static_cast<float>(old_extent.height) * managed.desc.height_scale);
+            const auto new_desc = resolve_image_desc(managed.desc);
+
+            if (old_w == new_desc.width && old_h == new_desc.height) continue;
+
+            resource_manager_->destroy_image(managed.backing);
+            managed.backing = resource_manager_->create_image(new_desc);
+        }
     }
 
     rhi::ImageDesc RenderGraph::resolve_image_desc(const RGImageDesc &desc) const {
