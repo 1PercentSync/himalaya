@@ -110,7 +110,7 @@
 - [x] 创建 `shaders/common/constants.glsl`（PI、EPSILON 等数学常量）
 - [x] 创建 `shaders/common/brdf.glsl`（D_GGX、V_SmithGGX、F_Schlick、F_Schlick_roughness、Lambert_diffuse，纯函数无场景数据依赖）
 - [x] 创建 `shaders/common/lighting.glsl`（evaluate_directional_light、evaluate_ibl，内部 include constants + brdf，依赖 bindings.glsl 的光源/IBL 结构体）
-- [ ] 升级 `forward.frag`：替换 Lambert 为 Cook-Torrance（GGX / Smith Height-Correlated / Schlick）+ IBL 环境光（irradiance + prefiltered + BRDF LUT Split-Sum）
+- [x] 升级 `forward.frag`：替换 Lambert 为 Cook-Torrance（GGX / Smith Height-Correlated / Schlick）+ IBL 环境光（irradiance + prefiltered + BRDF LUT Split-Sum）
 - [ ] `forward.frag` 消费全部 5 个材质纹理：occlusion_tex 调制 IBL/ambient，emissive_tex × emissive_factor 加到最终颜色
 - [ ] DebugUI 渲染模式：增加可视化选项（Diffuse Only / Specular Only / IBL Only / Normal / Metallic / Roughness / AO）通过 GlobalUBO 传递 debug mode 标志，forward.frag 根据标志输出对应分量
 - [ ] 验证：glTF 场景正确 PBR 渲染，金属表面反射环境，粗糙表面漫反射，Debug 各模式可用
