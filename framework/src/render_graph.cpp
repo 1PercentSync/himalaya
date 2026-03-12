@@ -155,6 +155,17 @@ namespace himalaya::framework {
                     .access = VK_ACCESS_2_SHADER_SAMPLED_READ_BIT,
                 };
 
+            case RGStage::Compute:
+                return {
+                    .layout = access == RGAccessType::Read
+                                  ? VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+                                  : VK_IMAGE_LAYOUT_GENERAL,
+                    .stage = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+                    .access = access == RGAccessType::Read
+                                  ? VK_ACCESS_2_SHADER_SAMPLED_READ_BIT
+                                  : VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+                };
+
             case RGStage::Transfer:
                 return {
                     .layout = access == RGAccessType::Read
