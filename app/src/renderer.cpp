@@ -54,7 +54,9 @@ namespace himalaya::app {
                                                                     .mip_levels = 1,
                                                                 });
 
-        // Depth buffer as managed resource (auto-rebuilt on resize)
+        // Resolved depth buffer (1x): direct render target in 1x mode,
+        // MSAA depth resolve target (MAX_BIT) in multi-sample mode.
+        // Sampled usage for future screen-space effects (SSAO, Contact Shadows).
         managed_depth_ = render_graph_.create_managed_image("Depth", {
                                                                 .size_mode = framework::RGSizeMode::Relative,
                                                                 .width_scale = 1.0f,
@@ -62,7 +64,8 @@ namespace himalaya::app {
                                                                 .width = 0,
                                                                 .height = 0,
                                                                 .format = rhi::Format::D32Sfloat,
-                                                                .usage = rhi::ImageUsage::DepthAttachment,
+                                                                .usage = rhi::ImageUsage::DepthAttachment |
+                                                                         rhi::ImageUsage::Sampled,
                                                                 .sample_count = 1,
                                                                 .mip_levels = 1,
                                                             });
