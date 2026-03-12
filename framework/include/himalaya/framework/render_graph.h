@@ -287,17 +287,6 @@ namespace himalaya::framework {
         // ---- Managed Resource API ----
 
         /**
-         * @brief Registers a managed image with the render graph.
-         *
-         * The graph creates and caches the backing GPU image. For Relative mode,
-         * set_reference_resolution() must have been called before this method.
-         * The returned handle is persistent and valid until destroy_managed_image().
-         *
-         * @param debug_name Human-readable name (used for Vulkan debug labels and diagnostics).
-         * @param desc       Image description (size mode, format, usage, etc.).
-         * @return Persistent handle for use with use_managed_image() and destroy_managed_image().
-         */
-        /**
          * @brief Sets the reference resolution for Relative size mode.
          *
          * Must be called before create_managed_image() with Relative descriptors.
@@ -309,7 +298,30 @@ namespace himalaya::framework {
          */
         void set_reference_resolution(VkExtent2D extent);
 
+        /**
+         * @brief Registers a managed image with the render graph.
+         *
+         * The graph creates and caches the backing GPU image. For Relative mode,
+         * set_reference_resolution() must have been called before this method.
+         * The returned handle is persistent and valid until destroy_managed_image().
+         *
+         * @param debug_name Human-readable name (used for Vulkan debug labels and diagnostics).
+         * @param desc       Image description (size mode, format, usage, etc.).
+         * @return Persistent handle for use with use_managed_image() and destroy_managed_image().
+         */
         RGManagedHandle create_managed_image(const char *debug_name, const RGImageDesc &desc);
+
+        /**
+         * @brief Updates the description of a managed image.
+         *
+         * If the resolved image properties change (dimensions, format, sample count,
+         * etc.), the backing GPU image is destroyed and recreated. The handle
+         * remains valid. Used for MSAA sample count switching.
+         *
+         * @param handle   Managed image handle.
+         * @param new_desc New image description.
+         */
+        void update_managed_desc(RGManagedHandle handle, const RGImageDesc &new_desc);
 
         /**
          * @brief Destroys a managed image and releases its backing GPU resource.

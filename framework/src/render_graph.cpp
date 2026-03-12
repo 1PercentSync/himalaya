@@ -268,6 +268,27 @@ namespace himalaya::framework {
                             VK_IMAGE_LAYOUT_UNDEFINED);
     }
 
+    void RenderGraph::update_managed_desc(const RGManagedHandle handle, const RGImageDesc &new_desc) {
+        assert(handle.valid() && handle.index < managed_images_.size() && "Invalid RGManagedHandle");
+        auto &managed = managed_images_[handle.index];
+        assert(managed.backing.valid() && "Managed image has been destroyed");
+
+        const auto old_resolved = resolve_image_desc(managed.desc);
+        managed.desc = new_desc;
+
+        // Rebuild only if resolved properties actually changed
+        if (const auto new_resolved = resolve_image_desc(new_desc);
+            old_resolved.width != new_resolved.width
+            || old_resolved.height != new_resolved.height
+            || old_resolved.format != new_resolved.format
+            || old_resolved.sample_count != new_resolved.sample_count
+            || old_resolved.usage != new_resolved.usage
+            || old_resolved.mip_levels != new_resolved.mip_levels) {
+            resource_manager_->destroy_image(managed.backing);
+            managed.backing = resource_manager_->create_image(new_resolved);
+        }
+    }
+
     void RenderGraph::destroy_managed_image(const RGManagedHandle handle) {
         assert(handle.valid() && handle.index < managed_images_.size() && "Invalid RGManagedHandle");
         auto &managed = managed_images_[handle.index];
