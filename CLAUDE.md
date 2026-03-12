@@ -177,6 +177,7 @@ himalaya/
 | Dear ImGui | 调试 UI |
 | fastgltf | glTF 场景加载 |
 | stb_image | JPEG/PNG 图像解码 |
+| CLI11 | 命令行参数解析 |
 
 ---
 

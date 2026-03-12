@@ -14,7 +14,7 @@
 - [ ] 两阶段 resize：`handle_resize()` 改为先调 `renderer_.on_swapchain_invalidated()`、再 `swapchain_.recreate()`、最后 `renderer_.on_swapchain_recreated()`
 - [ ] 验证：编译通过，运行效果与阶段二一致，无 validation 报错
 
-## Step 2：RG Managed 资源
+## Step 2：RG Managed 资源 + Debug Name
 
 - [ ] `RGImageDesc` 结构体（RGSizeMode Relative/Absolute、format、usage、sample_count、mip_levels）
 - [ ] `RGManagedHandle` 类型 + `create_managed_image()` / `destroy_managed_image()` API
@@ -24,35 +24,52 @@
 - [ ] `update_managed_desc(handle, new_desc)` — 更新描述符（MSAA 切换用），desc 变化时重建 backing image
 - [ ] `get_managed_backing_image(handle)` — 获取 backing ImageHandle（resize handler 中即时获取新 handle 更新 Set 2 descriptor）
 - [ ] 迁移现有 depth buffer 从手动管理到 managed 资源，删除 Renderer 中的手动 depth 创建/销毁代码
-- [ ] 验证：现有渲染正常工作，depth buffer 由 RG managed 管理，resize 时自动重建
+- [ ] `create_image()`、`create_buffer()`、`create_sampler()` 新增必选 `debug_name` 参数，内部调用 `vkSetDebugUtilsObjectNameEXT`
+- [ ] 回溯修改所有已有 `create_image()` / `create_buffer()` / `create_sampler()` 调用点，补充 debug name
+- [ ] 验证：现有渲染正常工作，depth buffer 由 RG managed 管理，resize 时自动重建；Vulkan 对象在 validation 输出和 RenderDoc 中显示可读名称
 
 ## Step 3：Descriptor Layout + Compute Infra
 
 - [ ] Set 1 layout 新增 binding 1（`samplerCube[]`，上限 256，`PARTIALLY_BOUND` + `UPDATE_AFTER_BIND`）
 - [ ] Set 1 descriptor pool 容量从 4096 扩展到 4352
 - [ ] 去掉 Set 1 binding 0 的 `VARIABLE_DESCRIPTOR_COUNT`，改为固定上限 4096 + `PARTIALLY_BOUND`
+- [ ] 同步在 `bindings.glsl` 中声明 `samplerCube cubemaps[]`（Set 1 binding 1），使 shader 侧布局与 CPU 侧一致
 - [ ] 新增 Set 2 descriptor set layout（M1 全部 8 个 binding 预留，`PARTIALLY_BOUND`）+ Set 2 pool（普通 pool，8 COMBINED_IMAGE_SAMPLER）+ 分配 Set 2 × 1
 - [ ] `DescriptorManager` 新增 `register_cubemap()` / `unregister_cubemap()` API（独立 free list 和 slot 空间）
 - [ ] `DescriptorManager` 新增 Set 2 管理：`update_render_target()` 更新指定 binding 的 image + sampler
 - [ ] `get_global_set_layouts()` 返回三个 layout（Set 0 + Set 1 + Set 2），所有 pipeline layout 统一
 - [ ] `pipeline.h` 新增 `ComputePipelineDesc` 结构体（含 `descriptor_set_layouts` 字段支持自定义 layout）+ `create_compute_pipeline()` 函数
 - [ ] `commands.h` 新增 `CommandBuffer::dispatch(group_count_x, group_count_y, group_count_z)` + `CommandBuffer::push_descriptor_set()` 方法
+- [ ] 补充 `RenderGraph::resolve_usage()` 的 Compute case：Read → `SHADER_READ_ONLY_OPTIMAL` + `SHADER_SAMPLED_READ_BIT`，Write → `GENERAL` + `SHADER_STORAGE_WRITE_BIT`
 - [ ] 验证：所有布局更新无 validation 报错，现有渲染正常；能创建并 dispatch 一个空 compute shader
 
-## Step 4：MSAA + HDR + Tonemapping + Pass 类基础设施
+## Step 4a：FrameContext + Pass 类 + HDR 管线重组
 
 - [ ] 创建 `framework/include/himalaya/framework/frame_context.h`（FrameContext 结构体：RG 资源 ID + 场景数据引用 + 帧参数）
+- [ ] 提取 ForwardPass 类（`passes/forward_pass.h/cpp`）：从 Renderer 的 RG lambda 迁移渲染逻辑，实现 setup / record / destroy
+- [ ] 创建 hdr_color managed 资源（R16G16B16A16_SFLOAT，1x）
+- [ ] 创建 `shaders/fullscreen.vert`（fullscreen triangle，无顶点输入）
+- [ ] 创建 `shaders/tonemapping.frag`（passthrough 版本：采样 hdr_color 直接输出，不做 ACES）
+- [ ] TonemappingPass 类（`passes/tonemapping_pass.h/cpp`）：setup 创建 pipeline、record、destroy
+- [ ] ForwardPass 改为渲染到 hdr_color（不再直接渲染到 swapchain），沿用阶段二深度行为（depth compare GREATER、depth write ON）
+- [ ] TonemappingPass 读 hdr_color 写 swapchain image
+- [ ] 验证：管线正确运行，无 validation 报错，场景可见（高光过曝可接受，因为没有 tone mapping）
+
+## Step 4b：ACES Tonemapping + Exposure
+
+- [ ] 替换 `tonemapping.frag` 的 passthrough 为 ACES tonemapping
+- [ ] Exposure 控制：DebugUI 手动 EV 滑条（范围 -4 到 +4），`pow(2, ev)` 计算 exposure
+- [ ] 数据通路：`RenderInput::exposure` → `GlobalUniformData::camera_position_and_exposure.w` → `tonemapping.frag`
+- [ ] 验证：高光不截断，画面正确 tonemapped，DebugUI EV 滑条可调
+
+## Step 4c：MSAA
+
 - [ ] 创建 MSAA color buffer（R16G16B16A16F，4x，managed 资源；1x 时不创建）
 - [ ] 创建 MSAA depth buffer（D32Sfloat，4x，managed 资源；1x 时不创建，使用 Step 2 的 1x depth）
-- [ ] 创建 resolved HDR color buffer（R16G16B16A16F，1x，managed 资源）
-- [ ] 提取 ForwardPass 类（`passes/forward_pass.h/cpp`）：从 Renderer 的 RG lambda 迁移渲染逻辑，实现 setup / record / destroy
 - [ ] Forward pass 改为渲染到 MSAA color + MSAA depth，通过 Dynamic Rendering 配置 color resolve（AVERAGE）；1x 时直接渲染到 hdr_color，无 resolve
 - [ ] Forward pass RG 资源声明：多采样时 3 个资源（msaa_color WRITE、msaa_depth READ_WRITE、hdr_color WRITE），1x 时 2 个资源（hdr_color WRITE、depth READ_WRITE）
-- [ ] Tonemapping shader（`shaders/tonemapping.frag` + `shaders/fullscreen.vert`）
-- [ ] TonemappingPass 类（`passes/tonemapping_pass.h/cpp`）：setup 创建 pipeline、record、destroy
-- [ ] TonemappingPass 读 hdr_color 写 swapchain image（不感知 MSAA 模式）
-- [ ] MSAA 运行时切换：Renderer::handle_msaa_change()（创建/销毁 MSAA managed 资源 + update_managed_desc + pipeline 重建）+ DebugUI MSAA 选择控件（1x/2x/4x/8x）
-- [ ] 验证：场景以 MSAA + HDR + ACES tonemapping 渲染，高光不再截断为纯白，DebugUI 可切换 MSAA 采样数
+- [ ] MSAA 运行时切换：`Renderer::handle_msaa_change()`（`vkQueueWaitIdle` 保障 GPU 空闲 → 创建/销毁 MSAA managed 资源 + `update_managed_desc` + `on_sample_count_changed()` pipeline 重建）+ DebugUI MSAA 选择控件（1x/2x/4x/8x）
+- [ ] 验证：MSAA 渲染正确，DebugUI 可切换 1x/2x/4x/8x 采样数
 
 ## Step 5：Depth + Normal PrePass
 
@@ -65,10 +82,10 @@
 - [ ] DepthPrePass 类（`passes/depth_prepass.h/cpp`）：setup 创建 Opaque pipeline + Mask pipeline、on_resize、record、destroy
 - [ ] DepthPrePass 配置 Dynamic Rendering 同时 resolve：depth MAX_BIT + normal AVERAGE（1x 时无 resolve，直接写 1x target）
 - [ ] PrePass 绘制：先 Opaque 批次（Early-Z 保证），再 Mask 批次（含 discard）
-- [ ] Forward pass 改为 depth compare EQUAL + depth write OFF + 移除 depth resolve 配置，资源声明改为 3 个（msaa_color Write、msaa_depth Read、hdr_color Write），forward.vert 添加 `invariant gl_Position`
+- [ ] Forward pass 深度行为变更：从 Step 4a/4b 的 GREATER + write ON 改为 EQUAL + write OFF + 移除 depth resolve 配置，资源声明改为 3 个（msaa_color Write、msaa_depth Read、hdr_color Write），forward.vert 添加 `invariant gl_Position`
 - [ ] 验证：PrePass 正确填充 depth 和 normal buffer（RenderDoc 检查），Forward pass zero-overdraw 无视觉瑕疵
 
-## Step 6：IBL Pipeline
+## Step 6：IBL Pipeline + Skybox
 
 - [ ] `framework/include/himalaya/framework/ibl.h` + `framework/src/ibl.cpp` 模块骨架
 - [ ] stb_image `.hdr` 文件加载（`stbi_loadf`，RGB float 数据）+ 上传到 equirectangular 2D GPU image
@@ -78,9 +95,12 @@
 - [ ] BRDF Integration LUT compute shader（`shaders/ibl/brdf_lut.comp`，256×256，R16G16_UNORM）
 - [ ] IBL 模块 `init()` 方法：在 `begin_immediate()` / `end_immediate()` scope 内执行全部预计算，使用 Push Descriptors 绑定输入/输出 image
 - [ ] 将 irradiance/prefiltered cubemap 注册到 Set 1 binding 1（`register_cubemap()`），BRDF LUT 注册到 Set 1 binding 0（`register_texture()`）
-- [ ] `GlobalUniformData` 新增 IBL 字段（irradiance_cubemap_index、prefiltered_cubemap_index、brdf_lut_index、prefiltered_mip_count）+ 更新 `bindings.glsl` 布局（Step 6 完成，不等 Step 7）
+- [ ] `GlobalUniformData` 新增 IBL 字段（irradiance_cubemap_index、prefiltered_cubemap_index、brdf_lut_index、prefiltered_mip_count）+ 更新 `bindings.glsl` GlobalUBO 布局（Step 6 完成，不等 Step 7；`cubemaps[]` 声明已在 Step 3 完成，此处仅更新 GlobalUBO）
 - [ ] Renderer 在 `init()` 中调用 IBL 预计算，在 `destroy()` 中清理 IBL 资源
-- [ ] 验证：IBL 预计算无 validation 报错，RenderDoc 检查 cubemap 各面和 mip 级别内容正确、BRDF LUT 呈现预期的渐变图案
+- [ ] 创建 `shaders/skybox.vert`（独立 VS，计算世界方向 varying，`gl_Position.z = 0.0`；不复用 `fullscreen.vert`）
+- [ ] 创建 `shaders/skybox.frag`（normalize + texture 纯采样）
+- [ ] SkyboxPass 类（`passes/skybox_pass.h/cpp`）：方法集 setup / record / destroy（不属于 MSAA 相关 pass，无 on_resize / on_sample_count_changed），渲染到 resolved 1x hdr_color，读 resolved depth（GREATER_OR_EQUAL + depth write OFF）
+- [ ] 验证：IBL 预计算无 validation 报错，RenderDoc 检查 cubemap 各面和 mip 级别内容正确、BRDF LUT 呈现预期的渐变图案；天空背景正确显示
 
 ## Step 7：PBR Shader 升级
 
@@ -89,6 +109,6 @@
 - [ ] 创建 `shaders/common/lighting.glsl`（evaluate_directional_light、evaluate_ibl，内部 include constants + brdf，依赖 bindings.glsl 的光源/IBL 结构体）
 - [ ] 升级 `forward.frag`：替换 Lambert 为 Cook-Torrance（GGX / Smith Height-Correlated / Schlick）+ IBL 环境光（irradiance + prefiltered + BRDF LUT Split-Sum）
 - [ ] `forward.frag` 消费全部 5 个材质纹理：occlusion_tex 调制 IBL/ambient，emissive_tex × emissive_factor 加到最终颜色
-- [ ] `bindings.glsl` 更新：新增 `samplerCube cubemaps[]` 声明（Set 1 binding 1）+ GlobalUBO IBL 字段
 - [ ] DebugUI 渲染模式：增加可视化选项（Diffuse Only / Specular Only / IBL Only / Normal / Metallic / Roughness / AO）通过 GlobalUBO 传递 debug mode 标志，forward.frag 根据标志输出对应分量
 - [ ] 验证：glTF 场景正确 PBR 渲染，金属表面反射环境，粗糙表面漫反射，Debug 各模式可用
+- [ ] 最终验证：补充 .hdr 环境贴图和额外 glTF PBR 测试模型（DamagedHelmet 或类似），结合现有 Sponza 场景全面验证

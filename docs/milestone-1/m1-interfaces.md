@@ -207,7 +207,10 @@ VkImageAspectFlags aspect_from_format(Format format);
 ```cpp
 class ResourceManager {
 public:
-    // --- 已有接口省略 ---
+    // --- 资源创建（debug_name 为必选参数，内部调用 vkSetDebugUtilsObjectNameEXT） ---
+    ImageHandle  create_image(const ImageDesc& desc, const char* debug_name);
+    BufferHandle create_buffer(const BufferDesc& desc, const char* debug_name);
+    SamplerHandle create_sampler(const SamplerDesc& desc, const char* debug_name);
 
     // 外部 image 注册（swapchain image 等非 ResourceManager 创建的资源）
     // 分配 slot 记录 VkImage/VkImageView/desc，allocation 为 null（不持有 VMA 内存）
@@ -237,6 +240,29 @@ public:
     // 例：set_include_path("shaders") 后，compile_from_file("forward.vert", Vertex)
     //     读取 shaders/forward.vert，filename 传 "forward.vert" 给内部 compile()
     std::vector<uint32_t> compile_from_file(const std::string& path, ShaderStage stage);
+};
+```
+
+#### DescriptorManager 接口
+
+```cpp
+class DescriptorManager {
+public:
+    // --- Descriptor Set getter ---
+    // Pass 在 setup() 时存储 DescriptorManager*，
+    // record() 的 execute lambda 中按需调用以下 getter 获取 descriptor set。
+
+    // Set 0: per-frame（2 个 set 对应 2 frames in flight）
+    VkDescriptorSet get_set0(uint32_t frame_index) const;
+
+    // Set 1: 持久 Bindless 纹理（1 个 set，加载时写入）
+    VkDescriptorSet get_set1() const;
+
+    // Set 2: Render Target 中间产物（1 个 set，init/resize/MSAA 切换时更新）
+    VkDescriptorSet get_set2() const;
+
+    // 返回三个 Set 的 layout（Set 0 + Set 1 + Set 2），用于 pipeline 创建
+    std::array<VkDescriptorSetLayout, 3> get_global_set_layouts() const;
 };
 ```
 
@@ -344,7 +370,8 @@ struct GlobalUniformData {
     uint32_t brdf_lut_index;                    // offset 300 — textures[] 下标
     uint32_t prefiltered_mip_count;             // offset 304 — roughness → mip level 映射
     uint32_t debug_render_mode;                 // offset 308 — 0=正常，非零=debug 分量可视化
-    float _pad[2];                              // padding to 320 bytes (std140 16-byte)
+    uint32_t skybox_cubemap_index;              // offset 312 — cubemaps[] 下标（Skybox Pass 天空渲染用）
+    float _pad[1];                              // padding to 320 bytes (std140 16-byte)
 };
 
 // GPU 方向光 — std430 layout, 32 bytes per element
@@ -484,6 +511,19 @@ void end_debug_label();
 
 RG `execute()` 自动为每个 pass 调用 `begin_debug_label(pass_name)` / `end_debug_label()`，在 RenderDoc 和 GPU profiler 中按 pass 名称分组显示。
 
+#### CommandBuffer Compute + Push Descriptor 扩展
+
+```cpp
+// Compute dispatch
+void dispatch(uint32_t group_count_x, uint32_t group_count_y, uint32_t group_count_z);
+
+// Push descriptors (Vulkan 1.4 core, IBL 预计算专用)
+// 注意：此方法直接接受 Vulkan 类型参数（VkPipelineLayout、VkWriteDescriptorSet），
+// 是项目中上层使用 Vulkan 类型的例外——仅限 IBL 一次性 init compute dispatch 场景。
+void push_descriptor_set(VkPipelineLayout layout, uint32_t set,
+                         std::span<const VkWriteDescriptorSet> writes) const;
+```
+
 ---
 
 ### Pass 类约定
@@ -491,10 +531,10 @@ RG `execute()` 自动为每个 pass 调用 `begin_debug_label(pass_name)` / `end
 > 阶段三引入。阶段二直接在 RG lambda 回调中编写渲染逻辑。
 > 阶段三所有 pass 统一放在 Layer 2（`passes/`），使用具体类（非虚基类），Renderer 持有具体类型成员。设计决策见 `m1-design-decisions.md`「Pass 类设计」。
 
-每个 Pass 使用具体类（非虚函数），`setup()` 签名因 pass 而异。Attachment format 在 pass 内部硬编码。
+每个 Pass 使用具体类（非虚函数），`setup()` 签名因 pass 而异。Attachment format 在 pass 内部硬编码。各 pass 的方法集允许不统一（如 SkyboxPass 无 `on_resize()`），但同功能的方法保持同名（如 `record()`、`destroy()`）。
 
 ```cpp
-// MSAA 相关 pass（ForwardPass、DepthPrePass、SkyboxPass）
+// MSAA 相关 pass（ForwardPass、DepthPrePass）
 class ForwardPass {  // 具体类，无基类
 public:
     /// 一次性：创建 pipeline，存储服务指针（ctx_, rm_, dm_, sc_）
@@ -521,6 +561,15 @@ public:
     void setup(rhi::Context& ctx, rhi::ResourceManager& rm,
                rhi::DescriptorManager& dm, rhi::ShaderCompiler& sc);
     void on_resize(uint32_t width, uint32_t height);
+    void record(RenderGraph& rg, const FrameContext& ctx);
+    void destroy();
+};
+
+// 轻量 pass（SkyboxPass）— 无分辨率/MSAA 相关私有资源
+class SkyboxPass {
+public:
+    void setup(rhi::Context& ctx, rhi::ResourceManager& rm,
+               rhi::DescriptorManager& dm, rhi::ShaderCompiler& sc);
     void record(RenderGraph& rg, const FrameContext& ctx);
     void destroy();
 };
@@ -585,9 +634,11 @@ struct RenderInput {
 ```cpp
 class Renderer {
 public:
+    /// hdr_env_path: .hdr 环境贴图路径（传递给内部 IBL 初始化，生成 irradiance / prefiltered cubemap）
     void init(rhi::Context& ctx, rhi::Swapchain& swapchain,
               rhi::ResourceManager& rm, rhi::DescriptorManager& dm,
-              framework::ImGuiBackend& imgui);
+              framework::ImGuiBackend& imgui,
+              const std::string& hdr_env_path);
 
     /// 填充 GPU buffers（UBO/SSBO），构建 RG，执行所有 pass。
     void render(const rhi::CommandBuffer& cmd, const RenderInput& input);
@@ -699,6 +750,13 @@ layout(set = 0, binding = 0) uniform GlobalUBO {
     vec2 screen_size;
     float time;                             // 程序运行时间（秒）
     uint directional_light_count;           // 活跃方向光数量
+    float ibl_intensity;                    // IBL 环境光强度乘数
+    uint irradiance_cubemap_index;          // cubemaps[] 下标
+    uint prefiltered_cubemap_index;         // cubemaps[] 下标
+    uint brdf_lut_index;                    // textures[] 下标
+    uint prefiltered_mip_count;             // roughness → mip level 映射
+    uint debug_render_mode;                 // 0=正常，非零=debug 分量可视化
+    uint skybox_cubemap_index;              // cubemaps[] 下标（Skybox Pass 天空渲染用）
 } global;
 
 layout(set = 0, binding = 1) readonly buffer LightBuffer {

@@ -61,8 +61,9 @@
 - IBL 环境光（Split-Sum 近似、BRDF Integration LUT 预计算、HDR Cubemap 加载）
 - Depth + Normal PrePass
 - MSAA 开启 + Depth Resolve + Normal Resolve + Color Resolve
+- Tonemapping Pass（ACES 拟合，fullscreen fragment shader，直接写 swapchain）
 
-**产出：** 场景有了基本正确的 PBR 光照——直接光 + 环境光。金属表面反射天空 Cubemap。但没有阴影、没有 AO，画面会偏平。
+**产出：** 场景有了基本正确的 PBR 光照——直接光 + 环境光。金属表面反射天空 Cubemap。HDR 渲染结果经过 Tonemapping 映射到 LDR。但没有阴影、没有 AO，画面会偏平。
 
 ---
 
@@ -116,7 +117,9 @@
 - 自动曝光（亮度降采样到 1×1 + 时域平滑）
 - Bloom（降采样链 + 升采样链）
 - 高度雾 Pass
-- Tonemapping（ACES 拟合）
+- Tonemapping 演进（阶段三已实现基础 ACES 拟合，此处升级）：
+  - 从 fullscreen fragment shader 迁移到 compute shader（LDR buffer 非 SRGB swapchain，可以用 STORAGE_BIT）
+  - 从直接写 swapchain 改为写中间 LDR buffer（后处理链串联：HDR → Bloom → Tonemapping → LDR → Vignette → Color Grading → Final Output → Swapchain）
 - Vignette Pass
 - Color Grading Pass
 
