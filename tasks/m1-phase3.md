@@ -82,9 +82,9 @@
 - [x] 创建 `shaders/depth_prepass_masked.frag`（Mask：采样 base_color_tex alpha test → discard → 采样 normal_tex → TBN → encode）
 - [x] 创建 resolved depth buffer（D32Sfloat，1x，managed 资源）
 - [x] 创建 MSAA normal buffer（R10G10B10A2_UNORM，managed 资源；1x 时不创建）+ resolved normal buffer（R10G10B10A2_UNORM，managed 资源）
-- [ ] DepthPrePass 类（`passes/depth_prepass.h/cpp`）：setup 创建 Opaque pipeline + Mask pipeline、on_resize、record、destroy
-- [ ] DepthPrePass 配置 Dynamic Rendering 同时 resolve：depth MAX_BIT + normal AVERAGE（1x 时无 resolve，直接写 1x target）
-- [ ] PrePass 绘制：先 Opaque 批次（Early-Z 保证），再 Mask 批次（含 discard）
+- [x] DepthPrePass 类（`passes/depth_prepass.h/cpp`）：setup 创建 Opaque pipeline + Mask pipeline、on_resize、record、destroy
+- [x] DepthPrePass 配置 Dynamic Rendering 同时 resolve：depth MAX_BIT + normal AVERAGE（1x 时无 resolve，直接写 1x target）
+- [x] PrePass 绘制：先 Opaque 批次（Early-Z 保证），再 Mask 批次（含 discard）
 - [ ] Forward pass 深度行为变更：从 Step 4a/4b 的 GREATER + write ON 改为 EQUAL + write OFF + 移除 depth resolve 配置，资源声明改为 3 个（msaa_color Write、msaa_depth Read、hdr_color Write），forward.vert 添加 `invariant gl_Position`
 - [ ] 验证：PrePass 正确填充 depth 和 normal buffer（RenderDoc 检查），Forward pass zero-overdraw 无视觉瑕疵
 
