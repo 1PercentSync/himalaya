@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段三 — PBR 光照基础（Cook-Torrance + IBL + MSAA + HDR）
-- **进度**：Step 2 进行中（managed 资源 API 全部完成，下一步迁移 depth buffer）
+- **进度**：Step 2 进行中（managed 资源 + depth 迁移完成，下一步 Debug Name）
 
 ### 下一个任务
 
-阶段三 Step 2：迁移现有 depth buffer 从手动管理到 managed 资源。
+阶段三 Step 2：`create_image()` / `create_buffer()` / `create_sampler()` 新增必选 `debug_name` 参数。
 
 ---
 
