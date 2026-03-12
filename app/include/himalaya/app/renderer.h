@@ -165,11 +165,20 @@ namespace himalaya::app {
         /** @brief Tonemapping pass (reads HDR color, writes swapchain). */
         passes::TonemappingPass tonemapping_pass_{};
 
-        /** @brief HDR color buffer (R16G16B16A16F, managed, auto-rebuilt on resize). */
+        /** @brief HDR color buffer (R16G16B16A16F, 1x, managed, auto-rebuilt on resize). */
         framework::RGManagedHandle managed_hdr_color_;
 
-        /** @brief Depth buffer (D32Sfloat, managed by render graph, auto-rebuilt on resize). */
+        /** @brief Depth buffer (D32Sfloat, 1x, managed by render graph, auto-rebuilt on resize). */
         framework::RGManagedHandle managed_depth_;
+
+        /** @brief MSAA color buffer (R16G16B16A16F, Nx, managed); invalid when sample_count == 1. */
+        framework::RGManagedHandle managed_msaa_color_;
+
+        /** @brief MSAA depth buffer (D32Sfloat, Nx, managed); invalid when sample_count == 1. */
+        framework::RGManagedHandle managed_msaa_depth_;
+
+        /** @brief Current MSAA sample count (1 = no MSAA, default 4x). */
+        uint32_t current_sample_count_ = 4;
 
         /** @brief Default sampler (linear filter, repeat wrap, linear mip). */
         rhi::SamplerHandle default_sampler_;

@@ -137,6 +137,9 @@ namespace himalaya::rhi {
         /** @brief Device-supported maximum sampler anisotropy (e.g. 16.0f). */
         float max_sampler_anisotropy;
 
+        /** @brief Maximum MSAA sample count supported by both color and depth framebuffers. */
+        uint32_t max_msaa_samples;
+
         /** @brief Logical device. */
         VkDevice device = VK_NULL_HANDLE;
 

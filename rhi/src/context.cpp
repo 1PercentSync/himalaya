@@ -253,7 +253,19 @@ namespace himalaya::rhi {
         vkGetPhysicalDeviceProperties(physical_device, &props);
         gpu_name = props.deviceName;
         max_sampler_anisotropy = props.limits.maxSamplerAnisotropy;
-        spdlog::info("Selected GPU: {} (score: {})", gpu_name, best_score);
+
+        // Compute max MSAA sample count supported by both color and depth framebuffers
+        const VkSampleCountFlags counts = props.limits.framebufferColorSampleCounts &
+                                           props.limits.framebufferDepthSampleCounts;
+        if (counts & VK_SAMPLE_COUNT_64_BIT) max_msaa_samples = 64;
+        else if (counts & VK_SAMPLE_COUNT_32_BIT) max_msaa_samples = 32;
+        else if (counts & VK_SAMPLE_COUNT_16_BIT) max_msaa_samples = 16;
+        else if (counts & VK_SAMPLE_COUNT_8_BIT) max_msaa_samples = 8;
+        else if (counts & VK_SAMPLE_COUNT_4_BIT) max_msaa_samples = 4;
+        else if (counts & VK_SAMPLE_COUNT_2_BIT) max_msaa_samples = 2;
+        else max_msaa_samples = 1;
+
+        spdlog::info("Selected GPU: {} (score: {}, max MSAA: {}x)", gpu_name, best_score, max_msaa_samples);
     }
 
     void Context::create_device() {
