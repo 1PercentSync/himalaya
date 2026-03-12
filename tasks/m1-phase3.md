@@ -6,8 +6,8 @@
 
 ## Step 1：Renderer 提取 + CLI11
 
-- [ ] 创建 `RenderInput` 结构体（`app/include/himalaya/app/renderer.h`）
-- [ ] 创建 `Renderer` 类骨架（init / render / destroy / on_swapchain_invalidated / on_swapchain_recreated）
+- [x] 创建 `RenderInput` 结构体（`app/include/himalaya/app/renderer.h`）
+- [x] 创建 `Renderer` 类骨架（init / render / destroy / on_swapchain_invalidated / on_swapchain_recreated）
 - [ ] 将渲染资源所有权从 Application 迁移到 Renderer（pipeline、depth image、default textures、default sampler、shader compiler、material system、render graph、swapchain image handles、per-frame UBO/SSBO）
 - [ ] 将渲染逻辑从 Application 迁移到 Renderer（RG 构建与执行、UBO/SSBO 填充、draw loop）
 - [ ] Application 改为持有 Renderer 并在主循环中调用 `renderer_.render(cmd, input)`

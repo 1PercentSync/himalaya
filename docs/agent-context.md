@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段三 — PBR 光照基础（Cook-Torrance + IBL + MSAA + HDR）
-- **进度**：Step 1 待开始
+- **进度**：Step 1 进行中（RenderInput + Renderer 骨架已完成，资源迁移下一步）
 
 ### 下一个任务
 
-阶段三 Step 1：Renderer 提取 + CLI11 命令行解析库引入。
+Step 1 第 3 项：将渲染资源所有权从 Application 迁移到 Renderer。
 
 ---
 
