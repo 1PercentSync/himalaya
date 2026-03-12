@@ -471,7 +471,10 @@ struct RGImageDesc {
 // 所有字段必须显式指定，无默认值。与 RHI 层 ImageDesc 设计一致，防止遗漏。
 
 // 持久 handle，跨帧稳定（初始化时获取，每帧通过 use_managed_image 转为 RGResourceId）
-struct RGManagedHandle { uint32_t index; };
+struct RGManagedHandle {
+    uint32_t index = UINT32_MAX;
+    bool valid() const { return index != UINT32_MAX; }
+};
 ```
 
 #### Render Graph 核心接口

@@ -94,6 +94,8 @@ Render Graph 的功能按需引入，不提前建设未使用的能力：
 
 **两步注册模式：** `create_managed_image()` 在初始化时注册持久 handle；`use_managed_image()` 每帧调用，返回当前帧的 `RGResourceId`。初始化时注册、每帧使用、销毁时注销——handle 跨帧稳定，RGResourceId 每帧重建。
 
+**Slot 状态判断：** Managed image slot 通过 `backing.valid()`（`ImageHandle::index != UINT32_MAX`）判断是否活跃，不引入额外 `active` 标志。`destroy_managed_image()` 重置 `backing = {}`（无效），`create_managed_image()` 赋予有效 backing handle。与 RHI 层句柄设计一致——`valid()` 是单次 `uint32_t` 比较，零开销，语义已充分表达 slot 状态。
+
 **Initial/final layout 推导：** Managed 资源每帧统一以 `VK_IMAGE_LAYOUT_UNDEFINED` 作为 initial layout，帧末不插入 final layout transition。
 
 候选方案：
