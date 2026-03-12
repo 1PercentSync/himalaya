@@ -40,6 +40,19 @@ namespace himalaya::app {
         render_graph_.set_reference_resolution(swapchain_->extent);
         register_swapchain_images();
 
+        // HDR color buffer as managed resource (ForwardPass writes, TonemappingPass samples)
+        managed_hdr_color_ = render_graph_.create_managed_image("HDR Color", {
+            .size_mode = framework::RGSizeMode::Relative,
+            .width_scale = 1.0f,
+            .height_scale = 1.0f,
+            .width = 0,
+            .height = 0,
+            .format = rhi::Format::R16G16B16A16Sfloat,
+            .usage = rhi::ImageUsage::ColorAttachment | rhi::ImageUsage::Sampled,
+            .sample_count = 1,
+            .mip_levels = 1,
+        });
+
         // Depth buffer as managed resource (auto-rebuilt on resize)
         managed_depth_ = render_graph_.create_managed_image("Depth", {
             .size_mode = framework::RGSizeMode::Relative,
@@ -128,6 +141,7 @@ namespace himalaya::app {
         resource_manager_->destroy_image(default_textures_.black.image);
         resource_manager_->destroy_sampler(default_sampler_);
 
+        render_graph_.destroy_managed_image(managed_hdr_color_);
         render_graph_.destroy_managed_image(managed_depth_);
         unregister_swapchain_images();
     }
@@ -179,12 +193,13 @@ namespace himalaya::app {
             VK_IMAGE_LAYOUT_UNDEFINED,
             VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 
+        const auto hdr_color_resource = render_graph_.use_managed_image(managed_hdr_color_);
         const auto depth_resource = render_graph_.use_managed_image(managed_depth_);
 
         // --- Construct FrameContext ---
         framework::FrameContext frame_ctx{};
         frame_ctx.swapchain = swapchain_image;
-        frame_ctx.hdr_color = swapchain_image; // Temporary: until hdr_color managed resource is created
+        frame_ctx.hdr_color = hdr_color_resource;
         frame_ctx.depth = depth_resource;
         frame_ctx.meshes = input.meshes;
         frame_ctx.materials = input.materials;

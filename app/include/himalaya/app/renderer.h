@@ -161,6 +161,9 @@ namespace himalaya::app {
         /** @brief Forward lighting pass (renders to HDR color + depth). */
         passes::ForwardPass forward_pass_{};
 
+        /** @brief HDR color buffer (R16G16B16A16F, managed, auto-rebuilt on resize). */
+        framework::RGManagedHandle managed_hdr_color_;
+
         /** @brief Depth buffer (D32Sfloat, managed by render graph, auto-rebuilt on resize). */
         framework::RGManagedHandle managed_depth_;
 
