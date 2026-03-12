@@ -1,6 +1,7 @@
 add_executable(himalaya_app
     src/main.cpp
     src/application.cpp
+    src/renderer.cpp
     src/camera_controller.cpp
     src/debug_ui.cpp
     src/scene_loader.cpp
@@ -9,8 +10,9 @@ add_executable(himalaya_app
 target_include_directories(himalaya_app PRIVATE include)
 
 find_package(fastgltf CONFIG REQUIRED)
+find_package(CLI11 CONFIG REQUIRED)
 
-target_link_libraries(himalaya_app PRIVATE himalaya_rhi himalaya_framework fastgltf::fastgltf)
+target_link_libraries(himalaya_app PRIVATE himalaya_rhi himalaya_framework fastgltf::fastgltf CLI11::CLI11)
 
 # Clean and copy shaders to build directory after each build
 add_custom_command(TARGET himalaya_app POST_BUILD
