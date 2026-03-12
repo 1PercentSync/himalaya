@@ -243,10 +243,10 @@ namespace himalaya::rhi {
 
         VK_CHECK(vkCreateDescriptorPool(context_->device, &set0_pool_info, nullptr, &set0_pool_));
 
-        // --- UPDATE_AFTER_BIND pool for Set 1 (maxSets=1, 4096 COMBINED_IMAGE_SAMPLER) ---
+        // --- UPDATE_AFTER_BIND pool for Set 1 (maxSets=1, 4096+256 COMBINED_IMAGE_SAMPLER) ---
         constexpr VkDescriptorPoolSize set1_pool_size{
             .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-            .descriptorCount = kMaxBindlessTextures,
+            .descriptorCount = kMaxBindlessTextures + kMaxBindlessCubemaps,
         };
 
         // ReSharper disable once CppVariableCanBeMadeConstexpr
