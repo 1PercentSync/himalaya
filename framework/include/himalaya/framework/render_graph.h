@@ -5,6 +5,7 @@
  * @brief Render Graph for automatic barrier insertion and pass orchestration.
  */
 
+#include <himalaya/rhi/resources.h>
 #include <himalaya/rhi/types.h>
 
 #include <functional>
@@ -19,7 +20,6 @@ namespace himalaya::rhi {
 } // namespace himalaya::rhi
 
 namespace himalaya::framework {
-
     // ---- Managed Resource Types ----
 
     /** @brief Sizing mode for managed render graph images. */
@@ -52,7 +52,7 @@ namespace himalaya::framework {
      * All fields must be explicitly specified (no default values),
      * consistent with rhi::ImageDesc design.
      */
-    struct RGImageDesc {
+    struct RGImageDesc { // NOLINT(*-pro-type-member-init)
         /** @brief Sizing mode (Relative to reference resolution, or Absolute pixels). */
         RGSizeMode size_mode;
 
@@ -85,6 +85,21 @@ namespace himalaya::framework {
 
         /** @brief Number of mip levels (1 = single level). */
         uint32_t mip_levels;
+    };
+
+    /**
+     * @brief Persistent handle to a managed render graph image.
+     *
+     * Returned by create_managed_image() and valid until destroy_managed_image()
+     * is called. Each frame, use use_managed_image() to obtain the per-frame
+     * RGResourceId for pass declarations.
+     */
+    struct RGManagedHandle {
+        /** @brief Internal index into the managed image array (UINT32_MAX = invalid). */
+        uint32_t index = UINT32_MAX;
+
+        /** @brief Returns true if this handle refers to a valid managed image. */
+        [[nodiscard]] bool valid() const { return index != UINT32_MAX; }
     };
 
     // ---- Resource Identifiers ----
@@ -269,6 +284,31 @@ namespace himalaya::framework {
          */
         [[nodiscard]] rhi::BufferHandle get_buffer(RGResourceId id) const;
 
+        // ---- Managed Resource API ----
+
+        /**
+         * @brief Registers a managed image with the render graph.
+         *
+         * The graph creates and caches the backing GPU image. For Relative mode,
+         * set_reference_resolution() must have been called before this method.
+         * The returned handle is persistent and valid until destroy_managed_image().
+         *
+         * @param debug_name Human-readable name (used for Vulkan debug labels and diagnostics).
+         * @param desc       Image description (size mode, format, usage, etc.).
+         * @return Persistent handle for use with use_managed_image() and destroy_managed_image().
+         */
+        RGManagedHandle create_managed_image(const char *debug_name, const RGImageDesc &desc);
+
+        /**
+         * @brief Destroys a managed image and releases its backing GPU resource.
+         *
+         * The handle becomes invalid after this call. Must be called before
+         * the render graph is destroyed (typically in Renderer::destroy()).
+         *
+         * @param handle Handle returned by create_managed_image().
+         */
+        void destroy_managed_image(RGManagedHandle handle);
+
     private:
         /** @brief Internal storage for an imported resource. */
         struct RGResource {
@@ -322,8 +362,25 @@ namespace himalaya::framework {
          */
         void emit_barriers(const rhi::CommandBuffer &cmd, std::span<const CompiledBarrier> barriers) const;
 
+        /** @brief Internal storage for a managed image. */
+        struct ManagedImage {
+            std::string debug_name; ///< Human-readable name for Vulkan debug labels.
+            RGImageDesc desc; ///< Image description (format, size mode, usage, etc.).
+            rhi::ImageHandle backing; ///< The actual GPU image (invalid when slot is free).
+        };
+
+        /**
+         * @brief Resolves an RGImageDesc to an rhi::ImageDesc with concrete pixel dimensions.
+         *
+         * For Relative mode, uses reference_extent_ to compute actual size.
+         * Asserts that reference_extent_ is non-zero for Relative mode.
+         */
+        [[nodiscard]] rhi::ImageDesc resolve_image_desc(const RGImageDesc &desc) const;
+
         /** @brief Resource manager for resolving handles to Vulkan objects. */
         rhi::ResourceManager *resource_manager_ = nullptr;
+
+        // ---- Per-frame state (cleared each frame) ----
 
         /** @brief All resources imported this frame, indexed by RGResourceId::index. */
         std::vector<RGResource> resources_;
@@ -339,5 +396,16 @@ namespace himalaya::framework {
 
         /** @brief Whether compile() has been called since the last clear(). */
         bool compiled_ = false;
+
+        // ---- Managed resource state (persistent across frames) ----
+
+        /** @brief All managed images, indexed by RGManagedHandle::index. */
+        std::vector<ManagedImage> managed_images_;
+
+        /** @brief Free slot indices in managed_images_ available for reuse. */
+        std::vector<uint32_t> free_managed_slots_;
+
+        /** @brief Reference resolution for Relative size mode (set by set_reference_resolution()). */
+        VkExtent2D reference_extent_ = {0, 0};
     };
 } // namespace himalaya::framework

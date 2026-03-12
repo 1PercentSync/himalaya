@@ -22,19 +22,36 @@ namespace himalaya::framework {
         constexpr float v = 0.9f;
 
         // HSV to RGB
-        const float c = v * s;
+        constexpr float c = v * s;
         const float x = c * (1.0f - std::fabs(std::fmod(h * 6.0f, 2.0f) - 1.0f));
-        const float m = v - c;
+        constexpr float m = v - c;
 
         float r, g, b;
-        const int sector = static_cast<int>(h * 6.0f);
-        switch (sector % 6) {
-            case 0: r = c; g = x; b = 0; break;
-            case 1: r = x; g = c; b = 0; break;
-            case 2: r = 0; g = c; b = x; break;
-            case 3: r = 0; g = x; b = c; break;
-            case 4: r = x; g = 0; b = c; break;
-            default: r = c; g = 0; b = x; break;
+        switch (const int sector = static_cast<int>(h * 6.0f); sector % 6) {
+            case 0: r = c;
+                g = x;
+                b = 0;
+                break;
+            case 1: r = x;
+                g = c;
+                b = 0;
+                break;
+            case 2: r = 0;
+                g = c;
+                b = x;
+                break;
+            case 3: r = 0;
+                g = x;
+                b = c;
+                break;
+            case 4: r = x;
+                g = 0;
+                b = c;
+                break;
+            default: r = c;
+                g = 0;
+                b = x;
+                break;
         }
         return {r + m, g + m, b + m, 1.0f};
     }
@@ -156,6 +173,69 @@ namespace himalaya::framework {
         }
     }
 
+    rhi::ImageDesc RenderGraph::resolve_image_desc(const RGImageDesc &desc) const {
+        uint32_t w, h;
+        if (desc.size_mode == RGSizeMode::Relative) {
+            assert(reference_extent_.width > 0 && reference_extent_.height > 0
+                && "set_reference_resolution() must be called before creating Relative managed images");
+            w = static_cast<uint32_t>(static_cast<float>(reference_extent_.width) * desc.width_scale);
+            h = static_cast<uint32_t>(static_cast<float>(reference_extent_.height) * desc.height_scale);
+            assert(w > 0 && h > 0 && "Relative scale produced zero-sized image");
+        } else {
+            w = desc.width;
+            h = desc.height;
+        }
+
+        return {
+            .width = w,
+            .height = h,
+            .depth = 1,
+            .mip_levels = desc.mip_levels,
+            .sample_count = desc.sample_count,
+            .format = desc.format,
+            .usage = desc.usage,
+        };
+    }
+
+    RGManagedHandle RenderGraph::create_managed_image(const char *debug_name, const RGImageDesc &desc) {
+        assert(resource_manager_ && "Must call init() before create_managed_image()");
+
+        // Create the backing GPU image
+        const auto image_desc = resolve_image_desc(desc);
+        const auto backing = resource_manager_->create_image(image_desc);
+
+        // Allocate a managed slot (reuse freed slots if available)
+        uint32_t slot;
+        if (!free_managed_slots_.empty()) {
+            slot = free_managed_slots_.back();
+            free_managed_slots_.pop_back();
+            managed_images_[slot] = {
+                .debug_name = debug_name,
+                .desc = desc,
+                .backing = backing,
+            };
+        } else {
+            slot = static_cast<uint32_t>(managed_images_.size());
+            managed_images_.push_back({
+                .debug_name = debug_name,
+                .desc = desc,
+                .backing = backing,
+            });
+        }
+
+        return {.index = slot};
+    }
+
+    void RenderGraph::destroy_managed_image(const RGManagedHandle handle) {
+        assert(handle.valid() && handle.index < managed_images_.size() && "Invalid RGManagedHandle");
+        auto &managed = managed_images_[handle.index];
+        assert(managed.backing.valid() && "Managed image already destroyed");
+
+        resource_manager_->destroy_image(managed.backing);
+        managed.backing = {};
+        free_managed_slots_.push_back(handle.index);
+    }
+
     void RenderGraph::compile() {
         assert(!compiled_ && "compile() called twice without clear()");
 
@@ -201,10 +281,10 @@ namespace himalaya::framework {
                 // Emit barrier on layout change or any data hazard (RAW, WAW, WAR).
                 // RAR (read-after-read) is the only case that needs no barrier.
                 constexpr VkAccessFlags2 kWriteFlags =
-                    VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT |
-                    VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT |
-                    VK_ACCESS_2_TRANSFER_WRITE_BIT |
-                    VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT;
+                        VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT |
+                        VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT |
+                        VK_ACCESS_2_TRANSFER_WRITE_BIT |
+                        VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT;
 
                 const bool layout_change = state.current_layout != resolved.layout;
                 const bool prev_wrote = (state.last_access & kWriteFlags) != 0;
