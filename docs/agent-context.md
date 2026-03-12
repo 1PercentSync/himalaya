@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段三 — PBR 光照基础（Cook-Torrance + IBL + MSAA + HDR）
-- **进度**：Step 3 进行中（Set 1 layout + pool + bindings.glsl 已完成，checkbox 1-4 done）
+- **进度**：Step 3 进行中（Set 1 + Set 2 layout/pool/alloc + bindings.glsl 已完成，checkbox 1-5 done）
 
 ### 下一个任务
 
-阶段三 Step 3：Descriptor Layout + Compute Infra — 新增 Set 2 descriptor set layout + pool + 分配。
+阶段三 Step 3：Descriptor Layout + Compute Infra — `DescriptorManager` 新增 `register_cubemap()` / `unregister_cubemap()` API。
 
 ---
 

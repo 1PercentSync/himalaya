@@ -37,7 +37,7 @@
 - [x] Set 1 descriptor pool 容量从 4096 扩展到 4352
 - [x] 去掉 Set 1 binding 0 的 `VARIABLE_DESCRIPTOR_COUNT`，改为固定上限 4096 + `PARTIALLY_BOUND`
 - [x] 同步在 `bindings.glsl` 中声明 `samplerCube cubemaps[]`（Set 1 binding 1），使 shader 侧布局与 CPU 侧一致
-- [ ] 新增 Set 2 descriptor set layout（M1 全部 8 个 binding 预留，`PARTIALLY_BOUND`）+ Set 2 pool（普通 pool，8 COMBINED_IMAGE_SAMPLER）+ 分配 Set 2 × 1
+- [x] 新增 Set 2 descriptor set layout（M1 全部 8 个 binding 预留，`PARTIALLY_BOUND`）+ Set 2 pool（普通 pool，8 COMBINED_IMAGE_SAMPLER）+ 分配 Set 2 × 1
 - [ ] `DescriptorManager` 新增 `register_cubemap()` / `unregister_cubemap()` API（独立 free list 和 slot 空间）
 - [ ] `DescriptorManager` 新增 Set 2 管理：`update_render_target()` 更新指定 binding 的 image + sampler
 - [ ] `get_global_set_layouts()` 返回三个 layout（Set 0 + Set 1 + Set 2），所有 pipeline layout 统一
