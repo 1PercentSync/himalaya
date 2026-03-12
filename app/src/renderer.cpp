@@ -182,6 +182,13 @@ namespace himalaya::app {
             *resource_manager_, *descriptor_manager_, default_sampler_);
         ctx_->end_immediate();
 
+        // --- Depth + Normal PrePass ---
+        depth_prepass_.setup(*ctx_,
+                             *resource_manager_,
+                             *descriptor_manager_,
+                             shader_compiler_,
+                             current_sample_count_);
+
         // --- Forward pass ---
         forward_pass_.setup(*ctx_,
                             *resource_manager_,
@@ -202,6 +209,7 @@ namespace himalaya::app {
 
     void Renderer::destroy() {
         material_system_.destroy();
+        depth_prepass_.destroy();
         forward_pass_.destroy();
         tonemapping_pass_.destroy();
 
@@ -320,6 +328,7 @@ namespace himalaya::app {
         }
 
         // Rebuild pipelines for MSAA-affected passes
+        depth_prepass_.on_sample_count_changed(new_sample_count);
         forward_pass_.on_sample_count_changed(new_sample_count);
     }
 
@@ -406,6 +415,9 @@ namespace himalaya::app {
         frame_ctx.frame_index = input.frame_index;
         frame_ctx.sample_count = current_sample_count_;
 
+        // --- Depth + Normal PrePass ---
+        depth_prepass_.record(render_graph_, frame_ctx);
+
         // --- Forward pass ---
         forward_pass_.record(render_graph_, frame_ctx);
 
@@ -459,6 +471,7 @@ namespace himalaya::app {
         update_hdr_color_descriptor();
 
         // Notify passes of resolution change
+        depth_prepass_.on_resize(swapchain_->extent.width, swapchain_->extent.height);
         forward_pass_.on_resize(swapchain_->extent.width, swapchain_->extent.height);
         tonemapping_pass_.on_resize(swapchain_->extent.width, swapchain_->extent.height);
     }
