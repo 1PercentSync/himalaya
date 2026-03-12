@@ -56,7 +56,7 @@
 - [x] TonemappingPass 类（`passes/tonemapping_pass.h/cpp`）：setup 接收 swapchain format 参数（物理设备协商结果，非硬编码）、创建 pipeline、record、destroy
 - [x] ForwardPass 改为渲染到 hdr_color（不再直接渲染到 swapchain），沿用阶段二深度行为（depth compare GREATER、depth write ON）
 - [x] TonemappingPass 读 hdr_color 写 swapchain image
-- [ ] 验证：管线正确运行，无 validation 报错，场景可见（高光过曝可接受，因为没有 tone mapping）
+- [x] 验证：管线正确运行，无 validation 报错，场景可见（高光过曝可接受，因为没有 tone mapping）
 
 ## Step 4b：ACES Tonemapping + Exposure
 
