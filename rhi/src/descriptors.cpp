@@ -183,33 +183,44 @@ namespace himalaya::rhi {
 
         VK_CHECK(vkCreateDescriptorSetLayout(context_->device, &set0_info, nullptr, &set0_layout_));
 
-        // --- Set 1: bindless sampler2D array (binding 0) ---
-        // Flags: VARIABLE_DESCRIPTOR_COUNT + PARTIALLY_BOUND + UPDATE_AFTER_BIND
-        constexpr VkDescriptorSetLayoutBinding set1_binding{
-            .binding = 0,
-            .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-            .descriptorCount = kMaxBindlessTextures,
-            .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+        // --- Set 1: bindless arrays (binding 0 = sampler2D[], binding 1 = samplerCube[]) ---
+        // Both bindings: PARTIALLY_BOUND + UPDATE_AFTER_BIND, fixed upper bound
+        constexpr VkDescriptorSetLayoutBinding set1_bindings[] = {
+            {
+                .binding = 0,
+                .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                .descriptorCount = kMaxBindlessTextures,
+                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+            },
+            {
+                .binding = 1,
+                .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                .descriptorCount = kMaxBindlessCubemaps,
+                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+            },
         };
 
-        constexpr VkDescriptorBindingFlags binding_flags =
-                VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT |
-                VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT |
-                VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT;
+        constexpr VkDescriptorBindingFlags set1_binding_flags_array[] = {
+            VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT |
+            VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT,
+
+            VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT |
+            VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT,
+        };
 
         // ReSharper disable once CppVariableCanBeMadeConstexpr
         const VkDescriptorSetLayoutBindingFlagsCreateInfo set1_binding_flags{
             .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO,
-            .bindingCount = 1,
-            .pBindingFlags = &binding_flags,
+            .bindingCount = 2,
+            .pBindingFlags = set1_binding_flags_array,
         };
 
         const VkDescriptorSetLayoutCreateInfo set1_info{
             .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
             .pNext = &set1_binding_flags,
             .flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT,
-            .bindingCount = 1,
-            .pBindings = &set1_binding,
+            .bindingCount = 2,
+            .pBindings = set1_bindings,
         };
 
         VK_CHECK(vkCreateDescriptorSetLayout(context_->device, &set1_info, nullptr, &set1_layout_));
@@ -265,19 +276,9 @@ namespace himalaya::rhi {
 
         VK_CHECK(vkAllocateDescriptorSets(context_->device, &set0_alloc, set0_sets_.data()));
 
-        // --- Set 1 x1 (bindless textures) ---
-        constexpr uint32_t variable_count = kMaxBindlessTextures;
-
-        // ReSharper disable once CppVariableCanBeMadeConstexpr
-        const VkDescriptorSetVariableDescriptorCountAllocateInfo variable_info{
-            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO,
-            .descriptorSetCount = 1,
-            .pDescriptorCounts = &variable_count,
-        };
-
+        // --- Set 1 x1 (bindless textures + cubemaps, fixed upper bounds) ---
         const VkDescriptorSetAllocateInfo set1_alloc{
             .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-            .pNext = &variable_info,
             .descriptorPool = set1_pool_,
             .descriptorSetCount = 1,
             .pSetLayouts = &set1_layout_,

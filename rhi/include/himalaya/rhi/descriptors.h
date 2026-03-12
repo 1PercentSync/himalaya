@@ -16,15 +16,18 @@ namespace himalaya::rhi {
     class Context;
     class ResourceManager;
 
-    /** @brief Maximum number of textures in the bindless array (Set 1, Binding 0). */
+    /** @brief Maximum number of 2D textures in the bindless array (Set 1, Binding 0). */
     constexpr uint32_t kMaxBindlessTextures = 4096;
+
+    /** @brief Maximum number of cubemaps in the bindless array (Set 1, Binding 1). */
+    constexpr uint32_t kMaxBindlessCubemaps = 256;
 
     /**
      * @brief Manages descriptor set layouts, descriptor pools, and bindless texture registration.
      *
      * Owns two descriptor set layouts:
      * - Set 0: per-frame global data (GlobalUBO + LightBuffer + MaterialBuffer)
-     * - Set 1: bindless texture array (variable descriptor count, update-after-bind)
+     * - Set 1: bindless arrays (binding 0: sampler2D[], binding 1: samplerCube[])
      *
      * Owns two descriptor pools:
      * - Normal pool for Set 0 (2 sets for 2 frames in flight)
@@ -127,7 +130,7 @@ namespace himalaya::rhi {
         /** @brief Set 0: GlobalUBO (binding 0) + LightBuffer (binding 1) + MaterialBuffer (binding 2). */
         VkDescriptorSetLayout set0_layout_ = VK_NULL_HANDLE;
 
-        /** @brief Set 1: bindless sampler2D array (binding 0). */
+        /** @brief Set 1: bindless sampler2D array (binding 0) + samplerCube array (binding 1). */
         VkDescriptorSetLayout set1_layout_ = VK_NULL_HANDLE;
 
         // ---- Pools ----
