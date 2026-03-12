@@ -116,6 +116,33 @@ Render Graph 的功能按需引入，不提前建设未使用的能力：
 
 接口定义详见 `m1-interfaces.md`「Managed 资源 API」。
 
+#### Backing Image 即时查询
+
+**选择：RG 暴露 `get_managed_backing_image()` API**
+
+Resize / MSAA 切换时，managed 资源被 RG 内部重建（销毁旧 backing image，创建新的）。Renderer 需要获取新的 backing `ImageHandle` 来更新 Set 2 descriptor。
+
+| 方案 | 说明 |
+|------|------|
+| A. 帧循环中通过 `use_managed_image()` → `get_image()` 获取 | 下一帧自然拿到新 handle |
+| B. RG 新增 `get_managed_backing_image(RGManagedHandle)` 方法 | resize handler 中立即获取 |
+
+**选择 B。** 方案 A 导致 resize 到下一帧之间存在一帧的 descriptor 失效窗口——Set 2 仍指向已销毁 image 的 view。方案 B 在 resize handler 中立即获取新 handle 并更新 Set 2，流程无中间错误状态。实现简单——managed 资源内部已持有 backing `ImageHandle`，只需暴露一个 getter。
+
+**Set 2 更新流程（resize / MSAA 切换）：**
+
+```
+vkQueueWaitIdle()
+    ↓
+RG 重建 managed 资源（set_reference_resolution / update_managed_desc）
+    ↓
+Renderer 通过 get_managed_backing_image() 获取新 ImageHandle
+    ↓
+DescriptorManager 更新 Set 2 对应 binding（vkUpdateDescriptorSets）
+    ↓
+继续渲染
+```
+
 **闲置资源处理（M1 不实现，备忘）：** Pass 长期 disable 时，其 managed 资源的 backing VkImage 持续占用显存。L2 内存别名解决帧内生命周期不重叠时的复用；跨帧长期闲置可通过显式 `sleep_managed_image(handle)` / `wake_managed_image(handle)` 释放/重建 backing VkImage——使用者完全控制资源生命周期，不做隐式回收。阶段八实现 L2 时同步评估是否需要 sleep/wake。
 
 #### MSAA Resolve 策略
@@ -355,20 +382,33 @@ Render Graph 和 ImGui Backend 是 framework 层中允许直接使用 Vulkan 类
 
 **注意事项：** 需要想清楚 descriptor 更新策略、纹理加载后注册到 array 的流程、shader 里的间接访问模式。对 GPU 调试不太友好（所有东西都是 index），需配合 debug name 使用。
 
-### Descriptor Set 管理方式
+### Descriptor Set 三层架构
 
-Set 0（全局数据：GlobalUBO + LightBuffer + MaterialBuffer）和 Set 1（Bindless 纹理数组）均使用传统 Descriptor Set 分配。Set 0 需要 per-frame 分配（2 帧 in-flight 各一个），Set 1 分配一次长期持有。共 3 个 descriptor set：Set 0 × 2 + Set 1 × 1。
+三个 Descriptor Set 按资源生命周期分层，每层有清晰的语义边界：
+
+| Set | 内容 | 生命周期 | 更新频率 |
+|-----|------|---------|---------|
+| 0 | 全局 Buffer（GlobalUBO + LightBuffer + MaterialBuffer） | per-frame 双缓冲 | 每帧 memcpy |
+| 1 | 持久纹理资产（bindless 材质纹理 + cubemap） | 场景加载 → 卸载 | 加载时写入 |
+| 2 | 帧内 Render Target（后处理 / 屏幕空间效果的中间产物） | init → destroy | resize / MSAA 切换时更新 |
+
+均使用传统 Descriptor Set 分配（非 Push Descriptors）。Set 0 per-frame 分配 2 个（2 frames in flight），Set 1 和 Set 2 各分配 1 个长期持有。共 4 个 descriptor set：Set 0 × 2 + Set 1 × 1 + Set 2 × 1。
+
+所有 pipeline（场景渲染、后处理、屏幕空间效果）使用统一的 pipeline layout `{Set 0, Set 1, Set 2}`，确保切换 pipeline 时所有 set 绑定保持有效。后处理 pass 不使用 Set 1 但 layout 中包含以保持兼容性。
 
 ### Descriptor Pool 分离
 
-Set 0 和 Set 1 使用**独立的 Descriptor Pool**：
+三个 Set 使用**独立的 Descriptor Pool**：
 
-- **Set 0 Pool**（普通 pool）：容纳 2 UBO + 4 SSBO + 2 COMBINED_IMAGE_SAMPLER，maxSets = 2。分配 Set 0 × 2（per-frame）
+- **Set 0 Pool**（普通 pool）：容纳 2 UBO + 4 SSBO，maxSets = 2。分配 Set 0 × 2（per-frame）
 - **Set 1 Pool**（`VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT`）：容纳 4352 COMBINED_IMAGE_SAMPLER（2D 纹理 4096 + Cubemap 256），maxSets = 1。分配 Set 1 × 1
+- **Set 2 Pool**（普通 pool）：容纳 8 COMBINED_IMAGE_SAMPLER（M1 预留 8 个 render target binding），maxSets = 1。分配 Set 2 × 1
 
-**为什么分离：** `UPDATE_AFTER_BIND_BIT` 加在 pool 上会影响从该 pool 分配的所有 set。分离后 Set 0 使用普通 pool，职责隔离更清晰。
+**为什么分离：** `UPDATE_AFTER_BIND_BIT` 加在 pool 上会影响从该 pool 分配的所有 set。Set 1 需要此 flag（bindless 纹理在使用时更新），Set 0 和 Set 2 不需要，分离后职责隔离更清晰。
 
-ImGui 专用 Descriptor Pool 独立于上述两个 pool（已在阶段一实现）。
+Set 2 不需要 `UPDATE_AFTER_BIND`——render target descriptor 只在 resize/MSAA 切换时更新，此时已 `vkQueueWaitIdle()` 确保 GPU 空闲。
+
+ImGui 专用 Descriptor Pool 独立于上述三个 pool（已在阶段一实现）。
 
 ### Set 0 Per-frame Buffer 策略
 
@@ -396,9 +436,10 @@ Set 0 descriptor 初始化时通过 `vkUpdateDescriptorSets` 写一次（per-fra
 
 `DescriptorManager`（`rhi/descriptors.h/cpp`）集中管理所有 descriptor 相关资源：
 
-- **持有全局 Descriptor Set Layout**（Set 0 和 Set 1），提供 `get_global_set_layouts()` 方法供 pipeline 创建时使用，确保所有 pipeline 使用一致的 layout
-- **管理 Descriptor Pool** 和 **Descriptor Set 分配**
-- **管理 Bindless 数组**（2D 纹理和 Cubemap 的注册、注销、slot 分配）
+- **持有全局 Descriptor Set Layout**（Set 0、Set 1、Set 2），提供 `get_global_set_layouts()` 方法供 pipeline 创建时使用，确保所有 pipeline 使用一致的 layout
+- **管理 Descriptor Pool** 和 **Descriptor Set 分配**（三个 pool 各自分配对应的 set）
+- **管理 Bindless 数组**（Set 1：2D 纹理和 Cubemap 的注册、注销、slot 分配）
+- **管理 Render Target Descriptor**（Set 2：render target binding 的写入和更新）
 
 ### Descriptor Set Layout 与 Pipeline Layout 的关系
 
@@ -433,41 +474,72 @@ Cubemap 不能放入 `sampler2D[]` 数组（类型不兼容），需要独立 bi
 
 **Slot 回收**：纹理销毁后，其 bindless slot 通过 free list 回收，新纹理注册时优先复用空闲 slot。回收配合 deferred deletion 确保 GPU 不再引用旧 descriptor。这支持场景切换时的纹理卸载/重载。2D 纹理和 Cubemap 的 slot 管理独立（各自的 free list + 各自的 slot 空间），`BindlessIndex` 的 `index` 值分别对应各自数组的下标。
 
-### Set 0 Layout 稳定性
+### Set 0 Layout — 纯 Buffer
 
-**选择：一次性预留 M1 全部 Set 0 binding**
-
-| 方案 | 说明 |
-|------|------|
-| A. 按需添加 | 每个阶段需要新 binding 时修改 layout |
-| B. 一次性预留 M1 全部 binding | 现在就把后续阶段的 binding 全部预分配 |
-| C. 部分预留 | 只预留阶段三到四需要的 |
-
-**选择 B。** Cubemap 走 Set 1 bindless，大部分 per-pass 纹理（AO result、contact shadow mask、lightmap 等）走 Set 1 `sampler2D[]` bindless。唯一无法走 bindless 的是 shadow map（使用硬件比较采样器 `sampler2DArrayShadow`，类型与 `sampler2D` 不同）。
-
-M1 完整 Set 0 Layout：
+Set 0 只包含 buffer 类型的 binding，不包含任何 image/sampler 类型：
 
 | Binding | 类型 | 内容 | 引入阶段 |
 |---------|------|------|----------|
 | 0 | UBO | GlobalUBO | 阶段二（已有） |
 | 1 | SSBO | LightBuffer | 阶段二（已有） |
 | 2 | SSBO | MaterialBuffer | 阶段二（已有） |
-| 3 | `sampler2DArrayShadow` | CSM Shadow Map Atlas | 阶段四 |
 
-其他所有纹理走 Set 1 bindless：
+阶段二的 Set 0 layout 保持不变——阶段三不需要新增 Set 0 binding。Shadow map（`sampler2DArrayShadow`）归入 Set 2（render target，见下文），不占用 Set 0 binding。
+
+### Set 1 Layout — 持久纹理资产
+
+Set 1 bindless 数组只存放**持久纹理资产**——场景加载或初始化时创建，整个运行期间不变：
 
 | 纹理 | Set 1 binding | 阶段 |
 |------|--------------|------|
-| IBL irradiance / prefiltered | `samplerCube[]` (binding 1) | 阶段三 |
+| 材质纹理（base color、normal、metallic-roughness 等） | `sampler2D[]` (binding 0) | 阶段二（已有） |
 | BRDF LUT | `sampler2D[]` (binding 0) | 阶段三 |
-| AO texture | `sampler2D[]` (binding 0) | 阶段五 |
-| Contact shadow mask | `sampler2D[]` (binding 0) | 阶段五 |
 | Lightmap | `sampler2D[]` (binding 0) | 阶段六 |
+| IBL irradiance / prefiltered | `samplerCube[]` (binding 1) | 阶段三 |
 | Reflection Probes | `samplerCube[]` (binding 1) | 阶段六 |
 
-阶段三创建 DescriptorManager 时即预留 binding 3，但不写入实际 descriptor（`PARTIALLY_BOUND` 允许未写入的 binding 存在，只要 shader 不访问即可）。阶段四实现 CSM 时写入 shadow map descriptor。
+帧内 render target（AO texture、contact shadow mask、hdr_color、depth 等）不进入 Set 1，走 Set 2。
 
-> 基于 M1 功能范围的完整分析，binding 0-3 应覆盖全部需求。如果后续发现需要额外的非 bindless Set 0 binding，仍需修改 layout。
+### Set 2 Layout — Render Target Descriptor Set
+
+**选择：专用 Descriptor Set 管理帧内 render target 的 shader 采样**
+
+后处理 pass（Tonemapping、Bloom 等）和屏幕空间效果（SSAO、Contact Shadows）需要采样帧内中间渲染产物。同时 ForwardPass 也需要读取 AO/contact shadow 等 effect 结果。这些 render target 的生命周期与材质纹理完全不同（resize/MSAA 切换时重建），需要独立的绑定机制。
+
+候选方案：
+
+| 方案 | 说明 |
+|------|------|
+| A. 注册 render target 到 Set 1 bindless | 复用 bindless 基础设施 |
+| B. Push Descriptors | 后处理 pass 每帧推送输入 |
+| C. 专用 Descriptor Set（Set 2） | render target 独立管理 |
+
+**选择 C。** 核心理由是**资源生命周期分层**——三类资源（每帧更新的 buffer、持久纹理资产、帧内 render target）有不同的创建/更新/销毁模式，每类对应一个 descriptor set 最清晰。
+
+排除 A：render target 与材质纹理混在同一 bindless 数组中模糊了"持久资产"和"帧内产物"的边界。Resize/MSAA 切换时需要在 bindless 中 unregister→register 更新 entry，增加管理复杂度。shader 层面通过 array index 间接访问，不如命名 binding 直观。
+
+排除 B：后处理 pass 每帧参与渲染循环，不属于"一次性 init 操作"（IBL 预计算的 push descriptor 例外仅限 init scope）。Push descriptor set 在每个 pipeline layout 中只能有一个，后处理 pass 若同时需要 GlobalUBO（exposure、debug mode 等）和 push descriptor 的输入 image，layout 设计变复杂。且所有 pipeline 的 layout 不再统一，切换 pipeline 时 descriptor set 绑定失效需要重新绑定。
+
+**M1 完整 Set 2 Layout（一次性预留，`PARTIALLY_BOUND`，按阶段逐步写入）：**
+
+| Binding | 类型 | 名称 | 产生者 | 消费者 | 引入阶段 |
+|---------|------|------|--------|--------|---------|
+| 0 | `sampler2D` | hdr_color | ForwardPass | Tonemapping, Bloom, HeightFog, AutoExposure | 三 |
+| 1 | `sampler2D` | depth_resolved | PrePass | SSAO, ContactShadows, HeightFog | 五 |
+| 2 | `sampler2D` | normal_resolved | PrePass | SSAO | 五 |
+| 3 | `sampler2D` | ao_texture | SSAOTemporalPass | ForwardPass | 五 |
+| 4 | `sampler2D` | contact_shadow_mask | ContactShadowsPass | ForwardPass | 五 |
+| 5 | `sampler2DArrayShadow` | shadow_map | ShadowPass | ForwardPass | 四 |
+| 6 | `sampler2D` | bloom_texture | BloomUpsample | Tonemapping | 八 |
+| 7 | `sampler2D` | refraction_source | HDR Copy | TransparentPass | 七 |
+
+**Sampler 选择：** Renderer 在 init 时创建两个后处理专用 sampler——`linear_clamp`（color/normal/AO 等）和 `nearest_clamp`（depth 精确重建）。写入 Set 2 时根据 render target 类型选择对应 sampler。Shadow map binding 5 使用硬件比较采样器。
+
+**更新时机：** Set 2 descriptor 只在 resize / MSAA 切换时更新（managed 资源重建导致 image view 变化）。更新路径已有 `vkQueueWaitIdle()` 保证 GPU 空闲，Set 2 不需要 `UPDATE_AFTER_BIND`。
+
+**已知局限：** 同一 render target 若需不同 sampler（如 depth 的 nearest 和 linear），需占用两个 binding。M1 中此情况罕见，8 个 binding 足够覆盖。
+
+**阶段八 compute 迁移影响：** 阶段八后处理链改为 compute shader 后，compute pass 的输出通过 storage image（`imageStore`）写入，不经过 Set 2。输入仍可通过 Set 2 采样（支持硬件双线性过滤）。Auto Exposure 输出走 GlobalUBO 的 exposure 字段（GPU 写回 buffer），不占 Set 2 binding。
 
 ---
 

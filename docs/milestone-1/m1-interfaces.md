@@ -461,6 +461,9 @@ public:
     // 更新 managed 资源描述（desc 变化时销毁旧 backing image 并创建新的，handle 不变）
     void update_managed_desc(RGManagedHandle handle, const RGImageDesc& desc);
 
+    // 获取 managed 资源的 backing image（resize handler 中即时获取新 handle 更新 Set 2 descriptor）
+    ImageHandle get_managed_backing_image(RGManagedHandle handle) const;
+
     // 销毁 managed image（Renderer::destroy() 时调用）
     void destroy_managed_image(RGManagedHandle handle);
 };
@@ -666,7 +669,7 @@ public:
 ### Shader 端 — 全局绑定布局（shaders/common/bindings.glsl）
 
 ```glsl
-// Set 0: 全局数据（每帧更新一次）
+// Set 0: 全局 Buffer（每帧更新一次）
 layout(set = 0, binding = 0) uniform GlobalUBO {
     mat4 view;
     mat4 projection;
@@ -687,12 +690,19 @@ layout(set = 0, binding = 2) readonly buffer MaterialBuffer {
     GPUMaterialData materials[];
 };
 
-// 阶段四引入，阶段三预留（PARTIALLY_BOUND，不写入）
-layout(set = 0, binding = 3) uniform sampler2DArrayShadow shadow_map;
-
-// Set 1: Bindless 数组
+// Set 1: 持久纹理资产（Bindless 数组）
 layout(set = 1, binding = 0) uniform sampler2D textures[];
 layout(set = 1, binding = 1) uniform samplerCube cubemaps[];
+
+// Set 2: Render Target（帧内中间产物，PARTIALLY_BOUND，按阶段逐步写入）
+layout(set = 2, binding = 0) uniform sampler2D rt_hdr_color;            // 阶段三
+layout(set = 2, binding = 1) uniform sampler2D rt_depth_resolved;       // 阶段五
+layout(set = 2, binding = 2) uniform sampler2D rt_normal_resolved;      // 阶段五
+layout(set = 2, binding = 3) uniform sampler2D rt_ao_texture;           // 阶段五
+layout(set = 2, binding = 4) uniform sampler2D rt_contact_shadow_mask;  // 阶段五
+layout(set = 2, binding = 5) uniform sampler2DArrayShadow rt_shadow_map;// 阶段四
+layout(set = 2, binding = 6) uniform sampler2D rt_bloom_texture;        // 阶段八
+layout(set = 2, binding = 7) uniform sampler2D rt_refraction_source;    // 阶段七
 
 // Per-draw 数据
 layout(push_constant) uniform PushConstants {
@@ -703,10 +713,13 @@ layout(push_constant) uniform PushConstants {
 
 #### Descriptor Set 管理方式
 
-Set 0 和 Set 1 均使用传统 Descriptor Set（非 Push Descriptors）。
+三个 Set 均使用传统 Descriptor Set（非 Push Descriptors），所有 pipeline 共享统一 layout `{Set 0, Set 1, Set 2}`。
 
 - **Set 0**：per-frame 分配 2 个 descriptor set（对应 2 frames in flight），每帧绑定当前帧的 set
 - **Set 1**：分配 1 个 descriptor set，加载时写入，长期持有
+- **Set 2**：分配 1 个 descriptor set，init 时写入，resize / MSAA 切换时更新
+
+设计决策见 `m1-design-decisions.md`「Descriptor Set 三层架构」+「Set 2 — Render Target Descriptor Set」。
 
 #### 数据分层对应关系
 
@@ -715,7 +728,7 @@ Set 0 和 Set 1 均使用传统 Descriptor Set（非 Push Descriptors）。
 | 全局数据 | 每帧一次 | Set 0, Binding 0 (UBO) | 相机矩阵、屏幕尺寸、曝光值 |
 | 光源数据 | 每帧一次 | Set 0, Binding 1 (SSBO) | 方向光、点光源数组 |
 | 材质数据 | 加载时一次 | Set 0, Binding 2 (SSBO) | PBR 参数、纹理 index |
-| 阴影数据 | 阶段四引入 | Set 0, Binding 3 (Sampler) | CSM Shadow Map Atlas（阶段三预留不写入） |
-| 2D 纹理数据 | 加载时一次 | Set 1, Binding 0 (Bindless) | 所有 2D 纹理通过 index 访问 |
+| 2D 纹理数据 | 加载时一次 | Set 1, Binding 0 (Bindless) | 材质纹理、BRDF LUT、Lightmap |
 | Cubemap 数据 | 初始化 / 加载时 | Set 1, Binding 1 (Bindless) | IBL cubemap、Reflection Probes |
+| Render Target | init 时 / resize 时 | Set 2, Binding 0-7 (Named) | HDR color、depth、normal、AO、shadow map 等 |
 | Per-draw 数据 | 每次绘制 | Push Constant | 模型矩阵、材质 index |

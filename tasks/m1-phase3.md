@@ -22,17 +22,19 @@
 - [ ] `set_reference_resolution(VkExtent2D)` — Relative 模式的基准分辨率
 - [ ] Resize 自动重建：`set_reference_resolution()` 被调用时，比较 desc 推导出的新旧尺寸，变化时销毁旧 backing image 并创建新的
 - [ ] `update_managed_desc(handle, new_desc)` — 更新描述符（MSAA 切换用），desc 变化时重建 backing image
+- [ ] `get_managed_backing_image(handle)` — 获取 backing ImageHandle（resize handler 中即时获取新 handle 更新 Set 2 descriptor）
 - [ ] 迁移现有 depth buffer 从手动管理到 managed 资源，删除 Renderer 中的手动 depth 创建/销毁代码
 - [ ] 验证：现有渲染正常工作，depth buffer 由 RG managed 管理，resize 时自动重建
 
 ## Step 3：Descriptor Layout + Compute Infra
 
-- [ ] Set 0 layout 新增 binding 3（`sampler2DArrayShadow`，阶段四 CSM 用；`PARTIALLY_BOUND` 允许当前不写入）
-- [ ] Set 0 descriptor pool 调整（从 "2 UBO + 4 SSBO" 调整为 "2 UBO + 4 SSBO + 2 COMBINED_IMAGE_SAMPLER"）
 - [ ] Set 1 layout 新增 binding 1（`samplerCube[]`，上限 256，`PARTIALLY_BOUND` + `UPDATE_AFTER_BIND`）
 - [ ] Set 1 descriptor pool 容量从 4096 扩展到 4352
 - [ ] 去掉 Set 1 binding 0 的 `VARIABLE_DESCRIPTOR_COUNT`，改为固定上限 4096 + `PARTIALLY_BOUND`
+- [ ] 新增 Set 2 descriptor set layout（M1 全部 8 个 binding 预留，`PARTIALLY_BOUND`）+ Set 2 pool（普通 pool，8 COMBINED_IMAGE_SAMPLER）+ 分配 Set 2 × 1
 - [ ] `DescriptorManager` 新增 `register_cubemap()` / `unregister_cubemap()` API（独立 free list 和 slot 空间）
+- [ ] `DescriptorManager` 新增 Set 2 管理：`update_render_target()` 更新指定 binding 的 image + sampler
+- [ ] `get_global_set_layouts()` 返回三个 layout（Set 0 + Set 1 + Set 2），所有 pipeline layout 统一
 - [ ] `pipeline.h` 新增 `ComputePipelineDesc` 结构体（含 `descriptor_set_layouts` 字段支持自定义 layout）+ `create_compute_pipeline()` 函数
 - [ ] `commands.h` 新增 `CommandBuffer::dispatch(group_count_x, group_count_y, group_count_z)` + `CommandBuffer::push_descriptor_set()` 方法
 - [ ] 验证：所有布局更新无 validation 报错，现有渲染正常；能创建并 dispatch 一个空 compute shader

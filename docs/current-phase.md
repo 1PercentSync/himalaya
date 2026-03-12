@@ -111,14 +111,15 @@ render_graph_.destroy_managed_image(managed_hdr_);
 
 #### 设计要点
 
-描述符布局更新见 `milestone-1/m1-design-decisions.md`「Bindless 纹理数组」+「IBL 管线 — Descriptor Binding」。Compute 基础设施为阶段三 IBL 预计算提供前置支持。
+描述符三层架构见 `milestone-1/m1-design-decisions.md`「Descriptor Set 三层架构」+「Set 2 — Render Target Descriptor Set」。Compute 基础设施为阶段三 IBL 预计算提供前置支持。
 
 关键设计：
 - Set 1 新增 binding 1（`samplerCube[]`），与 binding 0（`sampler2D[]`）共用 `PARTIALLY_BOUND` + `UPDATE_AFTER_BIND`，去掉 `VARIABLE_DESCRIPTOR_COUNT`
-- Set 0 预留 binding 3（`sampler2DArrayShadow`）供阶段四 CSM 使用，当前不写入（`PARTIALLY_BOUND`）
-- `DescriptorManager` 新增 `register_cubemap()` / `unregister_cubemap()` API
+- 新增 Set 2 layout + pool + descriptor set（render target 专用，M1 全部 8 个 binding 一次性预留，`PARTIALLY_BOUND`）
+- `DescriptorManager` 新增 `register_cubemap()` / `unregister_cubemap()` API + Set 2 管理（layout、pool、set 分配、render target binding 更新）
 - `pipeline.h` 新增 `ComputePipelineDesc` + `create_compute_pipeline()`，`ComputePipelineDesc` 支持自定义 `descriptor_set_layouts`（IBL push descriptors 需要）
 - `commands.h` 新增 `CommandBuffer::dispatch()` + `CommandBuffer::push_descriptor_set()`
+- 所有 pipeline layout 统一为 `{Set 0, Set 1, Set 2}`，`get_global_set_layouts()` 返回三个 layout
 
 ---
 
