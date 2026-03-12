@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段三 — PBR 光照基础（Cook-Torrance + IBL + MSAA + HDR）
-- **进度**：Step 5 代码完成，待用户编译验证
+- **进度**：Step 5 完成，下一步 Step 6
 
 ### 下一个任务
 
-阶段三 Step 5：Depth + Normal PrePass — 创建 PrePass shader、normal 公共库、MSAA + resolved normal buffer，修改 Forward pass 深度行为为 EQUAL + write OFF。
+阶段三 Step 6：IBL Pipeline + Skybox — IBL 预计算全流程（equirect → cubemap → irradiance/prefiltered/BRDF LUT）、4 个 compute shader、IBL 模块、Skybox Pass。
 
 ---
 
