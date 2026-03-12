@@ -541,7 +541,7 @@ offset 256: vec4 camera_position_and_exposure
 offset 272: vec2 screen_size
 offset 280: float time
 offset 284: uint directional_light_count
-offset 288: float ibl_intensity               ← 原 ambient_intensity，Step 7 重命名
+offset 288: float ibl_intensity               ← 原 ambient_intensity，Step 6 重命名
 offset 292: uint irradiance_cubemap_index      ← Step 6 新增
 offset 296: uint prefiltered_cubemap_index     ← Step 6 新增
 offset 300: uint brdf_lut_index                ← Step 6 新增
@@ -551,7 +551,7 @@ offset 312: uint skybox_cubemap_index          ← Step 6 新增
 offset 316: float _pad[1]                      ← padding to 320
 ```
 
-IBL 未初始化时字段值为 0（index 0 对应 default textures，行为正确）。`ambient_intensity` 在 Step 7 重命名为 `ibl_intensity`——阶段三 IBL 取代了简单环境光项，原名不再准确。C++ 端 `GlobalUniformData` 和 shader 端 `bindings.glsl` 同步改名。
+IBL 未初始化时字段值为 0（index 0 对应 default textures，行为正确）。`ambient_intensity` 在 Step 6 随 IBL 字段一同重命名为 `ibl_intensity`——阶段三 IBL 取代了简单环境光项，原名不再准确。C++ 端 `GlobalUniformData` 和 shader 端 `bindings.glsl` 同步改名。
 
 `skybox_cubemap_index` 存储天空盒 cubemap 在 Set 1 `cubemaps[]` 数组中的下标，与其他 IBL index 字段一致，shader 统一从 UBO 读取。M2 Bruneton 大气散射替换天空时，字段指向 Bruneton cubemap，shader 不用改。
 
@@ -965,7 +965,7 @@ Renderer 持有的非 owning 引用（从 Application 接收）：`context_*`、
 | App 模块 | `camera_`, `camera_controller_`, `debug_ui_`, `scene_loader_`, **`renderer_`** |
 | 每帧场景数据 | `scene_render_data_`, `cull_result_` |
 | 灯光/调试参数 | `default_lights_`, light yaw/pitch/intensity, 拖拽状态 |
-| 渲染参数 | `ambient_intensity_`, `exposure_` |
+| 渲染参数 | `ibl_intensity_`, `exposure_` |
 | 帧状态 | `vsync_changed_`, `image_index_` |
 
 > `resource_manager_` 和 `descriptor_manager_` 归 Application 持有，因为 `scene_loader_` 加载时也要用。Renderer 和 SceneLoader 都是使用者，不是拥有者。

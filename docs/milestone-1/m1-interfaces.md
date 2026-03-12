@@ -687,7 +687,7 @@ struct RenderInput {
     const framework::CullResult& cull_result;
     std::span<const framework::MeshData> meshes;
     std::span<const framework::MaterialInstance> materials;
-    float ambient_intensity;
+    float ibl_intensity;
     float exposure;
 };
 ```
