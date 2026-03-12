@@ -25,6 +25,11 @@ namespace himalaya::rhi {
     void DescriptorManager::destroy() {
         // Descriptor sets are implicitly freed when pools are destroyed
 
+        if (set2_pool_ != VK_NULL_HANDLE) {
+            vkDestroyDescriptorPool(context_->device, set2_pool_, nullptr);
+            set2_pool_ = VK_NULL_HANDLE;
+        }
+
         if (set1_pool_ != VK_NULL_HANDLE) {
             vkDestroyDescriptorPool(context_->device, set1_pool_, nullptr);
             set1_pool_ = VK_NULL_HANDLE;
@@ -33,6 +38,11 @@ namespace himalaya::rhi {
         if (set0_pool_ != VK_NULL_HANDLE) {
             vkDestroyDescriptorPool(context_->device, set0_pool_, nullptr);
             set0_pool_ = VK_NULL_HANDLE;
+        }
+
+        if (set2_layout_ != VK_NULL_HANDLE) {
+            vkDestroyDescriptorSetLayout(context_->device, set2_layout_, nullptr);
+            set2_layout_ = VK_NULL_HANDLE;
         }
 
         if (set1_layout_ != VK_NULL_HANDLE) {
@@ -45,6 +55,7 @@ namespace himalaya::rhi {
             set0_layout_ = VK_NULL_HANDLE;
         }
 
+        set2_set_ = VK_NULL_HANDLE;
         set1_set_ = VK_NULL_HANDLE;
         set0_sets_ = {};
         next_bindless_index_ = 0;
@@ -64,6 +75,10 @@ namespace himalaya::rhi {
 
     VkDescriptorSet DescriptorManager::get_set1() const {
         return set1_set_;
+    }
+
+    VkDescriptorSet DescriptorManager::get_set2() const {
+        return set2_set_;
     }
 
     BindlessIndex DescriptorManager::register_texture(const ImageHandle image, SamplerHandle sampler) {
@@ -224,6 +239,35 @@ namespace himalaya::rhi {
         };
 
         VK_CHECK(vkCreateDescriptorSetLayout(context_->device, &set1_info, nullptr, &set1_layout_));
+
+        // --- Set 2: render target intermediates (8 COMBINED_IMAGE_SAMPLER, PARTIALLY_BOUND) ---
+        VkDescriptorSetLayoutBinding set2_bindings[kRenderTargetBindingCount];
+        VkDescriptorBindingFlags set2_binding_flags_array[kRenderTargetBindingCount];
+        for (uint32_t i = 0; i < kRenderTargetBindingCount; ++i) {
+            set2_bindings[i] = {
+                .binding = i,
+                .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                .descriptorCount = 1,
+                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT,
+            };
+            set2_binding_flags_array[i] = VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT;
+        }
+
+        // ReSharper disable once CppVariableCanBeMadeConstexpr
+        const VkDescriptorSetLayoutBindingFlagsCreateInfo set2_binding_flags{
+            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO,
+            .bindingCount = kRenderTargetBindingCount,
+            .pBindingFlags = set2_binding_flags_array,
+        };
+
+        const VkDescriptorSetLayoutCreateInfo set2_info{
+            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+            .pNext = &set2_binding_flags,
+            .bindingCount = kRenderTargetBindingCount,
+            .pBindings = set2_bindings,
+        };
+
+        VK_CHECK(vkCreateDescriptorSetLayout(context_->device, &set2_info, nullptr, &set2_layout_));
     }
 
     void DescriptorManager::create_pools() {
@@ -259,6 +303,22 @@ namespace himalaya::rhi {
         };
 
         VK_CHECK(vkCreateDescriptorPool(context_->device, &set1_pool_info, nullptr, &set1_pool_));
+
+        // --- Normal pool for Set 2 (maxSets=1, 8 COMBINED_IMAGE_SAMPLER) ---
+        constexpr VkDescriptorPoolSize set2_pool_size{
+            .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+            .descriptorCount = kRenderTargetBindingCount,
+        };
+
+        // ReSharper disable once CppVariableCanBeMadeConstexpr
+        const VkDescriptorPoolCreateInfo set2_pool_info{
+            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+            .maxSets = 1,
+            .poolSizeCount = 1,
+            .pPoolSizes = &set2_pool_size,
+        };
+
+        VK_CHECK(vkCreateDescriptorPool(context_->device, &set2_pool_info, nullptr, &set2_pool_));
     }
 
     void DescriptorManager::allocate_sets() {
@@ -285,5 +345,15 @@ namespace himalaya::rhi {
         };
 
         VK_CHECK(vkAllocateDescriptorSets(context_->device, &set1_alloc, &set1_set_));
+
+        // --- Set 2 x1 (render targets) ---
+        const VkDescriptorSetAllocateInfo set2_alloc{
+            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+            .descriptorPool = set2_pool_,
+            .descriptorSetCount = 1,
+            .pSetLayouts = &set2_layout_,
+        };
+
+        VK_CHECK(vkAllocateDescriptorSets(context_->device, &set2_alloc, &set2_set_));
     }
 } // namespace himalaya::rhi

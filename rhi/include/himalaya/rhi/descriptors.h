@@ -22,16 +22,21 @@ namespace himalaya::rhi {
     /** @brief Maximum number of cubemaps in the bindless array (Set 1, Binding 1). */
     constexpr uint32_t kMaxBindlessCubemaps = 256;
 
+    /** @brief Number of render target bindings in Set 2 (pre-allocated for all M1 phases). */
+    constexpr uint32_t kRenderTargetBindingCount = 8;
+
     /**
      * @brief Manages descriptor set layouts, descriptor pools, and bindless texture registration.
      *
-     * Owns two descriptor set layouts:
+     * Owns three descriptor set layouts:
      * - Set 0: per-frame global data (GlobalUBO + LightBuffer + MaterialBuffer)
      * - Set 1: bindless arrays (binding 0: sampler2D[], binding 1: samplerCube[])
+     * - Set 2: render target intermediates (8 named bindings, PARTIALLY_BOUND)
      *
-     * Owns two descriptor pools:
+     * Owns three descriptor pools:
      * - Normal pool for Set 0 (2 sets for 2 frames in flight)
      * - UPDATE_AFTER_BIND pool for Set 1 (1 set, shared across frames)
+     * - Normal pool for Set 2 (1 set, updated at init/resize/MSAA switch)
      *
      * Lifetime is managed explicitly via init() and destroy().
      */
@@ -69,6 +74,12 @@ namespace himalaya::rhi {
          * @return VkDescriptorSet for the bindless texture array.
          */
         [[nodiscard]] VkDescriptorSet get_set1() const;
+
+        /**
+         * @brief Returns the single Set 2 (render targets) descriptor set.
+         * @return VkDescriptorSet for the render target bindings.
+         */
+        [[nodiscard]] VkDescriptorSet get_set2() const;
 
         /**
          * @brief Registers a texture+sampler pair into the bindless array.
@@ -133,6 +144,9 @@ namespace himalaya::rhi {
         /** @brief Set 1: bindless sampler2D array (binding 0) + samplerCube array (binding 1). */
         VkDescriptorSetLayout set1_layout_ = VK_NULL_HANDLE;
 
+        /** @brief Set 2: render target intermediates (8 named bindings, PARTIALLY_BOUND). */
+        VkDescriptorSetLayout set2_layout_ = VK_NULL_HANDLE;
+
         // ---- Pools ----
 
         /** @brief Normal descriptor pool for Set 0 allocation. */
@@ -141,6 +155,9 @@ namespace himalaya::rhi {
         /** @brief UPDATE_AFTER_BIND descriptor pool for Set 1 allocation. */
         VkDescriptorPool set1_pool_ = VK_NULL_HANDLE;
 
+        /** @brief Normal descriptor pool for Set 2 allocation. */
+        VkDescriptorPool set2_pool_ = VK_NULL_HANDLE;
+
         // ---- Allocated Sets ----
 
         /** @brief Per-frame Set 0 descriptor sets (one per frame in flight). */
@@ -148,6 +165,9 @@ namespace himalaya::rhi {
 
         /** @brief Single Set 1 descriptor set (bindless textures). */
         VkDescriptorSet set1_set_ = VK_NULL_HANDLE;
+
+        /** @brief Single Set 2 descriptor set (render targets). */
+        VkDescriptorSet set2_set_ = VK_NULL_HANDLE;
 
         // ---- Bindless free list ----
 
