@@ -58,11 +58,17 @@ void main() {
                                          diffuse_color, F0, roughness);
     }
 
-    // IBL ambient (Split-Sum)
+    // IBL ambient (Split-Sum), modulated by ambient occlusion
     vec3 ambient = evaluate_ibl(N, V, diffuse_color, F0, roughness);
+    float ao = texture(textures[nonuniformEXT(mat.occlusion_tex)], frag_uv0).r;
+    ambient *= mix(1.0, ao, mat.occlusion_strength);
+
+    // Emissive
+    vec3 emissive = texture(textures[nonuniformEXT(mat.emissive_tex)], frag_uv0).rgb
+                    * mat.emissive_factor.rgb;
 
     // Exposure
     float exposure = global.camera_position_and_exposure.w;
 
-    out_color = vec4((Lo + ambient) * exposure, base_color.a);
+    out_color = vec4((Lo + ambient + emissive) * exposure, base_color.a);
 }
