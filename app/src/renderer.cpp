@@ -70,13 +70,29 @@ namespace himalaya::app {
                                                                 .mip_levels = 1,
                                                             });
 
+        // Resolved normal buffer (1x): direct render target in 1x mode,
+        // MSAA normal resolve target (AVERAGE) in multi-sample mode.
+        // Sampled usage for future screen-space effects (SSAO, Contact Shadows).
+        managed_normal_ = render_graph_.create_managed_image("Normal", {
+                                                                 .size_mode = framework::RGSizeMode::Relative,
+                                                                 .width_scale = 1.0f,
+                                                                 .height_scale = 1.0f,
+                                                                 .width = 0,
+                                                                 .height = 0,
+                                                                 .format = rhi::Format::A2B10G10R10UnormPack32,
+                                                                 .usage = rhi::ImageUsage::ColorAttachment |
+                                                                          rhi::ImageUsage::Sampled,
+                                                                 .sample_count = 1,
+                                                                 .mip_levels = 1,
+                                                             });
+
         // Fall back to the highest supported sample count if the default isn't available
         while (current_sample_count_ > 1 &&
                !(ctx_->msaa_sample_counts & current_sample_count_)) {
             current_sample_count_ >>= 1;
         }
 
-        // MSAA buffers (only created when sample_count > 1; 1x uses hdr_color/depth directly)
+        // MSAA buffers (only created when sample_count > 1; 1x uses resolved targets directly)
         if (current_sample_count_ > 1) {
             managed_msaa_color_ = render_graph_.create_managed_image("MSAA Color", {
                                                                          .size_mode = framework::RGSizeMode::Relative,
@@ -101,6 +117,18 @@ namespace himalaya::app {
                                                                          .sample_count = current_sample_count_,
                                                                          .mip_levels = 1,
                                                                      });
+
+            managed_msaa_normal_ = render_graph_.create_managed_image("MSAA Normal", {
+                                                                          .size_mode = framework::RGSizeMode::Relative,
+                                                                          .width_scale = 1.0f,
+                                                                          .height_scale = 1.0f,
+                                                                          .width = 0,
+                                                                          .height = 0,
+                                                                          .format = rhi::Format::A2B10G10R10UnormPack32,
+                                                                          .usage = rhi::ImageUsage::ColorAttachment,
+                                                                          .sample_count = current_sample_count_,
+                                                                          .mip_levels = 1,
+                                                                      });
         }
 
         shader_compiler_.set_include_path("shaders");
@@ -197,8 +225,11 @@ namespace himalaya::app {
             render_graph_.destroy_managed_image(managed_msaa_color_);
         if (managed_msaa_depth_.valid())
             render_graph_.destroy_managed_image(managed_msaa_depth_);
+        if (managed_msaa_normal_.valid())
+            render_graph_.destroy_managed_image(managed_msaa_normal_);
         render_graph_.destroy_managed_image(managed_hdr_color_);
         render_graph_.destroy_managed_image(managed_depth_);
+        render_graph_.destroy_managed_image(managed_normal_);
         unregister_swapchain_images();
     }
 
@@ -236,12 +267,24 @@ namespace himalaya::app {
                                                   .sample_count = new_sample_count,
                                                   .mip_levels = 1,
                                               });
+            render_graph_.update_managed_desc(managed_msaa_normal_, {
+                                                  .size_mode = framework::RGSizeMode::Relative,
+                                                  .width_scale = 1.0f,
+                                                  .height_scale = 1.0f,
+                                                  .width = 0, .height = 0,
+                                                  .format = rhi::Format::A2B10G10R10UnormPack32,
+                                                  .usage = rhi::ImageUsage::ColorAttachment,
+                                                  .sample_count = new_sample_count,
+                                                  .mip_levels = 1,
+                                              });
         } else if (old > 1) {
             // Multi-sample → 1x: destroy MSAA resources
             render_graph_.destroy_managed_image(managed_msaa_color_);
             render_graph_.destroy_managed_image(managed_msaa_depth_);
+            render_graph_.destroy_managed_image(managed_msaa_normal_);
             managed_msaa_color_ = {};
             managed_msaa_depth_ = {};
+            managed_msaa_normal_ = {};
         } else {
             // 1x → multi-sample: create MSAA resources
             managed_msaa_color_ = render_graph_.create_managed_image("MSAA Color", {
@@ -264,6 +307,16 @@ namespace himalaya::app {
                                                                          .sample_count = new_sample_count,
                                                                          .mip_levels = 1,
                                                                      });
+            managed_msaa_normal_ = render_graph_.create_managed_image("MSAA Normal", {
+                                                                          .size_mode = framework::RGSizeMode::Relative,
+                                                                          .width_scale = 1.0f,
+                                                                          .height_scale = 1.0f,
+                                                                          .width = 0, .height = 0,
+                                                                          .format = rhi::Format::A2B10G10R10UnormPack32,
+                                                                          .usage = rhi::ImageUsage::ColorAttachment,
+                                                                          .sample_count = new_sample_count,
+                                                                          .mip_levels = 1,
+                                                                      });
         }
 
         // Rebuild pipelines for MSAA-affected passes
@@ -324,21 +377,28 @@ namespace himalaya::app {
         const auto hdr_color_resource = render_graph_.use_managed_image(managed_hdr_color_);
         const auto depth_resource = render_graph_.use_managed_image(managed_depth_);
 
+        const auto normal_resource = render_graph_.use_managed_image(managed_normal_);
+
         // Use MSAA managed resources when multi-sampled
         framework::RGResourceId msaa_color_resource;
+        framework::RGResourceId msaa_depth_resource;
+        framework::RGResourceId msaa_normal_resource;
         if (managed_msaa_color_.valid())
             msaa_color_resource = render_graph_.use_managed_image(managed_msaa_color_);
-        framework::RGResourceId msaa_depth_resource;
         if (managed_msaa_depth_.valid())
             msaa_depth_resource = render_graph_.use_managed_image(managed_msaa_depth_);
+        if (managed_msaa_normal_.valid())
+            msaa_normal_resource = render_graph_.use_managed_image(managed_msaa_normal_);
 
         // --- Construct FrameContext ---
         framework::FrameContext frame_ctx{};
         frame_ctx.swapchain = swapchain_image;
         frame_ctx.hdr_color = hdr_color_resource;
         frame_ctx.depth = depth_resource;
+        frame_ctx.normal = normal_resource;
         frame_ctx.msaa_color = msaa_color_resource;
         frame_ctx.msaa_depth = msaa_depth_resource;
+        frame_ctx.msaa_normal = msaa_normal_resource;
         frame_ctx.meshes = input.meshes;
         frame_ctx.materials = input.materials;
         frame_ctx.cull_result = &input.cull_result;

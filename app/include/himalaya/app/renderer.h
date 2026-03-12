@@ -192,6 +192,12 @@ namespace himalaya::app {
         /** @brief MSAA depth buffer (D32Sfloat, Nx, managed); invalid when sample_count == 1. */
         framework::RGManagedHandle managed_msaa_depth_;
 
+        /** @brief MSAA normal buffer (R10G10B10A2, Nx, managed); invalid when sample_count == 1. */
+        framework::RGManagedHandle managed_msaa_normal_;
+
+        /** @brief Resolved normal buffer (R10G10B10A2, 1x, managed, auto-rebuilt on resize). */
+        framework::RGManagedHandle managed_normal_;
+
         /** @brief Current MSAA sample count (1 = no MSAA, default 4x). */
         uint32_t current_sample_count_ = 4;
 
