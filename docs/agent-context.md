@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段三 — PBR 光照基础（Cook-Torrance + IBL + MSAA + HDR）
-- **进度**：Step 4a 进行中（FrameContext + ForwardPass + hdr_color + shaders + TonemappingPass 已完成，下一步 ForwardPass 改为渲染到 hdr_color）
+- **进度**：Step 4a 代码全部完成，等待编译验证
 
 ### 下一个任务
 
-阶段三 Step 4a：ForwardPass 改为渲染到 hdr_color（不再直接渲染到 swapchain），沿用阶段二深度行为。
+阶段三 Step 4a 验证：编译通过，管线正确运行，无 validation 报错，场景可见（高光过曝可接受）。
 
 ---
 
