@@ -128,11 +128,13 @@ namespace himalaya::passes {
                         VkDescriptorSet set2 = dm_->get_set2();
                         cmd.bind_descriptor_sets(pipeline_.layout, 2, &set2, 1);
 
+                        // Normal viewport (no Y-flip): fullscreen post-processing
+                        // samples a texture, no 3D coordinate convention to fix.
                         VkViewport viewport{};
                         viewport.x = 0.0f;
-                        viewport.y = static_cast<float>(render_extent.height);
+                        viewport.y = 0.0f;
                         viewport.width = static_cast<float>(render_extent.width);
-                        viewport.height = -static_cast<float>(render_extent.height);
+                        viewport.height = static_cast<float>(render_extent.height);
                         viewport.minDepth = 0.0f;
                         viewport.maxDepth = 1.0f;
                         cmd.set_viewport(viewport);
