@@ -107,6 +107,28 @@ namespace himalaya::rhi {
                                 nullptr);
     }
 
+    void CommandBuffer::bind_compute_pipeline(const Pipeline &pipeline) const {
+        vkCmdBindPipeline(cmd_, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline.pipeline);
+    }
+
+    void CommandBuffer::dispatch(const uint32_t group_count_x,
+                                 const uint32_t group_count_y,
+                                 const uint32_t group_count_z) const {
+        vkCmdDispatch(cmd_, group_count_x, group_count_y, group_count_z);
+    }
+
+    // ReSharper disable once CppParameterMayBeConst
+    void CommandBuffer::push_descriptor_set(VkPipelineLayout layout,
+                                            const uint32_t set,
+                                            const std::span<const VkWriteDescriptorSet> writes) const {
+        vkCmdPushDescriptorSet(cmd_,
+                               VK_PIPELINE_BIND_POINT_COMPUTE,
+                               layout,
+                               set,
+                               static_cast<uint32_t>(writes.size()),
+                               writes.data());
+    }
+
     namespace {
         PFN_vkCmdBeginDebugUtilsLabelEXT pfn_begin_label = nullptr;
         PFN_vkCmdEndDebugUtilsLabelEXT pfn_end_label = nullptr;

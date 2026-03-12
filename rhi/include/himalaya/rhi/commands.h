@@ -8,6 +8,7 @@
 #include <vulkan/vulkan.h>
 
 #include <array>
+#include <span>
 
 namespace himalaya::rhi {
     struct Pipeline;
@@ -143,6 +144,35 @@ namespace himalaya::rhi {
          */
         void bind_descriptor_sets(VkPipelineLayout layout, uint32_t first_set,
                                   const VkDescriptorSet *sets, uint32_t count) const;
+
+        // --- Compute ---
+
+        /**
+         * @brief Binds a compute pipeline for subsequent dispatch commands.
+         * @param pipeline Pipeline to bind (must have been created with create_compute_pipeline).
+         */
+        void bind_compute_pipeline(const Pipeline &pipeline) const;
+
+        /**
+         * @brief Dispatches compute work groups.
+         * @param group_count_x Number of work groups in X dimension.
+         * @param group_count_y Number of work groups in Y dimension.
+         * @param group_count_z Number of work groups in Z dimension.
+         */
+        void dispatch(uint32_t group_count_x, uint32_t group_count_y, uint32_t group_count_z) const;
+
+        /**
+         * @brief Pushes descriptors directly without pre-allocated descriptor sets.
+         *
+         * Vulkan 1.4 core (promoted from VK_KHR_push_descriptor).
+         * Used exclusively for IBL one-time init compute dispatches.
+         *
+         * @param layout Pipeline layout compatible with the pushed descriptors.
+         * @param set    Descriptor set index to push to.
+         * @param writes Descriptor write operations.
+         */
+        void push_descriptor_set(VkPipelineLayout layout, uint32_t set,
+                                 std::span<const VkWriteDescriptorSet> writes) const;
 
         // --- Debug labels (VK_EXT_debug_utils, debug builds only) ---
 
