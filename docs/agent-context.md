@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段三 — PBR 光照基础（Cook-Torrance + IBL + MSAA + HDR）
-- **进度**：Step 4c 进行中（第 1-4 项完成：MSAA 资源创建 + Forward pass MSAA 渲染 + resolve）
+- **进度**：Step 4c 完成，下一步 Step 5
 
 ### 下一个任务
 
-阶段三 Step 4c 第 5 项：MSAA 运行时切换（`handle_msaa_change()` + DebugUI MSAA 选择控件）。
+阶段三 Step 5：Depth + Normal PrePass — 创建 PrePass shader、normal 公共库、MSAA + resolved normal buffer，修改 Forward pass 深度行为为 EQUAL + write OFF。
 
 ---
 
