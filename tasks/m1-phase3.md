@@ -13,9 +13,9 @@
 - [x] Application 改为持有 Renderer 并在主循环中调用 `renderer_.render(cmd, input)`
 - [x] 两阶段 resize：`handle_resize()` 改为先调 `renderer_.on_swapchain_invalidated()`、再 `swapchain_.recreate()`、最后 `renderer_.on_swapchain_recreated()`
 - [x] 引入 CLI11 命令行解析库（vcpkg.json + CMakeLists.txt 更新，需用户确认）
-- [ ] `main.cpp` 使用 CLI11 替代手动 `argc/argv` 解析：`--scene`（迁移现有路径参数）+ `--env`（预留，默认 `assets/environment.hdr`）
-- [ ] `Application::init()` 接收已解析的参数结构体，不感知命令行解析细节
-- [ ] 验证：编译通过，运行效果与阶段二一致，无 validation 报错
+- [x] `main.cpp` 使用 CLI11 替代手动 `argc/argv` 解析：`--scene`（迁移现有路径参数）+ `--env`（预留，默认 `assets/environment.hdr`）
+- [x] `Application::init()` 接收已解析的参数结构体，不感知命令行解析细节
+- [x] 验证：编译通过，运行效果与阶段二一致，无 validation 报错
 
 ## Step 2：RG Managed 资源 + Debug Name
 
