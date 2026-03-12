@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段三 — PBR 光照基础（Cook-Torrance + IBL + MSAA + HDR）
-- **进度**：Step 6 进行中（skybox.frag 完毕；下一步 SkyboxPass 类）
+- **进度**：Step 6 进行中（SkyboxPass 完毕；下一步 Step 6 验证）
 
 ### 下一个任务
 
-阶段三 Step 6：SkyboxPass 类（`passes/skybox_pass.h/cpp`）— setup / record / destroy，渲染到 resolved 1x hdr_color，读 resolved depth（GREATER_OR_EQUAL + depth write OFF）。
+阶段三 Step 6 验证：编译通过，IBL 预计算无 validation 报错，RenderDoc 检查 cubemap 各面和 mip 级别内容正确、BRDF LUT 呈现预期渐变图案；天空背景正确显示。
 
 ---
 
