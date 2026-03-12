@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段三 — PBR 光照基础（Cook-Torrance + IBL + MSAA + HDR）
-- **进度**：Step 4a 进行中（FrameContext + ForwardPass + hdr_color + fullscreen.vert 已完成，下一步 tonemapping.frag）
+- **进度**：Step 4a 进行中（FrameContext + ForwardPass + hdr_color + shaders 已完成，下一步 TonemappingPass 类）
 
 ### 下一个任务
 
-阶段三 Step 4a：创建 `shaders/tonemapping.frag`（passthrough 版本：采样 hdr_color 直接输出，不做 ACES）。
+阶段三 Step 4a：TonemappingPass 类（`passes/tonemapping_pass.h/cpp`）— setup 接收 swapchain format、创建 pipeline、record、destroy。
 
 ---
 
