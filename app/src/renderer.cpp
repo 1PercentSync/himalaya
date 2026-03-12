@@ -92,8 +92,10 @@ namespace himalaya::app {
             const auto frag_spirv = shader_compiler_.compile_from_file(
                 "forward.frag", rhi::ShaderStage::Fragment);
 
-            const VkShaderModule vert_module = rhi::create_shader_module(ctx_->device, vert_spirv);
-            const VkShaderModule frag_module = rhi::create_shader_module(ctx_->device, frag_spirv);
+            // ReSharper disable once CppLocalVariableMayBeConst
+            VkShaderModule vert_module = rhi::create_shader_module(ctx_->device, vert_spirv);
+            // ReSharper disable once CppLocalVariableMayBeConst
+            VkShaderModule frag_module = rhi::create_shader_module(ctx_->device, frag_spirv);
 
             rhi::GraphicsPipelineDesc desc;
             desc.vertex_shader = vert_module;
