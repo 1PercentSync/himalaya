@@ -27,7 +27,7 @@
 - [x] `update_managed_desc(handle, new_desc)` — 更新描述符（MSAA 切换用），desc 变化时重建 backing image
 - [x] `get_managed_backing_image(handle)` — 获取 backing ImageHandle（resize handler 中即时获取新 handle 更新 Set 2 descriptor）
 - [x] 迁移现有 depth buffer 从手动管理到 managed 资源，删除 Renderer 中的手动 depth 创建/销毁代码
-- [ ] `create_image()`、`create_buffer()`、`create_sampler()` 新增必选 `debug_name` 参数，内部调用 `vkSetDebugUtilsObjectNameEXT`
+- [x] `create_image()`、`create_buffer()`、`create_sampler()` 新增必选 `debug_name` 参数，内部调用 `vkSetDebugUtilsObjectNameEXT`
 - [ ] 回溯修改所有已有 `create_image()` / `create_buffer()` / `create_sampler()` 调用点，补充 debug name
 - [ ] 验证：现有渲染正常工作，depth buffer 由 RG managed 管理，resize 时自动重建；Vulkan 对象在 validation 输出和 RenderDoc 中显示可读名称
 
