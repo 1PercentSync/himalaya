@@ -11,6 +11,7 @@
 #include <himalaya/framework/texture.h>
 #include <himalaya/passes/depth_prepass.h>
 #include <himalaya/passes/forward_pass.h>
+#include <himalaya/passes/skybox_pass.h>
 #include <himalaya/passes/tonemapping_pass.h>
 #include <himalaya/rhi/context.h>
 #include <himalaya/rhi/shader.h>
@@ -182,6 +183,9 @@ namespace himalaya::app {
 
         /** @brief Forward lighting pass (renders to HDR color + depth). */
         passes::ForwardPass forward_pass_{};
+
+        /** @brief Skybox pass (renders sky background to resolved hdr_color). */
+        passes::SkyboxPass skybox_pass_{};
 
         /** @brief Tonemapping pass (reads HDR color, writes swapchain). */
         passes::TonemappingPass tonemapping_pass_{};
