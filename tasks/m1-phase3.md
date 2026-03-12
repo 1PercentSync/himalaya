@@ -23,7 +23,7 @@
 - [x] `RGManagedHandle` 类型 + `create_managed_image()` / `destroy_managed_image()` API
 - [x] `use_managed_image()` — 每帧调用，返回 `RGResourceId`（每帧以 UNDEFINED 为 initial layout，不追踪帧间状态，不插入 final barrier）
 - [x] `set_reference_resolution(VkExtent2D)` — Relative 模式的基准分辨率
-- [ ] Resize 自动重建：`set_reference_resolution()` 被调用时，比较 desc 推导出的新旧尺寸，变化时销毁旧 backing image 并创建新的
+- [x] Resize 自动重建：`set_reference_resolution()` 被调用时，比较 desc 推导出的新旧尺寸，变化时销毁旧 backing image 并创建新的
 - [ ] `update_managed_desc(handle, new_desc)` — 更新描述符（MSAA 切换用），desc 变化时重建 backing image
 - [ ] `get_managed_backing_image(handle)` — 获取 backing ImageHandle（resize handler 中即时获取新 handle 更新 Set 2 descriptor）
 - [ ] 迁移现有 depth buffer 从手动管理到 managed 资源，删除 Renderer 中的手动 depth 创建/销毁代码
