@@ -85,7 +85,7 @@
 - [x] DepthPrePass 类（`passes/depth_prepass.h/cpp`）：setup 创建 Opaque pipeline + Mask pipeline、on_resize、record、destroy
 - [x] DepthPrePass 配置 Dynamic Rendering 同时 resolve：depth MAX_BIT + normal AVERAGE（1x 时无 resolve，直接写 1x target）
 - [x] PrePass 绘制：先 Opaque 批次（Early-Z 保证），再 Mask 批次（含 discard）
-- [ ] Forward pass 深度行为变更：从 Step 4a/4b 的 GREATER + write ON 改为 EQUAL + write OFF + 移除 depth resolve 配置，资源声明改为 3 个（msaa_color Write、msaa_depth Read、hdr_color Write），forward.vert 添加 `invariant gl_Position`
+- [x] Forward pass 深度行为变更：从 Step 4a/4b 的 GREATER + write ON 改为 EQUAL + write OFF + 移除 depth resolve 配置，资源声明改为 3 个（msaa_color Write、msaa_depth Read、hdr_color Write），forward.vert 添加 `invariant gl_Position`
 - [ ] 验证：PrePass 正确填充 depth 和 normal buffer（RenderDoc 检查），Forward pass zero-overdraw 无视觉瑕疵
 
 ## Step 6：IBL Pipeline + Skybox
