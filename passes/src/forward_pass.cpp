@@ -126,18 +126,16 @@ namespace himalaya::passes {
                 color_attachment.resolveImageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
             }
 
-            // Depth attachment: MSAA depth or 1x depth
+            // Depth attachment: read-only (EQUAL test, no write, no resolve).
+            // PrePass already filled the depth buffer; Forward only tests against it.
             const auto depth_target = rg.get_image(msaa ? ctx.msaa_depth : ctx.depth);
 
             VkRenderingAttachmentInfo depth_attachment{};
             depth_attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
             depth_attachment.imageView = rm_->get_image(depth_target).view;
-            depth_attachment.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
-            depth_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-            depth_attachment.storeOp = msaa
-                                           ? VK_ATTACHMENT_STORE_OP_DONT_CARE
-                                           : VK_ATTACHMENT_STORE_OP_STORE;
-            depth_attachment.clearValue.depthStencil = {0.0f, 0};
+            depth_attachment.imageLayout = VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL;
+            depth_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+            depth_attachment.storeOp = VK_ATTACHMENT_STORE_OP_NONE;
 
             // Derive render area from the color render target
             const auto &color_image = rm_->get_image(color_target);
@@ -172,10 +170,12 @@ namespace himalaya::passes {
 
             cmd.set_front_face(VK_FRONT_FACE_COUNTER_CLOCKWISE);
             cmd.set_depth_test_enable(true);
-            cmd.set_depth_write_enable(true);
-            cmd.set_depth_compare_op(VK_COMPARE_OP_GREATER);
+            cmd.set_depth_write_enable(false);
+            cmd.set_depth_compare_op(VK_COMPARE_OP_EQUAL);
 
-            // Draw visible opaque instances, then visible transparent (back-to-front)
+            // Draw visible opaque instances (zero-overdraw via EQUAL depth test).
+            // Transparent instances are skipped — EQUAL test rejects them since
+            // they were not rendered in PrePass. Phase 7 Transparent Pass fixes this.
             auto draw_instance = [&](const uint32_t idx) {
                 const auto &instance = ctx.mesh_instances[idx];
                 const auto &mesh = ctx.meshes[instance.mesh_id];
@@ -205,17 +205,16 @@ namespace himalaya::passes {
                 cmd.draw_indexed(mesh.index_count);
             };
 
-            for (const auto idx: ctx.cull_result->visible_opaque_indices)
-                draw_instance(idx);
-            for (const auto idx: ctx.cull_result->visible_transparent_indices)
+            for (const auto idx : ctx.cull_result->visible_opaque_indices)
                 draw_instance(idx);
 
             cmd.end_rendering();
         };
 
         // Resource declarations differ by MSAA mode:
-        // MSAA: msaa_color(W) + msaa_depth(RW) + hdr_color(W, resolve target)
-        // 1x:   hdr_color(W) + depth(RW)
+        // MSAA: msaa_color(W) + msaa_depth(R) + hdr_color(W, resolve target)
+        // 1x:   hdr_color(W) + depth(R)
+        // Depth is read-only: EQUAL test, no write, no resolve (PrePass owns depth).
         if (msaa) {
             const std::array resources = {
                 framework::RGResourceUsage{
@@ -225,7 +224,7 @@ namespace himalaya::passes {
                 },
                 framework::RGResourceUsage{
                     ctx.msaa_depth,
-                    framework::RGAccessType::ReadWrite,
+                    framework::RGAccessType::Read,
                     framework::RGStage::DepthAttachment,
                 },
                 framework::RGResourceUsage{
@@ -244,7 +243,7 @@ namespace himalaya::passes {
                 },
                 framework::RGResourceUsage{
                     ctx.depth,
-                    framework::RGAccessType::ReadWrite,
+                    framework::RGAccessType::Read,
                     framework::RGStage::DepthAttachment,
                 },
             };

@@ -7,6 +7,9 @@
  * Transforms vertices by model and view-projection matrices.
  * Outputs world-space position, normal, tangent, and texture coordinates
  * for the fragment shader.
+ *
+ * Uses `invariant gl_Position` to guarantee bit-identical depth values
+ * with depth_prepass.vert, enabling EQUAL depth test for zero-overdraw.
  */
 
 #include "common/bindings.glsl"
@@ -25,6 +28,9 @@ layout(location = 0) out vec3 frag_world_pos;
 layout(location = 1) out vec3 frag_normal;
 layout(location = 2) out vec2 frag_uv0;
 layout(location = 3) out vec4 frag_tangent;
+
+// Guarantee bit-identical gl_Position with depth_prepass.vert for EQUAL depth test
+invariant gl_Position;
 
 void main() {
     vec4 world_pos = pc.model * vec4(in_position, 1.0);

@@ -7,8 +7,8 @@
  * Renders visible mesh instances into the HDR color buffer with depth testing.
  * Extracted from the Renderer's inline RG lambda to a standalone pass class.
  *
- * Step 4a: renders to hdr_color (R16G16B16A16F), depth compare GREATER,
- * depth write ON. Step 5 will change to EQUAL + write OFF after PrePass.
+ * Depth compare EQUAL + write OFF: relies on DepthPrePass to fill the
+ * depth buffer first, achieving zero-overdraw for opaque geometry.
  */
 
 #include <himalaya/rhi/pipeline.h>
