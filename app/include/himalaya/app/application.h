@@ -20,6 +20,20 @@ struct GLFWwindow;
 
 namespace himalaya::app {
     /**
+     * @brief Parsed command-line arguments passed to Application::init().
+     *
+     * Constructed in main() after CLI11 parsing. Application consumes
+     * these values without knowing how they were parsed.
+     */
+    struct AppConfig {
+        /** @brief Path to the glTF scene file. */
+        std::string scene_path;
+
+        /** @brief Path to the HDR environment map (used by IBL in Step 6). */
+        std::string env_path;
+    };
+
+    /**
      * @brief Top-level application managing the window, subsystems, and frame loop.
      *
      * Owns all RHI and framework subsystems. The frame loop is decomposed into
@@ -30,9 +44,9 @@ namespace himalaya::app {
     public:
         /**
          * @brief Initializes GLFW, all subsystems, and loads the scene.
-         * @param scene_path Path to the glTF scene file.
+         * @param config Parsed command-line arguments.
          */
-        void init(const std::string &scene_path);
+        void init(const AppConfig &config);
 
         /**
          * @brief Runs the main frame loop until the window is closed.
