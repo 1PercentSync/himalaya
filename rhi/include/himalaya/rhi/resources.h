@@ -135,6 +135,14 @@ namespace himalaya::rhi {
         /** @brief Number of mip levels. */
         uint32_t mip_levels;
 
+        /**
+         * @brief Number of array layers.
+         *
+         * 1 for regular 2D images. 6 for cubemaps (automatically sets
+         * VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT and VK_IMAGE_VIEW_TYPE_CUBE).
+         */
+        uint32_t array_layers;
+
         /** @brief Number of samples per pixel (1 = no MSAA). */
         uint32_t sample_count;
 

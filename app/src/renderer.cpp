@@ -520,6 +520,7 @@ namespace himalaya::app {
             .height = swapchain_->extent.height,
             .depth = 1,
             .mip_levels = 1,
+            .array_layers = 1,
             .sample_count = 1,
             .format = swapchain_format_to_rhi(swapchain_->format),
             .usage = rhi::ImageUsage::ColorAttachment,
