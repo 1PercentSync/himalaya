@@ -11,7 +11,6 @@
 #include <himalaya/rhi/commands.h>
 
 #include <algorithm>
-#include <array>
 #include <cmath>
 
 #include <GLFW/glfw3.h>
@@ -167,45 +166,10 @@ namespace himalaya::app {
 
         // Choose active light source
         const auto lights = using_default
-            ? std::span<const framework::DirectionalLight>(default_lights_)
-            : scene_lights;
+                                ? std::span<const framework::DirectionalLight>(default_lights_)
+                                : scene_lights;
 
-        // Fill GlobalUBO for this frame
-        const auto &ubo_buf = resource_manager_.get_buffer(global_ubo_buffers_[context_.frame_index]);
-
-        framework::GlobalUniformData ubo_data{};
-        ubo_data.view = camera_.view;
-        ubo_data.projection = camera_.projection;
-        ubo_data.view_projection = camera_.view_projection;
-        ubo_data.inv_view_projection = camera_.inv_view_projection;
-        ubo_data.camera_position_and_exposure = glm::vec4(camera_.position, exposure_);
-        ubo_data.screen_size = glm::vec2(
-            static_cast<float>(swapchain_.extent.width),
-            static_cast<float>(swapchain_.extent.height));
-        ubo_data.time = static_cast<float>(glfwGetTime());
-        ubo_data.ambient_intensity = ambient_intensity_;
-
-        const auto light_count = static_cast<uint32_t>(
-            std::min(lights.size(), static_cast<size_t>(kMaxDirectionalLights)));
-        ubo_data.directional_light_count = light_count;
-        std::memcpy(ubo_buf.allocation_info.pMappedData, &ubo_data, sizeof(ubo_data));
-
-        // Fill LightBuffer for this frame
-        const auto &light_buf = resource_manager_.get_buffer(light_buffers_[context_.frame_index]);
-        if (light_count > 0) {
-            std::array<framework::GPUDirectionalLight, kMaxDirectionalLights> gpu_lights{};
-            for (uint32_t i = 0; i < light_count; ++i) {
-                gpu_lights[i].direction_and_intensity = glm::vec4(
-                    lights[i].direction, lights[i].intensity);
-                gpu_lights[i].color_and_shadow = glm::vec4(
-                    lights[i].color, lights[i].cast_shadows ? 1.0f : 0.0f);
-            }
-            std::memcpy(light_buf.allocation_info.pMappedData,
-                        gpu_lights.data(),
-                        light_count * sizeof(framework::GPUDirectionalLight));
-        }
-
-        // Fill SceneRenderData for render passes
+        // Fill SceneRenderData for culling and render
         scene_render_data_.mesh_instances = scene_loader_.mesh_instances();
         scene_render_data_.directional_lights = lights;
         scene_render_data_.camera = camera_;
@@ -216,12 +180,12 @@ namespace himalaya::app {
 
         // Compute scene statistics for debug UI
         const auto meshes = scene_loader_.meshes();
-        const auto& instances = scene_render_data_.mesh_instances;
+        const auto &instances = scene_render_data_.mesh_instances;
 
         uint32_t rendered_triangles = 0;
-        for (const auto idx : cull_result_.visible_opaque_indices)
+        for (const auto idx: cull_result_.visible_opaque_indices)
             rendered_triangles += meshes[instances[idx].mesh_id].index_count / 3;
-        for (const auto idx : cull_result_.visible_transparent_indices)
+        for (const auto idx: cull_result_.visible_transparent_indices)
             rendered_triangles += meshes[instances[idx].mesh_id].index_count / 3;
 
         const auto visible_opaque = static_cast<uint32_t>(cull_result_.visible_opaque_indices.size());
@@ -235,7 +199,7 @@ namespace himalaya::app {
             display_pitch_deg = glm::degrees(light_pitch_);
             display_intensity = light_intensity_;
         } else {
-            const auto& dir = scene_lights[0].direction;
+            const auto &dir = scene_lights[0].direction;
             display_pitch_deg = glm::degrees(std::asin(dir.y));
             display_yaw_deg = glm::degrees(std::atan2(dir.x, -dir.z));
             display_intensity = scene_lights[0].intensity;
@@ -278,152 +242,20 @@ namespace himalaya::app {
         rhi::CommandBuffer cmd(frame.command_buffer);
         cmd.begin();
 
-        // Build render graph
-        render_graph_.clear();
-
-        const auto swapchain_image = render_graph_.import_image(
-            "Swapchain", swapchain_image_handles_[image_index_],
-            VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
-
-        const auto depth_image = render_graph_.import_image(
-            "Depth", depth_image_,
-            VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
-
-        const std::array scene_resources = {
-            framework::RGResourceUsage{
-                swapchain_image,
-                framework::RGAccessType::Write,
-                framework::RGStage::ColorAttachment
-            },
-            framework::RGResourceUsage{
-                depth_image,
-                framework::RGAccessType::ReadWrite,
-                framework::RGStage::DepthAttachment
-            },
+        const RenderInput input{
+            .image_index = image_index_,
+            .frame_index = context_.frame_index,
+            .camera = camera_,
+            .lights = scene_render_data_.directional_lights,
+            .cull_result = cull_result_,
+            .meshes = scene_loader_.meshes(),
+            .materials = scene_loader_.material_instances(),
+            .mesh_instances = scene_render_data_.mesh_instances,
+            .ambient_intensity = ambient_intensity_,
+            .exposure = exposure_,
         };
-        render_graph_.add_pass("Unlit",
-                               scene_resources,
-                               [this](const rhi::CommandBuffer &pass_cmd) {
-                                   VkRenderingAttachmentInfo color_attachment{};
-                                   color_attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-                                   color_attachment.imageView = swapchain_.image_views[image_index_];
-                                   color_attachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-                                   color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-                                   color_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-                                   color_attachment.clearValue.color = {{0.0f, 0.0f, 0.0f, 1.0f}};
 
-                                   VkRenderingAttachmentInfo depth_attachment{};
-                                   depth_attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-                                   depth_attachment.imageView = resource_manager_.get_image(depth_image_).view;
-                                   depth_attachment.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
-                                   depth_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-                                   depth_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-                                   depth_attachment.clearValue.depthStencil = {0.0f, 0};
-
-                                   VkRenderingInfo rendering_info{};
-                                   rendering_info.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
-                                   rendering_info.renderArea = {{0, 0}, swapchain_.extent};
-                                   rendering_info.layerCount = 1;
-                                   rendering_info.colorAttachmentCount = 1;
-                                   rendering_info.pColorAttachments = &color_attachment;
-                                   rendering_info.pDepthAttachment = &depth_attachment;
-
-                                   pass_cmd.begin_rendering(rendering_info);
-
-                                   pass_cmd.bind_pipeline(unlit_pipeline_);
-
-                                   const VkDescriptorSet sets[] = {
-                                       descriptor_manager_.get_set0(context_.frame_index),
-                                       descriptor_manager_.get_set1(),
-                                   };
-                                   pass_cmd.bind_descriptor_sets(unlit_pipeline_.layout, 0, sets, 2);
-
-                                   VkViewport viewport{};
-                                   viewport.x = 0.0f;
-                                   viewport.y = static_cast<float>(swapchain_.extent.height);
-                                   viewport.width = static_cast<float>(swapchain_.extent.width);
-                                   viewport.height = -static_cast<float>(swapchain_.extent.height);
-                                   viewport.minDepth = 0.0f;
-                                   viewport.maxDepth = 1.0f;
-                                   pass_cmd.set_viewport(viewport);
-                                   pass_cmd.set_scissor({{0, 0}, swapchain_.extent});
-
-                                   pass_cmd.set_front_face(VK_FRONT_FACE_COUNTER_CLOCKWISE);
-                                   pass_cmd.set_depth_test_enable(true);
-                                   pass_cmd.set_depth_write_enable(true);
-                                   pass_cmd.set_depth_compare_op(VK_COMPARE_OP_GREATER);
-
-                                   const auto meshes = scene_loader_.meshes();
-                                   const auto materials = scene_loader_.material_instances();
-                                   const auto &instances = scene_render_data_.mesh_instances;
-
-                                   // Draw visible opaque, then visible transparent (back-to-front)
-                                   auto draw_instance = [&](const uint32_t idx) {
-                                       const auto &instance = instances[idx];
-                                       const auto &mesh = meshes[instance.mesh_id];
-                                       const auto &material = materials[instance.material_id];
-
-                                       pass_cmd.set_cull_mode(
-                                           material.double_sided
-                                               ? VK_CULL_MODE_NONE
-                                               : VK_CULL_MODE_BACK_BIT);
-
-                                       const framework::PushConstantData pc{
-                                           .model = instance.transform,
-                                           .material_index = material.buffer_offset,
-                                       };
-                                       pass_cmd.push_constants(
-                                           unlit_pipeline_.layout,
-                                           VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-                                           &pc, sizeof(pc));
-
-                                       pass_cmd.bind_vertex_buffer(
-                                           0, resource_manager_.get_buffer(mesh.vertex_buffer).buffer);
-                                       pass_cmd.bind_index_buffer(
-                                           resource_manager_.get_buffer(mesh.index_buffer).buffer,
-                                           VK_INDEX_TYPE_UINT32);
-                                       pass_cmd.draw_indexed(mesh.index_count);
-                                   };
-
-                                   for (const auto idx: cull_result_.visible_opaque_indices)
-                                       draw_instance(idx);
-                                   for (const auto idx: cull_result_.visible_transparent_indices)
-                                       draw_instance(idx);
-
-                                   pass_cmd.end_rendering();
-                               });
-
-        // ImGui pass: last pass, reads previous content (loadOp LOAD) and draws on top
-        const std::array imgui_resources = {
-            framework::RGResourceUsage{
-                swapchain_image,
-                framework::RGAccessType::ReadWrite,
-                framework::RGStage::ColorAttachment
-            },
-        };
-        render_graph_.add_pass("ImGui", imgui_resources,
-                               [this](const rhi::CommandBuffer &pass_cmd) {
-                                   VkRenderingAttachmentInfo color_attachment{};
-                                   color_attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-                                   color_attachment.imageView = swapchain_.image_views[image_index_];
-                                   color_attachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-                                   color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
-                                   color_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-
-                                   VkRenderingInfo rendering_info{};
-                                   rendering_info.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
-                                   rendering_info.renderArea = {{0, 0}, swapchain_.extent};
-                                   rendering_info.layerCount = 1;
-                                   rendering_info.colorAttachmentCount = 1;
-                                   rendering_info.pColorAttachments = &color_attachment;
-
-                                   pass_cmd.begin_rendering(rendering_info);
-                                   imgui_backend_.render(pass_cmd.handle());
-                                   pass_cmd.end_rendering();
-                               });
-
-        render_graph_.compile();
-        render_graph_.execute(cmd);
+        renderer_.render(cmd, input);
 
         cmd.end();
 
@@ -498,7 +330,7 @@ namespace himalaya::app {
             return;
         }
 
-        const ImGuiIO& io = ImGui::GetIO();
+        const ImGuiIO &io = ImGui::GetIO();
         const bool left_pressed = !io.WantCaptureMouse &&
                                   glfwGetMouseButton(window_, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS;
 

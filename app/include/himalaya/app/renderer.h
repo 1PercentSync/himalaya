@@ -101,7 +101,7 @@ namespace himalaya::app {
          * @param cmd Command buffer to record into (already begun by Application).
          * @param input Per-frame semantic data from Application.
          */
-        void render(const rhi::CommandBuffer &cmd, const RenderInput &input);
+        void render(rhi::CommandBuffer &cmd, const RenderInput &input);
 
         /**
          * @brief Pre-resize cleanup: unregisters swapchain images and destroys
