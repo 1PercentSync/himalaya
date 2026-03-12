@@ -60,6 +60,8 @@ namespace himalaya::rhi {
         set0_sets_ = {};
         next_bindless_index_ = 0;
         free_bindless_indices_.clear();
+        next_cubemap_index_ = 0;
+        free_cubemap_indices_.clear();
 
         spdlog::info("DescriptorManager destroyed");
     }
@@ -121,9 +123,54 @@ namespace himalaya::rhi {
         return {slot};
     }
 
+    BindlessIndex DescriptorManager::register_cubemap(const ImageHandle image, const SamplerHandle sampler) {
+        // Pick a slot: reuse freed index or allocate sequentially
+        uint32_t slot;
+        if (!free_cubemap_indices_.empty()) {
+            slot = free_cubemap_indices_.back();
+            free_cubemap_indices_.pop_back();
+        } else {
+            assert(next_cubemap_index_ < kMaxBindlessCubemaps && "Bindless cubemap array full");
+            slot = next_cubemap_index_++;
+        }
+
+        // Write combined image sampler descriptor into Set 1, binding 1
+        const auto &img = resource_manager_->get_image(image);
+        const auto &smp = resource_manager_->get_sampler(sampler);
+
+        const VkDescriptorImageInfo image_info{
+            .sampler = smp.sampler,
+            .imageView = img.view,
+            .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+        };
+
+        const VkWriteDescriptorSet write{
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstSet = set1_set_,
+            .dstBinding = 1,
+            .dstArrayElement = slot,
+            .descriptorCount = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+            .pImageInfo = &image_info,
+        };
+
+        vkUpdateDescriptorSets(context_->device,
+                               1,
+                               &write,
+                               0,
+                               nullptr);
+
+        return {slot};
+    }
+
     void DescriptorManager::unregister_texture(const BindlessIndex index) {
         assert(index.valid() && index.index < next_bindless_index_);
         free_bindless_indices_.push_back(index.index);
+    }
+
+    void DescriptorManager::unregister_cubemap(const BindlessIndex index) {
+        assert(index.valid() && index.index < next_cubemap_index_);
+        free_cubemap_indices_.push_back(index.index);
     }
 
     void DescriptorManager::write_set0_buffer(const uint32_t frame_index,

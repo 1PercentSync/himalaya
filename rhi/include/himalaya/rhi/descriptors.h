@@ -119,6 +119,18 @@ namespace himalaya::rhi {
         void write_set0_buffer(uint32_t binding, BufferHandle buffer, uint64_t range) const;
 
         /**
+         * @brief Registers a cubemap+sampler pair into the bindless cubemap array.
+         *
+         * Writes a combined image sampler descriptor into Set 1, binding 1.
+         * Uses an independent slot space and free list from 2D textures.
+         *
+         * @param image   Cubemap image handle (must be valid, VK_IMAGE_VIEW_TYPE_CUBE).
+         * @param sampler Sampler handle (must be valid).
+         * @return Index into the cubemaps[] array for shader access.
+         */
+        [[nodiscard]] BindlessIndex register_cubemap(ImageHandle image, SamplerHandle sampler);
+
+        /**
          * @brief Unregisters a texture from the bindless array.
          *
          * The slot is returned to the free list for reuse.
@@ -128,6 +140,17 @@ namespace himalaya::rhi {
          * @param index Bindless index to unregister.
          */
         void unregister_texture(BindlessIndex index);
+
+        /**
+         * @brief Unregisters a cubemap from the bindless cubemap array.
+         *
+         * The slot is returned to the cubemap free list for reuse.
+         * The caller is responsible for ensuring the GPU is no longer
+         * referencing this slot (e.g. via deferred deletion).
+         *
+         * @param index Bindless index to unregister.
+         */
+        void unregister_cubemap(BindlessIndex index);
 
     private:
         /** @brief Vulkan context (device). */
@@ -169,13 +192,19 @@ namespace himalaya::rhi {
         /** @brief Single Set 2 descriptor set (render targets). */
         VkDescriptorSet set2_set_ = VK_NULL_HANDLE;
 
-        // ---- Bindless free list ----
+        // ---- Bindless free lists ----
 
-        /** @brief Next sequential bindless index for fresh allocation. */
+        /** @brief Next sequential texture index for fresh allocation (binding 0). */
         uint32_t next_bindless_index_ = 0;
 
-        /** @brief Freed bindless indices available for reuse. */
+        /** @brief Freed texture indices available for reuse (binding 0). */
         std::vector<uint32_t> free_bindless_indices_;
+
+        /** @brief Next sequential cubemap index for fresh allocation (binding 1). */
+        uint32_t next_cubemap_index_ = 0;
+
+        /** @brief Freed cubemap indices available for reuse (binding 1). */
+        std::vector<uint32_t> free_cubemap_indices_;
 
         // ---- Private helpers ----
 
