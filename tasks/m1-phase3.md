@@ -60,7 +60,7 @@
 
 ## Step 4b：ACES Tonemapping + Exposure
 
-- [ ] 替换 `tonemapping.frag` 的 passthrough 为 ACES tonemapping
+- [x] 替换 `tonemapping.frag` 的 passthrough 为 ACES tonemapping
 - [ ] Exposure 控制：DebugUI 手动 EV 滑条（范围 -4 到 +4），`pow(2, ev)` 计算 exposure
 - [ ] 数据通路：`RenderInput::exposure` → `GlobalUniformData::camera_position_and_exposure.w` → `tonemapping.frag`
 - [ ] 验证：高光不截断，画面正确 tonemapped，DebugUI EV 滑条可调
