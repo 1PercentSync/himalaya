@@ -29,7 +29,7 @@
 - [x] 迁移现有 depth buffer 从手动管理到 managed 资源，删除 Renderer 中的手动 depth 创建/销毁代码
 - [x] `create_image()`、`create_buffer()`、`create_sampler()` 新增必选 `debug_name` 参数，内部调用 `vkSetDebugUtilsObjectNameEXT`
 - [x] 回溯修改所有已有 `create_image()` / `create_buffer()` / `create_sampler()` 调用点，补充 debug name
-- [ ] 验证：现有渲染正常工作，depth buffer 由 RG managed 管理，resize 时自动重建；Vulkan 对象在 validation 输出和 RenderDoc 中显示可读名称
+- [x] 验证：现有渲染正常工作，depth buffer 由 RG managed 管理，resize 时自动重建；Vulkan 对象在 validation 输出和 RenderDoc 中显示可读名称
 
 ## Step 3：Descriptor Layout + Compute Infra
 
