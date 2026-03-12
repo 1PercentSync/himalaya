@@ -294,7 +294,6 @@ namespace himalaya::rhi {
         features_12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
         features_12.descriptorBindingPartiallyBound = VK_TRUE;
         features_12.descriptorBindingSampledImageUpdateAfterBind = VK_TRUE;
-        features_12.descriptorBindingVariableDescriptorCount = VK_TRUE;
         features_12.runtimeDescriptorArray = VK_TRUE;
         features_12.shaderSampledImageArrayNonUniformIndexing = VK_TRUE;
 
@@ -306,10 +305,16 @@ namespace himalaya::rhi {
         features_13.synchronization2 = VK_TRUE;
         features_13.shaderDemoteToHelperInvocation = VK_TRUE;
 
+        // Vulkan 1.4 core features: push descriptors (IBL compute dispatch)
+        VkPhysicalDeviceVulkan14Features features_14{};
+        features_14.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_4_FEATURES;
+        features_14.pushDescriptor = VK_TRUE;
+
         // Vulkan 1.0 core features
         VkPhysicalDeviceFeatures features_10{};
         features_10.samplerAnisotropy = VK_TRUE;
 
+        features_13.pNext = &features_14;
         features_12.pNext = &features_13;
 
         VkDeviceCreateInfo device_info{};
