@@ -9,7 +9,7 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段三 — PBR 光照基础（Cook-Torrance + IBL + MSAA + HDR）
-- **进度**：Step 5 进行中（shaders + resolved depth 完成，下一步 MSAA normal + resolved normal managed 资源）
+- **进度**：Step 5 进行中（shaders + 全部 managed 资源完成，下一步 DepthPrePass 类）
 
 ### 下一个任务
 
