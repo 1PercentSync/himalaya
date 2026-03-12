@@ -219,7 +219,7 @@ namespace himalaya::app {
             .force_default_light = force_default_light_,
             .has_scene_lights = has_scene_lights,
             .ambient_intensity = ambient_intensity_,
-            .exposure = exposure_,
+            .ev = ev_,
             .scene_stats = {
                 .total_instances = total_instances,
                 .total_meshes = static_cast<uint32_t>(meshes.size()),
@@ -252,7 +252,7 @@ namespace himalaya::app {
             .materials = scene_loader_.material_instances(),
             .mesh_instances = scene_render_data_.mesh_instances,
             .ambient_intensity = ambient_intensity_,
-            .exposure = exposure_,
+            .exposure = std::pow(2.0f, ev_),
         };
 
         renderer_.render(cmd, input);

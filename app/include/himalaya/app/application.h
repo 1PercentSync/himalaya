@@ -115,8 +115,8 @@ namespace himalaya::app {
         /** @brief Ambient light multiplier (written to GlobalUBO each frame). */
         float ambient_intensity_ = 0.03f;
 
-        /** @brief Exposure multiplier (written to GlobalUBO camera_position_and_exposure.w). */
-        float exposure_ = 1.0f;
+        /** @brief Exposure value in EV (pow(2, ev) gives linear exposure multiplier). */
+        float ev_ = 0.0f;
 
         // --- Default light control ---
 

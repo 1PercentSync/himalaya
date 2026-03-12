@@ -68,8 +68,8 @@ namespace himalaya::app {
         /** @brief Editable reference to the ambient light multiplier. */
         float& ambient_intensity;
 
-        /** @brief Editable reference to the exposure multiplier. */
-        float& exposure;
+        /** @brief Editable reference to the exposure value in EV stops. */
+        float& ev;
 
         // --- Scene statistics (display) ---
 

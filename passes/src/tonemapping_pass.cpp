@@ -122,11 +122,13 @@ namespace himalaya::passes {
                         cmd.begin_rendering(rendering_info);
                         cmd.bind_pipeline(pipeline_);
 
-                        // Bind Set 2 only (hdr_color at binding 0).
-                        // Set 0 and Set 1 are not needed for tonemapping.
-                        // ReSharper disable once CppLocalVariableMayBeConst
-                        VkDescriptorSet set2 = dm_->get_set2();
-                        cmd.bind_descriptor_sets(pipeline_.layout, 2, &set2, 1);
+                        // Bind Set 0 (GlobalUBO for exposure) + Set 1 + Set 2 (hdr_color).
+                        const std::array sets = {
+                            dm_->get_set0(ctx.frame_index),
+                            dm_->get_set1(),
+                            dm_->get_set2(),
+                        };
+                        cmd.bind_descriptor_sets(pipeline_.layout, 0, sets.data(), static_cast<uint32_t>(sets.size()));
 
                         // Normal viewport (no Y-flip): fullscreen post-processing
                         // samples a texture, no 3D coordinate convention to fix.
