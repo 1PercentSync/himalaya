@@ -327,7 +327,7 @@ struct CullResult {
 CPU 侧数据结构的 GPU 布局镜像，必须与 shader 端一一对应。
 
 ```cpp
-// GlobalUBO — std140 layout, 304 bytes (aligned to 16)
+// GlobalUBO — std140 layout, 320 bytes (aligned to 16)
 // 对应 shader: Set 0, Binding 0
 struct GlobalUniformData {
     glm::mat4 view;                             // offset   0
@@ -338,8 +338,13 @@ struct GlobalUniformData {
     glm::vec2 screen_size;                      // offset 272
     float time;                                 // offset 280 — 程序运行时间（秒），M2 水面/云层等动画用
     uint32_t directional_light_count;           // offset 284 — 活跃方向光数量
-    float ambient_intensity;                    // offset 288 — 环境光强度乘数
-    float _pad[3];                              // padding to 304 bytes (std140 16-byte)
+    float ibl_intensity;                        // offset 288 — IBL 环境光强度乘数（原 ambient_intensity）
+    uint32_t irradiance_cubemap_index;          // offset 292 — cubemaps[] 下标
+    uint32_t prefiltered_cubemap_index;         // offset 296 — cubemaps[] 下标
+    uint32_t brdf_lut_index;                    // offset 300 — textures[] 下标
+    uint32_t prefiltered_mip_count;             // offset 304 — roughness → mip level 映射
+    uint32_t debug_render_mode;                 // offset 308 — 0=正常，非零=debug 分量可视化
+    float _pad[2];                              // padding to 320 bytes (std140 16-byte)
 };
 
 // GPU 方向光 — std430 layout, 32 bytes per element
@@ -486,22 +491,37 @@ RG `execute()` 自动为每个 pass 调用 `begin_debug_label(pass_name)` / `end
 > 阶段三引入。阶段二直接在 RG lambda 回调中编写渲染逻辑。
 > 阶段三所有 pass 统一放在 Layer 2（`passes/`），使用具体类（非虚基类），Renderer 持有具体类型成员。设计决策见 `m1-design-decisions.md`「Pass 类设计」。
 
-每个 Pass 统一方法签名（非虚函数）：
+每个 Pass 使用具体类（非虚函数），`setup()` 签名因 pass 而异。Attachment format 在 pass 内部硬编码。
 
 ```cpp
+// MSAA 相关 pass（ForwardPass、DepthPrePass、SkyboxPass）
 class ForwardPass {  // 具体类，无基类
 public:
     /// 一次性：创建 pipeline，存储服务指针（ctx_, rm_, dm_, sc_）
     void setup(rhi::Context& ctx, rhi::ResourceManager& rm,
-               rhi::DescriptorManager& dm, rhi::ShaderCompiler& sc);
+               rhi::DescriptorManager& dm, rhi::ShaderCompiler& sc,
+               uint32_t sample_count);
 
     /// 创建/重建 resolution-dependent 资源（init 时在 setup 后调用，resize 时单独调用）
     void on_resize(uint32_t width, uint32_t height);
+
+    /// MSAA 切换时重建 pipeline
+    void on_sample_count_changed(uint32_t sample_count);
 
     /// 每帧：向 RG 注册资源使用声明 + execute lambda
     void record(RenderGraph& rg, const FrameContext& ctx);
 
     /// 销毁 pipeline + 私有资源
+    void destroy();
+};
+
+// 非 MSAA pass（TonemappingPass）— setup() 不接收 sample_count，无 on_sample_count_changed()
+class TonemappingPass {
+public:
+    void setup(rhi::Context& ctx, rhi::ResourceManager& rm,
+               rhi::DescriptorManager& dm, rhi::ShaderCompiler& sc);
+    void on_resize(uint32_t width, uint32_t height);
+    void record(RenderGraph& rg, const FrameContext& ctx);
     void destroy();
 };
 ```

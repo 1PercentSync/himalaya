@@ -18,9 +18,13 @@ Step 2: RG Managed 资源
     ↓
 Step 3: Descriptor Layout + Compute Infra
     ↓
-Step 4: MSAA + HDR + Tonemapping ──→ Step 5: Depth + Normal PrePass
-    ↓                                          ↓
-Step 6: IBL Pipeline ─────────────→ Step 7: PBR Shader 升级
+Step 4a: FrameContext + Pass 类 + ForwardPass 提取
+    ↓
+Step 4b: HDR + Tonemapping
+    ↓
+Step 4c: MSAA ──────────────→ Step 5: Depth + Normal PrePass
+    ↓                                      ↓
+Step 6: IBL Pipeline + Skybox ──→ Step 7: PBR Shader 升级
 ```
 
 #### 总览
@@ -30,9 +34,11 @@ Step 6: IBL Pipeline ─────────────→ Step 7: PBR Shad
 | 1 | Renderer 提取 | 编译通过，渲染输出与阶段二一致 |
 | 2 | RG Managed 资源 | 现有渲染正常，depth buffer 改由 RG 管理 |
 | 3 | Descriptor Layout + Compute Infra | 布局更新无 validation 报错，compute shader 能创建并 dispatch |
-| 4 | MSAA + HDR + Tonemapping | MSAA 渲染 + HDR tonemapped 输出正确，DebugUI 可切换采样数 |
+| 4a | FrameContext + Pass 类 + ForwardPass 提取 | 纯重构，渲染输出与 Step 3 一致 |
+| 4b | HDR + Tonemapping | Forward 渲染到 HDR → tonemapping → swapchain，高光不截断 |
+| 4c | MSAA | MSAA 渲染正确，DebugUI 可切换采样数 |
 | 5 | Depth + Normal PrePass | PrePass 运行，Forward zero-overdraw，normal buffer 有输出 |
-| 6 | IBL Pipeline | IBL 预计算完成，RenderDoc 可检查 cubemap 和 LUT 内容 |
+| 6 | IBL Pipeline + Skybox | IBL 预计算完成，Skybox 渲染天空背景，RenderDoc 可检查 cubemap 和 LUT 内容 |
 | 7 | PBR Shader 升级 | 完整 PBR 光照画面，金属表面反射环境，各 debug 模式可用 |
 
 ### Step 1：Renderer 提取
@@ -123,20 +129,38 @@ render_graph_.destroy_managed_image(managed_hdr_);
 
 ---
 
-### Step 4：MSAA + HDR + Tonemapping
+### Step 4a：FrameContext + Pass 类 + ForwardPass 提取
 
-- 建立完整的 MSAA → HDR → Tonemapping 渲染管线
-- 创建 MSAA 和 resolved 的 managed 资源
+- 引入 FrameContext 概念（`framework/frame_context.h`），携带 RG 资源 ID + 场景数据引用 + 帧参数
+- 引入 Pass 类基础设施：ForwardPass + TonemappingPass 提取为独立类（`passes/`）
+- ForwardPass 从 RG lambda 提取为独立类，渲染逻辑不变
+- TonemappingPass 骨架创建（此阶段仅 passthrough，4b 实现 ACES）
+- **验证**：纯重构，渲染输出与 Step 3 完全一致，无 validation 报错
+
+#### 设计要点
+
+Pass 类设计（具体类、方法签名、FrameContext）见 `milestone-1/m1-design-decisions.md`「Pass 类设计」。
+
+关键设计：
+- 具体类（非虚基类），Renderer 持有具体类型成员
+- 方法：`setup()` / `on_resize()` / `on_sample_count_changed()` / `record()` / `destroy()`
+- MSAA 相关 pass 的 `setup()` 接收 `sample_count`，非 MSAA pass 不接收
+- Attachment format 在 pass 内部硬编码，`setup()` 不传入
+- FrameContext 是纯每帧数据，服务引用由 pass 在 `setup()` 时存储指针
+
+---
+
+### Step 4b：HDR + Tonemapping
+
+- 创建 HDR color buffer（R16G16B16A16_SFLOAT，managed 资源）
 - 实现 ACES tonemapping pass（fullscreen fragment shader）
-- 实现 MSAA 运行时切换（DebugUI 控件 + pipeline/资源重建）
-- **验证**：MSAA 渲染 + HDR tonemapped 输出正确，高光不截断，DebugUI 可切换采样数
+- Forward Pass 渲染到 HDR buffer，Tonemapping 映射到 swapchain
+- **验证**：高光不截断，画面正确 tonemapped
 
 #### 阶段三帧流程
 
 ```
-MSAA HDR Color (forward pass 渲染, R16G16B16A16F, 4x)
-    ↓ Dynamic Rendering resolve (AVERAGE)
-HDR Color (resolved, R16G16B16A16F, 1x)
+HDR Color (forward pass 渲染, R16G16B16A16F)
     ↓ texture() 采样
 Tonemapping pass (fullscreen fragment): exposure → ACES → output linear [0,1]
     ↓ 硬件自动 linear → sRGB (swapchain format)
@@ -147,17 +171,29 @@ ImGui pass
 Present
 ```
 
+关键设计：
+- Tonemapping 使用 fullscreen fragment shader（非 compute），因为 SRGB swapchain 不支持 `STORAGE_BIT`
+- Step 4b 不引入 MSAA（Forward 直接渲染到 1x hdr_color）
+
+---
+
+### Step 4c：MSAA
+
+- 创建 MSAA managed 资源（msaa_color、msaa_depth）
+- 配置 Dynamic Rendering color resolve（AVERAGE）
+- 实现 MSAA 运行时切换（DebugUI 控件 + `on_sample_count_changed()` + 资源重建）
+- 1x MSAA 时不创建 MSAA 资源，Forward Pass 直接渲染到 hdr_color
+- **验证**：MSAA 渲染正确，DebugUI 可切换 1x/2x/4x/8x 采样数
+
 #### 设计要点
 
 MSAA 配置策略（运行时可切换 1x/2x/4x/8x）和 Tonemapping 设计见 `milestone-1/m1-design-decisions.md`「MSAA 配置策略」+「Tonemapping」。Depth resolve 模式（MAX_BIT — 前景深度）见「Depth Resolve 模式」。
 
 关键设计：
-- Step 4 不创建 resolved depth（Tonemapping 不需要 depth），Step 5 PrePass 引入时创建
+- Step 4c 不创建 resolved depth（Tonemapping 不需要 depth），Step 5 PrePass 引入时创建
 - MSAA resolve 通过 Dynamic Rendering 原生完成（`VkRenderingAttachmentInfo` 配置 color AVERAGE），RG 零改动
 - 1x MSAA 时不创建 MSAA 资源，Forward Pass 直接渲染到 hdr_color（1x）。MSAA 复杂度不向 Tonemapping 泄漏
-- Tonemapping 使用 fullscreen fragment shader（非 compute），因为 SRGB swapchain 不支持 `STORAGE_BIT`
-- MSAA 切换触发 `update_managed_desc()` + pipeline 重建，与 resize/vsync 统一模式
-- Step 4 同时引入 Pass 类基础设施：FrameContext + TonemappingPass + ForwardPass
+- MSAA 切换触发 `update_managed_desc()` + `on_sample_count_changed()`，与 resize/vsync 统一模式
 
 ---
 
@@ -184,23 +220,26 @@ Depth + Normal PrePass 设计、Alpha Mask 处理、Forward Pass 深度配合见
 
 ---
 
-### Step 6：IBL Pipeline
+### Step 6：IBL Pipeline + Skybox
 
 - 实现 IBL 预计算全流程（equirect → cubemap → irradiance/prefiltered/BRDF LUT）
 - 4 个 compute shader 共享相同模式（immediate scope + dispatch），验证点统一，不拆分 Step
 - IBL 模块位于 Framework 层（`framework/ibl.h`），预计算在 `Renderer::init()` 中执行
-- **验证**：IBL 预计算无 validation 报错，RenderDoc 检查 cubemap 各面和 mip 级别内容、BRDF LUT 呈现预期渐变图案
+- 实现 Skybox Pass（独立 RG pass，采样中间 cubemap 渲染天空背景）
+- **验证**：IBL 预计算无 validation 报错，RenderDoc 检查 cubemap 各面和 mip 级别内容、BRDF LUT 呈现预期渐变图案；天空背景正确显示
 
 #### 设计要点
 
 IBL 管线设计（环境贴图输入、预计算策略、产物参数、模块归属）见 `milestone-1/m1-design-decisions.md`「IBL 管线」。
 
 关键设计：
-- Equirectangular .hdr 输入，GPU compute shader 转 cubemap
+- Equirectangular .hdr 输入（R16G16B16A16_SFLOAT），GPU compute shader 转 cubemap（1024×1024 per face）
+- 中间 cubemap 保留用于 Skybox Pass 天空渲染（M2 Bruneton 替换后可销毁）
 - 预计算在 `begin_immediate()` / `end_immediate()` scope 内一次性完成
 - IBL compute shader 使用 Push Descriptors 绑定输入/输出 image（项目例外，仅限一次性 init compute dispatch）
 - Irradiance/prefiltered cubemap 注册到 Set 1 binding 1（`register_cubemap()`），BRDF LUT 注册到 Set 1 binding 0（`register_texture()`）
 - `GlobalUniformData` 新增 IBL 字段 + 更新 `bindings.glsl` 布局（Step 6 完成，不等 Step 7）
+- Skybox Pass 为独立 RG pass，Forward Pass 之后、Tonemapping 之前，渲染到 resolved 1x hdr_color，读 resolved depth（GREATER_OR_EQUAL + depth write OFF）
 
 ---
 
@@ -236,22 +275,25 @@ app/
     └── ...                      # application.cpp（Step 1 修改）
 framework/
 ├── include/himalaya/framework/
-│   ├── frame_context.h          # [Step 4 新增] FrameContext（纯头文件）
+│   ├── frame_context.h          # [Step 4a 新增] FrameContext（纯头文件）
 │   └── ibl.h                    # [Step 6 新增] IBL 预计算模块
 └── src/
     └── ibl.cpp                  # [Step 6 新增]
 passes/
 ├── include/himalaya/passes/
-│   ├── tonemapping_pass.h       # [Step 4 新增] Tonemapping pass 类
-│   ├── forward_pass.h           # [Step 4 新增] Forward Lighting pass 类
-│   └── depth_prepass.h          # [Step 5 新增] Depth + Normal PrePass 类
+│   ├── tonemapping_pass.h       # [Step 4a 新增] Tonemapping pass 类
+│   ├── forward_pass.h           # [Step 4a 新增] Forward Lighting pass 类
+│   ├── depth_prepass.h          # [Step 5 新增] Depth + Normal PrePass 类
+│   └── skybox_pass.h            # [Step 6 新增] Skybox pass 类
 └── src/
-    ├── tonemapping_pass.cpp     # [Step 4 新增]
-    ├── forward_pass.cpp         # [Step 4 新增]
-    └── depth_prepass.cpp        # [Step 5 新增]
+    ├── tonemapping_pass.cpp     # [Step 4a 新增]
+    ├── forward_pass.cpp         # [Step 4a 新增]
+    ├── depth_prepass.cpp        # [Step 5 新增]
+    └── skybox_pass.cpp          # [Step 6 新增]
 shaders/
-├── fullscreen.vert              # [Step 4 新增] fullscreen triangle（无顶点输入）
-├── tonemapping.frag             # [Step 4 新增] ACES tonemapping
+├── fullscreen.vert              # [Step 4b 新增] fullscreen triangle（无顶点输入）
+├── tonemapping.frag             # [Step 4b 新增] ACES tonemapping
+├── skybox.frag                  # [Step 6 新增] Cubemap 天空采样
 ├── depth_prepass.vert           # [Step 5 新增] PrePass 共享 VS（invariant gl_Position）
 ├── depth_prepass.frag           # [Step 5 新增] Opaque: normal_tex → TBN → encode
 ├── depth_prepass_masked.frag    # [Step 5 新增] Mask: alpha test + discard → encode
@@ -275,9 +317,9 @@ shaders/ibl/
 | Renderer 命名空间 | `himalaya::app`，与 Application 同层 |
 | Resize 两阶段 | `on_swapchain_invalidated()` 在 `swapchain_.recreate()` 之前，`on_swapchain_recreated()` 在之后。`swapchain_image_handles_` 引用旧 VkImage，必须先注销 |
 | UBO/SSBO 填充 | 归 Renderer。`GlobalUniformData` 布局是 shader 约定，属于渲染层。Application 只传语义数据（RenderInput） |
-| FrameContext | Step 4 引入 `FrameContext`（`framework/frame_context.h`），携带 RG 资源 ID + 场景数据引用 + 帧参数。替代原 `FrameResources` 设计 |
-| Pass 类约定 | Step 1 暂无独立 pass 类（渲染逻辑仍在 RG lambda 中），Step 4 引入 Pass 类（TonemappingPass + ForwardPass），所有 pass 统一放 Layer 2（`passes/`） |
-| Pass 方法 | `setup()` / `on_resize()` / `record()` / `destroy()`。`record()` 向 RG 注册资源声明 + execute lambda |
+| FrameContext | Step 4a 引入 `FrameContext`（`framework/frame_context.h`），携带 RG 资源 ID + 场景数据引用 + 帧参数。替代原 `FrameResources` 设计 |
+| Pass 类约定 | Step 1 暂无独立 pass 类（渲染逻辑仍在 RG lambda 中），Step 4a 引入 Pass 类（TonemappingPass + ForwardPass），所有 pass 统一放 Layer 2（`passes/`） |
+| Pass 方法 | `setup()` / `on_resize()` / `on_sample_count_changed()` / `record()` / `destroy()`。MSAA 相关 pass 的 setup 接收 `sample_count`，attachment format 在 pass 内部硬编码 |
 | Managed vs imported | Managed 资源由 RG 创建和缓存（depth、MSAA、HDR 等渲染中间产物），imported 资源由外部创建（swapchain image）。Managed 每帧以 UNDEFINED 为 initial layout，不追踪帧间状态 |
 | MSAA resolve | 所有 resolve 通过 Dynamic Rendering 原生完成（RG 零改动），不引入独立 resolve pass |
 | Resolve 产生者 | Step 5+ resolved depth/normal 由 PrePass 产生，resolved hdr_color 由 Forward Pass 产生。Forward Pass 不配 depth resolve（depth write OFF，内容不变） |
@@ -285,7 +327,10 @@ shaders/ibl/
 | Depth buffer 迁移 | Step 2 将阶段二手动管理的 depth buffer 迁移为 RG managed 资源 |
 | Tonemapping 策略 | ACES fullscreen fragment shader，SRGB swapchain 不支持 `STORAGE_BIT` |
 | Fullscreen triangle | Tonemapping 等全屏 pass 使用 hardcoded fullscreen triangle（vertex shader 生成，无顶点输入） |
-| Step 4 资源拓扑 | 4x 时创建 msaa_color + msaa_depth + hdr_color + depth；1x 时只创建 hdr_color + depth。Step 4 不创建 resolved depth（Step 5 PrePass 引入时创建） |
-| IBL 预计算 | 4 个 compute shader 共享 immediate scope + dispatch 模式，验证点统一不拆 Step |
-| DebugUI 跟随 Step | 每个 Step 涉及的 DebugUI 变更跟随该 Step：MSAA 切换在 Step 4，渲染模式在 Step 7 |
+| Step 4c 资源拓扑 | 4x 时创建 msaa_color + msaa_depth + hdr_color + depth；1x 时只创建 hdr_color + depth。Step 4c 不创建 resolved depth（Step 5 PrePass 引入时创建） |
+| IBL 预计算 | 4 个 compute shader 共享 immediate scope + dispatch 模式，验证点统一不拆 Step。Equirect 输入 R16G16B16A16F，中间 cubemap 1024×1024 保留用于 Skybox |
+| Skybox Pass | Step 6 引入。独立 RG pass，Forward 之后 Tonemapping 之前，渲染到 resolved 1x hdr_color，GREATER_OR_EQUAL depth test，不需要 MSAA |
+| DebugUI 跟随 Step | 每个 Step 涉及的 DebugUI 变更跟随该 Step：MSAA 切换在 Step 4c，渲染模式在 Step 7 |
+| Debug 渲染模式 | debug_render_mode != 0 时 TonemappingPass 跳过 ACES（passthrough），保留硬件 linear→sRGB |
+| 透明物体回归 | Step 5 EQUAL depth test 后，AlphaMode::Blend 物体不渲染。Phase 7 Transparent Pass 修复 |
 | PrePass 在 MSAA 之后 | PrePass 直接写入 MSAA depth/normal，不需要经历 1x→4x 的中间迁移状态 |

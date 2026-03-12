@@ -93,12 +93,17 @@ Transparent Pass（MSAA）
   输出：HDR Color Buffer（透明物体叠加上去）
 ```
 
-### 阶段七：Color Resolve
+### 阶段七：Color Resolve + Skybox
 
 ```
 MSAA Resolve
   输入：HDR Color Buffer（MSAA）
   输出：HDR Color Buffer（单采样）
+
+Skybox Pass
+  输入：Depth Buffer（单采样）、IBL 中间 Cubemap
+  输出：HDR Color Buffer（天空背景填充无几何覆盖的像素）
+  说明：GREATER_OR_EQUAL depth test + depth write OFF，仅写 depth == 0.0 的像素
 ```
 
 ### 阶段八：后处理
@@ -161,7 +166,7 @@ Color Grading Pass
 | Contact Shadow Mask | Contact Shadows Pass | Forward Pass | 帧内 |
 | HDR Color Buffer（MSAA） | Forward Pass | Transparent Pass、MSAA Resolve | 帧内 |
 | Refraction Source | HDR Copy | Transparent Pass | 帧内 |
-| HDR Color Buffer（单采样） | MSAA Resolve | 后处理链 | 帧内 |
+| HDR Color Buffer（单采样） | MSAA Resolve | Skybox Pass、后处理链 | 帧内 |
 | Exposure Value | Auto Exposure | Tonemapping、下一帧 Auto Exposure | 帧间（temporal） |
 | Bloom Mip Chain | Bloom Downsample | Bloom Upsample | 帧内 |
 | Bloom Texture | Bloom Upsample | Tonemapping | 帧内 |
