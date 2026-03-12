@@ -5,14 +5,21 @@
  * @brief Rendering subsystem: pass orchestration, GPU data filling, resource ownership.
  */
 
+#include <himalaya/framework/material_system.h>
+#include <himalaya/framework/render_graph.h>
+#include <himalaya/framework/texture.h>
+#include <himalaya/rhi/context.h>
+#include <himalaya/rhi/pipeline.h>
+#include <himalaya/rhi/shader.h>
+
+#include <array>
 #include <cstdint>
 #include <span>
+#include <vector>
 
 namespace himalaya::rhi {
     class CommandBuffer;
-    class Context;
     class DescriptorManager;
-    class ResourceManager;
     class Swapchain;
 }
 
@@ -21,7 +28,6 @@ namespace himalaya::framework {
     struct CullResult;
     struct DirectionalLight;
     class ImGuiBackend;
-    struct MaterialInstance;
     struct Mesh;
     struct MeshInstance;
 }
@@ -34,7 +40,7 @@ namespace himalaya::app {
      * parameters. Renderer translates it into GPU-side data (UBO/SSBO) and
      * drives the render graph. Contains non-owning references only.
      */
-    struct RenderInput {
+    struct RenderInput { // NOLINT(*-pro-type-member-init)
         /** @brief Acquired swapchain image index for the current frame. */
         uint32_t image_index;
 
@@ -42,13 +48,13 @@ namespace himalaya::app {
         uint32_t frame_index;
 
         /** @brief Camera state (position, matrices). */
-        const framework::Camera& camera;
+        const framework::Camera &camera;
 
         /** @brief Active directional lights for this frame. */
         std::span<const framework::DirectionalLight> lights;
 
         /** @brief Frustum culling result (visible opaque/transparent indices). */
-        const framework::CullResult& cull_result;
+        const framework::CullResult &cull_result;
 
         /** @brief All loaded meshes (vertex/index buffer handles and counts). */
         std::span<const framework::Mesh> meshes;
@@ -86,16 +92,16 @@ namespace himalaya::app {
          * descriptor manager are initialized. Stores non-owning references to
          * all subsystems for later use.
          */
-        void init(rhi::Context& ctx, rhi::Swapchain& swapchain,
-                  rhi::ResourceManager& rm, rhi::DescriptorManager& dm,
-                  framework::ImGuiBackend& imgui);
+        void init(rhi::Context &ctx, rhi::Swapchain &swapchain,
+                  rhi::ResourceManager &rm, rhi::DescriptorManager &dm,
+                  framework::ImGuiBackend &imgui);
 
         /**
          * @brief Fills GPU buffers and executes all render passes for one frame.
          * @param cmd Command buffer to record into (already begun by Application).
          * @param input Per-frame semantic data from Application.
          */
-        void render(const rhi::CommandBuffer& cmd, const RenderInput& input);
+        void render(const rhi::CommandBuffer &cmd, const RenderInput &input);
 
         /**
          * @brief Pre-resize cleanup: unregisters swapchain images and destroys
@@ -112,22 +118,79 @@ namespace himalaya::app {
         /** @brief Destroys all owned rendering resources in reverse init order. */
         void destroy();
 
+        // --- Accessors for scene loading ---
+
+        /** @brief Returns the default sampler (linear filter, repeat wrap, linear mip). */
+        [[nodiscard]] rhi::SamplerHandle default_sampler() const;
+
+        /** @brief Returns the default 1x1 textures (white, flat normal, black). */
+        [[nodiscard]] const framework::DefaultTextures &default_textures() const;
+
+        /** @brief Returns the material system for SSBO management. */
+        framework::MaterialSystem &material_system();
+
     private:
         // --- Subsystem references (non-owning, set during init) ---
 
         /** @brief Vulkan context: device, queues, frame data. */
-        rhi::Context* ctx_ = nullptr;
+        rhi::Context *ctx_ = nullptr;
 
         /** @brief Swapchain: extent, format, images. */
-        rhi::Swapchain* swapchain_ = nullptr;
+        rhi::Swapchain *swapchain_ = nullptr;
 
         /** @brief GPU resource pool. */
-        rhi::ResourceManager* resource_manager_ = nullptr;
+        rhi::ResourceManager *resource_manager_ = nullptr;
 
         /** @brief Descriptor set management. */
-        rhi::DescriptorManager* descriptor_manager_ = nullptr;
+        rhi::DescriptorManager *descriptor_manager_ = nullptr;
 
         /** @brief ImGui integration backend. */
-        framework::ImGuiBackend* imgui_ = nullptr;
+        framework::ImGuiBackend *imgui_ = nullptr;
+
+        // --- Owned rendering resources (migrated from Application) ---
+
+        /** @brief Render graph for pass orchestration and automatic barriers. */
+        framework::RenderGraph render_graph_{};
+
+        /** @brief Shader compiler instance. */
+        rhi::ShaderCompiler shader_compiler_{};
+
+        /** @brief Material SSBO management (Set 0, Binding 2). */
+        framework::MaterialSystem material_system_{};
+
+        /** @brief Forward lighting pipeline (forward.vert + forward.frag). */
+        rhi::Pipeline forward_pipeline_{};
+
+        /** @brief Depth buffer (D32Sfloat, recreated on resize). */
+        rhi::ImageHandle depth_image_;
+
+        /** @brief Default sampler (linear filter, repeat wrap, linear mip). */
+        rhi::SamplerHandle default_sampler_;
+
+        /** @brief Default 1x1 textures (white, flat normal, black). */
+        framework::DefaultTextures default_textures_{};
+
+        /** @brief Per-frame GlobalUBO buffers (CpuToGpu, one per frame in flight). */
+        std::array<rhi::BufferHandle, rhi::kMaxFramesInFlight> global_ubo_buffers_{};
+
+        /** @brief Per-frame LightBuffer SSBOs (CpuToGpu, one per frame in flight). */
+        std::array<rhi::BufferHandle, rhi::kMaxFramesInFlight> light_buffers_{};
+
+        /** @brief Registered ImageHandles for swapchain images (one per swapchain image). */
+        std::vector<rhi::ImageHandle> swapchain_image_handles_;
+
+        // --- Private helpers ---
+
+        /** @brief Registers all swapchain images as external images in ResourceManager. */
+        void register_swapchain_images();
+
+        /** @brief Unregisters all swapchain images from ResourceManager. */
+        void unregister_swapchain_images();
+
+        /** @brief Creates the depth buffer matching the current swapchain extent. */
+        void create_depth_buffer();
+
+        /** @brief Destroys the depth buffer (called before resize recreation). */
+        void destroy_depth_buffer();
     };
 } // namespace himalaya::app

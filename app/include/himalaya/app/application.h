@@ -7,16 +7,13 @@
 
 #include <himalaya/app/camera_controller.h>
 #include <himalaya/app/debug_ui.h>
+#include <himalaya/app/renderer.h>
 #include <himalaya/app/scene_loader.h>
 #include <himalaya/framework/camera.h>
 #include <himalaya/framework/imgui_backend.h>
-#include <himalaya/framework/render_graph.h>
-#include <himalaya/framework/texture.h>
 #include <himalaya/rhi/context.h>
 #include <himalaya/rhi/descriptors.h>
-#include <himalaya/rhi/pipeline.h>
 #include <himalaya/rhi/resources.h>
-#include <himalaya/rhi/shader.h>
 #include <himalaya/rhi/swapchain.h>
 
 struct GLFWwindow;
@@ -76,12 +73,6 @@ namespace himalaya::app {
         /** @brief ImGui integration backend. */
         framework::ImGuiBackend imgui_backend_{};
 
-        /** @brief Render graph for pass orchestration and automatic barriers. */
-        framework::RenderGraph render_graph_{};
-
-        /** @brief Material SSBO management (Set 0, Binding 2). */
-        framework::MaterialSystem material_system_{};
-
         // --- App modules ---
 
         /** @brief Camera state (position, orientation, matrices). */
@@ -138,39 +129,16 @@ namespace himalaya::app {
         /** @brief Whether the left mouse button is being held for light dragging. */
         bool light_dragging_ = false;
 
-        // --- Shared resources ---
+        // --- Rendering ---
 
-        /** @brief Depth buffer (D32Sfloat, recreated on resize). */
-        rhi::ImageHandle depth_image_;
-
-        /** @brief Default sampler (linear filter, repeat wrap, linear mip). */
-        rhi::SamplerHandle default_sampler_;
-
-        /** @brief Default 1x1 textures (white, flat normal, black). */
-        framework::DefaultTextures default_textures_{};
-
-        /** @brief Unlit graphics pipeline (forward.vert + forward.frag). */
-        rhi::Pipeline unlit_pipeline_{};
-
-        /** @brief Shader compiler instance. */
-        rhi::ShaderCompiler shader_compiler_{};
-
-        // --- Per-frame buffers ---
-
-        /** @brief Per-frame GlobalUBO buffers (CpuToGpu, one per frame in flight). */
-        std::array<rhi::BufferHandle, rhi::kMaxFramesInFlight> global_ubo_buffers_{};
-
-        /** @brief Per-frame LightBuffer SSBOs (CpuToGpu, one per frame in flight). */
-        std::array<rhi::BufferHandle, rhi::kMaxFramesInFlight> light_buffers_{};
+        /** @brief Rendering subsystem (owns pipelines, buffers, shared resources). */
+        Renderer renderer_{};
 
         /** @brief Whether VSync was toggled this frame (triggers swapchain recreate). */
         bool vsync_changed_ = false;
 
         /** @brief Acquired swapchain image index for the current frame. */
         uint32_t image_index_ = 0;
-
-        /** @brief Registered ImageHandles for swapchain images (one per swapchain image). */
-        std::vector<rhi::ImageHandle> swapchain_image_handles_;
 
         // --- Frame loop phases ---
 
@@ -205,22 +173,6 @@ namespace himalaya::app {
          * instead of deferred deletion, since idle guarantees no GPU references.
          */
         void handle_resize();
-
-        /**
-         * @brief Registers all swapchain images as external images in ResourceManager.
-         */
-        void register_swapchain_images();
-
-        /**
-         * @brief Unregisters all swapchain images from ResourceManager.
-         */
-        void unregister_swapchain_images();
-
-        /** @brief Creates the depth buffer matching the current swapchain extent. */
-        void create_depth_buffer();
-
-        /** @brief Destroys the depth buffer (called before resize recreation). */
-        void destroy_depth_buffer();
 
         /**
          * @brief Processes left-click drag to rotate the default directional light.
