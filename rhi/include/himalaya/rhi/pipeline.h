@@ -2,7 +2,7 @@
 
 /**
  * @file pipeline.h
- * @brief Graphics pipeline creation with Dynamic Rendering and Extended Dynamic State.
+ * @brief Graphics and compute pipeline creation.
  */
 
 #include <vector>
@@ -86,4 +86,30 @@ namespace himalaya::rhi {
      * @return Created pipeline and layout.
      */
     [[nodiscard]] Pipeline create_graphics_pipeline(VkDevice device, const GraphicsPipelineDesc &desc);
+
+    /**
+     * @brief Description for creating a compute pipeline.
+     *
+     * Supports custom descriptor_set_layouts for IBL push descriptors,
+     * which use a different layout from the global sets.
+     */
+    struct ComputePipelineDesc {
+        /** @brief Compute shader module (must be valid). */
+        VkShaderModule compute_shader = VK_NULL_HANDLE;
+
+        /** @brief Descriptor set layouts for the pipeline layout. */
+        std::vector<VkDescriptorSetLayout> descriptor_set_layouts;
+
+        /** @brief Push constant ranges for the pipeline layout. */
+        std::vector<VkPushConstantRange> push_constant_ranges;
+    };
+
+    /**
+     * @brief Creates a compute pipeline.
+     *
+     * @param device Logical device.
+     * @param desc   Pipeline configuration.
+     * @return Created pipeline and layout.
+     */
+    [[nodiscard]] Pipeline create_compute_pipeline(VkDevice device, const ComputePipelineDesc &desc);
 } // namespace himalaya::rhi

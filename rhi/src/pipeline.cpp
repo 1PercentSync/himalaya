@@ -142,6 +142,44 @@ namespace himalaya::rhi {
         return out;
     }
 
+    Pipeline create_compute_pipeline(VkDevice device, const ComputePipelineDesc &desc) {
+        Pipeline out;
+
+        // --- Pipeline Layout ---
+        VkPipelineLayoutCreateInfo layout_info{};
+        layout_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+        layout_info.setLayoutCount = static_cast<uint32_t>(desc.descriptor_set_layouts.size());
+        layout_info.pSetLayouts = desc.descriptor_set_layouts.data();
+        layout_info.pushConstantRangeCount = static_cast<uint32_t>(desc.push_constant_ranges.size());
+        layout_info.pPushConstantRanges = desc.push_constant_ranges.data();
+
+        VK_CHECK(vkCreatePipelineLayout(device, &layout_info, nullptr, &out.layout));
+
+        // --- Shader stage ---
+        VkPipelineShaderStageCreateInfo stage{};
+        stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+        stage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+        stage.module = desc.compute_shader;
+        stage.pName = "main";
+
+        // --- Create ---
+        VkComputePipelineCreateInfo pipeline_info{};
+        pipeline_info.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+        pipeline_info.stage = stage;
+        pipeline_info.layout = out.layout;
+
+        VK_CHECK(vkCreateComputePipelines(device,
+            VK_NULL_HANDLE,
+            1,
+            &pipeline_info,
+            nullptr,
+            &out.pipeline));
+
+        spdlog::info("Compute pipeline created");
+
+        return out;
+    }
+
     // ReSharper disable once CppParameterMayBeConst
     void Pipeline::destroy(VkDevice device) const {
         vkDestroyPipeline(device, pipeline, nullptr);
