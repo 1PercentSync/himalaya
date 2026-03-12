@@ -33,7 +33,7 @@ Step 6: IBL Pipeline + Skybox ──→ Step 7: PBR Shader 升级
 |------|------|----------|
 | 1 | Renderer 提取 | 编译通过，渲染输出与阶段二一致 |
 | 2 | RG Managed 资源 + Debug Name | 现有渲染正常，depth buffer 改由 RG 管理，Vulkan 对象可在 validation 和 RenderDoc 中显示名称 |
-| 3 | Descriptor Layout + Compute Infra | 布局更新无 validation 报错，compute shader 能创建并 dispatch |
+| 3 | Descriptor Layout + Compute Infra | 布局更新无 validation 报错，Compute 基础设施编译通过（实际 dispatch 推迟到 Step 6） |
 | 4a | FrameContext + Pass 类 + HDR 管线重组 | 管线正确运行，无 validation 报错，场景可见（高光过曝可接受） |
 | 4b | ACES Tonemapping + Exposure | 高光不截断，画面正确 tonemapped，DebugUI EV 滑条可调 |
 | 4c | MSAA | MSAA 渲染正确，DebugUI 可切换采样数 |
@@ -41,13 +41,14 @@ Step 6: IBL Pipeline + Skybox ──→ Step 7: PBR Shader 升级
 | 6 | IBL Pipeline + Skybox | IBL 预计算完成，Skybox 渲染天空背景，RenderDoc 可检查 cubemap 和 LUT 内容 |
 | 7 | PBR Shader 升级 | 完整 PBR 光照画面，金属表面反射环境，各 debug 模式可用 |
 
-### Step 1：Renderer 提取
+### Step 1：Renderer 提取 + CLI11
 
 - 从 Application 中提取 Renderer 类（纯重构，零功能变化）
 - 创建 `RenderInput` 结构体和 `Renderer` 类骨架
 - 将渲染资源所有权从 Application 迁移到 Renderer
 - 将渲染逻辑从 Application 迁移到 Renderer
 - 两阶段 resize 适配
+- 引入 CLI11 命令行解析库，替代手动 `argc/argv` 解析：`--scene`（场景路径）+ `--env`（环境贴图路径，预留，Step 6 使用）
 - **验证**：编译通过，运行效果与阶段二一致，无 validation 报错
 
 #### Renderer 类设计
@@ -67,6 +68,17 @@ run() → while loop:
   render()        — renderer_.render(cmd, input)
   end_frame()     — submit → present → swapchain 重建检查 → advance frame
 ```
+
+#### CLI11 命令行解析
+
+与 Application 重构同步引入 CLI11 命令行解析库（新增 vcpkg 依赖），替代当前手动 `argc/argv` 解析。
+
+- `--scene`：场景 glTF 路径（默认 `assets/Sponza/Sponza.gltf`，从现有手动解析迁移）
+- `--env`：HDR 环境贴图路径（默认 `assets/environment.hdr`，Step 6 IBL 使用，此处仅预留参数定义）
+
+`main.cpp` 解析命令行参数后构造参数结构体传给 `Application::init()`。Application 不感知命令行解析细节。
+
+与 Step 1 合并引入的理由：Step 1 本身是 Application 纯重构，同步做命令行重构是自然的切入点，避免 Step 6（IBL 工作量大）再引入新依赖。
 
 ### Step 2：RG Managed 资源 + Debug Name
 
@@ -116,7 +128,7 @@ render_graph_.destroy_managed_image(managed_hdr_);
 - 修改 Set 1 layout 时同步在 `bindings.glsl` 中声明 `samplerCube cubemaps[]`（Set 1 binding 1），后续 Step 无需重复声明
 - 新增 compute shader 基础设施（pipeline 创建 + dispatch）
 - 补充 `RenderGraph::resolve_usage()` 的 Compute case：Read → `SHADER_READ_ONLY_OPTIMAL` + `SHADER_SAMPLED_READ_BIT`，Write → `GENERAL` + `SHADER_STORAGE_WRITE_BIT`
-- **验证**：所有布局更新无 validation 报错，现有渲染正常；能创建并 dispatch 一个空 compute shader
+- **验证**：所有布局更新无 validation 报错，现有渲染正常；Compute 基础设施（`ComputePipelineDesc` + `dispatch()` + `push_descriptor_set()`）编译通过，实际 dispatch 验证推迟到 Step 6 IBL
 
 #### 设计要点
 
@@ -154,7 +166,7 @@ Pass 类设计（具体类、方法签名、FrameContext）见 `milestone-1/m1-d
 - 具体类（非虚基类），Renderer 持有具体类型成员
 - 方法：`setup()` / `on_resize()` / `on_sample_count_changed()` / `record()` / `destroy()`
 - MSAA 相关 pass 的 `setup()` 接收 `sample_count`，非 MSAA pass 不接收
-- Attachment format 在 pass 内部硬编码，`setup()` 不传入
+- Attachment format 在 pass 内部硬编码（Swapchain 格式例外：TonemappingPass 的 `setup()` 接收 `swapchain_format` 参数）
 - FrameContext 是纯每帧数据，服务引用由 pass 在 `setup()` 时存储指针
 - Step 4a 不引入 MSAA（Forward 直接渲染到 1x hdr_color + 1x depth）
 
@@ -171,6 +183,36 @@ ImGui pass
     ↓
 Present
 ```
+
+#### 阶段三结束状态帧流程（全部 7 Step 完成后）
+
+```
+DepthPrePass (MSAA)
+  渲染: 可见不透明物体 depth + normal
+  输出: msaa_depth, msaa_normal
+  resolve: depth MAX_BIT → resolved depth, normal AVERAGE → resolved normal
+    ↓
+ForwardPass (MSAA, depth EQUAL write OFF)
+  渲染: 可见不透明物体 Cook-Torrance + IBL
+  输出: msaa_color
+  resolve: color AVERAGE → hdr_color
+    ↓
+SkyboxPass (1x, resolved buffer)
+  读: resolved depth (GREATER_OR_EQUAL)
+  写: hdr_color (天空像素, depth == 0.0)
+    ↓
+TonemappingPass (1x)
+  读: hdr_color (Set 2 binding 0)
+  处理: exposure × ACES → linear [0,1]
+  写: swapchain (硬件 linear → sRGB)
+    ↓
+ImGuiPass (1x)
+  写: swapchain (debug overlay)
+    ↓
+Present
+```
+
+1x MSAA 时无 msaa_* 资源，DepthPrePass/ForwardPass 直接渲染到 resolved target，无 resolve 步骤。
 
 ---
 
@@ -348,8 +390,11 @@ shaders/ibl/
 | Debug 渲染模式 | debug_render_mode != 0 时 TonemappingPass 跳过 ACES（passthrough），保留硬件 linear→sRGB |
 | 透明物体回归 | Step 5 EQUAL depth test 后，AlphaMode::Blend 物体不渲染。Phase 7 Transparent Pass 修复 |
 | PrePass 在 MSAA 之后 | PrePass 直接写入 MSAA depth/normal，不需要经历 1x→4x 的中间迁移状态 |
-| CLI11 | 引入 CLI11 命令行解析库（影响 `vcpkg.json` 和 `CMakeLists.txt`） |
+| CLI11 | Step 1 引入 CLI11 命令行解析库（影响 `vcpkg.json` 和 `CMakeLists.txt`），与 Application 重构同步。`--scene`（迁移自手动解析）+ `--env`（预留给 Step 6 IBL） |
 | Forward depth 演进 | Step 4a/4b：depth compare GREATER + depth write ON（沿用阶段二）。Step 5：引入 PrePass 后改为 depth compare EQUAL + depth write OFF |
 | Debug Name | Step 2 为 `create_image()` / `create_buffer()` / `create_sampler()` 新增必选 `debug_name` 参数，内部调用 `vkSetDebugUtilsObjectNameEXT` |
 | Pipeline 销毁安全 | `on_sample_count_changed()` 会销毁旧 pipeline，调用者必须保证 GPU 空闲（`Renderer::handle_msaa_change()` 的 `vkQueueWaitIdle` 保障） |
 | 测试场景 | 现有测试使用 Sponza 场景。最终验证时需补充 .hdr 环境贴图和额外 glTF PBR 测试模型（DamagedHelmet 或类似） |
+| Pipeline layout 中间态 | Step 1-2 使用 `{Set 0, Set 1}` 两 layout（延续阶段二），Step 3 统一为 `{Set 0, Set 1, Set 2}` 三 layout。Forward pipeline 在 Step 3 重建，增量修改约 5 行 |
+| Swapchain format | TonemappingPass 的 `setup()` 接收 swapchain format 参数（`VkFormat`），不硬编码。其他 pass 的 attachment format 仍为 Pass 内部硬编码常量 |
+| Pass 热重载预留 | Pass 的 pipeline 创建逻辑抽为 `create_pipelines()` 私有方法，`setup()` 和 `on_sample_count_changed()` 共用。阶段三不实现热重载触发，预留结构 |

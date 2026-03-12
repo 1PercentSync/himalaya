@@ -4,7 +4,7 @@
 
 ---
 
-## Step 1：Renderer 提取
+## Step 1：Renderer 提取 + CLI11
 
 - [ ] 创建 `RenderInput` 结构体（`app/include/himalaya/app/renderer.h`）
 - [ ] 创建 `Renderer` 类骨架（init / render / destroy / on_swapchain_invalidated / on_swapchain_recreated）
@@ -12,6 +12,9 @@
 - [ ] 将渲染逻辑从 Application 迁移到 Renderer（RG 构建与执行、UBO/SSBO 填充、draw loop）
 - [ ] Application 改为持有 Renderer 并在主循环中调用 `renderer_.render(cmd, input)`
 - [ ] 两阶段 resize：`handle_resize()` 改为先调 `renderer_.on_swapchain_invalidated()`、再 `swapchain_.recreate()`、最后 `renderer_.on_swapchain_recreated()`
+- [ ] 引入 CLI11 命令行解析库（vcpkg.json + CMakeLists.txt 更新，需用户确认）
+- [ ] `main.cpp` 使用 CLI11 替代手动 `argc/argv` 解析：`--scene`（迁移现有路径参数）+ `--env`（预留，默认 `assets/environment.hdr`）
+- [ ] `Application::init()` 接收已解析的参数结构体，不感知命令行解析细节
 - [ ] 验证：编译通过，运行效果与阶段二一致，无 validation 报错
 
 ## Step 2：RG Managed 资源 + Debug Name
@@ -41,7 +44,7 @@
 - [ ] `pipeline.h` 新增 `ComputePipelineDesc` 结构体（含 `descriptor_set_layouts` 字段支持自定义 layout）+ `create_compute_pipeline()` 函数
 - [ ] `commands.h` 新增 `CommandBuffer::dispatch(group_count_x, group_count_y, group_count_z)` + `CommandBuffer::push_descriptor_set()` 方法
 - [ ] 补充 `RenderGraph::resolve_usage()` 的 Compute case：Read → `SHADER_READ_ONLY_OPTIMAL` + `SHADER_SAMPLED_READ_BIT`，Write → `GENERAL` + `SHADER_STORAGE_WRITE_BIT`
-- [ ] 验证：所有布局更新无 validation 报错，现有渲染正常；能创建并 dispatch 一个空 compute shader
+- [ ] 验证：所有布局更新无 validation 报错，现有渲染正常；Compute 基础设施（`ComputePipelineDesc` + `dispatch()` + `push_descriptor_set()`）编译通过，实际 dispatch 验证推迟到 Step 6 IBL
 
 ## Step 4a：FrameContext + Pass 类 + HDR 管线重组
 
@@ -50,7 +53,7 @@
 - [ ] 创建 hdr_color managed 资源（R16G16B16A16_SFLOAT，1x）
 - [ ] 创建 `shaders/fullscreen.vert`（fullscreen triangle，无顶点输入）
 - [ ] 创建 `shaders/tonemapping.frag`（passthrough 版本：采样 hdr_color 直接输出，不做 ACES）
-- [ ] TonemappingPass 类（`passes/tonemapping_pass.h/cpp`）：setup 创建 pipeline、record、destroy
+- [ ] TonemappingPass 类（`passes/tonemapping_pass.h/cpp`）：setup 接收 swapchain format 参数（物理设备协商结果，非硬编码）、创建 pipeline、record、destroy
 - [ ] ForwardPass 改为渲染到 hdr_color（不再直接渲染到 swapchain），沿用阶段二深度行为（depth compare GREATER、depth write ON）
 - [ ] TonemappingPass 读 hdr_color 写 swapchain image
 - [ ] 验证：管线正确运行，无 validation 报错，场景可见（高光过曝可接受，因为没有 tone mapping）

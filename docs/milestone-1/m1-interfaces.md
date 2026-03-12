@@ -394,6 +394,34 @@ struct PushConstantData {
 
 ---
 
+### Layer 1 — IBL 模块接口（framework/ibl.h）
+
+IBL 模块自管理全部资源——`init()` 中创建的所有 image 由模块自身持有，`destroy()` 先注销 bindless 条目再销毁底层资源。设计决策见 `m1-design-decisions.md`「IBL 资源所有权」。
+
+```cpp
+class IBL {
+public:
+    /// 加载 .hdr 文件，执行全部预计算（equirect → cubemap → irradiance/prefiltered/BRDF LUT），
+    /// 注册产物到 Set 1 bindless 数组。在 begin_immediate() / end_immediate() scope 内执行。
+    void init(rhi::Context& ctx, rhi::ResourceManager& rm,
+              rhi::DescriptorManager& dm, rhi::ShaderCompiler& sc,
+              const std::string& hdr_path);
+
+    /// 注销 bindless 条目 + 销毁全部 image（中间 cubemap、irradiance、prefiltered、BRDF LUT）。
+    /// equirect 输入 image 在 init() 内部已销毁，不出 init scope。
+    void destroy();
+
+    /// 获取 IBL 产物的 bindless index（Renderer 填充 GlobalUBO 用）
+    BindlessIndex irradiance_cubemap_index() const;
+    BindlessIndex prefiltered_cubemap_index() const;
+    BindlessIndex brdf_lut_index() const;
+    BindlessIndex skybox_cubemap_index() const;  // 中间 cubemap，用于 Skybox Pass
+    uint32_t prefiltered_mip_count() const;
+};
+```
+
+---
+
 ### Layer 1 — Render Graph 接口（framework/render_graph.h）
 
 #### 资源标识
@@ -556,10 +584,12 @@ public:
 };
 
 // 非 MSAA pass（TonemappingPass）— setup() 不接收 sample_count，无 on_sample_count_changed()
+// Swapchain 格式由 setup() 传入（物理设备协商结果，非硬编码常量）
 class TonemappingPass {
 public:
     void setup(rhi::Context& ctx, rhi::ResourceManager& rm,
-               rhi::DescriptorManager& dm, rhi::ShaderCompiler& sc);
+               rhi::DescriptorManager& dm, rhi::ShaderCompiler& sc,
+               VkFormat swapchain_format);
     void on_resize(uint32_t width, uint32_t height);
     void record(RenderGraph& rg, const FrameContext& ctx);
     void destroy();
@@ -603,6 +633,36 @@ struct FrameContext {
     uint32_t frame_index;
     uint32_t sample_count;
 };
+```
+
+#### RenderFeatures（阶段四引入）
+
+Pass 运行时开关的控制结构体。定义在 `framework/scene_data.h`（与其他渲染合同一起）。DebugUI 直接操作 bool 字段，Renderer 据此决定是否调用 pass 的 `record()`。设计决策见 `m1-design-decisions.md`「Pass 运行时开关」。
+
+```cpp
+/// 可选渲染效果的运行时开关。DebugUI 操作，Renderer 消费。
+/// 随阶段推进扩展。
+struct RenderFeatures {
+    bool skybox          = true;
+    bool shadows         = true;   // 阶段四引入
+    bool ssao            = true;   // 阶段五引入
+    bool contact_shadows = true;   // 阶段五引入
+    // 后处理 flags 随阶段八扩展
+};
+```
+
+GlobalUBO 对应字段（阶段四引入）：
+
+```cpp
+uint32_t feature_flags;   // bitmask，shader 动态分支用
+```
+
+Shader 端常量定义在 `bindings.glsl`：
+
+```glsl
+#define FEATURE_SHADOWS         (1u << 0)
+#define FEATURE_SSAO            (1u << 1)
+#define FEATURE_CONTACT_SHADOWS (1u << 2)
 ```
 
 ---
