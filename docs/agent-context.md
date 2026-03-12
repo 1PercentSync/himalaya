@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段三 — PBR 光照基础（Cook-Torrance + IBL + MSAA + HDR）
-- **进度**：Step 4a 进行中（FrameContext + ForwardPass 已完成，下一步创建 hdr_color managed 资源）
+- **进度**：Step 4a 进行中（FrameContext + ForwardPass + hdr_color 已完成，下一步 fullscreen.vert）
 
 ### 下一个任务
 
-阶段三 Step 4a：创建 hdr_color managed 资源（R16G16B16A16_SFLOAT，1x）— Renderer 中注册 managed image，FrameContext 填充实际 hdr_color 资源 ID。
+阶段三 Step 4a：创建 `shaders/fullscreen.vert`（fullscreen triangle，无顶点输入）。
 
 ---
 
