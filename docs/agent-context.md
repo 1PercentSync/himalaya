@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段三 — PBR 光照基础（Cook-Torrance + IBL + MSAA + HDR）
-- **进度**：Step 3 完成，下一步 Step 4a
+- **进度**：Step 4a 进行中（FrameContext 已完成，下一步提取 ForwardPass）
 
 ### 下一个任务
 
-阶段三 Step 4a：FrameContext + Pass 类 + HDR 管线重组 — 创建 `framework/include/himalaya/framework/frame_context.h`（FrameContext 结构体）。
+阶段三 Step 4a：提取 ForwardPass 类（`passes/forward_pass.h/cpp`）— 从 Renderer 的 RG lambda 迁移渲染逻辑，实现 setup / record / destroy。
 
 ---
 
