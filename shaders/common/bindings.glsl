@@ -64,9 +64,10 @@ layout(set = 0, binding = 2) readonly buffer MaterialBuffer {
     GPUMaterialData materials[];
 };
 
-// ---- Set 1: Bindless texture array ----
+// ---- Set 1: Bindless arrays ----
 
 layout(set = 1, binding = 0) uniform sampler2D textures[];
+layout(set = 1, binding = 1) uniform samplerCube cubemaps[];
 
 // ---- Per-draw data (push constants) ----
 
