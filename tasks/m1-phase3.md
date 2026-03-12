@@ -67,7 +67,7 @@
 
 ## Step 4c：MSAA
 
-- [ ] 创建 MSAA color buffer（R16G16B16A16F，4x，managed 资源；1x 时不创建）
+- [x] 创建 MSAA color buffer（R16G16B16A16F，4x，managed 资源；1x 时不创建）
 - [ ] 创建 MSAA depth buffer（D32Sfloat，4x，managed 资源；1x 时不创建，使用 Step 2 的 1x depth）
 - [ ] Forward pass 改为渲染到 MSAA color + MSAA depth，通过 Dynamic Rendering 配置 color resolve（AVERAGE）；1x 时直接渲染到 hdr_color，无 resolve
 - [ ] Forward pass RG 资源声明：多采样时 3 个资源（msaa_color WRITE、msaa_depth READ_WRITE、hdr_color WRITE），1x 时 2 个资源（hdr_color WRITE、depth READ_WRITE）
