@@ -47,7 +47,7 @@ namespace himalaya::passes {
         create_pipelines(sample_count);
     }
 
-    void ForwardPass::destroy() {
+    void ForwardPass::destroy() const {
         pipeline_.destroy(ctx_->device);
     }
 
@@ -100,7 +100,7 @@ namespace himalaya::passes {
 
     // ---- Per-frame recording ----
 
-    void ForwardPass::record(framework::RenderGraph &rg, const framework::FrameContext &ctx) {
+    void ForwardPass::record(framework::RenderGraph &rg, const framework::FrameContext &ctx) const {
         // Declare resource usage: write hdr_color + read/write depth.
         const std::array resources = {
             framework::RGResourceUsage{

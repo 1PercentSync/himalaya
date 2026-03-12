@@ -73,12 +73,12 @@ namespace himalaya::passes {
          * @param rg  Render graph to add the pass to.
          * @param ctx Per-frame context with RG resource IDs and scene data.
          */
-        void record(framework::RenderGraph &rg, const framework::FrameContext &ctx);
+        void record(framework::RenderGraph &rg, const framework::FrameContext &ctx) const;
 
         /**
          * @brief Destroy pipeline and release owned resources.
          */
-        void destroy();
+        void destroy() const;
 
     private:
         /**
