@@ -1,0 +1,69 @@
+#version 460
+
+/**
+ * @file equirect_to_cubemap.comp
+ * @brief Converts an equirectangular HDR image to a cubemap.
+ *
+ * Dispatch: (cubemap_size/16, cubemap_size/16, 6) — one layer per face.
+ * Uses push descriptors (IBL one-time init exception).
+ */
+
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+layout(set = 0, binding = 0) uniform sampler2D u_equirect;
+layout(set = 0, binding = 1, rgba16f) writeonly uniform image2DArray u_cubemap;
+
+const float PI = 3.14159265358979323846;
+
+/**
+ * Computes the 3D direction vector for a cubemap texel.
+ *
+ * Standard Vulkan/OpenGL cubemap face convention:
+ *   0: +X  1: -X  2: +Y  3: -Y  4: +Z  5: -Z
+ *
+ * @param face Cubemap face index (0-5).
+ * @param uv   Texel coordinate in [0,1]².
+ * @return Unnormalized direction vector (caller must normalize).
+ */
+vec3 cube_dir(uint face, vec2 uv) {
+    // Map [0,1] → [-1,1]
+    float u = uv.x * 2.0 - 1.0;
+    float v = uv.y * 2.0 - 1.0;
+
+    switch (face) {
+        case 0: return vec3( 1.0,   -v,   -u); // +X
+        case 1: return vec3(-1.0,   -v,    u); // -X
+        case 2: return vec3(   u,  1.0,    v); // +Y
+        case 3: return vec3(   u, -1.0,   -v); // -Y
+        case 4: return vec3(   u,   -v,  1.0); // +Z
+        case 5: return vec3(  -u,   -v, -1.0); // -Z
+    }
+    return vec3(0.0);
+}
+
+/**
+ * Converts a 3D direction to equirectangular UV coordinates.
+ *
+ * @param dir Normalized direction vector.
+ * @return UV in [0,1]² for sampling the equirectangular map.
+ */
+vec2 equirect_uv(vec3 dir) {
+    float phi   = atan(dir.z, dir.x);                  // [-PI, PI]
+    float theta = asin(clamp(dir.y, -1.0, 1.0));       // [-PI/2, PI/2]
+    return vec2(phi / (2.0 * PI) + 0.5, theta / PI + 0.5);
+}
+
+void main() {
+    ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+    uint  face  = gl_GlobalInvocationID.z;
+    ivec2 size  = imageSize(u_cubemap).xy;
+
+    if (pixel.x >= size.x || pixel.y >= size.y) return;
+
+    // Sample at pixel center
+    vec2 uv  = (vec2(pixel) + 0.5) / vec2(size);
+    vec3 dir = normalize(cube_dir(face, uv));
+
+    vec4 color = texture(u_equirect, equirect_uv(dir));
+    imageStore(u_cubemap, ivec3(pixel, face), color);
+}
