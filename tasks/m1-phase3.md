@@ -44,7 +44,7 @@
 - [x] `pipeline.h` 新增 `ComputePipelineDesc` 结构体（含 `descriptor_set_layouts` 字段支持自定义 layout）+ `create_compute_pipeline()` 函数
 - [x] `commands.h` 新增 `CommandBuffer::dispatch(group_count_x, group_count_y, group_count_z)` + `CommandBuffer::push_descriptor_set()` 方法
 - [x] 补充 `RenderGraph::resolve_usage()` 的 Compute case：Read → `SHADER_READ_ONLY_OPTIMAL` + `SHADER_SAMPLED_READ_BIT`，Write → `GENERAL` + `SHADER_STORAGE_WRITE_BIT`
-- [ ] 验证：所有布局更新无 validation 报错，现有渲染正常；Compute 基础设施（`ComputePipelineDesc` + `dispatch()` + `push_descriptor_set()`）编译通过，实际 dispatch 验证推迟到 Step 6 IBL
+- [x] 验证：所有布局更新无 validation 报错，现有渲染正常；Compute 基础设施实际 dispatch 验证通过
 
 ## Step 4a：FrameContext + Pass 类 + HDR 管线重组
 

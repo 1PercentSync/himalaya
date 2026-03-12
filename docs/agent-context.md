@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段三 — PBR 光照基础（Cook-Torrance + IBL + MSAA + HDR）
-- **进度**：Step 3 进行中（全部功能完成，剩余验证 checkbox）
+- **进度**：Step 3 完成，下一步 Step 4a
 
 ### 下一个任务
 
-阶段三 Step 3：Descriptor Layout + Compute Infra — 验证：所有布局更新无 validation 报错，现有渲染正常；Compute 基础设施编译通过。
+阶段三 Step 4a：FrameContext + Pass 类 + HDR 管线重组 — 创建 `framework/include/himalaya/framework/frame_context.h`（FrameContext 结构体）。
 
 ---
 
