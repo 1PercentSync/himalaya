@@ -234,7 +234,7 @@ namespace himalaya::app {
                 ImGui::EndCombo();
             }
 
-            slider_float_deferred("Ambient", &ctx.ambient_intensity, 0.0f, 1.0f, "%.3f");
+            slider_float_deferred("IBL", &ctx.ibl_intensity, 0.0f, 1.0f, "%.3f");
             slider_float_deferred("EV", &ctx.ev, -4.0f, 4.0f, "%.1f");
         }
 

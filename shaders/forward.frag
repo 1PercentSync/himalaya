@@ -70,7 +70,7 @@ void main() {
     }
 
     // Ambient term to prevent fully black surfaces
-    vec3 ambient = vec3(global.ambient_intensity);
+    vec3 ambient = vec3(global.ibl_intensity);
 
     // Exposure from camera settings
     float exposure = global.camera_position_and_exposure.w;

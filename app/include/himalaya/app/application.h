@@ -112,8 +112,8 @@ namespace himalaya::app {
 
         // --- Rendering parameters (controlled via DebugUI) ---
 
-        /** @brief Ambient light multiplier (written to GlobalUBO each frame). */
-        float ambient_intensity_ = 0.03f;
+        /** @brief IBL environment light intensity multiplier (written to GlobalUBO each frame). */
+        float ibl_intensity_ = 0.03f;
 
         /** @brief Exposure value in EV (pow(2, ev) gives linear exposure multiplier). */
         float ev_ = 0.0f;

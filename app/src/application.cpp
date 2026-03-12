@@ -218,7 +218,7 @@ namespace himalaya::app {
             .default_intensity = light_intensity_,
             .force_default_light = force_default_light_,
             .has_scene_lights = has_scene_lights,
-            .ambient_intensity = ambient_intensity_,
+            .ibl_intensity = ibl_intensity_,
             .ev = ev_,
             .current_sample_count = renderer_.current_sample_count(),
             .supported_sample_counts = context_.msaa_sample_counts,
@@ -257,7 +257,7 @@ namespace himalaya::app {
             .meshes = scene_loader_.meshes(),
             .materials = scene_loader_.material_instances(),
             .mesh_instances = scene_render_data_.mesh_instances,
-            .ambient_intensity = ambient_intensity_,
+            .ibl_intensity = ibl_intensity_,
             .exposure = std::pow(2.0f, ev_),
         };
 

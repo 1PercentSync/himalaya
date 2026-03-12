@@ -352,7 +352,7 @@ namespace himalaya::app {
             static_cast<float>(swapchain_->extent.width),
             static_cast<float>(swapchain_->extent.height));
         ubo_data.time = static_cast<float>(glfwGetTime());
-        ubo_data.ambient_intensity = input.ambient_intensity;
+        ubo_data.ibl_intensity = input.ibl_intensity;
 
         const auto light_count = static_cast<uint32_t>(
             std::min(input.lights.size(), static_cast<size_t>(kMaxDirectionalLights)));

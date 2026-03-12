@@ -65,8 +65,8 @@ namespace himalaya::app {
 
         // --- Render params (controls) ---
 
-        /** @brief Editable reference to the ambient light multiplier. */
-        float& ambient_intensity;
+        /** @brief Editable reference to the IBL environment light intensity multiplier. */
+        float& ibl_intensity;
 
         /** @brief Editable reference to the exposure value in EV stops. */
         float& ev;

@@ -53,7 +53,11 @@ layout(set = 0, binding = 0) uniform GlobalUBO {
     vec2 screen_size;                       // offset 272
     float time;                             // offset 280 — elapsed time in seconds
     uint directional_light_count;           // offset 284 — number of active directional lights
-    float ambient_intensity;                // offset 288 — ambient light multiplier
+    float ibl_intensity;                    // offset 288 — IBL environment light intensity multiplier
+    uint irradiance_cubemap_index;          // offset 292 — cubemaps[] index for irradiance map
+    uint prefiltered_cubemap_index;         // offset 296 — cubemaps[] index for prefiltered env map
+    uint brdf_lut_index;                    // offset 300 — textures[] index for BRDF integration LUT
+    uint prefiltered_mip_count;             // offset 304 — prefiltered env map mip levels
 } global;
 
 layout(set = 0, binding = 1) readonly buffer LightBuffer {
