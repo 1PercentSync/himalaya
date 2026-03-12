@@ -66,8 +66,8 @@ namespace himalaya::rhi {
         spdlog::info("DescriptorManager destroyed");
     }
 
-    std::array<VkDescriptorSetLayout, 2> DescriptorManager::get_global_set_layouts() const {
-        return {set0_layout_, set1_layout_};
+    std::array<VkDescriptorSetLayout, 3> DescriptorManager::get_global_set_layouts() const {
+        return {set0_layout_, set1_layout_, set2_layout_};
     }
 
     VkDescriptorSet DescriptorManager::get_set0(const uint32_t frame_index) const {

@@ -127,7 +127,7 @@ namespace himalaya::app {
             desc.vertex_attributes = {attributes.begin(), attributes.end()};
 
             const auto set_layouts = descriptor_manager_->get_global_set_layouts();
-            desc.descriptor_set_layouts = {set_layouts[0], set_layouts[1]};
+            desc.descriptor_set_layouts = {set_layouts.begin(), set_layouts.end()};
 
             desc.push_constant_ranges = {
                 {

@@ -58,9 +58,9 @@ namespace himalaya::rhi {
 
         /**
          * @brief Returns the global set layouts for pipeline creation.
-         * @return Array of {set0_layout, set1_layout}.
+         * @return Array of {set0_layout, set1_layout, set2_layout}.
          */
-        [[nodiscard]] std::array<VkDescriptorSetLayout, 2> get_global_set_layouts() const;
+        [[nodiscard]] std::array<VkDescriptorSetLayout, 3> get_global_set_layouts() const;
 
         /**
          * @brief Returns the Set 0 descriptor set for the given frame index.
