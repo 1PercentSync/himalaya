@@ -44,7 +44,7 @@ namespace himalaya::framework {
         convert_equirect_to_cubemap(ctx, sc, equirect, eq_width, deferred);
         compute_irradiance(ctx, sc, deferred);
         compute_prefiltered(ctx, sc, deferred);
-        // TODO: compute_brdf_lut(ctx, sc, deferred);
+        compute_brdf_lut(ctx, sc, deferred);
 
         ctx.end_immediate();
 
@@ -692,6 +692,138 @@ namespace himalaya::framework {
 
         spdlog::info("IBL: prefiltered cubemap ({}x{} per face, {} mip levels)",
                      kFaceSize, kFaceSize, mip_count);
+    }
+
+    // -----------------------------------------------------------------------
+    // compute_brdf_lut — BRDF integration LUT for Split-Sum approximation
+    // -----------------------------------------------------------------------
+
+    void IBL::compute_brdf_lut(rhi::Context &ctx,
+                               rhi::ShaderCompiler &sc,
+                               DeferredCleanup &deferred) {
+        constexpr uint32_t kSize = 256;
+
+        // --- Create BRDF LUT image (256x256, R16G16_UNORM) ---
+        const rhi::ImageDesc lut_desc{
+            .width = kSize,
+            .height = kSize,
+            .depth = 1,
+            .mip_levels = 1,
+            .array_layers = 1,
+            .sample_count = 1,
+            .format = rhi::Format::R16G16Unorm,
+            .usage = rhi::ImageUsage::Sampled | rhi::ImageUsage::Storage,
+        };
+        brdf_lut_ = rm_->create_image(lut_desc, "IBL BRDF LUT");
+
+        // --- Compile compute shader and create pipeline ---
+        auto spirv = sc.compile_from_file("ibl/brdf_lut.comp",
+                                          rhi::ShaderStage::Compute);
+        assert(!spirv.empty() && "Failed to compile brdf_lut.comp");
+        const auto shader_module = rhi::create_shader_module(ctx.device, spirv);
+
+        // Push descriptor layout: single storage image output
+        constexpr VkDescriptorSetLayoutBinding binding{
+            .binding = 0,
+            .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+            .descriptorCount = 1,
+            .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+        };
+
+        VkDescriptorSetLayoutCreateInfo layout_ci{};
+        layout_ci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+        layout_ci.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT;
+        layout_ci.bindingCount = 1;
+        layout_ci.pBindings = &binding;
+
+        VkDescriptorSetLayout push_layout = VK_NULL_HANDLE;
+        VK_CHECK(vkCreateDescriptorSetLayout(ctx.device, &layout_ci, nullptr, &push_layout));
+
+        const rhi::ComputePipelineDesc pipeline_desc{
+            .compute_shader = shader_module,
+            .descriptor_set_layouts = {push_layout},
+        };
+        auto pipeline = rhi::create_compute_pipeline(ctx.device, pipeline_desc);
+        deferred.emplace_back([device = ctx.device, pipeline] { pipeline.destroy(device); });
+
+        vkDestroyShaderModule(ctx.device, shader_module, nullptr);
+        vkDestroyDescriptorSetLayout(ctx.device, push_layout, nullptr);
+
+        // --- Record barriers and dispatch ---
+        const rhi::CommandBuffer cmd(ctx.immediate_command_buffer);
+        const auto &lut_img = rm_->get_image(brdf_lut_);
+
+        // Transition UNDEFINED → GENERAL for storage writes
+        VkImageMemoryBarrier2 to_general{};
+        to_general.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+        to_general.srcStageMask = VK_PIPELINE_STAGE_2_NONE;
+        to_general.srcAccessMask = VK_ACCESS_2_NONE;
+        to_general.dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+        to_general.dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT;
+        to_general.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        to_general.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+        to_general.image = lut_img.image;
+        to_general.subresourceRange = {
+            .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+            .baseMipLevel = 0,
+            .levelCount = 1,
+            .baseArrayLayer = 0,
+            .layerCount = 1,
+        };
+
+        VkDependencyInfo pre_dep{};
+        pre_dep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+        pre_dep.imageMemoryBarrierCount = 1;
+        pre_dep.pImageMemoryBarriers = &to_general;
+        cmd.pipeline_barrier(pre_dep);
+
+        // Bind pipeline and push descriptor
+        cmd.bind_compute_pipeline(pipeline);
+
+        VkDescriptorImageInfo output_info{};
+        output_info.imageView = lut_img.view;
+        output_info.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+
+        const VkWriteDescriptorSet writes[] = {
+            {
+                .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                .dstBinding = 0,
+                .descriptorCount = 1,
+                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+                .pImageInfo = &output_info,
+            },
+        };
+        cmd.push_descriptor_set(pipeline.layout, 0, writes);
+
+        constexpr uint32_t kGroupSize = 16;
+        constexpr uint32_t kGroups = (kSize + kGroupSize - 1) / kGroupSize;
+        cmd.dispatch(kGroups, kGroups, 1);
+
+        // GENERAL → SHADER_READ_ONLY for runtime sampling
+        VkImageMemoryBarrier2 to_read{};
+        to_read.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+        to_read.srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+        to_read.srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT;
+        to_read.dstStageMask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
+        to_read.dstAccessMask = VK_ACCESS_2_SHADER_SAMPLED_READ_BIT;
+        to_read.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
+        to_read.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        to_read.image = lut_img.image;
+        to_read.subresourceRange = {
+            .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+            .baseMipLevel = 0,
+            .levelCount = 1,
+            .baseArrayLayer = 0,
+            .layerCount = 1,
+        };
+
+        VkDependencyInfo post_dep{};
+        post_dep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+        post_dep.imageMemoryBarrierCount = 1;
+        post_dep.pImageMemoryBarriers = &to_read;
+        cmd.pipeline_barrier(post_dep);
+
+        spdlog::info("IBL: BRDF integration LUT ({}x{}, R16G16_UNORM)", kSize, kSize);
     }
 
     void IBL::destroy() {

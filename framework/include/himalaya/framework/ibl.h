@@ -170,6 +170,25 @@ namespace himalaya::framework {
                                  rhi::ShaderCompiler &sc,
                                  DeferredCleanup &deferred);
 
+        /**
+         * @brief Compute the BRDF integration lookup table for Split-Sum IBL.
+         *
+         * Creates a 256x256 R16G16_UNORM 2D image. For each (NdotV, roughness) pair,
+         * integrates the GGX BRDF to produce (scale, bias) for the Fresnel term.
+         * Environment-independent — shared across all IBL environments.
+         * Must be called within an active immediate scope.
+         *
+         * Transient resources (pipeline) are pushed to @p deferred for destruction
+         * after end_immediate().
+         *
+         * @param ctx      RHI context (device, immediate command buffer).
+         * @param sc       Shader compiler for compute shader compilation.
+         * @param deferred Cleanup functions executed after GPU completion.
+         */
+        void compute_brdf_lut(rhi::Context &ctx,
+                              rhi::ShaderCompiler &sc,
+                              DeferredCleanup &deferred);
+
         // --- Service pointers (stored for destroy) ---
         rhi::ResourceManager *rm_ = nullptr;
         rhi::DescriptorManager *dm_ = nullptr;

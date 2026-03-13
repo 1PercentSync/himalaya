@@ -97,6 +97,9 @@ namespace himalaya::rhi {
         B8G8R8A8Unorm,
         B8G8R8A8Srgb,
 
+        // 16-bit per channel
+        R16G16Unorm,
+
         // 16-bit per channel (HDR)
         R16Sfloat,
         R16G16Sfloat,
@@ -150,6 +153,7 @@ namespace himalaya::rhi {
             case Format::R8G8B8A8Srgb: return VK_FORMAT_R8G8B8A8_SRGB;
             case Format::B8G8R8A8Unorm: return VK_FORMAT_B8G8R8A8_UNORM;
             case Format::B8G8R8A8Srgb: return VK_FORMAT_B8G8R8A8_SRGB;
+            case Format::R16G16Unorm: return VK_FORMAT_R16G16_UNORM;
             case Format::R16Sfloat: return VK_FORMAT_R16_SFLOAT;
             case Format::R16G16Sfloat: return VK_FORMAT_R16G16_SFLOAT;
             case Format::R16G16B16A16Sfloat: return VK_FORMAT_R16G16B16A16_SFLOAT;
