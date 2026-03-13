@@ -91,7 +91,7 @@
 ## Step 6：IBL Pipeline + Skybox
 
 - [x] `framework/include/himalaya/framework/ibl.h` + `framework/src/ibl.cpp` 模块骨架（公开接口 + 私有成员 + CMakeLists.txt 集成）
-- [ ] `load_equirect()` 私有方法：stb_image `.hdr` 加载（`stbi_loadf`，RGB float）→ RGBA f16 转换 → R16G16B16A16F 2D GPU image 创建与上传，返回 equirect ImageHandle
+- [x] `load_equirect()` 私有方法：stb_image `.hdr` 加载（`stbi_loadf`，RGB float）→ RGBA f16 转换 → R16G16B16A16F 2D GPU image 创建与上传，返回 equirect ImageHandle
 - [ ] `shaders/ibl/equirect_to_cubemap.comp` + `convert_equirect_to_cubemap()` 私有方法（cubemap 1024² R16G16B16A16F 创建、compute pipeline with push descriptors、dispatch、barrier）
 - [ ] `shaders/ibl/irradiance.comp` + `compute_irradiance()` 私有方法（irradiance cubemap 32² R11G11B10F 创建、余弦卷积 dispatch）
 - [ ] `shaders/ibl/prefilter.comp` + `compute_prefiltered()` 私有方法（prefiltered cubemap 256² R16G16B16A16F 多 mip 创建、per-mip roughness push constant、dispatch）

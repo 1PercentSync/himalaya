@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段三 — PBR 光照基础（Cook-Torrance + IBL + MSAA + HDR）
-- **进度**：Step 6 进行中，IBL 模块骨架已完成，下一项 `load_equirect()` 实现
+- **进度**：Step 6 进行中，load_equirect() 已完成，下一项 equirect→cubemap compute shader
 
 ### 下一个任务
 
-Step 6 第 2 项：`load_equirect()` 私有方法 — stbi_loadf 加载 .hdr、RGB→RGBA f16 转换、R16G16B16A16F GPU image 创建与上传。后续依次实现 4 个 compute shader 及对应私有方法、init() 编排、GlobalUBO 更新、Renderer 集成、SkyboxPass、IBL 旋转。
+Step 6 第 3 项：`shaders/ibl/equirect_to_cubemap.comp` + `convert_equirect_to_cubemap()` 私有方法 — cubemap 1024² R16G16B16A16F 创建、compute pipeline with push descriptors、dispatch、barrier。注意 upload_image 的 final barrier dstStage 是 FRAGMENT_SHADER，需补一个 barrier 扩展到 COMPUTE_SHADER。
 
 ---
 
