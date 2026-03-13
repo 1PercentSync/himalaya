@@ -357,7 +357,7 @@ struct CullResult {
 CPU 侧数据结构的 GPU 布局镜像，必须与 shader 端一一对应。
 
 ```cpp
-// GlobalUBO — std140 layout, 336 bytes (aligned to 16)
+// GlobalUBO — std140 layout, 320 bytes (aligned to 16)
 // 对应 shader: Set 0, Binding 0
 struct GlobalUniformData {
     glm::mat4 view;                             // offset   0
@@ -368,16 +368,15 @@ struct GlobalUniformData {
     glm::vec2 screen_size;                      // offset 272
     float time;                                 // offset 280 — 程序运行时间（秒），M2 水面/云层等动画用
     uint32_t directional_light_count;           // offset 284 — 活跃方向光数量
-    float ibl_intensity;                        // offset 288 — IBL 环境光强度乘数（原 ambient_intensity，Step 6.5 重命名）
+    float ibl_intensity;                        // offset 288 — IBL 环境光强度乘数
     uint32_t irradiance_cubemap_index;          // offset 292 — cubemaps[] 下标
     uint32_t prefiltered_cubemap_index;         // offset 296 — cubemaps[] 下标
     uint32_t brdf_lut_index;                    // offset 300 — textures[] 下标
     uint32_t prefiltered_mip_count;             // offset 304 — roughness → mip level 映射
-    uint32_t debug_render_mode;                 // offset 308 — 0=正常，非零=debug 分量可视化
-    uint32_t skybox_cubemap_index;              // offset 312 — cubemaps[] 下标（Skybox Pass 天空渲染用）
-    float ibl_rotation_sin;                     // offset 316 — IBL 水平旋转 sin(yaw)
-    float ibl_rotation_cos;                     // offset 320 — IBL 水平旋转 cos(yaw)
-    float _pad[3];                              // padding to 336 bytes (std140 16-byte)
+    uint32_t skybox_cubemap_index;              // offset 308 — cubemaps[] 下标（Skybox Pass 天空渲染用）
+    float ibl_rotation_sin;                     // offset 312 — IBL 水平旋转 sin(yaw)
+    float ibl_rotation_cos;                     // offset 316 — IBL 水平旋转 cos(yaw)
+    // Step 7 在此追加: uint32_t debug_render_mode (offset 320)
 };
 
 // GPU 方向光 — std430 layout, 32 bytes per element
@@ -633,14 +632,14 @@ struct FrameContext {
     RGResourceId normal;
 
     // --- 场景数据（非拥有引用） ---
-    std::span<const MeshData> meshes;
+    std::span<const Mesh> meshes;
     std::span<const MaterialInstance> materials;
-    const CullResult& cull_result;
+    const CullResult* cull_result = nullptr;
     std::span<const MeshInstance> mesh_instances;
 
     // --- 帧参数 ---
-    uint32_t frame_index;
-    uint32_t sample_count;
+    uint32_t frame_index = 0;
+    uint32_t sample_count = 1;
 };
 ```
 
@@ -691,10 +690,13 @@ struct RenderInput {
     const framework::Camera& camera;
     std::span<const framework::DirectionalLight> lights;
     const framework::CullResult& cull_result;
-    std::span<const framework::MeshData> meshes;
+    std::span<const framework::Mesh> meshes;
     std::span<const framework::MaterialInstance> materials;
-    float ambient_intensity;
+    std::span<const framework::MeshInstance> mesh_instances;
+    float ibl_intensity;
     float exposure;
+    float ibl_rotation_sin;
+    float ibl_rotation_cos;
 };
 ```
 
@@ -710,7 +712,7 @@ public:
               const std::string& hdr_env_path);
 
     /// 填充 GPU buffers（UBO/SSBO），构建 RG，执行所有 pass。
-    void render(const rhi::CommandBuffer& cmd, const RenderInput& input);
+    void render(rhi::CommandBuffer& cmd, const RenderInput& input);
 
     /// Resize 两阶段：在 swapchain_.recreate() 之前调用。
     void on_swapchain_invalidated();
@@ -718,6 +720,12 @@ public:
     void on_swapchain_recreated();
 
     void destroy();
+
+    /// MSAA 运行时切换：等待 GPU 空闲，创建/销毁/更新 MSAA managed 资源，重建 pipeline。
+    void handle_msaa_change(uint32_t new_sample_count);
+
+    /// 当前 MSAA 采样数（1 = 无 MSAA）。
+    uint32_t current_sample_count() const;
 
     // --- 场景加载用 accessor ---
     rhi::SamplerHandle default_sampler() const;
@@ -819,15 +827,15 @@ layout(set = 0, binding = 0) uniform GlobalUBO {
     vec2 screen_size;
     float time;                             // 程序运行时间（秒）
     uint directional_light_count;           // 活跃方向光数量
-    float ibl_intensity;                    // IBL 环境光强度乘数（原 ambient_intensity）
+    float ibl_intensity;                    // IBL 环境光强度乘数
     uint irradiance_cubemap_index;          // cubemaps[] 下标
     uint prefiltered_cubemap_index;         // cubemaps[] 下标
     uint brdf_lut_index;                    // textures[] 下标
     uint prefiltered_mip_count;             // roughness → mip level 映射
-    uint debug_render_mode;                 // 0=正常，非零=debug 分量可视化
     uint skybox_cubemap_index;              // cubemaps[] 下标（Skybox Pass 天空渲染用）
     float ibl_rotation_sin;                 // IBL 水平旋转 sin(yaw)
     float ibl_rotation_cos;                 // IBL 水平旋转 cos(yaw)
+    // Step 7 在此追加: uint debug_render_mode
 } global;
 
 layout(set = 0, binding = 1) readonly buffer LightBuffer {
