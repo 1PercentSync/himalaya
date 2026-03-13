@@ -437,3 +437,4 @@ shaders/ibl/
 | Pipeline layout 中间态 | Step 1-2 使用 `{Set 0, Set 1}` 两 layout（延续阶段二），Step 3 统一为 `{Set 0, Set 1, Set 2}` 三 layout。Forward pipeline 在 Step 3 重建，增量修改约 5 行 |
 | Swapchain format | TonemappingPass 的 `setup()` 接收 swapchain format 参数（`VkFormat`），不硬编码。其他 pass 的 attachment format 仍为 Pass 内部硬编码常量 |
 | Pass 热重载预留 | Pass 的 pipeline 创建逻辑抽为 `create_pipelines()` 私有方法，`setup()` 和 `on_sample_count_changed()` 共用。阶段三不实现热重载触发，预留结构 |
+| HDR Fallback | `IBL::init()` 在 HDR 文件加载失败时，通过 `create_fallback_cubemaps()` 生成 1×1 中性灰 cubemap（`vkCmdClearColorImage`），管线照常运行，shader 无条件分支。BRDF LUT 始终正常 compute 计算（环境无关） |

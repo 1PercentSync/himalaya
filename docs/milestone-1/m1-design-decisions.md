@@ -1519,6 +1519,34 @@ Prefiltered map 用 R16G16B16A16F 而非 R11G11B10F：mip0（低 roughness）近
 
 M1 不支持运行时切换环境贴图，固定一张。
 
+### HDR 加载失败 Fallback
+
+**问题**：`--env` 指定的 HDR 文件不存在或加载失败时，`load_equirect()` 返回无效 handle，后续 compute pipeline 在无效 handle 上操作导致崩溃。
+
+**选择：Framework 层生成中性 fallback cubemap**
+
+| 方案 | 说明 |
+|------|------|
+| A. Fatal error 终止程序 | 环境贴图是必需资源，缺失则无法运行 |
+| B. Shader 层 fallback（条件分支） | shader 检查 index == UINT32_MAX 跳过 IBL |
+| C. Framework 层生成 fallback cubemap | 创建 1×1 中性灰 cubemap，管线照常运行 |
+
+**选择 C。** `IBL::init()` 在 `load_equirect()` 失败时，用 `vkCmdClearColorImage` 创建 1×1 中性灰 cubemap 替代。整个管线（bindless 注册、skybox 采样、forward IBL 采样）照常运行，shader 无需任何条件分支。效果为无环境反射的均匀灰色天空，渲染器仍可正常工作。
+
+Fallback 产物参数：
+
+| 产物 | 分辨率 | 格式 | 说明 |
+|------|--------|------|------|
+| Skybox cubemap | 1×1 per face | R16G16B16A16F | 中性灰 `(0.1, 0.1, 0.1)` |
+| Irradiance cubemap | 1×1 per face | R11G11B10F | 同色 |
+| Prefiltered cubemap | 1×1 per face, 1 mip | R16G16B16A16F | 同色 |
+| BRDF LUT | 正常 compute 计算 | R16G16_UNORM | 环境无关，数学纯函数 |
+
+**排除 A**：M1 定位为学习/演示项目，缺少 HDR 文件不应阻止渲染器运行。
+**排除 B**：在 shader 中添加条件分支会增加 Step 6.5/7 的复杂度，且 fallback 只影响 init 时的数据准备，不应泄漏到每帧渲染路径。
+
+实现边界：fallback 逻辑完全封装在 `IBL::init()` 内部（`create_fallback_cubemaps()` 私有方法），Renderer、Pass、Shader 层不感知 fallback 存在。
+
 ### Compute Shader 基础设施
 
 IBL 预计算需要 compute shader（cubemap 卷积、LUT 生成）。阶段二没有用过 compute shader，经代码检查确认均不存在：
