@@ -5,6 +5,7 @@
  * @brief Rendering subsystem: pass orchestration, GPU data filling, resource ownership.
  */
 
+#include <himalaya/framework/ibl.h>
 #include <himalaya/framework/material_system.h>
 #include <himalaya/framework/render_graph.h>
 #include <himalaya/framework/texture.h>
@@ -96,7 +97,8 @@ namespace himalaya::app {
          */
         void init(rhi::Context &ctx, rhi::Swapchain &swapchain,
                   rhi::ResourceManager &rm, rhi::DescriptorManager &dm,
-                  framework::ImGuiBackend &imgui);
+                  framework::ImGuiBackend &imgui,
+                  const std::string &hdr_path);
 
         /**
          * @brief Fills GPU buffers and executes all render passes for one frame.
@@ -174,6 +176,9 @@ namespace himalaya::app {
 
         /** @brief Material SSBO management (Set 0, Binding 2). */
         framework::MaterialSystem material_system_{};
+
+        /** @brief IBL precomputation module (cubemaps, BRDF LUT, bindless registration). */
+        framework::IBL ibl_{};
 
         /** @brief Depth + Normal PrePass (fills depth and normal buffers). */
         passes::DepthPrePass depth_prepass_{};

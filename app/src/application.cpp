@@ -63,7 +63,12 @@ namespace himalaya::app {
         camera_controller_.init(window_, &camera_);
 
         // --- Renderer (owns pipelines, buffers, default textures, sampler) ---
-        renderer_.init(context_, swapchain_, resource_manager_, descriptor_manager_, imgui_backend_);
+        renderer_.init(context_,
+                       swapchain_,
+                       resource_manager_,
+                       descriptor_manager_,
+                       imgui_backend_,
+                       config.env_path);
 
         // --- Scene loading (uses Renderer's default resources) ---
         context_.begin_immediate();
