@@ -132,6 +132,24 @@ namespace himalaya::framework {
                                          uint32_t equirect_width,
                                          DeferredCleanup &deferred);
 
+        /**
+         * @brief Compute diffuse irradiance cubemap via cosine-weighted hemisphere convolution.
+         *
+         * Samples the intermediate cubemap (cubemap_) over the hemisphere for each output
+         * texel, producing a low-resolution irradiance map (32x32 per face, R11G11B10F).
+         * Must be called within an active immediate scope, after convert_equirect_to_cubemap().
+         *
+         * Transient resources (pipeline, image views, sampler) are pushed to
+         * @p deferred for destruction after end_immediate().
+         *
+         * @param ctx      RHI context (device, immediate command buffer).
+         * @param sc       Shader compiler for compute shader compilation.
+         * @param deferred Cleanup functions executed after GPU completion.
+         */
+        void compute_irradiance(rhi::Context &ctx,
+                                rhi::ShaderCompiler &sc,
+                                DeferredCleanup &deferred);
+
         // --- Service pointers (stored for destroy) ---
         rhi::ResourceManager *rm_ = nullptr;
         rhi::DescriptorManager *dm_ = nullptr;

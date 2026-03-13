@@ -1,0 +1,87 @@
+/**
+ * @file irradiance.comp
+ * @brief Computes a diffuse irradiance cubemap via cosine-weighted hemisphere convolution.
+ *
+ * For each output texel, integrates the environment cubemap over the hemisphere
+ * centered on the texel's normal direction, weighted by cos(theta) (Lambert's law).
+ * The integration uses uniform angular stepping in spherical coordinates.
+ *
+ * Dispatched as (ceil(size/16), ceil(size/16), 6) — one invocation per texel per face.
+ * Uses push descriptors (set 0) for input/output binding.
+ */
+#version 460
+
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+layout(set = 0, binding = 0) uniform samplerCube u_environment;
+layout(set = 0, binding = 1, r11f_g11f_b10f) writeonly uniform image2DArray u_irradiance;
+
+const float PI = 3.14159265359;
+
+/**
+ * Computes the world-space direction for a cubemap texel.
+ *
+ * @param face Cubemap face index (0..5: +X, -X, +Y, -Y, +Z, -Z).
+ * @param uv   Normalized texel coordinate [0, 1]^2.
+ * @return Unnormalized direction vector pointing into the face.
+ */
+vec3 cube_dir(uint face, vec2 uv) {
+    vec2 st = uv * 2.0 - 1.0;
+
+    switch (face) {
+        case 0: return vec3( 1.0, -st.y, -st.x);   // +X
+        case 1: return vec3(-1.0, -st.y,  st.x);   // -X
+        case 2: return vec3( st.x,  1.0,  st.y);   // +Y
+        case 3: return vec3( st.x, -1.0, -st.y);   // -Y
+        case 4: return vec3( st.x, -st.y,  1.0);   // +Z
+        case 5: return vec3(-st.x, -st.y, -1.0);   // -Z
+    }
+    return vec3(0.0);
+}
+
+void main() {
+    ivec2 size = imageSize(u_irradiance).xy;
+
+    if (gl_GlobalInvocationID.x >= size.x || gl_GlobalInvocationID.y >= size.y)
+        return;
+
+    uint face = gl_GlobalInvocationID.z;
+    vec2 uv = (vec2(gl_GlobalInvocationID.xy) + 0.5) / vec2(size);
+
+    vec3 N = normalize(cube_dir(face, uv));
+
+    // Build tangent frame around N
+    vec3 up    = abs(N.y) < 0.999 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0);
+    vec3 right = normalize(cross(up, N));
+    up = cross(N, right);
+
+    // Cosine-weighted hemisphere integration via uniform angular stepping.
+    // Accumulates L(omega) * cos(theta) * sin(theta) where sin(theta) is the
+    // spherical-coordinate Jacobian and cos(theta) is Lambert weighting.
+    vec3 irradiance = vec3(0.0);
+    float sample_count = 0.0;
+
+    const float DELTA = 0.025;
+    for (float phi = 0.0; phi < 2.0 * PI; phi += DELTA) {
+        for (float theta = 0.0; theta < 0.5 * PI; theta += DELTA) {
+            // Spherical to tangent-space cartesian
+            float sin_theta = sin(theta);
+            float cos_theta = cos(theta);
+            vec3 tangent_sample = vec3(sin_theta * cos(phi),
+                                       sin_theta * sin(phi),
+                                       cos_theta);
+
+            // Tangent space to world space
+            vec3 sample_dir = tangent_sample.x * right
+                            + tangent_sample.y * up
+                            + tangent_sample.z * N;
+
+            irradiance += texture(u_environment, sample_dir).rgb * cos_theta * sin_theta;
+            sample_count += 1.0;
+        }
+    }
+
+    irradiance = PI * irradiance / sample_count;
+
+    imageStore(u_irradiance, ivec3(gl_GlobalInvocationID), vec4(irradiance, 1.0));
+}

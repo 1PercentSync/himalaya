@@ -109,6 +109,7 @@ namespace himalaya::rhi {
 
         // Packed
         A2B10G10R10UnormPack32,
+        B10G11R11UfloatPack32,
 
         // Depth / stencil
         D32Sfloat,
@@ -156,6 +157,7 @@ namespace himalaya::rhi {
             case Format::R32G32Sfloat: return VK_FORMAT_R32G32_SFLOAT;
             case Format::R32G32B32A32Sfloat: return VK_FORMAT_R32G32B32A32_SFLOAT;
             case Format::A2B10G10R10UnormPack32: return VK_FORMAT_A2B10G10R10_UNORM_PACK32;
+            case Format::B10G11R11UfloatPack32: return VK_FORMAT_B10G11R11_UFLOAT_PACK32;
             case Format::D32Sfloat: return VK_FORMAT_D32_SFLOAT;
             case Format::D24UnormS8Uint: return VK_FORMAT_D24_UNORM_S8_UINT;
         }

@@ -41,7 +41,7 @@ namespace himalaya::framework {
 
         auto [equirect, eq_width] = load_equirect(hdr_path);
         convert_equirect_to_cubemap(ctx, sc, equirect, eq_width, deferred);
-        // TODO: compute_irradiance(ctx, sc, deferred);
+        compute_irradiance(ctx, sc, deferred);
         // TODO: compute_prefiltered(ctx, sc, deferred);
         // TODO: compute_brdf_lut(ctx, sc, deferred);
 
@@ -294,6 +294,196 @@ namespace himalaya::framework {
 
         spdlog::info("IBL: equirect ({}px wide) -> cubemap ({}x{} per face)",
                      equirect_width, face_size, face_size);
+    }
+
+    // -----------------------------------------------------------------------
+    // compute_irradiance — Cosine-weighted hemisphere convolution
+    // -----------------------------------------------------------------------
+
+    void IBL::compute_irradiance(rhi::Context &ctx,
+                                 rhi::ShaderCompiler &sc,
+                                 DeferredCleanup &deferred) {
+        constexpr uint32_t kFaceSize = 32;
+
+        // --- Create irradiance cubemap (32x32, R11G11B10F) ---
+        const rhi::ImageDesc irradiance_desc{
+            .width = kFaceSize,
+            .height = kFaceSize,
+            .depth = 1,
+            .mip_levels = 1,
+            .array_layers = 6,
+            .sample_count = 1,
+            .format = rhi::Format::B10G11R11UfloatPack32,
+            .usage = rhi::ImageUsage::Sampled | rhi::ImageUsage::Storage,
+        };
+        irradiance_cubemap_ = rm_->create_image(irradiance_desc, "IBL Irradiance");
+
+        // --- Temporary sampler for cubemap sampling ---
+        constexpr rhi::SamplerDesc sampler_desc{
+            .mag_filter = rhi::Filter::Linear,
+            .min_filter = rhi::Filter::Linear,
+            .mip_mode = rhi::SamplerMipMode::Nearest,
+            .wrap_u = rhi::SamplerWrapMode::ClampToEdge,
+            .wrap_v = rhi::SamplerWrapMode::ClampToEdge,
+            .max_anisotropy = 0.0f,
+            .max_lod = 0.0f,
+        };
+        const auto temp_sampler = rm_->create_sampler(sampler_desc, "IBL Irradiance Sampler");
+        deferred.emplace_back([temp_sampler, rm = rm_] { rm->destroy_sampler(temp_sampler); });
+
+        // --- Compile compute shader and create pipeline ---
+        auto spirv = sc.compile_from_file("ibl/irradiance.comp",
+                                          rhi::ShaderStage::Compute);
+        assert(!spirv.empty() && "Failed to compile irradiance.comp");
+        const auto shader_module = rhi::create_shader_module(ctx.device, spirv);
+
+        // Push descriptor layout: combined image sampler (cubemap input) + storage image (output)
+        constexpr VkDescriptorSetLayoutBinding bindings[] = {
+            {
+                .binding = 0,
+                .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                .descriptorCount = 1,
+                .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+            },
+            {
+                .binding = 1,
+                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+                .descriptorCount = 1,
+                .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+            },
+        };
+
+        VkDescriptorSetLayoutCreateInfo layout_ci{};
+        layout_ci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+        layout_ci.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT;
+        layout_ci.bindingCount = 2;
+        layout_ci.pBindings = bindings;
+
+        VkDescriptorSetLayout push_layout = VK_NULL_HANDLE;
+        VK_CHECK(vkCreateDescriptorSetLayout(ctx.device, &layout_ci, nullptr, &push_layout));
+
+        const rhi::ComputePipelineDesc pipeline_desc{
+            .compute_shader = shader_module,
+            .descriptor_set_layouts = {push_layout},
+        };
+        auto pipeline = rhi::create_compute_pipeline(ctx.device, pipeline_desc);
+        deferred.emplace_back([device = ctx.device, pipeline] { pipeline.destroy(device); });
+
+        vkDestroyShaderModule(ctx.device, shader_module, nullptr);
+        vkDestroyDescriptorSetLayout(ctx.device, push_layout, nullptr);
+
+        // --- Create 2D array view for storage writes ---
+        const auto &irradiance_img = rm_->get_image(irradiance_cubemap_);
+        VkImageViewCreateInfo array_view_ci{};
+        array_view_ci.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+        array_view_ci.image = irradiance_img.image;
+        array_view_ci.viewType = VK_IMAGE_VIEW_TYPE_2D_ARRAY;
+        array_view_ci.format = VK_FORMAT_B10G11R11_UFLOAT_PACK32;
+        array_view_ci.subresourceRange = {
+            .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+            .baseMipLevel = 0,
+            .levelCount = 1,
+            .baseArrayLayer = 0,
+            .layerCount = 6,
+        };
+
+        VkImageView irradiance_array_view = VK_NULL_HANDLE;
+        VK_CHECK(vkCreateImageView(ctx.device, &array_view_ci, nullptr, &irradiance_array_view));
+        deferred.emplace_back([device = ctx.device, irradiance_array_view] {
+            vkDestroyImageView(device, irradiance_array_view, nullptr);
+        });
+
+        // --- Record barriers and dispatch ---
+        const rhi::CommandBuffer cmd(ctx.immediate_command_buffer);
+
+        // Transition irradiance UNDEFINED → GENERAL for storage writes
+        VkImageMemoryBarrier2 irr_to_general{};
+        irr_to_general.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+        irr_to_general.srcStageMask = VK_PIPELINE_STAGE_2_NONE;
+        irr_to_general.srcAccessMask = VK_ACCESS_2_NONE;
+        irr_to_general.dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+        irr_to_general.dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT;
+        irr_to_general.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        irr_to_general.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+        irr_to_general.image = irradiance_img.image;
+        irr_to_general.subresourceRange = {
+            .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+            .baseMipLevel = 0,
+            .levelCount = 1,
+            .baseArrayLayer = 0,
+            .layerCount = 6,
+        };
+
+        VkDependencyInfo pre_dep{};
+        pre_dep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+        pre_dep.imageMemoryBarrierCount = 1;
+        pre_dep.pImageMemoryBarriers = &irr_to_general;
+        cmd.pipeline_barrier(pre_dep);
+
+        // Bind pipeline and push descriptors
+        cmd.bind_compute_pipeline(pipeline);
+
+        const auto &cubemap_img = rm_->get_image(cubemap_);
+        const auto &temp_vk_sampler = rm_->get_sampler(temp_sampler).sampler;
+
+        VkDescriptorImageInfo input_info{};
+        input_info.sampler = temp_vk_sampler;
+        input_info.imageView = cubemap_img.view;
+        input_info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+        VkDescriptorImageInfo output_info{};
+        output_info.imageView = irradiance_array_view;
+        output_info.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+
+        const VkWriteDescriptorSet writes[] = {
+            {
+                .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                .dstBinding = 0,
+                .descriptorCount = 1,
+                .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                .pImageInfo = &input_info,
+            },
+            {
+                .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                .dstBinding = 1,
+                .descriptorCount = 1,
+                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+                .pImageInfo = &output_info,
+            },
+        };
+        cmd.push_descriptor_set(pipeline.layout, 0, writes);
+
+        // Dispatch: one workgroup per 16x16 texel block, 6 faces
+        constexpr uint32_t kGroupSize = 16;
+        constexpr uint32_t kGroups = (kFaceSize + kGroupSize - 1) / kGroupSize;
+        cmd.dispatch(kGroups, kGroups, 6);
+
+        // Irradiance GENERAL → SHADER_READ_ONLY for subsequent compute sampling
+        VkImageMemoryBarrier2 irr_to_read{};
+        irr_to_read.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+        irr_to_read.srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+        irr_to_read.srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT;
+        irr_to_read.dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+        irr_to_read.dstAccessMask = VK_ACCESS_2_SHADER_SAMPLED_READ_BIT;
+        irr_to_read.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
+        irr_to_read.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        irr_to_read.image = irradiance_img.image;
+        irr_to_read.subresourceRange = {
+            .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+            .baseMipLevel = 0,
+            .levelCount = 1,
+            .baseArrayLayer = 0,
+            .layerCount = 6,
+        };
+
+        VkDependencyInfo post_dep{};
+        post_dep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+        post_dep.imageMemoryBarrierCount = 1;
+        post_dep.pImageMemoryBarriers = &irr_to_read;
+        cmd.pipeline_barrier(post_dep);
+
+        spdlog::info("IBL: irradiance cubemap ({}x{} per face, R11G11B10F)",
+                     kFaceSize, kFaceSize);
     }
 
     void IBL::destroy() {
