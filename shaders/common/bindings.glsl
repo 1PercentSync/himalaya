@@ -54,6 +54,11 @@ layout(set = 0, binding = 0) uniform GlobalUBO {
     float time;                             // offset 280 — elapsed time in seconds
     uint directional_light_count;           // offset 284 — number of active directional lights
     float ambient_intensity;                // offset 288 — ambient light multiplier
+    uint irradiance_cubemap_index;          // offset 292 — bindless index into cubemaps[]
+    uint prefiltered_cubemap_index;         // offset 296 — bindless index into cubemaps[]
+    uint brdf_lut_index;                    // offset 300 — bindless index into textures[]
+    uint prefiltered_mip_count;             // offset 304 — mip levels in prefiltered env map
+    uint skybox_cubemap_index;              // offset 308 — bindless index into cubemaps[]
 } global;
 
 layout(set = 0, binding = 1) readonly buffer LightBuffer {
