@@ -1447,11 +1447,13 @@ if ((global.feature_flags & FEATURE_SSAO) != 0u) {
 
 | 参数 | 值 | 理由 |
 |------|------|------|
-| 分辨率 | 1024×1024 per face | 标准选择，prefiltered（256）的 4 倍源数据精度 |
+| 分辨率 | `clamp(bit_ceil(equirect_width / 4), 256, 2048)` per face | 匹配输入角分辨率（equirect 360° → face 90°），同时保证 Skybox 渲染清晰度 |
 | 格式 | R16G16B16A16_SFLOAT | 与 prefiltered map 格式一致，避免精度损失 |
 | 预计算后 | **保留** | 用于天空盒渲染（Skybox Pass） |
 
-**保留中间 cubemap**：M1 规划包含"静态 HDR Cubemap 天空"（见 `milestone-1.md`），中间 cubemap 是 Skybox Pass 的源数据。显存开销约 72MB（1024×1024×6×8 B/px），桌面 GPU 上微不足道。M2 Bruneton 大气散射替换天空后可改为销毁。
+**分辨率由输入 equirect 宽度决定**：cubemap 同时用于 IBL 预计算源数据和 Skybox 天空渲染。Skybox 直接暴露给玩家，固定分辨率在高质量输入下会丢失细节。`equirect_width / 4` 匹配角分辨率（360° 到 90°），`std::bit_ceil` 向上取整到 2 的幂，clamp 到 [256, 2048] 防止极端输入。常见 4096×2048 HDR → 1024 per face（~48 MB），8192×4096 → 2048 per face（~192 MB）。
+
+**保留中间 cubemap**：M1 规划包含"静态 HDR Cubemap 天空"（见 `milestone-1.md`），中间 cubemap 是 Skybox Pass 的源数据。M2 Bruneton 大气散射替换天空后可改为销毁。
 
 ### 预计算策略
 
