@@ -74,10 +74,12 @@ namespace himalaya::framework {
         const auto pixel_count = static_cast<uint32_t>(w) * static_cast<uint32_t>(h);
         std::vector<uint16_t> rgba16(pixel_count * 4);
 
+        // Clamp to float16 max to prevent Inf/NaN (HDR sun can exceed 65504)
+        constexpr float kHalfMax = 65504.0f;
         for (uint32_t i = 0; i < pixel_count; ++i) {
-            rgba16[i * 4 + 0] = glm::packHalf1x16(rgb_data[i * 3 + 0]);
-            rgba16[i * 4 + 1] = glm::packHalf1x16(rgb_data[i * 3 + 1]);
-            rgba16[i * 4 + 2] = glm::packHalf1x16(rgb_data[i * 3 + 2]);
+            rgba16[i * 4 + 0] = glm::packHalf1x16(std::min(rgb_data[i * 3 + 0], kHalfMax));
+            rgba16[i * 4 + 1] = glm::packHalf1x16(std::min(rgb_data[i * 3 + 1], kHalfMax));
+            rgba16[i * 4 + 2] = glm::packHalf1x16(std::min(rgb_data[i * 3 + 2], kHalfMax));
             rgba16[i * 4 + 3] = glm::packHalf1x16(1.0f);
         }
 
@@ -112,16 +114,18 @@ namespace himalaya::framework {
         const uint32_t face_size = std::min(std::bit_ceil(equirect_width / 4),
                                             kMaxCubemapSize);
 
-        // --- Create cubemap image (R16G16B16A16F) ---
+        // --- Create cubemap image (R16G16B16A16F, full mip chain for filtered sampling) ---
+        const uint32_t mip_count = static_cast<uint32_t>(std::floor(std::log2(face_size))) + 1;
         const rhi::ImageDesc cubemap_desc{
             .width = face_size,
             .height = face_size,
             .depth = 1,
-            .mip_levels = 1,
+            .mip_levels = mip_count,
             .array_layers = 6,
             .sample_count = 1,
             .format = rhi::Format::R16G16B16A16Sfloat,
-            .usage = rhi::ImageUsage::Sampled | rhi::ImageUsage::Storage,
+            .usage = rhi::ImageUsage::Sampled | rhi::ImageUsage::Storage
+                     | rhi::ImageUsage::TransferSrc | rhi::ImageUsage::TransferDst,
         };
         cubemap_ = rm_->create_image(cubemap_desc, "IBL Cubemap");
 
@@ -176,10 +180,13 @@ namespace himalaya::framework {
         auto pipeline = rhi::create_compute_pipeline(ctx.device, pipeline_desc);
         deferred.emplace_back([device = ctx.device, pipeline] { pipeline.destroy(device); });
 
-        // Shader module and descriptor set layout can be destroyed immediately
-        // (not referenced by command buffer during execution)
+        // Shader module can be destroyed after pipeline creation (SPIR-V is copied).
+        // Descriptor set layout must survive until command buffer execution completes
+        // because the pipeline layout references it during vkCmdPushDescriptorSet.
         vkDestroyShaderModule(ctx.device, shader_module, nullptr);
-        vkDestroyDescriptorSetLayout(ctx.device, push_layout, nullptr);
+        deferred.emplace_back([device = ctx.device, push_layout] {
+            vkDestroyDescriptorSetLayout(device, push_layout, nullptr);
+        });
 
         // --- Create 2D array view for storage writes (compute needs layer-addressable view) ---
         const auto &cubemap_img = rm_->get_image(cubemap_);
@@ -291,8 +298,13 @@ namespace himalaya::framework {
         post_dep.pImageMemoryBarriers = &cubemap_to_read;
         cmd.pipeline_barrier(post_dep);
 
-        spdlog::info("IBL: equirect ({}px wide) -> cubemap ({}x{} per face)",
-                     equirect_width, face_size, face_size);
+        // Generate mip chain via blit (mip 0 is now in SHADER_READ_ONLY).
+        // generate_mips expects mip 0 in SHADER_READ_ONLY and leaves all mips
+        // in SHADER_READ_ONLY on completion.
+        rm_->generate_mips(cubemap_);
+
+        spdlog::info("IBL: equirect ({}px wide) -> cubemap ({}x{} per face, {} mips)",
+                     equirect_width, face_size, face_size, mip_count);
     }
 
     // -----------------------------------------------------------------------
@@ -369,7 +381,9 @@ namespace himalaya::framework {
         deferred.emplace_back([device = ctx.device, pipeline] { pipeline.destroy(device); });
 
         vkDestroyShaderModule(ctx.device, shader_module, nullptr);
-        vkDestroyDescriptorSetLayout(ctx.device, push_layout, nullptr);
+        deferred.emplace_back([device = ctx.device, push_layout] {
+            vkDestroyDescriptorSetLayout(device, push_layout, nullptr);
+        });
 
         // --- Create 2D array view for storage writes ---
         const auto &irradiance_img = rm_->get_image(irradiance_cubemap_);
@@ -509,15 +523,15 @@ namespace himalaya::framework {
         };
         prefiltered_cubemap_ = rm_->create_image(prefiltered_desc, "IBL Prefiltered");
 
-        // --- Temporary sampler for cubemap sampling ---
-        constexpr rhi::SamplerDesc sampler_desc{
+        // --- Temporary sampler for cubemap sampling (mip access for filtered IS) ---
+        const rhi::SamplerDesc sampler_desc{
             .mag_filter = rhi::Filter::Linear,
             .min_filter = rhi::Filter::Linear,
-            .mip_mode = rhi::SamplerMipMode::Nearest,
+            .mip_mode = rhi::SamplerMipMode::Linear,
             .wrap_u = rhi::SamplerWrapMode::ClampToEdge,
             .wrap_v = rhi::SamplerWrapMode::ClampToEdge,
             .max_anisotropy = 0.0f,
-            .max_lod = 0.0f,
+            .max_lod = VK_LOD_CLAMP_NONE,
         };
         const auto temp_sampler = rm_->create_sampler(sampler_desc, "IBL Prefilter Sampler");
         deferred.emplace_back([temp_sampler, rm = rm_] { rm->destroy_sampler(temp_sampler); });
@@ -567,7 +581,9 @@ namespace himalaya::framework {
         deferred.emplace_back([device = ctx.device, pipeline] { pipeline.destroy(device); });
 
         vkDestroyShaderModule(ctx.device, shader_module, nullptr);
-        vkDestroyDescriptorSetLayout(ctx.device, push_layout, nullptr);
+        deferred.emplace_back([device = ctx.device, push_layout] {
+            vkDestroyDescriptorSetLayout(device, push_layout, nullptr);
+        });
 
         // --- Create per-mip 2D array views for storage writes ---
         const auto &prefiltered_img = rm_->get_image(prefiltered_cubemap_);
@@ -747,7 +763,9 @@ namespace himalaya::framework {
         deferred.emplace_back([device = ctx.device, pipeline] { pipeline.destroy(device); });
 
         vkDestroyShaderModule(ctx.device, shader_module, nullptr);
-        vkDestroyDescriptorSetLayout(ctx.device, push_layout, nullptr);
+        deferred.emplace_back([device = ctx.device, push_layout] {
+            vkDestroyDescriptorSetLayout(device, push_layout, nullptr);
+        });
 
         // --- Record barriers and dispatch ---
         const rhi::CommandBuffer cmd(ctx.immediate_command_buffer);

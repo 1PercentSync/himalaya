@@ -1,4 +1,5 @@
 #version 460
+#extension GL_EXT_nonuniform_qualifier : require
 
 /**
  * Skybox fragment shader — cubemap sampling with IBL rotation.
@@ -25,6 +26,6 @@ void main() {
     // IBL horizontal rotation
     dir = rotate_y(dir, global.ibl_rotation_sin, global.ibl_rotation_cos);
 
-    vec3 color = texture(cubemaps[global.skybox_cubemap_index], dir).rgb;
+    vec3 color = texture(cubemaps[nonuniformEXT(global.skybox_cubemap_index)], dir).rgb;
     out_color = vec4(color, 1.0);
 }

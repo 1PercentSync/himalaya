@@ -118,6 +118,12 @@ void main() {
     vec3 prefiltered_color = vec3(0.0);
     float total_weight = 0.0;
 
+    // Pre-compute texel solid angle for mip level selection
+    float resolution = float(textureSize(u_environment, 0).x);
+    float sa_texel = 4.0 * PI / (6.0 * resolution * resolution);
+
+    float a = roughness * roughness;
+
     for (uint i = 0u; i < SAMPLE_COUNT; ++i) {
         vec2 xi = hammersley(i, SAMPLE_COUNT);
         vec3 H  = importance_sample_ggx(xi, N, roughness);
@@ -125,7 +131,21 @@ void main() {
 
         float NdotL = max(dot(N, L), 0.0);
         if (NdotL > 0.0) {
-            prefiltered_color += texture(u_environment, L).rgb * NdotL;
+            // GGX NDF at this sample for PDF-based mip selection
+            float NdotH = max(dot(N, H), 0.0);
+            float HdotV = max(dot(H, V), 0.0);
+            float a2 = a * a;
+            float denom = NdotH * NdotH * (a2 - 1.0) + 1.0;
+            float D = a2 / (PI * denom * denom);
+
+            // PDF of the importance-sampled direction
+            float pdf = D * NdotH / (4.0 * HdotV + 0.0001);
+
+            // Solid angle of this sample; select mip where texel ≈ sample footprint
+            float sa_sample = 1.0 / (float(SAMPLE_COUNT) * pdf + 0.0001);
+            float mip_level = roughness == 0.0 ? 0.0 : 0.5 * log2(sa_sample / sa_texel);
+
+            prefiltered_color += textureLod(u_environment, L, max(mip_level, 0.0)).rgb * NdotL;
             total_weight += NdotL;
         }
     }
