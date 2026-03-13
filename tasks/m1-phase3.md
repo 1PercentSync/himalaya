@@ -64,6 +64,7 @@
 - [x] Exposure 控制：DebugUI 手动 EV 滑条（范围 -4 到 +4），`pow(2, ev)` 计算 exposure
 - [x] 数据通路：`RenderInput::exposure` → `GlobalUniformData::camera_position_and_exposure.w` → `tonemapping.frag`
 - [x] 验证：高光不截断，画面正确 tonemapped，DebugUI EV 滑条可调
+- [x] **事后修复**（代码审查发现）：`forward.frag` 和 `tonemapping.frag` 均乘以 exposure，导致 exposure² 双重曝光（EV=0 时不可见，EV≠0 时画面过亮/过暗）。修复：移除 `forward.frag` 中的 exposure，仅在 tonemapping 统一应用
 
 ## Step 4c：MSAA
 
@@ -104,6 +105,7 @@
 - [x] `GlobalUniformData` 新增 `ibl_rotation_sin` / `ibl_rotation_cos` + 更新 `bindings.glsl` GlobalUBO 布局
 - [x] 左键拖拽改为 IBL 水平旋转（`light_yaw_` → `ibl_yaw_`，移除 pitch 逻辑），DebugUI Lighting 面板显示 IBL Rotation 角度
 - [x] 验证：IBL 预计算无 validation 报错，RenderDoc 检查 cubemap 各面和 mip 级别内容正确、BRDF LUT 呈现预期的渐变图案；天空背景正确显示且可水平旋转
+- [x] **事后修复**（代码审查发现）：`generate_mips()` 的 barrier/blit 硬编码 `layerCount=1`，cubemap 面 1-5 的 mip 链未生成，导致 prefiltered specular IBL 高 roughness 方向采样到 UNDEFINED 数据。修复：使用 `img.desc.array_layers`
 
 ## Step 6.5：IBL 环境光验证 + 灯光体系重构
 

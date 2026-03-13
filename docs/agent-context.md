@@ -9,11 +9,18 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段三 — PBR 光照基础（Cook-Torrance + IBL + MSAA + HDR）
-- **进度**：Step 6 全部完成（IBL Pipeline + Skybox），下一步 Step 6.5
+- **进度**：Step 6 全部完成（IBL Pipeline + Skybox）+ 代码审查修复两处 bug，下一步 Step 6.5
 
 ### 下一个任务
 
 Step 6.5 第 1 项：`forward.frag` 采样 `metallic_roughness_tex`，metallic 工作流分离（F0 / diffuse_color）。
+
+### 代码审查修复记录
+
+Phase 3 全面代码审查（Step 1 ~ Step 6）发现并修复了两处 bug：
+
+1. **`generate_mips()` cubemap 支持**（影响 Step 6 IBL）：barrier/blit 硬编码 `layerCount=1`，cubemap 面 1-5 的 mip 链未生成。prefilter shader 对非 +X 面高 roughness 采样到 UNDEFINED 数据。已修复为使用 `img.desc.array_layers`。
+2. **`forward.frag` 双重曝光**（影响 Step 4b Exposure）：exposure 在 forward.frag 和 tonemapping.frag 各乘一次，导致 exposure²。EV=0 时不可见（1²=1），EV≠0 时画面过亮/过暗。已移除 forward.frag 中的 exposure。
 
 ---
 
