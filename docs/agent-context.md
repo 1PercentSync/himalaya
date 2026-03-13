@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段三 — PBR 光照基础（Cook-Torrance + IBL + MSAA + HDR）
-- **进度**：Step 5 完成，下一步 Step 6
+- **进度**：Step 6 进行中，IBL 模块骨架已完成，下一项 `load_equirect()` 实现
 
 ### 下一个任务
 
-阶段三 Step 6：IBL Pipeline + Skybox — IBL 预计算全流程（equirect → cubemap → irradiance/prefiltered/BRDF LUT）、4 个 compute shader、IBL 模块、Skybox Pass、IBL 水平旋转。Step 6 之后新增 Step 6.5（IBL 环境光验证 + 灯光体系重构），在 Cook-Torrance 之前独立验证 IBL 数据正确性。
+Step 6 第 2 项：`load_equirect()` 私有方法 — stbi_loadf 加载 .hdr、RGB→RGBA f16 转换、R16G16B16A16F GPU image 创建与上传。后续依次实现 4 个 compute shader 及对应私有方法、init() 编排、GlobalUBO 更新、Renderer 集成、SkyboxPass、IBL 旋转。
 
 ---
 

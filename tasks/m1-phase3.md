@@ -90,19 +90,17 @@
 
 ## Step 6：IBL Pipeline + Skybox
 
-- [ ] `framework/include/himalaya/framework/ibl.h` + `framework/src/ibl.cpp` 模块骨架
-- [ ] stb_image `.hdr` 文件加载（`stbi_loadf`，RGB float 数据）+ 上传到 equirectangular 2D GPU image
-- [ ] Equirectangular → Cubemap 转换 compute shader（`shaders/ibl/equirect_to_cubemap.comp`）
-- [ ] Irradiance 余弦卷积 compute shader（`shaders/ibl/irradiance.comp`，32×32 per face，R11G11B10F）
-- [ ] Prefiltered environment map compute shader（`shaders/ibl/prefilter.comp`，256×256 per face，多 mip 级别对应不同 roughness，R16G16B16A16F）
-- [ ] BRDF Integration LUT compute shader（`shaders/ibl/brdf_lut.comp`，256×256，R16G16_UNORM）
-- [ ] IBL 模块 `init()` 方法：在 `begin_immediate()` / `end_immediate()` scope 内执行全部预计算，使用 Push Descriptors 绑定输入/输出 image
-- [ ] 将 irradiance/prefiltered cubemap 注册到 Set 1 binding 1（`register_cubemap()`），BRDF LUT 注册到 Set 1 binding 0（`register_texture()`）
-- [ ] `GlobalUniformData` 新增 IBL 字段（irradiance_cubemap_index、prefiltered_cubemap_index、brdf_lut_index、prefiltered_mip_count）+ 更新 `bindings.glsl` GlobalUBO 布局（Step 6 完成，不等 Step 7；`cubemaps[]` 声明已在 Step 3 完成，此处仅更新 GlobalUBO）
+- [x] `framework/include/himalaya/framework/ibl.h` + `framework/src/ibl.cpp` 模块骨架（公开接口 + 私有成员 + CMakeLists.txt 集成）
+- [ ] `load_equirect()` 私有方法：stb_image `.hdr` 加载（`stbi_loadf`，RGB float）→ RGBA f16 转换 → R16G16B16A16F 2D GPU image 创建与上传，返回 equirect ImageHandle
+- [ ] `shaders/ibl/equirect_to_cubemap.comp` + `convert_equirect_to_cubemap()` 私有方法（cubemap 1024² R16G16B16A16F 创建、compute pipeline with push descriptors、dispatch、barrier）
+- [ ] `shaders/ibl/irradiance.comp` + `compute_irradiance()` 私有方法（irradiance cubemap 32² R11G11B10F 创建、余弦卷积 dispatch）
+- [ ] `shaders/ibl/prefilter.comp` + `compute_prefiltered()` 私有方法（prefiltered cubemap 256² R16G16B16A16F 多 mip 创建、per-mip roughness push constant、dispatch）
+- [ ] `shaders/ibl/brdf_lut.comp` + `compute_brdf_lut()` 私有方法（BRDF LUT 256² R16G16_UNORM 创建、dispatch）
+- [ ] `init()` 编排 + `register_bindless_resources()` + `destroy()` 实现（串联预计算阶段、创建 sampler、注册产物到 Set 1 bindless、equirect 销毁、资源清理）
+- [ ] `GlobalUniformData` 新增 IBL 字段（irradiance_cubemap_index、prefiltered_cubemap_index、brdf_lut_index、prefiltered_mip_count、skybox_cubemap_index）+ 更新 `bindings.glsl` GlobalUBO 布局（`cubemaps[]` 声明已在 Step 3 完成，此处仅更新 GlobalUBO）
 - [ ] Renderer 在 `init()` 中调用 IBL 预计算，在 `destroy()` 中清理 IBL 资源
-- [ ] 创建 `shaders/skybox.vert`（独立 VS，计算世界方向 varying，`gl_Position.z = 0.0`；不复用 `fullscreen.vert`）
-- [ ] 创建 `shaders/skybox.frag`（rotate_y + normalize + texture 采样）
-- [ ] SkyboxPass 类（`passes/skybox_pass.h/cpp`）：方法集 setup / record / destroy（不属于 MSAA 相关 pass，无 on_resize / on_sample_count_changed），渲染到 resolved 1x hdr_color，读 resolved depth（GREATER_OR_EQUAL + depth write OFF）
+- [ ] 创建 `shaders/skybox.vert` + `shaders/skybox.frag`（独立 VS 计算世界方向 varying + `gl_Position.z = 0.0`，FS rotate_y + normalize + cubemap 采样）
+- [ ] SkyboxPass 类（`passes/skybox_pass.h/cpp`）：方法集 setup / record / destroy（不属于 MSAA 相关 pass），渲染到 resolved 1x hdr_color，读 resolved depth（GREATER_OR_EQUAL + depth write OFF）
 - [ ] `GlobalUniformData` 新增 `ibl_rotation_sin` / `ibl_rotation_cos` + 更新 `bindings.glsl` GlobalUBO 布局
 - [ ] 左键拖拽改为 IBL 水平旋转（`light_yaw_` → `ibl_yaw_`，移除 pitch 逻辑），DebugUI Lighting 面板显示 IBL Rotation 角度
 - [ ] 验证：IBL 预计算无 validation 报错，RenderDoc 检查 cubemap 各面和 mip 级别内容正确、BRDF LUT 呈现预期的渐变图案；天空背景正确显示且可水平旋转
