@@ -200,6 +200,12 @@ namespace himalaya::app {
                             shader_compiler_,
                             current_sample_count_);
 
+        // --- Skybox pass ---
+        skybox_pass_.setup(*ctx_,
+                           *resource_manager_,
+                           *descriptor_manager_,
+                           shader_compiler_);
+
         // --- Tonemapping pass ---
         tonemapping_pass_.setup(*ctx_,
                                 *resource_manager_,
@@ -216,6 +222,7 @@ namespace himalaya::app {
         material_system_.destroy();
         depth_prepass_.destroy();
         forward_pass_.destroy();
+        skybox_pass_.destroy();
         tonemapping_pass_.destroy();
 
         for (const auto ubo: global_ubo_buffers_) {
@@ -430,6 +437,9 @@ namespace himalaya::app {
 
         // --- Forward pass ---
         forward_pass_.record(render_graph_, frame_ctx);
+
+        // --- Skybox pass ---
+        skybox_pass_.record(render_graph_, frame_ctx);
 
         // --- Tonemapping pass ---
         tonemapping_pass_.record(render_graph_, frame_ctx);
