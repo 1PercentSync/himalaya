@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段三 — PBR 光照基础（Cook-Torrance + IBL + MSAA + HDR）
-- **进度**：Step 6 进行中，4 个 compute shader 全部完成（equirect→cubemap、irradiance、prefiltered、BRDF LUT），下一项 init 编排 + bindless 注册 + destroy
+- **进度**：Step 6 进行中，IBL 预计算全部完成（4 compute + init 编排 + bindless 注册 + destroy），下一项 GlobalUniformData IBL 字段
 
 ### 下一个任务
 
-Step 6 第 7 项：`init()` 编排 + `register_bindless_resources()` + `destroy()` 实现 — 串联预计算阶段、创建 sampler、注册产物到 Set 1 bindless、equirect 销毁、资源清理。
+Step 6 第 8 项：`GlobalUniformData` 新增 IBL 字段（irradiance_cubemap_index、prefiltered_cubemap_index、brdf_lut_index、prefiltered_mip_count、skybox_cubemap_index）+ 更新 `bindings.glsl` GlobalUBO 布局。
 
 ---
 
