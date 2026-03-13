@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段三 — PBR 光照基础（Cook-Torrance + IBL + MSAA + HDR）
-- **进度**：Step 6 全部完成（IBL Pipeline + Skybox）+ 代码审查修复两处 bug，下一步 Step 6.5
+- **进度**：Step 6.5 进行中，第 1 项完成（forward.frag 共享 normal.glsl + metallic 工作流分离），下一步第 2 项
 
 ### 下一个任务
 
-Step 6.5 第 1 项：`forward.frag` 采样 `metallic_roughness_tex`，metallic 工作流分离（F0 / diffuse_color）。
+Step 6.5 第 2 项：`forward.frag` IBL 漫反射 + 镜面反射（irradiance + prefiltered + BRDF LUT Split-Sum，含 `rotate_y`），用 `ibl_intensity` 调制，移除固定 ambient 项。
 
 ### 代码审查修复记录
 
