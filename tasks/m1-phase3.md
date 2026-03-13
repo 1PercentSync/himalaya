@@ -109,7 +109,7 @@
 
 ## Step 6.5：IBL 环境光验证 + 灯光体系重构
 
-- [ ] `forward.frag` 采样 `metallic_roughness_tex`，metallic 工作流分离（F0 / diffuse_color）
+- [ ] `forward.frag` 重构：移除内联 `get_shading_normal()`，改用 `#include "common/normal.glsl"` 的共享版本（代码审查发现与 depth_prepass 不一致）；采样 `metallic_roughness_tex`，metallic 工作流分离（F0 / diffuse_color）
 - [ ] `forward.frag` IBL 漫反射 + 镜面反射（irradiance + prefiltered + BRDF LUT Split-Sum，含 `rotate_y`），用 `ibl_intensity` 调制，移除固定 ambient 项
 - [ ] 灯光体系重构：`ambient_intensity` → `ibl_intensity` 全通路重命名（GlobalUniformData、bindings.glsl、RenderInput、Application、DebugUI）+ 退役 default light（移除 `default_lights_`、`light_pitch_`、`light_intensity_`、`force_default_light_` 及相关逻辑）+ 新增 `disable_scene_lights_`（DebugUI "Disable Scene Lights" checkbox + RenderInput 通路）+ DebugUI Lighting 面板全面更新
 - [ ] 验证：物体表面 IBL 光照正确（金属面反射环境、粗糙面模糊反射、非金属环境漫反射），`ibl_intensity` 滑条可调，IBL 可旋转，glTF 方向光可通过 checkbox 切换
