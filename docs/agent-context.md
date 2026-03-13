@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段三 — PBR 光照基础（Cook-Torrance + IBL + MSAA + HDR）
-- **进度**：Step 6 进行中，IBL 预计算和 GlobalUBO 字段全部完成，下一项 Renderer 集成 IBL
+- **进度**：Step 6 进行中，IBL 预计算 + GlobalUBO + Renderer 集成全部完成，下一项 Skybox shader
 
 ### 下一个任务
 
-Step 6 第 9 项：Renderer 在 `init()` 中调用 IBL 预计算，在 `destroy()` 中清理 IBL 资源。
+Step 6 第 10 项：创建 `shaders/skybox.vert` + `shaders/skybox.frag`（独立 VS 计算世界方向 varying + `gl_Position.z = 0.0`，FS rotate_y + normalize + cubemap 采样）。
 
 ---
 
