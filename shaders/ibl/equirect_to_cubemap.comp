@@ -1,0 +1,71 @@
+/**
+ * @file equirect_to_cubemap.comp
+ * @brief Converts an equirectangular HDR environment map to a cubemap.
+ *
+ * Dispatched as (ceil(size/16), ceil(size/16), 6) — one invocation per texel
+ * per face. Uses push descriptors (set 0) for input/output binding.
+ */
+#version 460
+
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+layout(set = 0, binding = 0) uniform sampler2D u_equirect;
+layout(set = 0, binding = 1, rgba16f) writeonly uniform image2DArray u_cubemap;
+
+const float PI = 3.14159265359;
+
+/**
+ * Computes the world-space direction for a cubemap texel.
+ *
+ * @param face Cubemap face index (0..5: +X, -X, +Y, -Y, +Z, -Z).
+ * @param uv   Normalized texel coordinate [0, 1]^2.
+ * @return Unnormalized direction vector pointing into the face.
+ */
+vec3 cube_dir(uint face, vec2 uv) {
+    // Remap [0,1] → [-1,1]
+    vec2 st = uv * 2.0 - 1.0;
+
+    switch (face) {
+        case 0: return vec3( 1.0, -st.y, -st.x);   // +X
+        case 1: return vec3(-1.0, -st.y,  st.x);   // -X
+        case 2: return vec3( st.x,  1.0,  st.y);   // +Y
+        case 3: return vec3( st.x, -1.0, -st.y);   // -Y
+        case 4: return vec3( st.x, -st.y,  1.0);   // +Z
+        case 5: return vec3(-st.x, -st.y, -1.0);   // -Z
+    }
+    return vec3(0.0);
+}
+
+/**
+ * Samples the equirectangular map at the given direction.
+ *
+ * Converts a 3D direction to spherical (longitude, latitude),
+ * then to [0,1] UV coordinates for the 2D equirect texture.
+ */
+vec4 sample_equirect(vec3 dir) {
+    dir = normalize(dir);
+    float phi   = atan(dir.z, dir.x);       // longitude: [-PI, PI]
+    float theta = asin(clamp(dir.y, -1.0, 1.0));  // latitude: [-PI/2, PI/2]
+
+    vec2 uv = vec2(
+        phi   / (2.0 * PI) + 0.5,
+        theta / PI + 0.5
+    );
+
+    return texture(u_equirect, uv);
+}
+
+void main() {
+    ivec2 size = imageSize(u_cubemap).xy;
+
+    if (gl_GlobalInvocationID.x >= size.x || gl_GlobalInvocationID.y >= size.y)
+        return;
+
+    uint face = gl_GlobalInvocationID.z;
+    vec2 uv = (vec2(gl_GlobalInvocationID.xy) + 0.5) / vec2(size);
+
+    vec3 dir = cube_dir(face, uv);
+    vec4 color = sample_equirect(dir);
+
+    imageStore(u_cubemap, ivec3(gl_GlobalInvocationID), color);
+}
