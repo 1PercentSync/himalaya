@@ -24,6 +24,7 @@
 #include <algorithm>
 #include <bit>
 #include <cassert>
+#include <cmath>
 #include <vector>
 
 namespace himalaya::framework {
@@ -42,7 +43,7 @@ namespace himalaya::framework {
         auto [equirect, eq_width] = load_equirect(hdr_path);
         convert_equirect_to_cubemap(ctx, sc, equirect, eq_width, deferred);
         compute_irradiance(ctx, sc, deferred);
-        // TODO: compute_prefiltered(ctx, sc, deferred);
+        compute_prefiltered(ctx, sc, deferred);
         // TODO: compute_brdf_lut(ctx, sc, deferred);
 
         ctx.end_immediate();
@@ -107,11 +108,9 @@ namespace himalaya::framework {
                                           const uint32_t equirect_width,
                                           DeferredCleanup &deferred) {
         // Derive cubemap face size from equirect width (360° → 90° per face)
-        constexpr uint32_t kMinCubemapSize = 256;
         constexpr uint32_t kMaxCubemapSize = 2048;
-        const uint32_t face_size = std::clamp(std::bit_ceil(equirect_width / 4),
-                                              kMinCubemapSize,
-                                              kMaxCubemapSize);
+        const uint32_t face_size = std::min(std::bit_ceil(equirect_width / 4),
+                                            kMaxCubemapSize);
 
         // --- Create cubemap image (R16G16B16A16F) ---
         const rhi::ImageDesc cubemap_desc{
@@ -484,6 +483,215 @@ namespace himalaya::framework {
 
         spdlog::info("IBL: irradiance cubemap ({}x{} per face, R11G11B10F)",
                      kFaceSize, kFaceSize);
+    }
+
+    // -----------------------------------------------------------------------
+    // compute_prefiltered — GGX importance-sampled specular prefilter
+    // -----------------------------------------------------------------------
+
+    void IBL::compute_prefiltered(rhi::Context &ctx,
+                                  rhi::ShaderCompiler &sc,
+                                  DeferredCleanup &deferred) {
+        constexpr uint32_t kFaceSize = 512;
+        const uint32_t mip_count = static_cast<uint32_t>(std::floor(std::log2(kFaceSize))) + 1;
+        prefiltered_mip_count_ = mip_count;
+
+        // --- Create prefiltered cubemap (512x512, full mip chain, R16G16B16A16F) ---
+        const rhi::ImageDesc prefiltered_desc{
+            .width = kFaceSize,
+            .height = kFaceSize,
+            .depth = 1,
+            .mip_levels = mip_count,
+            .array_layers = 6,
+            .sample_count = 1,
+            .format = rhi::Format::R16G16B16A16Sfloat,
+            .usage = rhi::ImageUsage::Sampled | rhi::ImageUsage::Storage,
+        };
+        prefiltered_cubemap_ = rm_->create_image(prefiltered_desc, "IBL Prefiltered");
+
+        // --- Temporary sampler for cubemap sampling ---
+        constexpr rhi::SamplerDesc sampler_desc{
+            .mag_filter = rhi::Filter::Linear,
+            .min_filter = rhi::Filter::Linear,
+            .mip_mode = rhi::SamplerMipMode::Nearest,
+            .wrap_u = rhi::SamplerWrapMode::ClampToEdge,
+            .wrap_v = rhi::SamplerWrapMode::ClampToEdge,
+            .max_anisotropy = 0.0f,
+            .max_lod = 0.0f,
+        };
+        const auto temp_sampler = rm_->create_sampler(sampler_desc, "IBL Prefilter Sampler");
+        deferred.emplace_back([temp_sampler, rm = rm_] { rm->destroy_sampler(temp_sampler); });
+
+        // --- Compile compute shader and create pipeline (with push constant for roughness) ---
+        auto spirv = sc.compile_from_file("ibl/prefilter.comp",
+                                          rhi::ShaderStage::Compute);
+        assert(!spirv.empty() && "Failed to compile prefilter.comp");
+        const auto shader_module = rhi::create_shader_module(ctx.device, spirv);
+
+        constexpr VkDescriptorSetLayoutBinding bindings[] = {
+            {
+                .binding = 0,
+                .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                .descriptorCount = 1,
+                .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+            },
+            {
+                .binding = 1,
+                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+                .descriptorCount = 1,
+                .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+            },
+        };
+
+        VkDescriptorSetLayoutCreateInfo layout_ci{};
+        layout_ci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+        layout_ci.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT;
+        layout_ci.bindingCount = 2;
+        layout_ci.pBindings = bindings;
+
+        VkDescriptorSetLayout push_layout = VK_NULL_HANDLE;
+        VK_CHECK(vkCreateDescriptorSetLayout(ctx.device, &layout_ci, nullptr, &push_layout));
+
+        const rhi::ComputePipelineDesc pipeline_desc{
+            .compute_shader = shader_module,
+            .descriptor_set_layouts = {push_layout},
+            .push_constant_ranges = {
+                {
+                    .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+                    .offset = 0,
+                    .size = sizeof(float),
+                }
+            },
+        };
+        auto pipeline = rhi::create_compute_pipeline(ctx.device, pipeline_desc);
+        deferred.emplace_back([device = ctx.device, pipeline] { pipeline.destroy(device); });
+
+        vkDestroyShaderModule(ctx.device, shader_module, nullptr);
+        vkDestroyDescriptorSetLayout(ctx.device, push_layout, nullptr);
+
+        // --- Create per-mip 2D array views for storage writes ---
+        const auto &prefiltered_img = rm_->get_image(prefiltered_cubemap_);
+
+        std::vector<VkImageView> mip_views(mip_count);
+        for (uint32_t mip = 0; mip < mip_count; ++mip) {
+            VkImageViewCreateInfo view_ci{};
+            view_ci.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+            view_ci.image = prefiltered_img.image;
+            view_ci.viewType = VK_IMAGE_VIEW_TYPE_2D_ARRAY;
+            view_ci.format = VK_FORMAT_R16G16B16A16_SFLOAT;
+            view_ci.subresourceRange = {
+                .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                .baseMipLevel = mip,
+                .levelCount = 1,
+                .baseArrayLayer = 0,
+                .layerCount = 6,
+            };
+            VK_CHECK(vkCreateImageView(ctx.device, &view_ci, nullptr, &mip_views[mip]));
+            deferred.emplace_back([device = ctx.device, view = mip_views[mip]] {
+                vkDestroyImageView(device, view, nullptr);
+            });
+        }
+
+        // --- Record barriers and per-mip dispatch ---
+        const rhi::CommandBuffer cmd(ctx.immediate_command_buffer);
+
+        // Transition ALL mip levels UNDEFINED → GENERAL
+        VkImageMemoryBarrier2 to_general{};
+        to_general.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+        to_general.srcStageMask = VK_PIPELINE_STAGE_2_NONE;
+        to_general.srcAccessMask = VK_ACCESS_2_NONE;
+        to_general.dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+        to_general.dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT;
+        to_general.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        to_general.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+        to_general.image = prefiltered_img.image;
+        to_general.subresourceRange = {
+            .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+            .baseMipLevel = 0,
+            .levelCount = mip_count,
+            .baseArrayLayer = 0,
+            .layerCount = 6,
+        };
+
+        VkDependencyInfo pre_dep{};
+        pre_dep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+        pre_dep.imageMemoryBarrierCount = 1;
+        pre_dep.pImageMemoryBarriers = &to_general;
+        cmd.pipeline_barrier(pre_dep);
+
+        cmd.bind_compute_pipeline(pipeline);
+
+        const auto &cubemap_img = rm_->get_image(cubemap_);
+        const auto &temp_vk_sampler = rm_->get_sampler(temp_sampler).sampler;
+
+        VkDescriptorImageInfo input_info{};
+        input_info.sampler = temp_vk_sampler;
+        input_info.imageView = cubemap_img.view;
+        input_info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+        constexpr uint32_t kGroupSize = 16;
+
+        for (uint32_t mip = 0; mip < mip_count; ++mip) {
+            const float mip_roughness = static_cast<float>(mip) / static_cast<float>(mip_count - 1);
+            const uint32_t mip_size = kFaceSize >> mip;
+
+            // Push roughness constant
+            cmd.push_constants(pipeline.layout, VK_SHADER_STAGE_COMPUTE_BIT,
+                               &mip_roughness, sizeof(float));
+
+            // Push descriptors with per-mip output view
+            VkDescriptorImageInfo output_info{};
+            output_info.imageView = mip_views[mip];
+            output_info.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+
+            const VkWriteDescriptorSet writes[] = {
+                {
+                    .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                    .dstBinding = 0,
+                    .descriptorCount = 1,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                    .pImageInfo = &input_info,
+                },
+                {
+                    .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                    .dstBinding = 1,
+                    .descriptorCount = 1,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+                    .pImageInfo = &output_info,
+                },
+            };
+            cmd.push_descriptor_set(pipeline.layout, 0, writes);
+
+            const uint32_t groups = (mip_size + kGroupSize - 1) / kGroupSize;
+            cmd.dispatch(std::max(groups, 1u), std::max(groups, 1u), 6);
+        }
+
+        // Transition ALL mip levels GENERAL → SHADER_READ_ONLY
+        VkImageMemoryBarrier2 to_read{};
+        to_read.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+        to_read.srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+        to_read.srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT;
+        to_read.dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+        to_read.dstAccessMask = VK_ACCESS_2_SHADER_SAMPLED_READ_BIT;
+        to_read.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
+        to_read.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        to_read.image = prefiltered_img.image;
+        to_read.subresourceRange = {
+            .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+            .baseMipLevel = 0,
+            .levelCount = mip_count,
+            .baseArrayLayer = 0,
+            .layerCount = 6,
+        };
+
+        VkDependencyInfo post_dep{};
+        post_dep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+        post_dep.imageMemoryBarrierCount = 1;
+        post_dep.pImageMemoryBarriers = &to_read;
+        cmd.pipeline_barrier(post_dep);
+
+        spdlog::info("IBL: prefiltered cubemap ({}x{} per face, {} mip levels)",
+                     kFaceSize, kFaceSize, mip_count);
     }
 
     void IBL::destroy() {

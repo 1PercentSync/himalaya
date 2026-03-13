@@ -45,7 +45,7 @@ namespace himalaya::framework {
          * 1. stbi_loadf → equirect R16G16B16A16F GPU image
          * 2. Equirect → cubemap (face size derived from input width, compute shader)
          * 3. Irradiance convolution (32×32 per face, R11G11B10F, compute)
-         * 4. Prefiltered environment map (256×256 per face, multi-mip, R16G16B16A16F, compute)
+         * 4. Prefiltered environment map (512×512 per face, multi-mip, R16G16B16A16F, compute)
          * 5. BRDF Integration LUT (256×256, R16G16_UNORM, compute)
          *
          * Products are registered to Set 1 bindless arrays. The equirect input image
@@ -112,7 +112,7 @@ namespace himalaya::framework {
          * @brief Convert equirectangular image to a cubemap via compute shader.
          *
          * Cubemap face size is derived from the equirect width to match angular
-         * resolution: clamp(bit_ceil(equirect_width / 4), 256, 2048).
+         * resolution: min(bit_ceil(equirect_width / 4), 2048).
          * Dispatches equirect_to_cubemap.comp using push descriptors, and
          * transitions the cubemap to SHADER_READ_ONLY for subsequent sampling.
          * Must be called within an active immediate scope.
@@ -150,6 +150,26 @@ namespace himalaya::framework {
                                 rhi::ShaderCompiler &sc,
                                 DeferredCleanup &deferred);
 
+        /**
+         * @brief Generate prefiltered environment cubemap for specular IBL.
+         *
+         * Creates a 512x512 cubemap with a full mip chain, where each mip level
+         * stores the environment convolved at increasing roughness. Uses GGX
+         * importance sampling with 1024 samples per texel. Roughness is passed
+         * via push constant, one dispatch per mip level.
+         * Must be called within an active immediate scope, after convert_equirect_to_cubemap().
+         *
+         * Transient resources (pipeline, per-mip image views, sampler) are pushed to
+         * @p deferred for destruction after end_immediate().
+         *
+         * @param ctx      RHI context (device, immediate command buffer).
+         * @param sc       Shader compiler for compute shader compilation.
+         * @param deferred Cleanup functions executed after GPU completion.
+         */
+        void compute_prefiltered(rhi::Context &ctx,
+                                 rhi::ShaderCompiler &sc,
+                                 DeferredCleanup &deferred);
+
         // --- Service pointers (stored for destroy) ---
         rhi::ResourceManager *rm_ = nullptr;
         rhi::DescriptorManager *dm_ = nullptr;
@@ -157,7 +177,7 @@ namespace himalaya::framework {
         // --- GPU resources (owned) ---
         rhi::ImageHandle cubemap_; ///< Intermediate cubemap (size derived from input, kept for Skybox)
         rhi::ImageHandle irradiance_cubemap_; ///< Irradiance map (32×32 per face)
-        rhi::ImageHandle prefiltered_cubemap_; ///< Prefiltered env map (256×256, multi-mip)
+        rhi::ImageHandle prefiltered_cubemap_; ///< Prefiltered env map (512×512, multi-mip)
         rhi::ImageHandle brdf_lut_; ///< BRDF integration LUT (256×256)
 
         // --- Shared sampler for all IBL products ---
