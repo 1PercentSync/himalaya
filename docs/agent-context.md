@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段三 — PBR 光照基础（Cook-Torrance + IBL + MSAA + HDR）
-- **进度**：Step 6 进行中，irradiance 余弦卷积已完成（含 B10G11R11UfloatPack32 格式新增），下一项 prefilter compute shader
+- **进度**：Step 6 进行中，prefiltered environment map 已完成（512² 10 mip GGX 重要性采样，含 cubemap 下限移除），下一项 BRDF LUT compute shader
 
 ### 下一个任务
 
-Step 6 第 5 项：`shaders/ibl/prefilter.comp` + `compute_prefiltered()` 私有方法 — prefiltered cubemap 512² R16G16B16A16F 多 mip 创建、per-mip roughness push constant、dispatch。
+Step 6 第 6 项：`shaders/ibl/brdf_lut.comp` + `compute_brdf_lut()` 私有方法 — BRDF LUT 256² R16G16_UNORM 创建、dispatch。
 
 ---
 
