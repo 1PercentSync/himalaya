@@ -180,16 +180,14 @@ namespace himalaya::app {
         // Lighting section
         ImGui::Separator();
         if (ImGui::CollapsingHeader("Lighting", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::Text("IBL Rotation: %.1f%s", ctx.ibl_rotation_deg, "\xC2\xB0");
+
             const bool using_default = !ctx.has_scene_lights || ctx.force_default_light;
 
             // Force Default Light checkbox (disabled when scene has no lights)
             ImGui::BeginDisabled(!ctx.has_scene_lights);
             ImGui::Checkbox("Force Default Light", &ctx.force_default_light);
             ImGui::EndDisabled();
-
-            ImGui::Text("Yaw: %.1f%s  Pitch: %.1f%s",
-                        ctx.light_yaw_deg, "\xC2\xB0",
-                        ctx.light_pitch_deg, "\xC2\xB0");
 
             // Intensity slider (editable only when using default light)
             if (using_default) {

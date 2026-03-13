@@ -118,13 +118,12 @@ namespace himalaya::app {
         /** @brief Exposure value in EV (pow(2, ev) gives linear exposure multiplier). */
         float ev_ = 0.0f;
 
+        // --- IBL rotation ---
+
+        /** @brief IBL horizontal rotation angle in radians (left-click drag controlled). */
+        float ibl_yaw_ = 0.0f;
+
         // --- Default light control ---
-
-        /** @brief Yaw angle for the default directional light (radians). */
-        float light_yaw_ = glm::radians(-45.0f);
-
-        /** @brief Pitch angle for the default directional light (radians, negative = downward). */
-        float light_pitch_ = glm::radians(-55.0f);
 
         /** @brief Intensity of the default directional light. */
         float light_intensity_ = 1.0f;
@@ -132,16 +131,13 @@ namespace himalaya::app {
         /** @brief When true, use the default light even if the scene provides lights. */
         bool force_default_light_ = false;
 
-        // --- Light direction viewport drag state ---
+        // --- IBL rotation viewport drag state ---
 
-        /** @brief Previous cursor X for left-click light drag delta. */
-        double light_last_cursor_x_ = 0.0;
+        /** @brief Previous cursor X for left-click IBL drag delta. */
+        double drag_last_x_ = 0.0;
 
-        /** @brief Previous cursor Y for left-click light drag delta. */
-        double light_last_cursor_y_ = 0.0;
-
-        /** @brief Whether the left mouse button is being held for light dragging. */
-        bool light_dragging_ = false;
+        /** @brief Whether the left mouse button is being held for IBL dragging. */
+        bool drag_active_ = false;
 
         // --- Rendering ---
 
@@ -189,12 +185,11 @@ namespace himalaya::app {
         void handle_resize();
 
         /**
-         * @brief Processes left-click drag to rotate the default directional light.
-         * @param using_default Whether the default light is currently active.
+         * @brief Processes left-click drag to rotate the IBL environment horizontally.
          *
-         * Only processes input when using_default is true. Does not hide the cursor
-         * (unlike right-click camera rotation).
+         * Updates ibl_yaw_ based on horizontal cursor delta. Does not hide
+         * the cursor (unlike right-click camera rotation).
          */
-        void update_light_input(bool using_default);
+        void update_ibl_input();
     };
 } // namespace himalaya::app

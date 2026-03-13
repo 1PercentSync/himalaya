@@ -74,6 +74,12 @@ namespace himalaya::app {
 
         /** @brief Exposure value (linear scale, from pow(2, EV)). */
         float exposure;
+
+        /** @brief IBL rotation sin(yaw) for environment horizontal rotation. */
+        float ibl_rotation_sin;
+
+        /** @brief IBL rotation cos(yaw) for environment horizontal rotation. */
+        float ibl_rotation_cos;
     };
 
     /**

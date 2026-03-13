@@ -156,15 +156,17 @@ namespace himalaya::app {
         const bool has_scene_lights = !scene_lights.empty();
         const bool using_default = !has_scene_lights || force_default_light_;
 
-        // Left-click drag to rotate default light direction
-        update_light_input(using_default);
+        // Left-click drag to rotate IBL environment
+        update_ibl_input();
 
-        // Recompute default light direction from yaw/pitch each frame
+        // Default light (fixed direction, will be retired in Step 6.5)
+        constexpr float kDefaultLightYaw = glm::radians(-45.0f);
+        constexpr float kDefaultLightPitch = glm::radians(-55.0f);
         if (default_lights_.empty()) default_lights_.resize(1);
         default_lights_[0].direction = glm::normalize(glm::vec3(
-            std::sin(light_yaw_) * std::cos(light_pitch_),
-            std::sin(light_pitch_),
-            -std::cos(light_yaw_) * std::cos(light_pitch_)));
+            std::sin(kDefaultLightYaw) * std::cos(kDefaultLightPitch),
+            std::sin(kDefaultLightPitch),
+            -std::cos(kDefaultLightYaw) * std::cos(kDefaultLightPitch)));
         default_lights_[0].color = glm::vec3(1.0f);
         default_lights_[0].intensity = light_intensity_;
         default_lights_[0].cast_shadows = false;
@@ -198,17 +200,9 @@ namespace himalaya::app {
         const auto total_instances = static_cast<uint32_t>(instances.size());
 
         // Compute light display values for debug UI
-        float display_yaw_deg, display_pitch_deg, display_intensity;
-        if (using_default) {
-            display_yaw_deg = glm::degrees(light_yaw_);
-            display_pitch_deg = glm::degrees(light_pitch_);
-            display_intensity = light_intensity_;
-        } else {
-            const auto &dir = scene_lights[0].direction;
-            display_pitch_deg = glm::degrees(std::asin(dir.y));
-            display_yaw_deg = glm::degrees(std::atan2(dir.x, -dir.z));
-            display_intensity = scene_lights[0].intensity;
-        }
+        const float display_intensity = using_default
+                                            ? light_intensity_
+                                            : scene_lights[0].intensity;
 
         // Debug UI
         // ReSharper disable once CppUseStructuredBinding
@@ -217,12 +211,11 @@ namespace himalaya::app {
             .context = context_,
             .swapchain = swapchain_,
             .camera = camera_,
-            .light_yaw_deg = display_yaw_deg,
-            .light_pitch_deg = display_pitch_deg,
             .light_intensity = display_intensity,
             .default_intensity = light_intensity_,
             .force_default_light = force_default_light_,
             .has_scene_lights = has_scene_lights,
+            .ibl_rotation_deg = glm::degrees(ibl_yaw_),
             .ambient_intensity = ambient_intensity_,
             .ev = ev_,
             .current_sample_count = renderer_.current_sample_count(),
@@ -264,6 +257,8 @@ namespace himalaya::app {
             .mesh_instances = scene_render_data_.mesh_instances,
             .ambient_intensity = ambient_intensity_,
             .exposure = std::pow(2.0f, ev_),
+            .ibl_rotation_sin = std::sin(ibl_yaw_),
+            .ibl_rotation_cos = std::cos(ibl_yaw_),
         };
 
         renderer_.render(cmd, input);
@@ -333,14 +328,9 @@ namespace himalaya::app {
         renderer_.on_swapchain_recreated();
     }
 
-    // ---- Light direction input ----
+    // ---- IBL rotation input ----
 
-    void Application::update_light_input(const bool using_default) {
-        if (!using_default) {
-            light_dragging_ = false;
-            return;
-        }
-
+    void Application::update_ibl_input() {
         const ImGuiIO &io = ImGui::GetIO();
         const bool left_pressed = !io.WantCaptureMouse &&
                                   glfwGetMouseButton(window_, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS;
@@ -349,26 +339,18 @@ namespace himalaya::app {
         glfwGetCursorPos(window_, &cursor_x, &cursor_y);
 
         if (left_pressed) {
-            if (!light_dragging_) {
-                // Just pressed: record starting position (no cursor hiding)
-                light_dragging_ = true;
-                light_last_cursor_x_ = cursor_x;
-                light_last_cursor_y_ = cursor_y;
+            if (!drag_active_) {
+                drag_active_ = true;
+                drag_last_x_ = cursor_x;
             }
 
-            const auto dx = static_cast<float>(cursor_x - light_last_cursor_x_);
-            const auto dy = static_cast<float>(cursor_y - light_last_cursor_y_);
-            light_last_cursor_x_ = cursor_x;
-            light_last_cursor_y_ = cursor_y;
+            const auto dx = static_cast<float>(cursor_x - drag_last_x_);
+            drag_last_x_ = cursor_x;
 
             constexpr float kSensitivity = 0.003f;
-            light_yaw_ += dx * kSensitivity;
-            light_pitch_ -= dy * kSensitivity;
-
-            // Clamp pitch to [-90°, 0°] — light must come from above
-            light_pitch_ = std::clamp(light_pitch_, glm::radians(-90.0f), 0.0f);
+            ibl_yaw_ += dx * kSensitivity;
         } else {
-            light_dragging_ = false;
+            drag_active_ = false;
         }
     }
 } // namespace himalaya::app
