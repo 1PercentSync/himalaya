@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 6 第 5 项：`shaders/ibl/prefilter.comp` + `compute_prefiltered()` 私有方法 — prefiltered cubemap 256² R16G16B16A16F 多 mip 创建、per-mip roughness push constant、dispatch。
+Step 6 第 5 项：`shaders/ibl/prefilter.comp` + `compute_prefiltered()` 私有方法 — prefiltered cubemap 512² R16G16B16A16F 多 mip 创建、per-mip roughness push constant、dispatch。
 
 ---
 

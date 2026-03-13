@@ -291,7 +291,7 @@ Depth + Normal PrePass 设计、Alpha Mask 处理、Forward Pass 深度配合见
 IBL 管线设计（环境贴图输入、预计算策略、产物参数、模块归属）见 `milestone-1/m1-design-decisions.md`「IBL 管线」。
 
 关键设计：
-- Equirectangular .hdr 输入（R16G16B16A16_SFLOAT），GPU compute shader 转 cubemap（分辨率由输入宽度决定：`clamp(bit_ceil(width/4), 256, 2048)` per face）
+- Equirectangular .hdr 输入（R16G16B16A16_SFLOAT），GPU compute shader 转 cubemap（分辨率由输入宽度决定：`min(bit_ceil(width/4), 2048)` per face）
 - 中间 cubemap 保留用于 Skybox Pass 天空渲染（M2 Bruneton 替换后可销毁）
 - 预计算在单个 `begin_immediate()` / `end_immediate()` scope 内录入同一 command buffer（upload + 所有 compute dispatch）
 - IBL compute shader 使用 Push Descriptors 绑定输入/输出 image（项目例外，仅限一次性 init compute dispatch）
@@ -417,7 +417,7 @@ shaders/ibl/
 | Tonemapping 策略 | ACES fullscreen fragment shader，SRGB swapchain 不支持 `STORAGE_BIT` |
 | Fullscreen triangle | Tonemapping 等全屏 pass 使用 hardcoded fullscreen triangle（vertex shader 生成，无顶点输入） |
 | Step 4c 资源拓扑 | 4x 时创建 msaa_color + msaa_depth + hdr_color + depth；1x 时只创建 hdr_color + depth。Step 4c 不创建 resolved depth（Step 5 PrePass 引入时创建） |
-| IBL 预计算 | 单个 immediate scope 录入 upload + 4 个 compute dispatch，DeferredCleanup 模式管理临时对象生命周期。Equirect 输入 R16G16B16A16F，中间 cubemap 分辨率由输入宽度动态计算（`clamp(bit_ceil(width/4), 256, 2048)`），保留用于 Skybox |
+| IBL 预计算 | 单个 immediate scope 录入 upload + 4 个 compute dispatch，DeferredCleanup 模式管理临时对象生命周期。Equirect 输入 R16G16B16A16F，中间 cubemap 分辨率由输入宽度动态计算（`min(bit_ceil(width/4), 2048)`），保留用于 Skybox |
 | Skybox Pass | Step 6 引入。独立 RG pass，Forward 之后 Tonemapping 之前，渲染到 resolved 1x hdr_color，GREATER_OR_EQUAL depth test。不属于 MSAA 相关 pass，方法集 `setup()` / `record()` / `destroy()`。独立 `skybox.vert`（不复用 `fullscreen.vert`）。采样前应用 IBL 旋转 |
 | IBL 旋转 | Step 6 引入。CPU 预计算 `sin(ibl_yaw_)` / `cos(ibl_yaw_)` 写入 GlobalUBO `ibl_rotation_sin/cos`，shader `rotate_y()` 旋转采样方向。仅影响环境采样（skybox / irradiance / prefiltered），不影响 glTF 场景灯光方向。左键拖拽从 default light 方向改为 IBL 水平旋转（仅 yaw） |
 | IBL 环境光验证 | Step 6.5 引入。在 Cook-Torrance 之前独立验证 IBL 数据正确性。forward.frag 用 Lambert 直射光 + IBL 环境光（Split-Sum），出问题时可区分 IBL 数据 vs BRDF 数学 |

@@ -1447,11 +1447,11 @@ if ((global.feature_flags & FEATURE_SSAO) != 0u) {
 
 | 参数 | 值 | 理由 |
 |------|------|------|
-| 分辨率 | `clamp(bit_ceil(equirect_width / 4), 256, 2048)` per face | 匹配输入角分辨率（equirect 360° → face 90°），同时保证 Skybox 渲染清晰度 |
+| 分辨率 | `min(bit_ceil(equirect_width / 4), 2048)` per face | 匹配输入角分辨率（equirect 360° → face 90°），上限 2048 防止显存爆炸 |
 | 格式 | R16G16B16A16_SFLOAT | 与 prefiltered map 格式一致，避免精度损失 |
 | 预计算后 | **保留** | 用于天空盒渲染（Skybox Pass） |
 
-**分辨率由输入 equirect 宽度决定**：cubemap 同时用于 IBL 预计算源数据和 Skybox 天空渲染。Skybox 直接暴露给玩家，固定分辨率在高质量输入下会丢失细节。`equirect_width / 4` 匹配角分辨率（360° 到 90°），`std::bit_ceil` 向上取整到 2 的幂，clamp 到 [256, 2048] 防止极端输入。常见 4096×2048 HDR → 1024 per face（~48 MB），8192×4096 → 2048 per face（~192 MB）。
+**分辨率由输入 equirect 宽度决定**：cubemap 同时用于 IBL 预计算源数据和 Skybox 天空渲染。Skybox 直接暴露给玩家，固定分辨率在高质量输入下会丢失细节。`equirect_width / 4` 匹配角分辨率（360° 到 90°），`std::bit_ceil` 向上取整到 2 的幂，上限 2048 防止显存爆炸（无下限——低分辨率输入不会凭空产生细节）。常见 4096×2048 HDR → 1024 per face（~48 MB），8192×4096 → 2048 per face（~192 MB）。
 
 **保留中间 cubemap**：M1 规划包含"静态 HDR Cubemap 天空"（见 `milestone-1.md`），中间 cubemap 是 Skybox Pass 的源数据。M2 Bruneton 大气散射替换天空后可改为销毁。
 
@@ -1482,7 +1482,7 @@ if ((global.feature_flags & FEATURE_SSAO) != 0u) {
 | 产物 | 分辨率 | 格式 | 内存 | 说明 |
 |------|--------|------|------|------|
 | Irradiance Map | 32×32 per face | R11G11B10F | ~48 KB | 极低频信号，R11G11B10F 远超需求 |
-| Prefiltered Env Map | 256×256 per face (含 mip chain) | R16G16B16A16F | ~24 MB | 高精度避免镜面反射 banding（banding 难排查，分辨率不足易排查）。分辨率提取为常量供后续配置 |
+| Prefiltered Env Map | 512×512 per face (含 mip chain) | R16G16B16A16F | ~96 MB | 高精度避免镜面反射 banding；512 保证低 roughness（0.05~0.1）近距离观察仍足够锐利。分辨率提取为常量供后续配置 |
 | BRDF Integration LUT | 256×256 | R16G16_UNORM | ~256 KB | 值域 [0,1]，UNORM 足够。与环境无关，所有环境共享 |
 
 Prefiltered map 用 R16G16B16A16F 而非 R11G11B10F：mip0（低 roughness）近似镜面反射，直接暴露 cubemap 内容，6-bit 尾数在平滑渐变中可能产生 banding。Irradiance map 是余弦积分后的极低频信号，不存在此风险。
