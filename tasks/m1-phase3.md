@@ -97,7 +97,7 @@
 - [x] `shaders/ibl/prefilter.comp` + `compute_prefiltered()` 私有方法（prefiltered cubemap 512² R16G16B16A16F 多 mip 创建、per-mip roughness push constant、dispatch）
 - [x] `shaders/ibl/brdf_lut.comp` + `compute_brdf_lut()` 私有方法（BRDF LUT 256² R16G16_UNORM 创建、dispatch）
 - [x] `init()` 编排 + `register_bindless_resources()` + `destroy()` 实现（串联预计算阶段、创建 sampler、注册产物到 Set 1 bindless、equirect 销毁、资源清理）
-- [ ] `GlobalUniformData` 新增 IBL 字段（irradiance_cubemap_index、prefiltered_cubemap_index、brdf_lut_index、prefiltered_mip_count、skybox_cubemap_index）+ 更新 `bindings.glsl` GlobalUBO 布局（`cubemaps[]` 声明已在 Step 3 完成，此处仅更新 GlobalUBO）
+- [x] `GlobalUniformData` 新增 IBL 字段（irradiance_cubemap_index、prefiltered_cubemap_index、brdf_lut_index、prefiltered_mip_count、skybox_cubemap_index）+ 更新 `bindings.glsl` GlobalUBO 布局（`cubemaps[]` 声明已在 Step 3 完成，此处仅更新 GlobalUBO）
 - [ ] Renderer 在 `init()` 中调用 IBL 预计算，在 `destroy()` 中清理 IBL 资源
 - [ ] 创建 `shaders/skybox.vert` + `shaders/skybox.frag`（独立 VS 计算世界方向 varying + `gl_Position.z = 0.0`，FS rotate_y + normalize + cubemap 采样）
 - [ ] SkyboxPass 类（`passes/skybox_pass.h/cpp`）：方法集 setup / record / destroy（不属于 MSAA 相关 pass），渲染到 resolved 1x hdr_color，读 resolved depth（GREATER_OR_EQUAL + depth write OFF）
