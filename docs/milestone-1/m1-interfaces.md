@@ -164,10 +164,12 @@ Pipeline 不使用 handle 体系——所有权单一明确（pass / MaterialTem
 ```cpp
 // 所有字段必须显式初始化，无默认值。
 // create_image() 通过 assert 拦截 depth/mip_levels/sample_count 为 0 的情况。
+// array_layers == 6 自动推断 cubemap（VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT + CUBE view type）。
 struct ImageDesc {
     uint32_t width, height;
     uint32_t depth;             // 2D images: must be 1
     uint32_t mip_levels;        // single level: must be 1
+    uint32_t array_layers;      // cubemap: 6, regular 2D: 1
     uint32_t sample_count;      // no MSAA: must be 1
     Format format;              // 自定义枚举，映射到 VkFormat
     ImageUsage usage;           // 自定义 flags，映射到 VkImageUsageFlags

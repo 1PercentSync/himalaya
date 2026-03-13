@@ -1558,9 +1558,11 @@ IBL 是唯一消费者，一次性 init 代码，过度封装无益。与 Comman
 
 ### IBL Barrier 管理
 
-IBL 预计算在 immediate scope 内执行，手动 `vkCmdPipelineBarrier2` 管理各步骤之间的资源转换。
+IBL 预计算在单个 `begin_immediate()` / `end_immediate()` scope 内执行，所有 GPU 命令（upload + 多次 compute dispatch）录入同一 command buffer。各步骤之间用 `vkCmdPipelineBarrier2` 手动管理资源转换。
 
-线性流水线（equirect → cubemap → irradiance / prefiltered → SHADER_READ_ONLY_OPTIMAL），每步之间的 barrier 简单明确，不需要 Render Graph 参与。与 `upload_image()` / `generate_mips()` 的 barrier 模式一致——immediate scope 内的线性 GPU 工作。
+线性流水线（equirect → cubemap → irradiance / prefiltered → SHADER_READ_ONLY_OPTIMAL），每步之间的 barrier 简单明确，不需要 Render Graph 参与。
+
+**DeferredCleanup 模式**：compute dispatch 引用的临时对象（pipeline、image view、sampler）在 command buffer 执行期间不得销毁（Vulkan spec 要求）。各私有方法将清理 lambda 推入 `DeferredCleanup` 向量，`init()` 在 `end_immediate()`（含 `vkQueueWaitIdle`）后统一执行。可立即销毁的对象（`VkShaderModule`、`VkDescriptorSetLayout`——不在 spec 的 pending-state 引用列表中）仍就地销毁。
 
 最终产物转到 `SHADER_READ_ONLY_OPTIMAL` 后注册到 Set 1 bindless 数组。
 
