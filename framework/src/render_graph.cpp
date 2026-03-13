@@ -231,6 +231,7 @@ namespace himalaya::framework {
             .height = h,
             .depth = 1,
             .mip_levels = desc.mip_levels,
+            .array_layers = 1,
             .sample_count = desc.sample_count,
             .format = desc.format,
             .usage = desc.usage,

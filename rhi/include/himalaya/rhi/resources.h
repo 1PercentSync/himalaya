@@ -135,6 +135,9 @@ namespace himalaya::rhi {
         /** @brief Number of mip levels. */
         uint32_t mip_levels;
 
+        /** @brief Number of array layers (6 for cubemaps, 1 for regular 2D). */
+        uint32_t array_layers;
+
         /** @brief Number of samples per pixel (1 = no MSAA). */
         uint32_t sample_count;
 

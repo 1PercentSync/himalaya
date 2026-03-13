@@ -258,6 +258,7 @@ namespace himalaya::rhi {
         assert(desc.depth == 1 &&
             "3D images (depth > 1) not yet supported — remove this assert when adding VK_IMAGE_TYPE_3D");
         assert(desc.mip_levels > 0 && "Image mip_levels must be greater than zero");
+        assert(desc.array_layers > 0 && "Image array_layers must be greater than zero");
         assert(desc.sample_count > 0 && "Image sample_count must be greater than zero");
         assert(debug_name && "debug_name must not be null");
 
@@ -267,12 +268,17 @@ namespace himalaya::rhi {
         image_info.format = to_vk_format(desc.format);
         image_info.extent = {desc.width, desc.height, desc.depth};
         image_info.mipLevels = desc.mip_levels;
-        image_info.arrayLayers = 1;
+        image_info.arrayLayers = desc.array_layers;
         image_info.samples = static_cast<VkSampleCountFlagBits>(desc.sample_count);
         image_info.tiling = VK_IMAGE_TILING_OPTIMAL;
         image_info.usage = to_vk_image_usage(desc.usage);
         image_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
         image_info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+
+        const bool is_cubemap = desc.array_layers == 6;
+        if (is_cubemap) {
+            image_info.flags |= VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
+        }
 
         // Images are always GPU-only in M1
         VmaAllocationCreateInfo alloc_info{};
@@ -291,17 +297,17 @@ namespace himalaya::rhi {
             nullptr));
         slot.desc = desc;
 
-        // Create default image view
+        // Create default image view (cube view for cubemaps, 2D otherwise)
         VkImageViewCreateInfo view_info{};
         view_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
         view_info.image = slot.image;
-        view_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+        view_info.viewType = is_cubemap ? VK_IMAGE_VIEW_TYPE_CUBE : VK_IMAGE_VIEW_TYPE_2D;
         view_info.format = image_info.format;
         view_info.subresourceRange.aspectMask = aspect_from_format(desc.format);
         view_info.subresourceRange.baseMipLevel = 0;
         view_info.subresourceRange.levelCount = desc.mip_levels;
         view_info.subresourceRange.baseArrayLayer = 0;
-        view_info.subresourceRange.layerCount = 1;
+        view_info.subresourceRange.layerCount = desc.array_layers;
 
         VK_CHECK(vkCreateImageView(context_->device, &view_info, nullptr, &slot.view));
 
