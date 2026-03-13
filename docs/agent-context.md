@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-阶段三 Step 6：IBL Pipeline + Skybox — IBL 预计算全流程（equirect → cubemap → irradiance/prefiltered/BRDF LUT）、4 个 compute shader、IBL 模块、Skybox Pass。
+阶段三 Step 6：IBL Pipeline + Skybox — IBL 预计算全流程（equirect → cubemap → irradiance/prefiltered/BRDF LUT）、4 个 compute shader、IBL 模块、Skybox Pass、IBL 水平旋转。Step 6 之后新增 Step 6.5（IBL 环境光验证 + 灯光体系重构），在 Cook-Torrance 之前独立验证 IBL 数据正确性。
 
 ---
 

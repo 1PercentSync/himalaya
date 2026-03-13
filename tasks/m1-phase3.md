@@ -101,17 +101,25 @@
 - [ ] `GlobalUniformData` 新增 IBL 字段（irradiance_cubemap_index、prefiltered_cubemap_index、brdf_lut_index、prefiltered_mip_count）+ 更新 `bindings.glsl` GlobalUBO 布局（Step 6 完成，不等 Step 7；`cubemaps[]` 声明已在 Step 3 完成，此处仅更新 GlobalUBO）
 - [ ] Renderer 在 `init()` 中调用 IBL 预计算，在 `destroy()` 中清理 IBL 资源
 - [ ] 创建 `shaders/skybox.vert`（独立 VS，计算世界方向 varying，`gl_Position.z = 0.0`；不复用 `fullscreen.vert`）
-- [ ] 创建 `shaders/skybox.frag`（normalize + texture 纯采样）
+- [ ] 创建 `shaders/skybox.frag`（rotate_y + normalize + texture 采样）
 - [ ] SkyboxPass 类（`passes/skybox_pass.h/cpp`）：方法集 setup / record / destroy（不属于 MSAA 相关 pass，无 on_resize / on_sample_count_changed），渲染到 resolved 1x hdr_color，读 resolved depth（GREATER_OR_EQUAL + depth write OFF）
-- [ ] 验证：IBL 预计算无 validation 报错，RenderDoc 检查 cubemap 各面和 mip 级别内容正确、BRDF LUT 呈现预期的渐变图案；天空背景正确显示
+- [ ] `GlobalUniformData` 新增 `ibl_rotation_sin` / `ibl_rotation_cos` + 更新 `bindings.glsl` GlobalUBO 布局
+- [ ] 左键拖拽改为 IBL 水平旋转（`light_yaw_` → `ibl_yaw_`，移除 pitch 逻辑），DebugUI Lighting 面板显示 IBL Rotation 角度
+- [ ] 验证：IBL 预计算无 validation 报错，RenderDoc 检查 cubemap 各面和 mip 级别内容正确、BRDF LUT 呈现预期的渐变图案；天空背景正确显示且可水平旋转
+
+## Step 6.5：IBL 环境光验证 + 灯光体系重构
+
+- [ ] `forward.frag` 采样 `metallic_roughness_tex`，metallic 工作流分离（F0 / diffuse_color）
+- [ ] `forward.frag` IBL 漫反射 + 镜面反射（irradiance + prefiltered + BRDF LUT Split-Sum，含 `rotate_y`），用 `ibl_intensity` 调制，移除固定 ambient 项
+- [ ] 灯光体系重构：`ambient_intensity` → `ibl_intensity` 全通路重命名（GlobalUniformData、bindings.glsl、RenderInput、Application、DebugUI）+ 退役 default light（移除 `default_lights_`、`light_pitch_`、`light_intensity_`、`force_default_light_` 及相关逻辑）+ 新增 `disable_scene_lights_`（DebugUI "Disable Scene Lights" checkbox + RenderInput 通路）+ DebugUI Lighting 面板全面更新
+- [ ] 验证：物体表面 IBL 光照正确（金属面反射环境、粗糙面模糊反射、非金属环境漫反射），`ibl_intensity` 滑条可调，IBL 可旋转，glTF 方向光可通过 checkbox 切换
 
 ## Step 7：PBR Shader 升级
 
 - [ ] 创建 `shaders/common/constants.glsl`（PI、EPSILON 等数学常量）
 - [ ] 创建 `shaders/common/brdf.glsl`（D_GGX、G_SmithGGX、F_Schlick、Lambert_diffuse，纯函数无场景数据依赖）
-- [ ] 创建 `shaders/common/lighting.glsl`（evaluate_directional_light、evaluate_ibl，内部 include constants + brdf，依赖 bindings.glsl 的光源/IBL 结构体）
-- [ ] 升级 `forward.frag`：替换 Lambert 为 Cook-Torrance（GGX / Smith Height-Correlated / Schlick）+ IBL 环境光（irradiance + prefiltered + BRDF LUT Split-Sum）
-- [ ] `forward.frag` 消费全部 5 个材质纹理：occlusion_tex 调制 IBL/ambient，emissive_tex × emissive_factor 加到最终颜色
+- [ ] 创建 `shaders/common/lighting.glsl`（evaluate_directional_light、evaluate_ibl，从 forward.frag 重构而来，内部 include constants + brdf）
+- [ ] 升级 `forward.frag`：Lambert 直射光 → Cook-Torrance（GGX / Smith Height-Correlated / Schlick），IBL 内联代码重构为 `evaluate_ibl()` 调用（逻辑不变）+ 新增 occlusion_tex 调制 IBL + emissive_tex × emissive_factor
 - [ ] DebugUI 渲染模式：增加可视化选项（Diffuse Only / Specular Only / IBL Only / Normal / Metallic / Roughness / AO）通过 GlobalUBO 传递 debug mode 标志，forward.frag 根据标志输出对应分量
-- [ ] 验证：glTF 场景正确 PBR 渲染，金属表面反射环境，粗糙表面漫反射，Debug 各模式可用
+- [ ] 验证：glTF 场景正确 PBR 渲染，Cook-Torrance 直射光 + IBL 环境光，金属表面反射环境，粗糙表面漫反射，Debug 各模式可用
 - [ ] 最终验证：补充 .hdr 环境贴图和额外 glTF PBR 测试模型（DamagedHelmet 或类似），结合现有 Sponza 场景全面验证
