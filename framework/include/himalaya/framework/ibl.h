@@ -43,7 +43,7 @@ namespace himalaya::framework {
          * scope. Transient resources are destroyed after GPU completion.
          * Pipeline stages:
          * 1. stbi_loadf → equirect R16G16B16A16F GPU image
-         * 2. Equirect → cubemap (1024×1024 per face, compute shader)
+         * 2. Equirect → cubemap (face size derived from input width, compute shader)
          * 3. Irradiance convolution (32×32 per face, R11G11B10F, compute)
          * 4. Prefiltered environment map (256×256 per face, multi-mip, R16G16B16A16F, compute)
          * 5. BRDF Integration LUT (256×256, R16G16_UNORM, compute)
@@ -89,7 +89,13 @@ namespace himalaya::framework {
 
     private:
         /** @brief Deferred cleanup function list, executed after end_immediate(). */
-        using DeferredCleanup = std::vector<std::function<void()>>;
+        using DeferredCleanup = std::vector<std::function<void()> >;
+
+        /** @brief Return value of load_equirect(). */
+        struct EquirectResult { // NOLINT(*-pro-type-member-init)
+            rhi::ImageHandle image; ///< GPU image handle (SHADER_READ_ONLY layout).
+            uint32_t width; ///< Equirect image width in pixels.
+        };
 
         /**
          * @brief Load .hdr file and upload as equirectangular GPU image.
@@ -98,29 +104,32 @@ namespace himalaya::framework {
          * create R16G16B16A16F 2D image → upload via staging buffer.
          * Must be called within an active immediate scope.
          *
-         * @return Equirect image handle (SHADER_READ_ONLY layout). Caller must destroy.
+         * @return Equirect image handle and width. Caller must destroy the image.
          */
-        rhi::ImageHandle load_equirect(const std::string &hdr_path) const;
+        [[nodiscard]] EquirectResult load_equirect(const std::string &hdr_path) const;
 
         /**
          * @brief Convert equirectangular image to a cubemap via compute shader.
          *
-         * Creates a 1024×1024 per-face R16G16B16A16F cubemap, dispatches the
-         * equirect_to_cubemap.comp shader using push descriptors, and transitions
-         * the cubemap to SHADER_READ_ONLY for subsequent sampling.
+         * Cubemap face size is derived from the equirect width to match angular
+         * resolution: clamp(bit_ceil(equirect_width / 4), 256, 2048).
+         * Dispatches equirect_to_cubemap.comp using push descriptors, and
+         * transitions the cubemap to SHADER_READ_ONLY for subsequent sampling.
          * Must be called within an active immediate scope.
          *
          * Transient resources (pipeline, image views, sampler) are pushed to
          * @p deferred for destruction after end_immediate().
          *
-         * @param ctx      RHI context (device, immediate command buffer).
-         * @param sc       Shader compiler for compute shader compilation.
-         * @param equirect Equirect image handle (must be in SHADER_READ_ONLY layout).
-         * @param deferred Cleanup functions executed after GPU completion.
+         * @param ctx            RHI context (device, immediate command buffer).
+         * @param sc             Shader compiler for compute shader compilation.
+         * @param equirect       Equirect image handle (must be in SHADER_READ_ONLY layout).
+         * @param equirect_width Equirect image width in pixels (used to compute cubemap face size).
+         * @param deferred       Cleanup functions executed after GPU completion.
          */
         void convert_equirect_to_cubemap(rhi::Context &ctx,
                                          rhi::ShaderCompiler &sc,
                                          rhi::ImageHandle equirect,
+                                         uint32_t equirect_width,
                                          DeferredCleanup &deferred);
 
         // --- Service pointers (stored for destroy) ---
@@ -128,7 +137,7 @@ namespace himalaya::framework {
         rhi::DescriptorManager *dm_ = nullptr;
 
         // --- GPU resources (owned) ---
-        rhi::ImageHandle cubemap_; ///< Intermediate cubemap (1024×1024, kept for Skybox)
+        rhi::ImageHandle cubemap_; ///< Intermediate cubemap (size derived from input, kept for Skybox)
         rhi::ImageHandle irradiance_cubemap_; ///< Irradiance map (32×32 per face)
         rhi::ImageHandle prefiltered_cubemap_; ///< Prefiltered env map (256×256, multi-mip)
         rhi::ImageHandle brdf_lut_; ///< BRDF integration LUT (256×256)
