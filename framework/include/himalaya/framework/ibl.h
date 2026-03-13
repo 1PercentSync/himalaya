@@ -6,7 +6,9 @@
  */
 
 #include <himalaya/rhi/types.h>
+#include <functional>
 #include <string>
+#include <vector>
 
 namespace himalaya::rhi {
     class Context;
@@ -27,7 +29,6 @@ namespace himalaya::framework {
      * Typical usage:
      * @code
      *   IBL ibl;
-     *   // Inside begin_immediate() / end_immediate() scope:
      *   ibl.init(ctx, rm, dm, sc, "assets/environment.hdr");
      *   // ... use bindless indices in GlobalUBO ...
      *   ibl.destroy();
@@ -38,8 +39,9 @@ namespace himalaya::framework {
         /**
          * @brief Load an .hdr file and run the full IBL precomputation pipeline.
          *
-         * Performs all work inside a begin_immediate() / end_immediate() scope
-         * (caller must set up the scope). Pipeline stages:
+         * All GPU work is recorded into a single begin_immediate() / end_immediate()
+         * scope. Transient resources are destroyed after GPU completion.
+         * Pipeline stages:
          * 1. stbi_loadf → equirect R16G16B16A16F GPU image
          * 2. Equirect → cubemap (1024×1024 per face, compute shader)
          * 3. Irradiance convolution (32×32 per face, R11G11B10F, compute)
@@ -86,16 +88,40 @@ namespace himalaya::framework {
         [[nodiscard]] uint32_t prefiltered_mip_count() const;
 
     private:
+        /** @brief Deferred cleanup function list, executed after end_immediate(). */
+        using DeferredCleanup = std::vector<std::function<void()>>;
+
         /**
          * @brief Load .hdr file and upload as equirectangular GPU image.
          *
          * stbi_loadf → RGB→RGBA expansion → float32→float16 conversion →
          * create R16G16B16A16F 2D image → upload via staging buffer.
-         * The image ends in SHADER_READ_ONLY layout.
+         * Must be called within an active immediate scope.
          *
-         * @return Equirect image handle. Caller must destroy after cubemap conversion.
+         * @return Equirect image handle (SHADER_READ_ONLY layout). Caller must destroy.
          */
         rhi::ImageHandle load_equirect(const std::string &hdr_path) const;
+
+        /**
+         * @brief Convert equirectangular image to a cubemap via compute shader.
+         *
+         * Creates a 1024×1024 per-face R16G16B16A16F cubemap, dispatches the
+         * equirect_to_cubemap.comp shader using push descriptors, and transitions
+         * the cubemap to SHADER_READ_ONLY for subsequent sampling.
+         * Must be called within an active immediate scope.
+         *
+         * Transient resources (pipeline, image views, sampler) are pushed to
+         * @p deferred for destruction after end_immediate().
+         *
+         * @param ctx      RHI context (device, immediate command buffer).
+         * @param sc       Shader compiler for compute shader compilation.
+         * @param equirect Equirect image handle (must be in SHADER_READ_ONLY layout).
+         * @param deferred Cleanup functions executed after GPU completion.
+         */
+        void convert_equirect_to_cubemap(rhi::Context &ctx,
+                                         rhi::ShaderCompiler &sc,
+                                         rhi::ImageHandle equirect,
+                                         DeferredCleanup &deferred);
 
         // --- Service pointers (stored for destroy) ---
         rhi::ResourceManager *rm_ = nullptr;
