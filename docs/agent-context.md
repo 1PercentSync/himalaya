@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段三 — PBR 光照基础（Cook-Torrance + IBL + MSAA + HDR）
-- **进度**：Step 6 进行中，IBL + Skybox shader + SkyboxPass 全部完成，下一项 ibl_rotation UBO 字段
+- **进度**：Step 6 进行中，IBL + Skybox + ibl_rotation UBO 全部完成，下一项 IBL 旋转交互
 
 ### 下一个任务
 
-Step 6 第 12 项：`GlobalUniformData` 新增 `ibl_rotation_sin` / `ibl_rotation_cos` + 更新 `bindings.glsl` GlobalUBO 布局。
+Step 6 第 13 项（最后一项）：左键拖拽改为 IBL 水平旋转（`light_yaw_` → `ibl_yaw_`，移除 pitch 逻辑），DebugUI Lighting 面板显示 IBL Rotation 角度。
 
 ---
 

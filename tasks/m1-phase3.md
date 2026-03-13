@@ -101,7 +101,7 @@
 - [x] Renderer 在 `init()` 中调用 IBL 预计算，在 `destroy()` 中清理 IBL 资源
 - [x] 创建 `shaders/skybox.vert` + `shaders/skybox.frag`（独立 VS 计算世界方向 varying + `gl_Position.z = 0.0`，FS rotate_y + normalize + cubemap 采样）
 - [x] SkyboxPass 类（`passes/skybox_pass.h/cpp`）：方法集 setup / record / destroy（不属于 MSAA 相关 pass），渲染到 resolved 1x hdr_color，读 resolved depth（GREATER_OR_EQUAL + depth write OFF）
-- [ ] `GlobalUniformData` 新增 `ibl_rotation_sin` / `ibl_rotation_cos` + 更新 `bindings.glsl` GlobalUBO 布局
+- [x] `GlobalUniformData` 新增 `ibl_rotation_sin` / `ibl_rotation_cos` + 更新 `bindings.glsl` GlobalUBO 布局
 - [ ] 左键拖拽改为 IBL 水平旋转（`light_yaw_` → `ibl_yaw_`，移除 pitch 逻辑），DebugUI Lighting 面板显示 IBL Rotation 角度
 - [ ] 验证：IBL 预计算无 validation 报错，RenderDoc 检查 cubemap 各面和 mip 级别内容正确、BRDF LUT 呈现预期的渐变图案；天空背景正确显示且可水平旋转
 
