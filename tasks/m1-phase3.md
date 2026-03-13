@@ -95,7 +95,7 @@
 - [x] `shaders/ibl/equirect_to_cubemap.comp` + `convert_equirect_to_cubemap()` 私有方法（cubemap R16G16B16A16F 动态分辨率创建、compute pipeline with push descriptors、dispatch、barrier）
 - [x] `shaders/ibl/irradiance.comp` + `compute_irradiance()` 私有方法（irradiance cubemap 32² R11G11B10F 创建、余弦卷积 dispatch）
 - [x] `shaders/ibl/prefilter.comp` + `compute_prefiltered()` 私有方法（prefiltered cubemap 512² R16G16B16A16F 多 mip 创建、per-mip roughness push constant、dispatch）
-- [ ] `shaders/ibl/brdf_lut.comp` + `compute_brdf_lut()` 私有方法（BRDF LUT 256² R16G16_UNORM 创建、dispatch）
+- [x] `shaders/ibl/brdf_lut.comp` + `compute_brdf_lut()` 私有方法（BRDF LUT 256² R16G16_UNORM 创建、dispatch）
 - [ ] `init()` 编排 + `register_bindless_resources()` + `destroy()` 实现（串联预计算阶段、创建 sampler、注册产物到 Set 1 bindless、equirect 销毁、资源清理）
 - [ ] `GlobalUniformData` 新增 IBL 字段（irradiance_cubemap_index、prefiltered_cubemap_index、brdf_lut_index、prefiltered_mip_count、skybox_cubemap_index）+ 更新 `bindings.glsl` GlobalUBO 布局（`cubemaps[]` 声明已在 Step 3 完成，此处仅更新 GlobalUBO）
 - [ ] Renderer 在 `init()` 中调用 IBL 预计算，在 `destroy()` 中清理 IBL 资源
