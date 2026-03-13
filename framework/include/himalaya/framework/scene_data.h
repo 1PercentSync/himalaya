@@ -126,7 +126,7 @@ namespace himalaya::framework {
         glm::vec2 screen_size; ///< offset 272
         float time; ///< offset 280 — elapsed time in seconds
         uint32_t directional_light_count = 0; ///< offset 284 — number of active directional lights
-        float ambient_intensity = 0.03f; ///< offset 288 — ambient light multiplier
+        float ibl_intensity = 1.0f; ///< offset 288 — IBL environment light multiplier
         uint32_t irradiance_cubemap_index = UINT32_MAX; ///< offset 292 — bindless index into cubemaps[]
         uint32_t prefiltered_cubemap_index = UINT32_MAX; ///< offset 296 — bindless index into cubemaps[]
         uint32_t brdf_lut_index = UINT32_MAX; ///< offset 300 — bindless index into textures[]

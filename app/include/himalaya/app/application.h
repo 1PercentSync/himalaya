@@ -107,13 +107,10 @@ namespace himalaya::app {
         /** @brief Per-frame frustum culling result (populated in update()). */
         framework::CullResult cull_result_{};
 
-        /** @brief Fallback directional light when the scene provides none. */
-        std::vector<framework::DirectionalLight> default_lights_;
-
         // --- Rendering parameters (controlled via DebugUI) ---
 
-        /** @brief Ambient light multiplier (written to GlobalUBO each frame). */
-        float ambient_intensity_ = 0.03f;
+        /** @brief IBL environment light intensity multiplier (written to GlobalUBO each frame). */
+        float ibl_intensity_ = 1.0f;
 
         /** @brief Exposure value in EV (pow(2, ev) gives linear exposure multiplier). */
         float ev_ = 0.0f;
@@ -123,13 +120,8 @@ namespace himalaya::app {
         /** @brief IBL horizontal rotation angle in radians (left-click drag controlled). */
         float ibl_yaw_ = 0.0f;
 
-        // --- Default light control ---
-
-        /** @brief Intensity of the default directional light. */
-        float light_intensity_ = 1.0f;
-
-        /** @brief When true, use the default light even if the scene provides lights. */
-        bool force_default_light_ = false;
+        /** @brief When true, scene directional lights are disabled (IBL only). */
+        bool disable_scene_lights_ = false;
 
         // --- IBL rotation viewport drag state ---
 

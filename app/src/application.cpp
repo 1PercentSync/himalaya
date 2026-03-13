@@ -151,30 +151,14 @@ namespace himalaya::app {
         camera_.aspect = static_cast<float>(swapchain_.extent.width) / static_cast<float>(swapchain_.extent.height);
         camera_controller_.update(delta_time);
 
-        // Determine light source
+        // Determine light source (scene lights or none when disabled)
         const auto scene_lights = scene_loader_.directional_lights();
-        const bool has_scene_lights = !scene_lights.empty();
-        const bool using_default = !has_scene_lights || force_default_light_;
+        const auto lights = disable_scene_lights_
+                                ? std::span<const framework::DirectionalLight>{}
+                                : scene_lights;
 
         // Left-click drag to rotate IBL environment
         update_ibl_input();
-
-        // Default light (fixed direction, will be retired in Step 6.5)
-        constexpr float kDefaultLightYaw = glm::radians(-45.0f);
-        constexpr float kDefaultLightPitch = glm::radians(-55.0f);
-        if (default_lights_.empty()) default_lights_.resize(1);
-        default_lights_[0].direction = glm::normalize(glm::vec3(
-            std::sin(kDefaultLightYaw) * std::cos(kDefaultLightPitch),
-            std::sin(kDefaultLightPitch),
-            -std::cos(kDefaultLightYaw) * std::cos(kDefaultLightPitch)));
-        default_lights_[0].color = glm::vec3(1.0f);
-        default_lights_[0].intensity = light_intensity_;
-        default_lights_[0].cast_shadows = false;
-
-        // Choose active light source
-        const auto lights = using_default
-                                ? std::span<const framework::DirectionalLight>(default_lights_)
-                                : scene_lights;
 
         // Fill SceneRenderData for culling and render
         scene_render_data_.mesh_instances = scene_loader_.mesh_instances();
@@ -199,11 +183,6 @@ namespace himalaya::app {
         const auto visible_transparent = static_cast<uint32_t>(cull_result_.visible_transparent_indices.size());
         const auto total_instances = static_cast<uint32_t>(instances.size());
 
-        // Compute light display values for debug UI
-        const float display_intensity = using_default
-                                            ? light_intensity_
-                                            : scene_lights[0].intensity;
-
         // Debug UI
         // ReSharper disable once CppUseStructuredBinding
         const auto actions = debug_ui_.draw({
@@ -211,12 +190,9 @@ namespace himalaya::app {
             .context = context_,
             .swapchain = swapchain_,
             .camera = camera_,
-            .light_intensity = display_intensity,
-            .default_intensity = light_intensity_,
-            .force_default_light = force_default_light_,
-            .has_scene_lights = has_scene_lights,
+            .disable_scene_lights = disable_scene_lights_,
             .ibl_rotation_deg = glm::degrees(ibl_yaw_),
-            .ambient_intensity = ambient_intensity_,
+            .ibl_intensity = ibl_intensity_,
             .ev = ev_,
             .current_sample_count = renderer_.current_sample_count(),
             .supported_sample_counts = context_.msaa_sample_counts,
@@ -255,7 +231,7 @@ namespace himalaya::app {
             .meshes = scene_loader_.meshes(),
             .materials = scene_loader_.material_instances(),
             .mesh_instances = scene_render_data_.mesh_instances,
-            .ambient_intensity = ambient_intensity_,
+            .ibl_intensity = ibl_intensity_,
             .exposure = std::pow(2.0f, ev_),
             .ibl_rotation_sin = std::sin(ibl_yaw_),
             .ibl_rotation_cos = std::cos(ibl_yaw_),

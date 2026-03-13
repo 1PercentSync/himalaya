@@ -53,7 +53,7 @@ layout(set = 0, binding = 0) uniform GlobalUBO {
     vec2 screen_size;                       // offset 272
     float time;                             // offset 280 — elapsed time in seconds
     uint directional_light_count;           // offset 284 — number of active directional lights
-    float ambient_intensity;                // offset 288 — ambient light multiplier
+    float ibl_intensity;                    // offset 288 — IBL environment light multiplier
     uint irradiance_cubemap_index;          // offset 292 — bindless index into cubemaps[]
     uint prefiltered_cubemap_index;         // offset 296 — bindless index into cubemaps[]
     uint brdf_lut_index;                    // offset 300 — bindless index into textures[]

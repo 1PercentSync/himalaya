@@ -181,24 +181,7 @@ namespace himalaya::app {
         ImGui::Separator();
         if (ImGui::CollapsingHeader("Lighting", ImGuiTreeNodeFlags_DefaultOpen)) {
             ImGui::Text("IBL Rotation: %.1f%s", ctx.ibl_rotation_deg, "\xC2\xB0");
-
-            const bool using_default = !ctx.has_scene_lights || ctx.force_default_light;
-
-            // Force Default Light checkbox (disabled when scene has no lights)
-            ImGui::BeginDisabled(!ctx.has_scene_lights);
-            ImGui::Checkbox("Force Default Light", &ctx.force_default_light);
-            ImGui::EndDisabled();
-
-            // Intensity slider (editable only when using default light)
-            if (using_default) {
-                slider_float_deferred("Intensity", &ctx.default_intensity,
-                                      0.0f, 10.0f, "%.2f");
-            } else {
-                ImGui::BeginDisabled();
-                float display = ctx.light_intensity;
-                ImGui::SliderFloat("Intensity", &display, 0.0f, 10.0f, "%.2f");
-                ImGui::EndDisabled();
-            }
+            ImGui::Checkbox("Disable Scene Lights", &ctx.disable_scene_lights);
         }
 
         // Rendering section
@@ -232,7 +215,7 @@ namespace himalaya::app {
                 ImGui::EndCombo();
             }
 
-            slider_float_deferred("Ambient", &ctx.ambient_intensity, 0.0f, 1.0f, "%.3f");
+            slider_float_deferred("IBL Intensity", &ctx.ibl_intensity, 0.0f, 5.0f, "%.2f");
             slider_float_deferred("EV", &ctx.ev, -4.0f, 4.0f, "%.1f");
         }
 

@@ -69,8 +69,8 @@ namespace himalaya::app {
         /** @brief All scene mesh instances (transform, mesh_id, material_id). */
         std::span<const framework::MeshInstance> mesh_instances;
 
-        /** @brief Ambient/IBL light intensity multiplier. */
-        float ambient_intensity;
+        /** @brief IBL environment light intensity multiplier. */
+        float ibl_intensity;
 
         /** @brief Exposure value (linear scale, from pow(2, EV)). */
         float exposure;

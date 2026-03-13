@@ -85,7 +85,7 @@ void main() {
 
     // Combine: direct lighting + IBL environment lighting
     vec3 color = diffuse_color * direct_diffuse
-               + global.ambient_intensity * (ibl_diffuse + ibl_specular);
+               + global.ibl_intensity * (ibl_diffuse + ibl_specular);
 
     // Output raw HDR linear values; exposure is applied in the tonemapping pass.
     out_color = vec4(color, base_color.a);

@@ -41,31 +41,18 @@ namespace himalaya::app {
         /** @brief Camera state for position/orientation display and parameter sliders. */
         framework::Camera& camera;
 
-        // --- Lighting (display values computed by Application) ---
+        // --- Lighting (controls) ---
 
-        /** @brief Active light intensity (default or glTF). */
-        float light_intensity;
+        /** @brief Checkbox state: disable scene directional lights (IBL only). */
+        bool& disable_scene_lights;
 
-        // --- Lighting (controls, only effective when using default light) ---
-
-        /** @brief Editable reference to the default light intensity. */
-        float& default_intensity;
-
-        /** @brief Checkbox state: force default light even with scene lights. */
-        bool& force_default_light;
-
-        /** @brief True if the scene provides directional lights (enables force checkbox). */
-        bool has_scene_lights;
-
-        // --- IBL (display) ---
-
-        /** @brief IBL horizontal rotation angle in degrees. */
+        /** @brief IBL horizontal rotation angle in degrees (display only). */
         float ibl_rotation_deg;
 
         // --- Render params (controls) ---
 
-        /** @brief Editable reference to the ambient light multiplier. */
-        float& ambient_intensity;
+        /** @brief Editable reference to the IBL environment light intensity. */
+        float& ibl_intensity;
 
         /** @brief Editable reference to the exposure value in EV stops. */
         float& ev;
