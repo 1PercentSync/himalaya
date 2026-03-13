@@ -105,8 +105,22 @@ namespace himalaya::framework {
          * Must be called within an active immediate scope.
          *
          * @return Equirect image handle and width. Caller must destroy the image.
+         *         Returns invalid handle (valid() == false) if loading fails.
          */
         [[nodiscard]] EquirectResult load_equirect(const std::string &hdr_path) const;
+
+        /**
+         * @brief Create minimal 1×1 neutral gray cubemaps as fallback when HDR loading fails.
+         *
+         * Uses vkCmdClearColorImage to fill cubemap_, irradiance_cubemap_, and
+         * prefiltered_cubemap_ with a uniform neutral gray. The pipeline (bindless
+         * registration, skybox, forward IBL) works identically — no shader-side
+         * conditionals needed.
+         * Must be called within an active immediate scope.
+         *
+         * @param ctx RHI context (device, immediate command buffer).
+         */
+        void create_fallback_cubemaps(rhi::Context &ctx);
 
         /**
          * @brief Convert equirectangular image to a cubemap via compute shader.

@@ -41,16 +41,27 @@ namespace himalaya::framework {
         ctx.begin_immediate();
 
         auto [equirect, eq_width] = load_equirect(hdr_path);
-        convert_equirect_to_cubemap(ctx, sc, equirect, eq_width, deferred);
-        compute_irradiance(ctx, sc, deferred);
-        compute_prefiltered(ctx, sc, deferred);
+
+        if (equirect.valid()) {
+            // Normal path: equirect → cubemap → irradiance / prefiltered
+            convert_equirect_to_cubemap(ctx, sc, equirect, eq_width, deferred);
+            compute_irradiance(ctx, sc, deferred);
+            compute_prefiltered(ctx, sc, deferred);
+        } else {
+            // Fallback: create neutral 1×1 cubemaps so the pipeline works without HDR
+            create_fallback_cubemaps(ctx);
+        }
+
+        // BRDF LUT is environment-independent — always compute
         compute_brdf_lut(ctx, sc, deferred);
 
         ctx.end_immediate();
 
         // Safe to destroy after GPU completion (end_immediate does vkQueueWaitIdle)
         for (auto &fn: deferred) fn();
-        rm_->destroy_image(equirect);
+        if (equirect.valid()) {
+            rm_->destroy_image(equirect);
+        }
 
         register_bindless_resources();
     }
@@ -842,6 +853,118 @@ namespace himalaya::framework {
         cmd.pipeline_barrier(post_dep);
 
         spdlog::info("IBL: BRDF integration LUT ({}x{}, R16G16_UNORM)", kSize, kSize);
+    }
+
+    // -----------------------------------------------------------------------
+    // create_fallback_cubemaps — Neutral 1×1 cubemaps when HDR loading fails
+    // -----------------------------------------------------------------------
+
+    void IBL::create_fallback_cubemaps(rhi::Context &ctx) {
+        // Skybox cubemap: 1×1 R16G16B16A16F
+        const rhi::ImageDesc skybox_desc{
+            .width = 1,
+            .height = 1,
+            .depth = 1,
+            .mip_levels = 1,
+            .array_layers = 6,
+            .sample_count = 1,
+            .format = rhi::Format::R16G16B16A16Sfloat,
+            .usage = rhi::ImageUsage::Sampled | rhi::ImageUsage::TransferDst,
+        };
+        cubemap_ = rm_->create_image(skybox_desc, "IBL Cubemap (Fallback)");
+
+        // Irradiance cubemap: 1×1 R11G11B10F
+        const rhi::ImageDesc irradiance_desc{
+            .width = 1, .height = 1, .depth = 1,
+            .mip_levels = 1, .array_layers = 6,
+            .sample_count = 1,
+            .format = rhi::Format::B10G11R11UfloatPack32,
+            .usage = rhi::ImageUsage::Sampled | rhi::ImageUsage::TransferDst,
+        };
+        irradiance_cubemap_ = rm_->create_image(irradiance_desc, "IBL Irradiance (Fallback)");
+
+        // Prefiltered cubemap: 1×1 R16G16B16A16F, 1 mip
+        const rhi::ImageDesc prefiltered_desc{
+            .width = 1, .height = 1, .depth = 1,
+            .mip_levels = 1, .array_layers = 6,
+            .sample_count = 1,
+            .format = rhi::Format::R16G16B16A16Sfloat,
+            .usage = rhi::ImageUsage::Sampled | rhi::ImageUsage::TransferDst,
+        };
+        prefiltered_cubemap_ = rm_->create_image(prefiltered_desc, "IBL Prefiltered (Fallback)");
+        prefiltered_mip_count_ = 1;
+
+        // --- Fill all three cubemaps with neutral gray via vkCmdClearColorImage ---
+        // ReSharper disable once CppLocalVariableMayBeConst
+        VkCommandBuffer cmd = ctx.immediate_command_buffer;
+        constexpr VkClearColorValue clear_color = {.float32 = {0.1f, 0.1f, 0.1f, 1.0f}};
+
+        const VkImage images[] = {
+            rm_->get_image(cubemap_).image,
+            rm_->get_image(irradiance_cubemap_).image,
+            rm_->get_image(prefiltered_cubemap_).image,
+        };
+
+        // Batch transition: UNDEFINED → TRANSFER_DST_OPTIMAL
+        VkImageMemoryBarrier2 to_transfer[3]{};
+        for (int i = 0; i < 3; ++i) {
+            to_transfer[i].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+            to_transfer[i].srcStageMask = VK_PIPELINE_STAGE_2_NONE;
+            to_transfer[i].srcAccessMask = VK_ACCESS_2_NONE;
+            to_transfer[i].dstStageMask = VK_PIPELINE_STAGE_2_CLEAR_BIT;
+            to_transfer[i].dstAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
+            to_transfer[i].oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+            to_transfer[i].newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+            to_transfer[i].image = images[i];
+            to_transfer[i].subresourceRange = {
+                .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                .baseMipLevel = 0, .levelCount = 1,
+                .baseArrayLayer = 0, .layerCount = 6,
+            };
+        }
+
+        VkDependencyInfo pre_dep{};
+        pre_dep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+        pre_dep.imageMemoryBarrierCount = 3;
+        pre_dep.pImageMemoryBarriers = to_transfer;
+        vkCmdPipelineBarrier2(cmd, &pre_dep);
+
+        // Clear all cubemap faces with neutral gray
+        constexpr VkImageSubresourceRange clear_range = {
+            .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+            .baseMipLevel = 0, .levelCount = 1,
+            .baseArrayLayer = 0, .layerCount = 6,
+        };
+        for (const auto img: images) {
+            vkCmdClearColorImage(cmd, img, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                                 &clear_color, 1, &clear_range);
+        }
+
+        // Batch transition: TRANSFER_DST_OPTIMAL → SHADER_READ_ONLY_OPTIMAL
+        VkImageMemoryBarrier2 to_read[3]{};
+        for (int i = 0; i < 3; ++i) {
+            to_read[i].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+            to_read[i].srcStageMask = VK_PIPELINE_STAGE_2_CLEAR_BIT;
+            to_read[i].srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
+            to_read[i].dstStageMask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
+            to_read[i].dstAccessMask = VK_ACCESS_2_SHADER_SAMPLED_READ_BIT;
+            to_read[i].oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+            to_read[i].newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            to_read[i].image = images[i];
+            to_read[i].subresourceRange = {
+                .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                .baseMipLevel = 0, .levelCount = 1,
+                .baseArrayLayer = 0, .layerCount = 6,
+            };
+        }
+
+        VkDependencyInfo post_dep{};
+        post_dep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+        post_dep.imageMemoryBarrierCount = 3;
+        post_dep.pImageMemoryBarriers = to_read;
+        vkCmdPipelineBarrier2(cmd, &post_dep);
+
+        spdlog::warn("IBL: using fallback neutral cubemaps (no HDR environment loaded)");
     }
 
     // -----------------------------------------------------------------------
