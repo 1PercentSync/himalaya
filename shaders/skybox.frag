@@ -22,8 +22,8 @@ vec3 rotate_y(vec3 d, float s, float c) {
 void main() {
     vec3 dir = normalize(in_world_dir);
 
-    // IBL horizontal rotation (identity until ibl_rotation_sin/cos are wired)
-    dir = rotate_y(dir, 0.0, 1.0);
+    // IBL horizontal rotation
+    dir = rotate_y(dir, global.ibl_rotation_sin, global.ibl_rotation_cos);
 
     vec3 color = texture(cubemaps[global.skybox_cubemap_index], dir).rgb;
     out_color = vec4(color, 1.0);

@@ -132,7 +132,8 @@ namespace himalaya::framework {
         uint32_t brdf_lut_index = UINT32_MAX; ///< offset 300 — bindless index into textures[]
         uint32_t prefiltered_mip_count = 0; ///< offset 304 — mip levels in prefiltered env map
         uint32_t skybox_cubemap_index = UINT32_MAX; ///< offset 308 — bindless index into cubemaps[]
-        float _pad[2]{}; ///< padding to 320 bytes (std140 requires multiple of 16)
+        float ibl_rotation_sin = 0.0f; ///< offset 312 — sin(ibl_yaw) for environment rotation
+        float ibl_rotation_cos = 1.0f; ///< offset 316 — cos(ibl_yaw) for environment rotation
     };
 
     /**

@@ -59,6 +59,8 @@ layout(set = 0, binding = 0) uniform GlobalUBO {
     uint brdf_lut_index;                    // offset 300 — bindless index into textures[]
     uint prefiltered_mip_count;             // offset 304 — mip levels in prefiltered env map
     uint skybox_cubemap_index;              // offset 308 — bindless index into cubemaps[]
+    float ibl_rotation_sin;                 // offset 312 — sin(ibl_yaw) for environment rotation
+    float ibl_rotation_cos;                 // offset 316 — cos(ibl_yaw) for environment rotation
 } global;
 
 layout(set = 0, binding = 1) readonly buffer LightBuffer {
