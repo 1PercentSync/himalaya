@@ -93,7 +93,7 @@
 - [x] `framework/include/himalaya/framework/ibl.h` + `framework/src/ibl.cpp` 模块骨架（公开接口 + 私有成员 + CMakeLists.txt 集成）
 - [x] `load_equirect()` 私有方法：stb_image `.hdr` 加载（`stbi_loadf`，RGB float）→ RGBA f16 转换 → R16G16B16A16F 2D GPU image 创建与上传，返回 equirect ImageHandle
 - [x] `shaders/ibl/equirect_to_cubemap.comp` + `convert_equirect_to_cubemap()` 私有方法（cubemap R16G16B16A16F 动态分辨率创建、compute pipeline with push descriptors、dispatch、barrier）
-- [ ] `shaders/ibl/irradiance.comp` + `compute_irradiance()` 私有方法（irradiance cubemap 32² R11G11B10F 创建、余弦卷积 dispatch）
+- [x] `shaders/ibl/irradiance.comp` + `compute_irradiance()` 私有方法（irradiance cubemap 32² R11G11B10F 创建、余弦卷积 dispatch）
 - [ ] `shaders/ibl/prefilter.comp` + `compute_prefiltered()` 私有方法（prefiltered cubemap 256² R16G16B16A16F 多 mip 创建、per-mip roughness push constant、dispatch）
 - [ ] `shaders/ibl/brdf_lut.comp` + `compute_brdf_lut()` 私有方法（BRDF LUT 256² R16G16_UNORM 创建、dispatch）
 - [ ] `init()` 编排 + `register_bindless_resources()` + `destroy()` 实现（串联预计算阶段、创建 sampler、注册产物到 Set 1 bindless、equirect 销毁、资源清理）
