@@ -222,7 +222,9 @@ public:
     void unregister_external_image(ImageHandle handle);
 
     // Image 上传（staging buffer + vkCmdCopyBufferToImage，在 immediate scope 内调用）
-    void upload_image(ImageHandle handle, const void* data, uint64_t size);
+    // dst_stage: 最终 barrier 的 dstStageMask（调用方按消费者指定）
+    void upload_image(ImageHandle handle, const void* data, uint64_t size,
+                      VkPipelineStageFlags2 dst_stage);
 
     // GPU 端 mip 生成（逐级 vkCmdBlitImage，在 immediate scope 内调用）
     void generate_mips(ImageHandle handle);

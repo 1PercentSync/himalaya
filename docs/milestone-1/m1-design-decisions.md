@@ -1744,7 +1744,7 @@ Context 提供 immediate command scope：
 
 ResourceManager 新增 `upload_image()` 和 `generate_mips()` 方法，与 `upload_buffer()` 同级——通用资源操作，不绑定在特定模块（Texture、IBL、Lightmap 等均复用）。
 
-- `upload_image(ImageHandle, data, size)`：创建 staging buffer + 录制 `vkCmdCopyBufferToImage`（含 UNDEFINED → TRANSFER_DST layout transition）
+- `upload_image(ImageHandle, data, size, dst_stage)`：创建 staging buffer + 录制 `vkCmdCopyBufferToImage`（含 UNDEFINED → TRANSFER_DST layout transition）。`dst_stage` 指定最终 barrier 的 `dstStageMask`，调用方按消费者阶段显式指定（fragment 传 `FRAGMENT_SHADER_BIT`，compute 传 `COMPUTE_SHADER_BIT`）
 - `generate_mips(ImageHandle)`：逐级 `vkCmdBlitImage` + 每级 layout transition（TRANSFER_DST → TRANSFER_SRC），最终转为 SHADER_READ_ONLY_OPTIMAL
 
 两者均在 begin/end_immediate scope 内调用，遵循录制模式。

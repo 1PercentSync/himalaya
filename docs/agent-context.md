@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 6 第 3 项：`shaders/ibl/equirect_to_cubemap.comp` + `convert_equirect_to_cubemap()` 私有方法 — cubemap 1024² R16G16B16A16F 创建、compute pipeline with push descriptors、dispatch、barrier。注意 upload_image 的 final barrier dstStage 是 FRAGMENT_SHADER，需补一个 barrier 扩展到 COMPUTE_SHADER。
+Step 6 第 3 项：`shaders/ibl/equirect_to_cubemap.comp` + `convert_equirect_to_cubemap()` 私有方法 — cubemap R16G16B16A16F 创建（分辨率由输入宽度动态计算）、compute pipeline with push descriptors、dispatch、barrier。
 
 ---
 
