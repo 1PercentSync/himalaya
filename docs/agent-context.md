@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段三 — PBR 光照基础（Cook-Torrance + IBL + MSAA + HDR）
-- **进度**：Step 6 进行中，load_equirect() 已完成，下一项 equirect→cubemap compute shader
+- **进度**：Step 6 进行中，equirect→cubemap 已完成（含动态分辨率、upload_image dst_stage 参数化），下一项 irradiance compute shader
 
 ### 下一个任务
 
-Step 6 第 3 项：`shaders/ibl/equirect_to_cubemap.comp` + `convert_equirect_to_cubemap()` 私有方法 — cubemap R16G16B16A16F 创建（分辨率由输入宽度动态计算）、compute pipeline with push descriptors、dispatch、barrier。
+Step 6 第 4 项：`shaders/ibl/irradiance.comp` + `compute_irradiance()` 私有方法 — irradiance cubemap 32² R11G11B10F 创建、余弦卷积 compute dispatch。
 
 ---
 
