@@ -177,6 +177,7 @@ Layer 0（Vulkan 抽象层 / RHI）
 | Render Graph | 本质是 Vulkan barrier 管理器，用 VkImageLayout 比自造枚举再映射更直观且不易出错 |
 | ImGui Backend | 第三方库的 Vulkan backend 天然需要 Vulkan 类型 |
 | Vertex 管线描述 | `binding_description()` / `attribute_descriptions()` 返回 `VkVertexInput*` 类型，仅用于 Pipeline 创建。再包一层自定义类型纯增复杂度 |
+| `upload_image` dst_stage 参数 | 同步原语（`VkPipelineStageFlags2`），与 Render Graph 使用 VkImageLayout 属同一范畴。bitmask 类型封装成本高（枚举 + operator\| + 映射），调用点仅 texture.cpp 和 ibl.cpp 两处 |
 
 其他 Framework 模块（Camera、Texture、MaterialSystem 等）的公开接口仍然不使用 Vulkan 类型，通过 RHI 句柄和自定义枚举操作。
 
