@@ -598,6 +598,8 @@ namespace himalaya::rhi {
         // ReSharper disable once CppLocalVariableMayBeConst
         VkCommandBuffer cmd = context_->immediate_command_buffer;
 
+        const uint32_t layers = img.desc.array_layers;
+
         // Transition mip 0: SHADER_READ_ONLY -> TRANSFER_SRC (blit source)
         VkImageMemoryBarrier2 barrier{};
         barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
@@ -608,7 +610,7 @@ namespace himalaya::rhi {
         barrier.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
         barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
         barrier.image = img.image;
-        barrier.subresourceRange = {aspect, 0, 1, 0, 1};
+        barrier.subresourceRange = {aspect, 0, 1, 0, layers};
 
         VkDependencyInfo dep{};
         dep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
@@ -630,16 +632,16 @@ namespace himalaya::rhi {
             barrier.dstAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
             barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
             barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-            barrier.subresourceRange = {aspect, i, 1, 0, 1};
+            barrier.subresourceRange = {aspect, i, 1, 0, layers};
             vkCmdPipelineBarrier2(cmd, &dep);
 
             // Blit from mip i-1 to mip i
             VkImageBlit2 blit{};
             blit.sType = VK_STRUCTURE_TYPE_IMAGE_BLIT_2;
-            blit.srcSubresource = {aspect, i - 1, 0, 1};
+            blit.srcSubresource = {aspect, i - 1, 0, layers};
             blit.srcOffsets[0] = {0, 0, 0};
             blit.srcOffsets[1] = {mip_width, mip_height, 1};
-            blit.dstSubresource = {aspect, i, 0, 1};
+            blit.dstSubresource = {aspect, i, 0, layers};
             blit.dstOffsets[0] = {0, 0, 0};
             blit.dstOffsets[1] = {next_width, next_height, 1};
 
@@ -661,7 +663,7 @@ namespace himalaya::rhi {
             barrier.dstAccessMask = VK_ACCESS_2_TRANSFER_READ_BIT;
             barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
             barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-            barrier.subresourceRange = {aspect, i, 1, 0, 1};
+            barrier.subresourceRange = {aspect, i, 1, 0, layers};
             vkCmdPipelineBarrier2(cmd, &dep);
 
             mip_width = next_width;
@@ -675,7 +677,7 @@ namespace himalaya::rhi {
         barrier.dstAccessMask = VK_ACCESS_2_SHADER_SAMPLED_READ_BIT;
         barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
         barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        barrier.subresourceRange = {aspect, 0, img.desc.mip_levels, 0, 1};
+        barrier.subresourceRange = {aspect, 0, img.desc.mip_levels, 0, layers};
         vkCmdPipelineBarrier2(cmd, &dep);
     }
 } // namespace himalaya::rhi
