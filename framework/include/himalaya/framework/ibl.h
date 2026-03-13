@@ -189,6 +189,15 @@ namespace himalaya::framework {
                               rhi::ShaderCompiler &sc,
                               DeferredCleanup &deferred);
 
+        /**
+         * @brief Create shared sampler and register precomputed products to Set 1 bindless.
+         *
+         * Registers cubemaps (skybox, irradiance, prefiltered) to Set 1 binding 1
+         * and BRDF LUT to Set 1 binding 0. Must be called after all compute
+         * stages complete and end_immediate() returns.
+         */
+        void register_bindless_resources();
+
         // --- Service pointers (stored for destroy) ---
         rhi::ResourceManager *rm_ = nullptr;
         rhi::DescriptorManager *dm_ = nullptr;

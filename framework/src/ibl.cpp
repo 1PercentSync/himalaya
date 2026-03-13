@@ -52,7 +52,7 @@ namespace himalaya::framework {
         for (auto &fn: deferred) fn();
         rm_->destroy_image(equirect);
 
-        // TODO: register_bindless_resources();
+        register_bindless_resources();
     }
 
     // -----------------------------------------------------------------------
@@ -826,10 +826,58 @@ namespace himalaya::framework {
         spdlog::info("IBL: BRDF integration LUT ({}x{}, R16G16_UNORM)", kSize, kSize);
     }
 
+    // -----------------------------------------------------------------------
+    // register_bindless_resources — Sampler creation + Set 1 registration
+    // -----------------------------------------------------------------------
+
+    void IBL::register_bindless_resources() {
+        // Shared sampler: linear filtering with mip interpolation for prefiltered cubemap.
+        // Single-mip products (irradiance, skybox cubemap) are unaffected by mip settings.
+        const rhi::SamplerDesc sampler_desc{
+            .mag_filter = rhi::Filter::Linear,
+            .min_filter = rhi::Filter::Linear,
+            .mip_mode = rhi::SamplerMipMode::Linear,
+            .wrap_u = rhi::SamplerWrapMode::ClampToEdge,
+            .wrap_v = rhi::SamplerWrapMode::ClampToEdge,
+            .max_anisotropy = 0.0f,
+            .max_lod = VK_LOD_CLAMP_NONE,
+        };
+        sampler_ = rm_->create_sampler(sampler_desc, "IBL Sampler");
+
+        // Cubemaps → Set 1 binding 1
+        skybox_cubemap_idx_ = dm_->register_cubemap(cubemap_, sampler_);
+        irradiance_cubemap_idx_ = dm_->register_cubemap(irradiance_cubemap_, sampler_);
+        prefiltered_cubemap_idx_ = dm_->register_cubemap(prefiltered_cubemap_, sampler_);
+
+        // BRDF LUT (2D texture) → Set 1 binding 0
+        brdf_lut_idx_ = dm_->register_texture(brdf_lut_, sampler_);
+
+        spdlog::info("IBL: registered bindless (skybox={}, irradiance={}, prefiltered={}, brdf_lut={})",
+                     skybox_cubemap_idx_.index, irradiance_cubemap_idx_.index,
+                     prefiltered_cubemap_idx_.index, brdf_lut_idx_.index);
+    }
+
+    // -----------------------------------------------------------------------
+    // destroy — Unregister bindless entries, then destroy images and sampler
+    // -----------------------------------------------------------------------
+
     void IBL::destroy() {
         if (!rm_) return;
 
-        // TODO: Unregister bindless entries, then destroy images and sampler
+        // Unregister bindless entries first (slots returned to free lists)
+        if (skybox_cubemap_idx_.valid()) dm_->unregister_cubemap(skybox_cubemap_idx_);
+        if (irradiance_cubemap_idx_.valid()) dm_->unregister_cubemap(irradiance_cubemap_idx_);
+        if (prefiltered_cubemap_idx_.valid()) dm_->unregister_cubemap(prefiltered_cubemap_idx_);
+        if (brdf_lut_idx_.valid()) dm_->unregister_texture(brdf_lut_idx_);
+
+        // Destroy GPU images
+        if (cubemap_.valid()) rm_->destroy_image(cubemap_);
+        if (irradiance_cubemap_.valid()) rm_->destroy_image(irradiance_cubemap_);
+        if (prefiltered_cubemap_.valid()) rm_->destroy_image(prefiltered_cubemap_);
+        if (brdf_lut_.valid()) rm_->destroy_image(brdf_lut_);
+
+        // Destroy shared sampler
+        if (sampler_.valid()) rm_->destroy_sampler(sampler_);
     }
 
     rhi::BindlessIndex IBL::irradiance_cubemap_index() const {
