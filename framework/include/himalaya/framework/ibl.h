@@ -16,7 +16,6 @@ namespace himalaya::rhi {
 }
 
 namespace himalaya::framework {
-
     /**
      * @brief Manages IBL precomputation: equirect HDR → cubemap → irradiance / prefiltered / BRDF LUT.
      *
@@ -56,9 +55,11 @@ namespace himalaya::framework {
          * @param sc       Shader compiler for compute shader compilation.
          * @param hdr_path Filesystem path to an equirectangular .hdr environment map.
          */
-        void init(rhi::Context& ctx, rhi::ResourceManager& rm,
-                  rhi::DescriptorManager& dm, rhi::ShaderCompiler& sc,
-                  const std::string& hdr_path);
+        void init(rhi::Context &ctx,
+                  rhi::ResourceManager &rm,
+                  rhi::DescriptorManager &dm,
+                  rhi::ShaderCompiler &sc,
+                  const std::string &hdr_path);
 
         /**
          * @brief Unregister bindless entries and destroy all owned GPU resources.
@@ -85,15 +86,26 @@ namespace himalaya::framework {
         [[nodiscard]] uint32_t prefiltered_mip_count() const;
 
     private:
+        /**
+         * @brief Load .hdr file and upload as equirectangular GPU image.
+         *
+         * stbi_loadf → RGB→RGBA expansion → float32→float16 conversion →
+         * create R16G16B16A16F 2D image → upload via staging buffer.
+         * The image ends in SHADER_READ_ONLY layout.
+         *
+         * @return Equirect image handle. Caller must destroy after cubemap conversion.
+         */
+        rhi::ImageHandle load_equirect(const std::string &hdr_path) const;
+
         // --- Service pointers (stored for destroy) ---
-        rhi::ResourceManager* rm_ = nullptr;
-        rhi::DescriptorManager* dm_ = nullptr;
+        rhi::ResourceManager *rm_ = nullptr;
+        rhi::DescriptorManager *dm_ = nullptr;
 
         // --- GPU resources (owned) ---
-        rhi::ImageHandle cubemap_;             ///< Intermediate cubemap (1024×1024, kept for Skybox)
-        rhi::ImageHandle irradiance_cubemap_;  ///< Irradiance map (32×32 per face)
+        rhi::ImageHandle cubemap_; ///< Intermediate cubemap (1024×1024, kept for Skybox)
+        rhi::ImageHandle irradiance_cubemap_; ///< Irradiance map (32×32 per face)
         rhi::ImageHandle prefiltered_cubemap_; ///< Prefiltered env map (256×256, multi-mip)
-        rhi::ImageHandle brdf_lut_;            ///< BRDF integration LUT (256×256)
+        rhi::ImageHandle brdf_lut_; ///< BRDF integration LUT (256×256)
 
         // --- Shared sampler for all IBL products ---
         rhi::SamplerHandle sampler_;
@@ -107,5 +119,4 @@ namespace himalaya::framework {
         // --- Prefiltered mip count ---
         uint32_t prefiltered_mip_count_ = 0;
     };
-
 } // namespace himalaya::framework
