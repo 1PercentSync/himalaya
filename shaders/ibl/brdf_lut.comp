@@ -110,9 +110,9 @@ void main() {
 
         if (NdotL > 0.0) {
             float V_term = geometry_smith(NdotV, NdotL, roughness);
-            // G_vis = V_term * VdotH * NdotL / NdotH
-            // (cancels D(H) from the PDF; includes 4*NdotV*NdotL denominator)
-            float G_vis = V_term * VdotH * NdotL / max(NdotH, 0.001);
+            // geometry_smith returns V = G / (4*NdotV*NdotL), so G = V * 4*NdotV*NdotL.
+            // Estimator: G*F*VdotH / (NdotV*NdotH) = V * 4*NdotL * VdotH / NdotH.
+            float G_vis = V_term * 4.0 * NdotL * VdotH / max(NdotH, 0.001);
 
             // Schlick Fresnel: F = F0 + (1-F0) * (1-VdotH)^5
             // Split into F0*scale + bias

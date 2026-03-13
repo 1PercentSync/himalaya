@@ -36,9 +36,15 @@ vec3 aces_tonemap(vec3 x) {
 void main() {
     vec3 hdr = texture(rt_hdr_color, in_uv).rgb;
 
-    // Debug render modes bypass ACES (forward.frag already applied exposure)
+    // Debug render modes:
+    //   1-3 (diffuse/specular/IBL): HDR values with exposure → Reinhard tonemapping
+    //   4-7 (normal/metallic/roughness/AO): linear [0,1] data → direct passthrough
     if (global.debug_render_mode != 0u) {
-        out_color = vec4(hdr, 1.0);
+        if (global.debug_render_mode <= 3u) {
+            out_color = vec4(hdr / (hdr + vec3(1.0)), 1.0);
+        } else {
+            out_color = vec4(hdr, 1.0);
+        }
         return;
     }
 

@@ -34,8 +34,14 @@ vec3 get_shading_normal(vec3 N, vec4 tangent, vec3 normal_sample, float normal_s
         return N;
     }
 
-    // Construct TBN matrix
+    // Gram-Schmidt re-orthogonalize T against N (interpolation breaks orthogonality)
     vec3 T = tangent.xyz / tangent_len;
+    T = T - dot(T, N) * N;
+    float t_len = length(T);
+    if (t_len < 0.001) {
+        return N; // T nearly parallel to N — TBN would be degenerate
+    }
+    T /= t_len;
     vec3 B = cross(N, T) * tangent.w;
     mat3 TBN = mat3(T, B, N);
 

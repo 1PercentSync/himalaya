@@ -99,10 +99,11 @@ void main() {
     vec3 emissive = texture(textures[nonuniformEXT(mat.emissive_tex)], frag_uv0).rgb
                     * mat.emissive_factor.rgb;
 
-    // Exposure
+    // Exposure (used only by debug modes — default mode lets tonemapping handle it)
     float exposure = global.camera_position_and_exposure.w;
 
-    // Debug render modes (tonemapping skips ACES when mode != 0)
+    // Debug render modes apply exposure here (tonemapping passes through);
+    // default mode outputs raw HDR (tonemapping applies exposure + ACES).
     vec3 color;
     switch (global.debug_render_mode) {
         case 1u: color = (direct_diffuse + ibl_diffuse) * exposure; break;
@@ -112,8 +113,8 @@ void main() {
         case 5u: color = vec3(metallic); break;
         case 6u: color = vec3(roughness); break;
         case 7u: color = vec3(ao); break;
-        default: color = (direct_diffuse + direct_specular + ibl_diffuse
-                         + ibl_specular + emissive) * exposure; break;
+        default: color = direct_diffuse + direct_specular + ibl_diffuse
+                         + ibl_specular + emissive; break;
     }
 
     out_color = vec4(color, base_color.a);
