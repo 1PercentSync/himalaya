@@ -68,7 +68,10 @@ namespace himalaya::framework {
         };
 
         const auto image = resource_manager.create_image(desc, debug_name);
-        resource_manager.upload_image(image, data.pixels.get(), data.size_bytes());
+        resource_manager.upload_image(image,
+                                      data.pixels.get(),
+                                      data.size_bytes(),
+                                      VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT);
         if (mip_levels > 1) {
             resource_manager.generate_mips(image);
         }
@@ -100,7 +103,10 @@ namespace himalaya::framework {
 
             const auto image = resource_manager.create_image(desc, debug_name);
             const uint8_t pixels[4] = {r, g, b, a};
-            resource_manager.upload_image(image, pixels, sizeof(pixels));
+            resource_manager.upload_image(image,
+                                          pixels,
+                                          sizeof(pixels),
+                                          VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT);
 
             const auto bindless_index = descriptor_manager.register_texture(image, sampler);
             return {image, bindless_index};

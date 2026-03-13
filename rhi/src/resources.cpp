@@ -492,7 +492,8 @@ namespace himalaya::rhi {
 
     void ResourceManager::upload_image(const ImageHandle handle,
                                        const void *data,
-                                       const uint64_t size) const {
+                                       const uint64_t size,
+                                       const VkPipelineStageFlags2 dst_stage) const {
         assert(context_->is_immediate_active()
             && "upload_image must be called within begin_immediate/end_immediate scope");
         assert(data && "Upload source data must not be null");
@@ -566,7 +567,7 @@ namespace himalaya::rhi {
         to_read.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
         to_read.srcStageMask = VK_PIPELINE_STAGE_2_COPY_BIT;
         to_read.srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
-        to_read.dstStageMask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
+        to_read.dstStageMask = dst_stage;
         to_read.dstAccessMask = VK_ACCESS_2_SHADER_SAMPLED_READ_BIT;
         to_read.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
         to_read.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;

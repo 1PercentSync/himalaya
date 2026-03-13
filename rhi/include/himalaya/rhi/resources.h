@@ -388,11 +388,16 @@ namespace himalaya::rhi {
          * then transitions to SHADER_READ_ONLY. The staging buffer is registered
          * with Context for deferred cleanup.
          *
-         * @param handle Destination image (must have TransferDst usage).
-         * @param data   Source pixel data pointer.
-         * @param size   Number of bytes to upload.
+         * @param handle    Destination image (must have TransferDst usage).
+         * @param data      Source pixel data pointer.
+         * @param size      Number of bytes to upload.
+         * @param dst_stage Pipeline stage that will first consume the image
+         *                  (e.g. FRAGMENT_SHADER_BIT for textures, COMPUTE_SHADER_BIT for IBL).
          */
-        void upload_image(ImageHandle handle, const void *data, uint64_t size) const;
+        void upload_image(ImageHandle handle,
+                          const void *data,
+                          uint64_t size,
+                          VkPipelineStageFlags2 dst_stage) const;
 
         /**
          * @brief Records mip generation commands into the active immediate scope.
