@@ -179,6 +179,10 @@ namespace himalaya::app {
         for (const auto idx: cull_result_.visible_transparent_indices)
             rendered_triangles += meshes[instances[idx].mesh_id].index_count / 3;
 
+        uint32_t total_vertices = 0;
+        for (const auto &mesh: meshes)
+            total_vertices += mesh.vertex_count;
+
         const auto visible_opaque = static_cast<uint32_t>(cull_result_.visible_opaque_indices.size());
         const auto visible_transparent = static_cast<uint32_t>(cull_result_.visible_transparent_indices.size());
         const auto total_instances = static_cast<uint32_t>(instances.size());
@@ -190,6 +194,7 @@ namespace himalaya::app {
             .context = context_,
             .swapchain = swapchain_,
             .camera = camera_,
+            .active_light_count = static_cast<uint32_t>(lights.size()),
             .disable_scene_lights = disable_scene_lights_,
             .ibl_rotation_deg = glm::degrees(ibl_yaw_),
             .ibl_intensity = ibl_intensity_,
@@ -200,6 +205,8 @@ namespace himalaya::app {
                 .total_instances = total_instances,
                 .total_meshes = static_cast<uint32_t>(meshes.size()),
                 .total_materials = static_cast<uint32_t>(scene_loader_.material_instances().size()),
+                .total_textures = scene_loader_.texture_count(),
+                .total_vertices = total_vertices,
                 .visible_opaque = visible_opaque,
                 .visible_transparent = visible_transparent,
                 .culled = total_instances - visible_opaque - visible_transparent,

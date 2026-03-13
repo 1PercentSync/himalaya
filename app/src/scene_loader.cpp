@@ -629,4 +629,8 @@ namespace himalaya::app {
     std::span<const framework::DirectionalLight> SceneLoader::directional_lights() const {
         return directional_lights_;
     }
+
+    uint32_t SceneLoader::texture_count() const {
+        return static_cast<uint32_t>(images_.size());
+    }
 } // namespace himalaya::app

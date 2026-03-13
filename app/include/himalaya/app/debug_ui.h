@@ -41,7 +41,10 @@ namespace himalaya::app {
         /** @brief Camera state for position/orientation display and parameter sliders. */
         framework::Camera& camera;
 
-        // --- Lighting (controls) ---
+        // --- Lighting (display + controls) ---
+
+        /** @brief Number of directional lights active this frame (0 when disabled or scene has none). */
+        uint32_t active_light_count;
 
         /** @brief Checkbox state: disable scene directional lights (IBL only). */
         bool& disable_scene_lights;
@@ -72,6 +75,8 @@ namespace himalaya::app {
             uint32_t total_instances;
             uint32_t total_meshes;
             uint32_t total_materials;
+            uint32_t total_textures;
+            uint32_t total_vertices;
             uint32_t visible_opaque;
             uint32_t visible_transparent;
             uint32_t culled;

@@ -80,6 +80,9 @@ namespace himalaya::app {
         /** @brief Returns the loaded directional lights (may be empty). */
         [[nodiscard]] std::span<const framework::DirectionalLight> directional_lights() const;
 
+        /** @brief Returns the number of GPU texture images loaded from the scene. */
+        [[nodiscard]] uint32_t texture_count() const;
+
     private:
         // ---- Subsystem references (set during load) ----
 
