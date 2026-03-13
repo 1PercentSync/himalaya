@@ -70,7 +70,7 @@ namespace himalaya::framework {
          * underlying images. Safe to call even if init() was never called
          * (handles default to invalid).
          */
-        void destroy();
+        void destroy() const;
 
         /** @brief Bindless index of the irradiance cubemap in Set 1 cubemaps[]. */
         [[nodiscard]] rhi::BindlessIndex irradiance_cubemap_index() const;
@@ -120,7 +120,7 @@ namespace himalaya::framework {
          *
          * @param ctx RHI context (device, immediate command buffer).
          */
-        void create_fallback_cubemaps(rhi::Context &ctx);
+        void create_fallback_cubemaps(const rhi::Context &ctx);
 
         /**
          * @brief Convert equirectangular image to a cubemap via compute shader.

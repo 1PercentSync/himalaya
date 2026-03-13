@@ -86,8 +86,8 @@ namespace himalaya::framework {
         std::vector<uint16_t> rgba16(pixel_count * 4);
 
         // Clamp to float16 max to prevent Inf/NaN (HDR sun can exceed 65504)
-        constexpr float kHalfMax = 65504.0f;
         for (uint32_t i = 0; i < pixel_count; ++i) {
+            constexpr float kHalfMax = 65504.0f;
             rgba16[i * 4 + 0] = glm::packHalf1x16(std::min(rgb_data[i * 3 + 0], kHalfMax));
             rgba16[i * 4 + 1] = glm::packHalf1x16(std::min(rgb_data[i * 3 + 1], kHalfMax));
             rgba16[i * 4 + 2] = glm::packHalf1x16(std::min(rgb_data[i * 3 + 2], kHalfMax));
@@ -535,7 +535,7 @@ namespace himalaya::framework {
         prefiltered_cubemap_ = rm_->create_image(prefiltered_desc, "IBL Prefiltered");
 
         // --- Temporary sampler for cubemap sampling (mip access for filtered IS) ---
-        const rhi::SamplerDesc sampler_desc{
+        constexpr rhi::SamplerDesc sampler_desc{
             .mag_filter = rhi::Filter::Linear,
             .min_filter = rhi::Filter::Linear,
             .mip_mode = rhi::SamplerMipMode::Linear,
@@ -656,9 +656,8 @@ namespace himalaya::framework {
         input_info.imageView = cubemap_img.view;
         input_info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
-        constexpr uint32_t kGroupSize = 16;
-
         for (uint32_t mip = 0; mip < mip_count; ++mip) {
+            constexpr uint32_t kGroupSize = 16;
             const float mip_roughness = static_cast<float>(mip) / static_cast<float>(mip_count - 1);
             const uint32_t mip_size = kFaceSize >> mip;
 
@@ -859,7 +858,7 @@ namespace himalaya::framework {
     // create_fallback_cubemaps — Neutral 1×1 cubemaps when HDR loading fails
     // -----------------------------------------------------------------------
 
-    void IBL::create_fallback_cubemaps(rhi::Context &ctx) {
+    void IBL::create_fallback_cubemaps(const rhi::Context &ctx) {
         // Skybox cubemap: 1×1 R16G16B16A16F
         const rhi::ImageDesc skybox_desc{
             .width = 1,
@@ -974,7 +973,7 @@ namespace himalaya::framework {
     void IBL::register_bindless_resources() {
         // Shared sampler: linear filtering with mip interpolation for prefiltered cubemap.
         // Single-mip products (irradiance, skybox cubemap) are unaffected by mip settings.
-        const rhi::SamplerDesc sampler_desc{
+        constexpr rhi::SamplerDesc sampler_desc{
             .mag_filter = rhi::Filter::Linear,
             .min_filter = rhi::Filter::Linear,
             .mip_mode = rhi::SamplerMipMode::Linear,
@@ -1002,7 +1001,7 @@ namespace himalaya::framework {
     // destroy — Unregister bindless entries, then destroy images and sampler
     // -----------------------------------------------------------------------
 
-    void IBL::destroy() {
+    void IBL::destroy() const {
         if (!rm_) return;
 
         // Unregister bindless entries first (slots returned to free lists)
