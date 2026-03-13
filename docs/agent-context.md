@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段三 — PBR 光照基础（Cook-Torrance + IBL + MSAA + HDR）
-- **进度**：Step 6.5 进行中，第 1-2 项完成（forward.frag metallic 工作流 + IBL 环境光），下一步第 3 项
+- **进度**：Step 6.5 进行中，第 1-3 项完成（forward.frag metallic 工作流 + IBL 环境光 + 灯光体系重构），下一步第 4 项（验证）
 
 ### 下一个任务
 
-Step 6.5 第 3 项：灯光体系重构 — `ambient_intensity` → `ibl_intensity` 全通路重命名 + 退役 default light + 新增 `disable_scene_lights_` + DebugUI Lighting 面板更新。
+Step 6.5 第 4 项：验证 — 物体表面 IBL 光照正确（金属面反射环境、粗糙面模糊反射、非金属环境漫反射），`ibl_intensity` 滑条可调，IBL 可旋转，glTF 方向光可通过 checkbox 切换。
 
 ### 代码审查修复记录
 
