@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段三 — PBR 光照基础（Cook-Torrance + IBL + MSAA + HDR）
-- **进度**：Step 7 进行中（PBR Shader 升级），第 1-3 项已完成
+- **进度**：Step 7 进行中（PBR Shader 升级），第 1-4 项已完成
 
 ### 下一个任务
 
-Step 7 第 4 项：升级 `forward.frag` — Lambert 直射光 → Cook-Torrance，IBL 内联代码重构为 `evaluate_ibl()` 调用，新增 occlusion_tex 调制 IBL + emissive_tex × emissive_factor。
+Step 7 第 5 项：DebugUI 渲染模式 — 增加可视化选项（Diffuse Only / Specular Only / IBL Only / Normal / Metallic / Roughness / AO）通过 GlobalUBO 传递 debug mode 标志，forward.frag 根据标志输出对应分量。
 
 ### 代码审查修复记录
 
