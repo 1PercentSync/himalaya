@@ -168,15 +168,21 @@ namespace himalaya::app {
         if (ImGui::CollapsingHeader("Scene", ImGuiTreeNodeFlags_DefaultOpen)) {
             // ReSharper disable once CppUseStructuredBinding
             const auto &stats = ctx.scene_stats;
-            ImGui::Text("Instances: %u", stats.total_instances);
-            ImGui::Text("Meshes: %u  Materials: %u  Textures: %u",
-                        stats.total_meshes, stats.total_materials, stats.total_textures);
+
+            // Scene assets
+            ImGui::Text("Instances: %u  Meshes: %u",
+                        stats.total_instances, stats.total_meshes);
+            ImGui::Text("Materials: %u  Textures: %u",
+                        stats.total_materials, stats.total_textures);
             ImGui::Text("Vertices: %u", stats.total_vertices);
+
+            // Per-frame rendering stats
+            ImGui::Separator();
             ImGui::Text("Visible: %u opaque, %u transparent",
                         stats.visible_opaque, stats.visible_transparent);
             ImGui::Text("Culled: %u", stats.culled);
-            ImGui::Text("Draw calls: %u", stats.draw_calls);
-            ImGui::Text("Triangles: %u", stats.rendered_triangles);
+            ImGui::Text("Draw Calls: %u  Triangles: %u",
+                        stats.draw_calls, stats.rendered_triangles);
         }
 
         // Lighting section
