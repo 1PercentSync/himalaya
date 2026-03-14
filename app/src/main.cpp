@@ -15,11 +15,10 @@
  * Parses command-line arguments via CLI11, then creates the
  * Application, runs the main loop, and cleans up on exit.
  */
-int main(int argc, char *argv[]) {
+int main(const int argc, char *argv[]) {
     CLI::App cli{"Himalaya Renderer"};
     argv = cli.ensure_utf8(argv);
-
-    std::string scene_path = "assets/Sponza/Sponza.gltf";
+    std::string scene_path = "assets/DamagedHelmet/DamagedHelmet.gltf";
     cli.add_option("--scene", scene_path, "Path to glTF scene file");
 
     std::string env_path = "assets/environment.hdr";
