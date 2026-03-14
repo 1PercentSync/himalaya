@@ -3,17 +3,17 @@
 
 /**
  * @file forward.frag
- * @brief Forward pass fragment shader — Lambert direct + IBL environment lighting.
+ * @brief Forward pass fragment shader — Cook-Torrance direct + IBL environment lighting.
  *
- * Samples normal map and metallic/roughness texture, applies metallic
- * workflow separation (F0 / diffuse_color), computes Lambert diffuse
- * from scene directional lights, and adds IBL environment lighting
- * (irradiance diffuse + Split-Sum specular approximation).
- * Alpha Mask mode discards fragments below alpha_cutoff.
+ * Full PBR pipeline: samples all 5 material textures (base_color, normal,
+ * metallic_roughness, occlusion, emissive), applies Cook-Torrance BRDF for
+ * directional lights, Split-Sum IBL for environment lighting, and adds
+ * emissive contribution.  Alpha Mask mode discards fragments below alpha_cutoff.
  */
 
 #include "common/bindings.glsl"
 #include "common/normal.glsl"
+#include "common/lighting.glsl"
 
 layout(location = 0) in vec3 frag_world_pos;
 layout(location = 1) in vec3 frag_normal;
@@ -58,34 +58,39 @@ void main() {
     vec3 R = reflect(-V, N);
     float NdotV = max(dot(N, V), 0.0);
 
-    // Accumulate Lambert diffuse from all directional lights
-    vec3 direct_diffuse = vec3(0.0);
+    // ---- Direct lighting: Cook-Torrance + Lambert ----
+    vec3 direct = vec3(0.0);
     for (uint i = 0; i < global.directional_light_count; ++i) {
-        vec3 light_dir = normalize(-directional_lights[i].direction_and_intensity.xyz);
+        vec3 L = normalize(-directional_lights[i].direction_and_intensity.xyz);
         float intensity = directional_lights[i].direction_and_intensity.w;
         vec3 light_color = directional_lights[i].color_and_shadow.xyz;
 
-        float NdotL = max(dot(N, light_dir), 0.0);
-        direct_diffuse += light_color * intensity * NdotL;
+        direct += evaluate_directional_light(L, light_color, intensity,
+                                             N, V, NdotV,
+                                             roughness, F0, diffuse_color);
     }
 
-    // IBL environment lighting with rotation
+    // ---- IBL environment lighting ----
     vec3 rotated_N = rotate_y(N, global.ibl_rotation_sin, global.ibl_rotation_cos);
     vec3 rotated_R = rotate_y(R, global.ibl_rotation_sin, global.ibl_rotation_cos);
 
-    // IBL diffuse: irradiance cubemap sampled at rotated normal
-    vec3 irradiance = texture(cubemaps[nonuniformEXT(global.irradiance_cubemap_index)], rotated_N).rgb;
-    vec3 ibl_diffuse = irradiance * diffuse_color;
-
-    // IBL specular: prefiltered environment + BRDF LUT (Split-Sum approximation)
-    float mip = roughness * float(global.prefiltered_mip_count - 1u);
+    vec3 irradiance  = texture(cubemaps[nonuniformEXT(global.irradiance_cubemap_index)], rotated_N).rgb;
+    float mip        = roughness * float(global.prefiltered_mip_count - 1u);
     vec3 prefiltered = textureLod(cubemaps[nonuniformEXT(global.prefiltered_cubemap_index)], rotated_R, mip).rgb;
-    vec2 brdf_lut = texture(textures[nonuniformEXT(global.brdf_lut_index)], vec2(NdotV, roughness)).rg;
-    vec3 ibl_specular = prefiltered * (F0 * brdf_lut.x + brdf_lut.y);
+    vec2 brdf_lut    = texture(textures[nonuniformEXT(global.brdf_lut_index)], vec2(NdotV, roughness)).rg;
 
-    // Combine: direct lighting + IBL environment lighting
-    vec3 color = diffuse_color * direct_diffuse
-               + global.ibl_intensity * (ibl_diffuse + ibl_specular);
+    vec3 ibl = evaluate_ibl(irradiance, prefiltered, brdf_lut, F0, diffuse_color);
+
+    // Occlusion modulates IBL only (direct lights have real-time shadows in M2)
+    float ao = texture(textures[nonuniformEXT(mat.occlusion_tex)], frag_uv0).r;
+    ao = 1.0 + mat.occlusion_strength * (ao - 1.0);
+
+    // Emissive
+    vec3 emissive = texture(textures[nonuniformEXT(mat.emissive_tex)], frag_uv0).rgb
+                    * mat.emissive_factor.rgb;
+
+    // Combine
+    vec3 color = direct + global.ibl_intensity * ibl * ao + emissive;
 
     // Output raw HDR linear values; exposure is applied in the tonemapping pass.
     out_color = vec4(color, base_color.a);
