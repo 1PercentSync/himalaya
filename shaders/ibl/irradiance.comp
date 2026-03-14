@@ -16,7 +16,7 @@ layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
 layout(set = 0, binding = 0) uniform samplerCube u_environment;
 layout(set = 0, binding = 1, r11f_g11f_b10f) writeonly uniform image2DArray u_irradiance;
 
-const float PI = 3.14159265359;
+#include "common/constants.glsl"
 
 /** Firefly rejection threshold: clamp sampled radiance to prevent extreme
  *  values (e.g. HDR sun at 65504) from dominating the integration. */
@@ -66,8 +66,8 @@ void main() {
     float sample_count = 0.0;
 
     const float DELTA = 0.01;
-    for (float phi = 0.0; phi < 2.0 * PI; phi += DELTA) {
-        for (float theta = 0.0; theta < 0.5 * PI; theta += DELTA) {
+    for (float phi = 0.0; phi < TWO_PI; phi += DELTA) {
+        for (float theta = 0.0; theta < HALF_PI; theta += DELTA) {
             // Spherical to tangent-space cartesian
             float sin_theta = sin(theta);
             float cos_theta = cos(theta);

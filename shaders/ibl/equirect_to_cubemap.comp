@@ -12,7 +12,7 @@ layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
 layout(set = 0, binding = 0) uniform sampler2D u_equirect;
 layout(set = 0, binding = 1, rgba16f) writeonly uniform image2DArray u_cubemap;
 
-const float PI = 3.14159265359;
+#include "common/constants.glsl"
 
 /**
  * Computes the world-space direction for a cubemap texel.
@@ -48,8 +48,8 @@ vec4 sample_equirect(vec3 dir) {
     float theta = asin(clamp(dir.y, -1.0, 1.0));  // latitude: [-PI/2, PI/2]
 
     vec2 uv = vec2(
-        phi   / (2.0 * PI) + 0.5,
-        0.5 - theta / PI
+        phi / TWO_PI + 0.5,
+        0.5 - theta * INV_PI
     );
 
     return texture(u_equirect, uv);
