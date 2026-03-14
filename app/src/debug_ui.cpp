@@ -222,6 +222,16 @@ namespace himalaya::app {
 
             slider_float_deferred("IBL Intensity", &ctx.ibl_intensity, 0.0f, 5.0f, "%.2f");
             slider_float_deferred("EV", &ctx.ev, -4.0f, 4.0f, "%.1f");
+
+            // Debug render mode
+            constexpr const char *kModeLabels[] = {
+                "Full PBR", "Diffuse Only", "Specular Only", "IBL Only",
+                "Normal", "Metallic", "Roughness", "AO",
+            };
+            auto mode = static_cast<int>(ctx.debug_render_mode);
+            if (ImGui::Combo("Debug View", &mode, kModeLabels, IM_ARRAYSIZE(kModeLabels))) {
+                ctx.debug_render_mode = static_cast<uint32_t>(mode);
+            }
         }
 
         ImGui::End();

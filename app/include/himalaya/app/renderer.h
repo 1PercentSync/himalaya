@@ -80,6 +80,9 @@ namespace himalaya::app {
 
         /** @brief IBL rotation cos(yaw) for environment horizontal rotation. */
         float ibl_rotation_cos;
+
+        /** @brief Debug render mode (0=Full PBR, 1-7=debug visualizations). */
+        uint32_t debug_render_mode;
     };
 
     /**

@@ -61,6 +61,7 @@ layout(set = 0, binding = 0) uniform GlobalUBO {
     uint skybox_cubemap_index;              // offset 308 — bindless index into cubemaps[]
     float ibl_rotation_sin;                 // offset 312 — sin(ibl_yaw) for environment rotation
     float ibl_rotation_cos;                 // offset 316 — cos(ibl_yaw) for environment rotation
+    uint debug_render_mode;                 // offset 320 — 0=Full PBR, 1-7=debug visualizations
 } global;
 
 layout(set = 0, binding = 1) readonly buffer LightBuffer {

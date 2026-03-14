@@ -123,6 +123,9 @@ namespace himalaya::app {
         /** @brief When true, scene directional lights are disabled (IBL only). */
         bool disable_scene_lights_ = false;
 
+        /** @brief Debug render mode (0=Full PBR, 1-7=debug visualizations). */
+        uint32_t debug_render_mode_ = 0;
+
         // --- IBL rotation viewport drag state ---
 
         /** @brief Previous cursor X for left-click IBL drag delta. */

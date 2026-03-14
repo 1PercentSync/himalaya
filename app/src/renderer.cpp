@@ -372,6 +372,7 @@ namespace himalaya::app {
         ubo_data.skybox_cubemap_index = ibl_.skybox_cubemap_index().index;
         ubo_data.ibl_rotation_sin = input.ibl_rotation_sin;
         ubo_data.ibl_rotation_cos = input.ibl_rotation_cos;
+        ubo_data.debug_render_mode = input.debug_render_mode;
 
         const auto light_count = static_cast<uint32_t>(
             std::min(input.lights.size(), static_cast<size_t>(kMaxDirectionalLights)));

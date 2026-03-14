@@ -115,7 +115,7 @@ namespace himalaya::framework {
     /**
      * @brief Per-frame global uniform data (Set 0, Binding 0).
      *
-     * std140 layout, 320 bytes aligned to 16.
+     * std140 layout, 336 bytes aligned to 16.
      */
     struct GlobalUniformData {
         glm::mat4 view; ///< offset   0
@@ -134,6 +134,8 @@ namespace himalaya::framework {
         uint32_t skybox_cubemap_index = UINT32_MAX; ///< offset 308 — bindless index into cubemaps[]
         float ibl_rotation_sin = 0.0f; ///< offset 312 — sin(ibl_yaw) for environment rotation
         float ibl_rotation_cos = 1.0f; ///< offset 316 — cos(ibl_yaw) for environment rotation
+        uint32_t debug_render_mode = 0; ///< offset 320 — 0=Full PBR, 1-7=debug visualizations
+        uint32_t _pad[3]{}; ///< padding to 336 (std140 requires multiple of 16)
     };
 
     /**
@@ -160,7 +162,7 @@ namespace himalaya::framework {
     // ---- GPU struct size guards ----
     // These must match the shader-side layout exactly. A mismatch silently
     // corrupts GPU reads, so catch it at compile time.
-    static_assert(sizeof(GlobalUniformData) == 320, "GlobalUniformData must be 320 bytes (std140)");
+    static_assert(sizeof(GlobalUniformData) == 336, "GlobalUniformData must be 336 bytes (std140)");
     static_assert(sizeof(GPUDirectionalLight) == 32, "GPUDirectionalLight must be 32 bytes (std430)");
     static_assert(sizeof(PushConstantData) == 68, "PushConstantData must be 68 bytes");
 } // namespace himalaya::framework

@@ -200,6 +200,7 @@ namespace himalaya::app {
             .ibl_rotation_deg = glm::degrees(ibl_yaw_),
             .ibl_intensity = ibl_intensity_,
             .ev = ev_,
+            .debug_render_mode = debug_render_mode_,
             .current_sample_count = renderer_.current_sample_count(),
             .supported_sample_counts = context_.msaa_sample_counts,
             .scene_stats = {
@@ -243,6 +244,7 @@ namespace himalaya::app {
             .exposure = std::pow(2.0f, ev_),
             .ibl_rotation_sin = std::sin(ibl_yaw_),
             .ibl_rotation_cos = std::cos(ibl_yaw_),
+            .debug_render_mode = debug_render_mode_,
         };
 
         renderer_.render(cmd, input);
