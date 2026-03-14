@@ -195,6 +195,7 @@ namespace himalaya::app {
             .swapchain = swapchain_,
             .camera = camera_,
             .active_light_count = static_cast<uint32_t>(lights.size()),
+            .has_scene_lights = !scene_lights.empty(),
             .disable_scene_lights = disable_scene_lights_,
             .ibl_rotation_deg = glm::degrees(ibl_yaw_),
             .ibl_intensity = ibl_intensity_,

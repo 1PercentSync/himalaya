@@ -184,7 +184,9 @@ namespace himalaya::app {
         if (ImGui::CollapsingHeader("Lighting", ImGuiTreeNodeFlags_DefaultOpen)) {
             ImGui::Text("Active Lights: %u", ctx.active_light_count);
             ImGui::Text("IBL Rotation: %.1f%s", ctx.ibl_rotation_deg, "\xC2\xB0");
+            ImGui::BeginDisabled(!ctx.has_scene_lights);
             ImGui::Checkbox("Disable Scene Lights", &ctx.disable_scene_lights);
+            ImGui::EndDisabled();
         }
 
         // Rendering section

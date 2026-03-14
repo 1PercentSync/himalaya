@@ -46,6 +46,9 @@ namespace himalaya::app {
         /** @brief Number of directional lights active this frame (0 when disabled or scene has none). */
         uint32_t active_light_count;
 
+        /** @brief True if the scene provides directional lights (false = checkbox grayed out). */
+        bool has_scene_lights;
+
         /** @brief Checkbox state: disable scene directional lights (IBL only). */
         bool& disable_scene_lights;
 
