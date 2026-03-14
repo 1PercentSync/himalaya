@@ -120,6 +120,6 @@
 - [x] 创建 `shaders/common/brdf.glsl`（D_GGX、V_SmithGGX、F_Schlick，纯函数无场景数据依赖；Lambertian 漫反射直接用 INV_PI）
 - [x] ~~创建 `shaders/common/lighting.glsl`~~ — 已创建后删除：debug 渲染模式需分离 diffuse/specular 贡献，组合函数无法拆分，forward.frag 改为直接 include brdf.glsl 内联计算
 - [x] 升级 `forward.frag`：Lambert 直射光 → Cook-Torrance（GGX / Smith Height-Correlated / Schlick），内联 BRDF 分离 diffuse/specular + 新增 occlusion_tex 调制 IBL + emissive_tex × emissive_factor
-- [ ] DebugUI 渲染模式：增加可视化选项（Diffuse Only / Specular Only / IBL Only / Normal / Metallic / Roughness / AO）通过 GlobalUBO 传递 debug mode 标志，forward.frag 根据标志输出对应分量
+- [x] DebugUI 渲染模式：增加可视化选项（Diffuse Only / Specular Only / IBL Only / Normal / Metallic / Roughness / AO）通过 GlobalUBO 传递 debug mode 标志，forward.frag 根据标志输出对应分量
 - [ ] 验证：glTF 场景正确 PBR 渲染，Cook-Torrance 直射光 + IBL 环境光，金属表面反射环境，粗糙表面漫反射，Debug 各模式可用
 - [ ] 最终验证：补充 .hdr 环境贴图和额外 glTF PBR 测试模型（DamagedHelmet 或类似），结合现有 Sponza 场景全面验证
