@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段三 — PBR 光照基础（Cook-Torrance + IBL + MSAA + HDR）
-- **进度**：Step 7 进行中（PBR Shader 升级），第 1 项已完成
+- **进度**：Step 7 进行中（PBR Shader 升级），第 1-2 项已完成
 
 ### 下一个任务
 
-Step 7 第 2 项：创建 `shaders/common/brdf.glsl`（D_GGX、G_SmithGGX、F_Schlick、Lambert_diffuse，纯函数无场景数据依赖）。
+Step 7 第 3 项：创建 `shaders/common/lighting.glsl`（evaluate_directional_light、evaluate_ibl，从 forward.frag 重构而来，内部 include constants + brdf）。
 
 ### 代码审查修复记录
 

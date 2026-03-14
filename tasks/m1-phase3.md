@@ -117,7 +117,7 @@
 ## Step 7：PBR Shader 升级
 
 - [x] 创建 `shaders/common/constants.glsl`（PI、EPSILON 等数学常量）
-- [ ] 创建 `shaders/common/brdf.glsl`（D_GGX、G_SmithGGX、F_Schlick、Lambert_diffuse，纯函数无场景数据依赖）
+- [x] 创建 `shaders/common/brdf.glsl`（D_GGX、V_SmithGGX、F_Schlick，纯函数无场景数据依赖；Lambertian 漫反射直接用 INV_PI）
 - [ ] 创建 `shaders/common/lighting.glsl`（evaluate_directional_light、evaluate_ibl，从 forward.frag 重构而来，内部 include constants + brdf）
 - [ ] 升级 `forward.frag`：Lambert 直射光 → Cook-Torrance（GGX / Smith Height-Correlated / Schlick），IBL 内联代码重构为 `evaluate_ibl()` 调用（逻辑不变）+ 新增 occlusion_tex 调制 IBL + emissive_tex × emissive_factor
 - [ ] DebugUI 渲染模式：增加可视化选项（Diffuse Only / Specular Only / IBL Only / Normal / Metallic / Roughness / AO）通过 GlobalUBO 传递 debug mode 标志，forward.frag 根据标志输出对应分量
