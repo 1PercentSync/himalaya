@@ -546,11 +546,11 @@ offset 292: uint irradiance_cubemap_index      ← Step 6 新增
 offset 296: uint prefiltered_cubemap_index     ← Step 6 新增
 offset 300: uint brdf_lut_index                ← Step 6 新增
 offset 304: uint prefiltered_mip_count         ← Step 6 新增
-offset 308: uint debug_render_mode             ← Step 7 新增
-offset 312: uint skybox_cubemap_index          ← Step 6 新增
-offset 316: float ibl_rotation_sin             ← Step 6 新增
-offset 320: float ibl_rotation_cos             ← Step 6 新增
-offset 324: float _pad[3]                      ← padding to 336
+offset 308: uint skybox_cubemap_index          ← Step 6 新增
+offset 312: float ibl_rotation_sin             ← Step 6 新增
+offset 316: float ibl_rotation_cos             ← Step 6 新增
+offset 320: uint debug_render_mode             ← Step 7 新增
+offset 324: uint _pad[3]                       ← padding to 336
 ```
 
 IBL 未初始化时字段值为 0（index 0 对应 default textures，行为正确）。`ambient_intensity` 在 Step 6.5 重命名为 `ibl_intensity`——Step 6.5 引入 IBL 环境光取代简单环境光项，原名不再准确。C++ 端 `GlobalUniformData` 和 shader 端 `bindings.glsl` 同步改名。
@@ -783,10 +783,8 @@ Shader 公共代码按依赖关系组织，include 顺序自明：
 ```
 common/constants.glsl   ← PI, EPSILON 等纯数学常量（无依赖）
     ↓
-common/brdf.glsl        ← D_GGX, G_SmithGGX, F_Schlick, Lambert（纯函数，不依赖场景数据）
-    ↓
-common/lighting.glsl    ← evaluate_directional_light, evaluate_ibl（组合 BRDF + 光源结构体）
-                           内部 #include constants.glsl + brdf.glsl
+common/brdf.glsl        ← D_GGX, V_SmithGGX, F_Schlick（纯函数，不依赖场景数据）
+                           Lambertian 漫反射直接用 INV_PI（来自 constants.glsl）
 
 common/bindings.glsl    ← Set 0/Set 1/push constant 布局定义（已有，独立于上面的链）
 common/normal.glsl      ← TBN 构造、normal map 解码（独立文件，depth_prepass 和 forward 共用）
@@ -798,20 +796,12 @@ common/normal.glsl      ← TBN 构造、normal map 解码（独立文件，dept
 // forward.frag
 #include "common/bindings.glsl"
 #include "common/normal.glsl"
-#include "common/lighting.glsl"  // 内部已 include constants + brdf
+#include "common/brdf.glsl"     // 内部已 include constants
 ```
 
-`normal.glsl` 独立于依赖链——depth_prepass.frag（输出法线时）和 forward.frag 都需要 TBN 构造，但 depth_prepass 不需要 brdf/lighting。
+`normal.glsl` 独立——depth_prepass.frag（输出法线时）和 forward.frag 都需要 TBN 构造，但 depth_prepass 不需要 brdf。
 
-候选方案：
-
-| 方案 | 说明 |
-|------|------|
-| A. 细粒度（每个功能独立文件） | 文件多但职责单一 |
-| B. 粗粒度（brdf.glsl 包含所有） | 文件少但耦合高 |
-| C. 按依赖拆分 | 清晰的依赖链让 include 顺序自明 |
-
-**选择 C + 独立 `normal.glsl`。** 依赖链清晰，`lighting.glsl` 内部 include `constants.glsl` + `brdf.glsl`，消费方只需 include 最顶层文件。`normal.glsl` 独立于链——不是所有需要法线处理的 pass 都需要光照计算。
+最初计划在 brdf.glsl 之上再加 `lighting.glsl`（evaluate_directional_light、evaluate_ibl），但 Step 7 debug 渲染模式需要分离 diffuse/specular 贡献，组合函数返回合并结果无法拆分。最终 forward.frag 直接 include brdf.glsl 内联计算，`lighting.glsl` 未保留。
 
 ### 材质变体策略
 
@@ -1310,11 +1300,11 @@ forward.vert 保持不变（输出 world position / normal / uv0 / tangent）。
 
 Step 7 通过 `GlobalUBO.debug_render_mode` 控制 forward.frag 输出不同分量（Diffuse Only / Normal / Metallic / Roughness / IBL Only 等）。Debug 输出通常是 [0,1] 线性值，经过 ACES tonemapping 会失真（如 normal 编码的 0.5 经 ACES 变成 ~0.47）。
 
-**选择：Debug 模式跳过 ACES。** TonemappingPass 检查 `debug_render_mode`——非零时 passthrough（不做 ACES 曲线，只保留硬件 linear→sRGB 转换），零时正常 ACES。一行 `if` 的实现成本，debug 输出可读性的收益。
+**选择：材质属性模式跳过 ACES。** TonemappingPass 检查 `debug_render_mode`——>= 4（Normal/Metallic/Roughness/AO）时 passthrough（不做 exposure 和 ACES，只保留硬件 linear→sRGB），0-3（Full PBR/Diffuse Only/Specular Only/IBL Only）走正常 exposure + ACES——这些模式输出 HDR 值，需要 tonemapping 才能正确显示。
 
 ### Forward Shader 跨阶段演进
 
-forward.frag 在每个阶段都会被修改——阶段四加阴影采样、阶段五加 AO/Contact Shadow、阶段六加 lightmap。**不预留注入点**（`#include` 占位、函数调用占位）。每个阶段按需修改是自然的增量开发，`lighting.glsl` 的函数签名在阶段四自然增加 `shadow_factor` 参数。过度预留增加当前复杂度且预留结构可能与实际需求不匹配。
+forward.frag 在每个阶段都会被修改——阶段四加阴影采样、阶段五加 AO/Contact Shadow、阶段六加 lightmap。**不预留注入点**（`#include` 占位、函数调用占位）。每个阶段按需修改是自然的增量开发，`brdf.glsl` 的函数在各阶段按需组合。过度预留增加当前复杂度且预留结构可能与实际需求不匹配。
 
 ### 透明物体处理（Phase 3 → Phase 7）
 

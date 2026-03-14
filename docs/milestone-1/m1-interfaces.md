@@ -109,8 +109,7 @@ App 层拥有 GLFW 窗口，传 `GLFWwindow*` 给 RHI 创建 Surface。Applicati
 shaders/
 ├── common/                      # 共享头文件 / 函数
 │   ├── constants.glsl           # 数学常量（PI、EPSILON 等）
-│   ├── brdf.glsl                # BRDF 函数（Lambert、GGX、Smith、Schlick，include constants）
-│   ├── lighting.glsl            # 光照计算（方向光、IBL，include constants + brdf）
+│   ├── brdf.glsl                # BRDF 函数（D_GGX、V_SmithGGX、F_Schlick，include constants）
 │   ├── normal.glsl              # TBN 构造、normal map 解码
 │   ├── shadow.glsl              # 阴影采样（CSM、PCF）
 │   └── bindings.glsl            # 全局绑定布局定义
@@ -357,7 +356,7 @@ struct CullResult {
 CPU 侧数据结构的 GPU 布局镜像，必须与 shader 端一一对应。
 
 ```cpp
-// GlobalUBO — std140 layout, 320 bytes (aligned to 16)
+// GlobalUBO — std140 layout, 336 bytes (aligned to 16)
 // 对应 shader: Set 0, Binding 0
 struct GlobalUniformData {
     glm::mat4 view;                             // offset   0
@@ -376,7 +375,8 @@ struct GlobalUniformData {
     uint32_t skybox_cubemap_index;              // offset 308 — cubemaps[] 下标（Skybox Pass 天空渲染用）
     float ibl_rotation_sin;                     // offset 312 — IBL 水平旋转 sin(yaw)
     float ibl_rotation_cos;                     // offset 316 — IBL 水平旋转 cos(yaw)
-    // Step 7 在此追加: uint32_t debug_render_mode (offset 320)
+    uint32_t debug_render_mode;                 // offset 320 — 0=Full PBR, 1-7=debug 可视化
+    uint32_t _pad[3];                           // offset 324 — padding to 336
 };
 
 // GPU 方向光 — std430 layout, 32 bytes per element
