@@ -1970,9 +1970,11 @@ ShadowPass 持有：shadow map ImageHandle、per-layer VkImageView 数组、opaq
 | B. 相邻 cascade lerp | blend region 内 2x 采样 |
 | C. Dithering + temporal | 无额外采样，需 temporal filtering |
 
-**阶段四选 B。** M1 阶段五才引入 temporal filtering，且 temporal 是 SSAO 专用，不覆盖 shadow 信号。无 temporal 的 dithering 效果比硬切换更差（脏噪点 vs 干净线）。Lerp blend 的性能开销局限在 blend region（~10% 阴影像素 2x 采样），可接受。
+**阶段四选 B。** Dithering 需要 temporal 平滑噪点，但 M1 阶段五的 per-effect temporal filtering 无法覆盖 shadow dithering——原因是结构性的：per-effect temporal 作用于独立的中间效果纹理（AO texture、contact shadow mask 等），而 cascade dithering 的噪声在 `forward.frag` 内部被直接乘入光照结果（`Lo_direct *= shadow`），嵌在最终颜色中，不存在独立的 shadow 纹理可供 temporal 处理。只有 M2 FSR/DLSS 的全画面 temporal accumulation（对最终颜色做时域积累）才能覆盖嵌在颜色中的高频噪声。因此阶段四必须使用 lerp blend。
 
-**M2 演进：** FSR/DLSS 接入后对整个画面做 temporal accumulation，shadow dithering 噪点被自然平滑，可切换为 dithering 省去 blend region 双重采样。
+无 temporal 平滑的裸 dithering 效果比硬切换更差（脏噪点 vs 干净线）。Lerp blend 的性能开销局限在 blend region（~10% 阴影像素 2x 采样），可接受。
+
+**M2 演进：** FSR/DLSS 的全画面 temporal accumulation 覆盖 shadow dithering 噪点后，cascade blend 可从 lerp 切换为 dithering（省去 blend region 双重采样）。注意这依赖的是 FSR/DLSS 的全画面 temporal（对最终颜色），不是阶段五搭建的 per-effect temporal（对中间效果纹理）。
 
 #### Blend Width 默认值分析
 

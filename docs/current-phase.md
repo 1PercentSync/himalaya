@@ -259,7 +259,7 @@ shaders/
 | PushConstantData | 72 bytes（新增 `cascade_index`），所有 pipeline 共享。Forward/PrePass 不读 `cascade_index` |
 | 硬件 bias vs shader bias | Constant + slope-scaled 通过 `vkCmdSetDepthBias`（渲染端），normal offset 在 `shadow.glsl`（采样端），三者互补 |
 | Alpha mask 阴影 | ShadowPass 双 pipeline（opaque 无 FS + mask 有 FS discard），与 DepthPrePass 模式一致 |
-| Cascade blend | Lerp blend（阶段四），M2 FSR/DLSS 接入后可切换为 dithering |
+| Cascade blend | Lerp blend（阶段四）。阶段五的 per-effect temporal 无法平滑 shadow dithering（噪声嵌在最终颜色中，非独立纹理）。M2 FSR/DLSS 全画面 temporal 接入后方可切换为 dithering |
 | Per-cascade 剔除 | Step 2-5 暴力全画（正确性优先），Step 6 泛化 Culling 模块支持任意 frustum 剔除 |
 | RenderFeatures | Step 1 引入骨架（skybox + shadows），阶段五扩展 ssao + contact_shadows |
 | feature_flags | GlobalUBO uint bitmask，shader 动态分支守护采样。Skybox 不需要（独立 pass 跳过即可），Shadow 需要（forward.frag 采样 Set 2） |
