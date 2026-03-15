@@ -701,7 +701,7 @@ struct ShadowConfig {
     float constant_bias   = 0.002f;  // 硬件 depth bias constant factor
     float slope_bias      = 1.5f;    // 硬件 depth bias slope factor
     float normal_offset   = 1.0f;    // shader-side 法线偏移强度
-    uint32_t pcf_radius   = 1;       // PCF kernel 半径 (0=off, 1=3×3, 2=5×5, 3=7×7)
+    uint32_t pcf_radius   = 1;       // PCF kernel 半径 (0=off, 1=3×3, 2=5×5, ..., 5=11×11)
     float blend_width     = 0.1f;    // cascade blend region 占 cascade 范围的比例
 };
 ```
@@ -955,7 +955,7 @@ layout(set = 0, binding = 0) uniform GlobalUBO {
     float shadow_texel_size;                // 1.0 / shadow_map_resolution
     float shadow_max_distance;              // cascade 覆盖最远距离
     float shadow_blend_width;               // cascade blend region 占比
-    uint shadow_pcf_radius;                 // PCF kernel 半径 (1=3×3, 2=5×5)
+    uint shadow_pcf_radius;                 // PCF kernel 半径 (0=off, 1=3×3, ..., 5=11×11)
     mat4 cascade_view_proj[MAX_SHADOW_CASCADES]; // per-cascade 光空间 VP 矩阵
     vec4 cascade_splits;                    // 4 个 cascade 远边界 (view-space depth)
 } global;

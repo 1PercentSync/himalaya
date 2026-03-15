@@ -8,7 +8,7 @@
 
 - [ ] 补充适合 CSM 阴影测试的室外场景（需要方向光、不同深度的物体分布、开阔空间验证 cascade 分割）
 
-## Step 1：RenderFeatures 基础设施
+## Step 1a：RenderFeatures 基础设施
 
 - [ ] `framework/scene_data.h` 新增 `RenderFeatures` 结构体（`skybox` bool 默认 true + `shadows` bool 默认 true）
 - [ ] `framework/scene_data.h` 新增 `ShadowConfig` 结构体（split_lambda、max_distance、constant_bias、slope_bias、normal_offset、pcf_radius、blend_width，含默认值）
@@ -20,9 +20,19 @@
 - [ ] SceneLoader 计算并暴露场景 AABB（`scene_bounds()`：所有 mesh instance 的 `world_bounds` 求并集）
 - [ ] Application 在场景加载后根据 scene AABB 初始化 `shadow_config.max_distance`（`diagonal × 1.5`，退化时 fallback 100m）
 - [ ] DebugUI 新增 Features 面板（Skybox checkbox）
-- [ ] Shader 热重载：各 pass 新增 `rebuild_pipelines()` 公开方法（调用已有 `create_pipelines()`）
+- [ ] 验证：Skybox 可通过 DebugUI 切换开/关，无 validation 报错
+
+## Step 1b：Shader 热重载
+
+- [ ] 各 pass 新增 `rebuild_pipelines()` 公开方法（调用已有 `create_pipelines()`）
 - [ ] DebugUI 新增 "Reload Shaders" 按钮，Renderer 检测触发后 `vkQueueWaitIdle()` → 遍历所有 pass `rebuild_pipelines()`
-- [ ] 验证：Skybox 可通过 DebugUI 切换开/关，修改 shader 后点击 Reload 生效，无 validation 报错
+- [ ] 验证：修改 shader 后点击 Reload 生效，无 validation 报错
+
+## Step 1c：Culling 模块重构
+
+- [ ] `framework/culling.h` 重构为纯几何剔除：`Frustum` 结构体 + `extract_frustum(mat4 vp)` + `cull_against_frustum(instances, frustum, out_visible)`（预分配 buffer 版），删除旧 `perform_culling()`
+- [ ] 现有相机 frustum cull 迁移到通用接口：`cull_against_frustum()` + 调用方内联分桶（opaque/transparent）+ 透明排序
+- [ ] 验证：现有相机剔除行为不变（渲染输出与重构前一致），无 validation 报错
 
 ## Step 2：Shadow 资源 + ShadowPass + 单 cascade 深度渲染
 
@@ -69,17 +79,15 @@
 - [ ] DebugUI 渲染模式下拉列表追加 "Shadow Cascades"
 - [ ] `Renderer::handle_shadow_config_changed(uint32_t new_cascade_count, uint32_t new_resolution)`：`vkQueueWaitIdle` → `shadow_pass_.on_shadow_config_changed()` 重建 image + views → 更新 Set 2 binding 5
 - [ ] ShadowPass `on_shadow_config_changed()` 实现：销毁旧 image + views → 创建新 image（new layers / new resolution）+ 新 views
-- [ ] DebugUI Shadow 面板扩展：cascade count 下拉（2/3/4）+ resolution 下拉（512/1024/2048/4096）
+- [ ] DebugUI Shadow 面板扩展：cascade count 下拉（1/2/3/4）+ resolution 下拉（512/1024/2048/4096）
 - [ ] DebugUI Shadow 面板底部新增 cascade 统计信息：每个 cascade 的覆盖范围（近/远边界 m）和 texel density（px/m）
 - [ ] 验证：相机移动/旋转时阴影边缘无闪烁，cascade 可视化显示正确分层，cascade 数量和分辨率可运行时切换
 
-## Step 6：PCF + cascade blend + 剔除泛化 + 最终验证
+## Step 6：PCF + cascade blend + per-cascade 剔除 + 最终验证
 
-- [ ] `shadow.glsl` 新增 `sample_shadow_pcf()`：基于硬件 2×2 比较的多次偏移采样，kernel 由 `shadow_pcf_radius` 控制（1=3×3, 2=5×5, 3=7×7）
+- [ ] `shadow.glsl` 新增 `sample_shadow_pcf()`：基于硬件 2×2 比较的多次偏移采样，kernel 由 `shadow_pcf_radius` 控制（0=off, 1=3×3, 2=5×5, ..., 5=11×11）
 - [ ] `shadow.glsl` `select_cascade()` 输出 `blend_factor`，`shadow.glsl` 新增 `blend_cascade_shadow()` 封装 blend 逻辑（预留 dithering 切换），forward.frag 通过此函数获取最终 shadow 值
 - [ ] Distance fade：最后一级 cascade 远端 blend 到 1.0（无阴影），复用 blend 逻辑
-- [ ] `framework/culling.h` 重构为纯几何剔除：`Frustum` 结构体 + `extract_frustum(mat4 vp)` + `cull_against_frustum(instances, frustum, out_visible)`（预分配 buffer 版），删除旧 `perform_culling()`
-- [ ] ShadowPass per-cascade 调用 `cull_against_frustum()`（输入全部场景物体）替代暴力全画，cull 结果按 alpha_mode 分桶为 opaque/mask 列表
-- [ ] 现有相机 frustum cull 迁移到通用接口：`cull_against_frustum()` + 调用方内联分桶（opaque/transparent）+ 透明排序
-- [ ] DebugUI Shadow 面板扩展：PCF radius 下拉（Off/3×3/5×5/7×7）+ blend width 滑条
+- [ ] ShadowPass per-cascade 调用 `cull_against_frustum()`（Step 1c 已就绪，输入全部场景物体）替代暴力全画，cull 结果按 alpha_mode 分桶为 opaque/mask 列表
+- [ ] DebugUI Shadow 面板扩展：PCF radius 下拉（Off/3×3/5×5/7×7/9×9/11×11）+ blend width 滑条
 - [ ] 最终验证：阴影边缘柔和（PCF），cascade 过渡平滑（blend），per-cascade 剔除生效（RenderDoc 对比 draw call 数减少）
