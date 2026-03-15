@@ -90,7 +90,7 @@
 
 **产出：** 物体之间、角落里有了自然的暗部过渡（AO），物体贴地处有了精细的接触阴影。画面层次感明显提升。
 
-**战略价值：** temporal filtering 基础设施在此搭建，M2 的 SSR、SSGI、FSR 全部复用。
+**战略价值：** temporal filtering 基础设施（per-effect 历史 buffer + reprojection + blend）在此搭建，M2 的 SSR、SSGI 可直接复用同一模式。注意 DLSS/FSR 的全画面 temporal accumulation 是 SDK 自带实现，依赖 Motion Vectors 而非此基础设施。
 
 ---
 
