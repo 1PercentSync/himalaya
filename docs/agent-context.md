@@ -8,16 +8,16 @@
 
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
-- **Phase**：阶段三 → 阶段四过渡中（阶段三代码完成待最终验证，阶段四文档设计中）
-- **进度**：阶段四决策讨论已完成，待编写阶段四详细文档
+- **Phase**：阶段三 → 阶段四过渡中（阶段四文档已就绪，待用户确认阶段三最终验证后正式切换）
+- **进度**：阶段四文档全部完成（current-phase.md + tasks + interfaces + design decisions + frame flow + development order + roadmap 更新）
 
 ### 下一个任务
 
-编写阶段四详细文档（current-phase.md + tasks + m1-interfaces.md 更新 + m1-design-decisions.md 更新）。
+用户确认阶段三 Step 7 最终验证通过后，正式进入阶段四 Step 1（RenderFeatures 基础设施）。
 
 ### 阶段三遗留
 
-Step 7 最终验证（第 6 项）尚未由用户确认完成。阶段四文档就绪后由用户决定何时切换。
+Step 7 最终验证（第 6 项）尚未由用户确认完成。
 
 ---
 
@@ -28,9 +28,9 @@ CLAUDE.md 已自动加载，以下为额外必读：
 | 文档 | 说明 |
 |------|------|
 | `docs/milestone-1/milestone-1.md` | M1 范围、预期效果、已知局限性 |
-| `docs/current-phase.md` | 当前阶段实现步骤（阶段四就绪后更新） |
+| `docs/current-phase.md` | 当前阶段实现步骤（阶段四） |
 | `docs/milestone-1/m1-interfaces.md` | M1 接口与目标结构：文件结构、关键接口与数据结构 |
-| `tasks/m1-phase4.md` | 阶段四任务清单（待创建） |
+| `tasks/m1-phase4.md` | 阶段四任务清单（复选框进度跟踪） |
 
 ## 按需文档
 

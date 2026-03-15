@@ -22,6 +22,7 @@
 | Film Grain | 增加画面质感，掩盖 banding |
 | Chromatic Aberration | 增加镜头感 |
 | PCSS | 在 PCF 基础上加 Blocker Search，半影随遮挡距离变化（替换 PCF，Contact Shadows 保留）|
+| CSM cascade blend → dithering | FSR/DLSS 的 temporal accumulation 覆盖 shadow 信号后，cascade blend 从 lerp 切换为 dithering（省去 blend region 双重采样）|
 | GTAO | 替换 SSAO 的遮挡计算公式，temporal filtering 复用 |
 
 ### 低工作量

@@ -69,10 +69,13 @@
 
 ## 阶段四：阴影
 
-- Shadow Map 基础（单张，方向光）
-- 升级为 CSM（多级 cascade、分割策略、texel snapping）
-- PCF 软阴影
-- Shadow 采样集成到 Forward Lighting Pass
+- RenderFeatures 运行时开关机制（为后续可选效果奠基）
+- 直接实现 CSM（cascade=1 起步，不经单张中间步骤，4 cascade 2048²，PSSM 分割、texel snapping）
+- PCF 软阴影 + cascade blend + triple bias（constant + slope + normal offset）
+- Alpha mask 阴影（双 pipeline：opaque + mask）
+- Shadow 采样集成到 Forward Lighting Pass（feature_flags 条件分支）
+- Culling 模块泛化（通用 frustum 剔除，shadow + camera 共用）
+- Cascade 数量 / 分辨率运行时可调
 
 **产出：** 场景有了阴影，立体感大幅提升。但物体接地感还差一些（没有 AO 和 Contact Shadows）。
 
