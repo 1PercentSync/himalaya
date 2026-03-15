@@ -1964,7 +1964,7 @@ ShadowPass 持有：shadow map ImageHandle、per-layer VkImageView 数组、opaq
 
 ### Cascade 混合策略
 
-**选择：Lerp blend（最终方案）**
+**选择：Lerp blend**
 
 候选方案：
 
@@ -1974,11 +1974,11 @@ ShadowPass 持有：shadow map ImageHandle、per-layer VkImageView 数组、opaq
 | B. 相邻 cascade lerp | blend region 内 2x 采样 |
 | C. Dithering + temporal | 无额外采样，需 temporal filtering |
 
-**选择 B，作为最终方案（不演进为 dithering）。**
-
-排除 A：cascade 间质量差异在无过渡时产生可见接缝。排除 C：dithering 依赖全画面 temporal accumulation（FSR/DLSS）平滑噪点，但 disocclusion（相机移动暴露新区域、无历史帧）时 dithering 噪声在 cascade 边界短暂可见（~2-4 帧），违反「不可有明显 glitch」原则。M1 阶段五的 per-effect temporal 也无法覆盖——shadow dithering 噪声嵌在最终颜色中（`Lo_direct *= shadow`），不存在独立纹理可供 temporal 处理。
+**选择 B。** 排除 A：cascade 间质量差异在无过渡时产生可见接缝。不采用 C：dithering 依赖全画面 temporal accumulation（FSR/DLSS）平滑噪点，M1 不具备此基础设施。即使有 DLSS/FSR，disocclusion 时 dithering 噪声在 cascade 边界仍短暂可见（~1-2 帧，无法完全消除）。是否可接受需实测判断。
 
 Lerp blend 每帧都产出干净结果，零 temporal 依赖，无 disocclusion 瑕疵。性能开销局限在 blend region（~10% 阴影像素 2x 采样），可接受。
+
+**Dithering 切换实现约束**：shadow.glsl 中 cascade blend 逻辑封装为独立函数 `blend_cascade_shadow(shadow_current, shadow_next, blend_factor)`，forward.frag 通过此函数获取最终 shadow 值。切换 dithering 时只需修改此函数内部（从 `mix()` 改为 dither pattern 比较 + 单次采样），forward.frag 调用点不变。
 
 #### Blend Width 默认值分析
 
@@ -2014,10 +2014,11 @@ Normal offset 与 cascade texel 世界尺寸成正比——远处 cascade 的 te
 // common/shadow.glsl
 int select_cascade(float view_depth, out float blend_factor);
 float sample_shadow_pcf(vec3 world_pos, vec3 world_normal, int cascade);
+float blend_cascade_shadow(float shadow_current, float shadow_next, float blend_factor);
 float shadow_distance_fade(float view_depth);
 ```
 
-不做单一 `evaluate_shadow()` 包装——cascade index 被隐藏会妨碍 debug cascade 可视化。forward.frag 的 shadow 调用流程完全透明，方便调参和排查。
+不做单一 `evaluate_shadow()` 包装——cascade index 被隐藏会妨碍 debug cascade 可视化。forward.frag 的 shadow 调用流程完全透明，方便调参和排查。`blend_cascade_shadow` 隔离 blend 策略（见「Cascade 混合策略 — Dithering 切换实现约束」）。
 
 ### GlobalUBO Shadow 数据布局
 

@@ -76,7 +76,7 @@
 ## Step 6：PCF + cascade blend + 剔除泛化 + 最终验证
 
 - [ ] `shadow.glsl` 新增 `sample_shadow_pcf()`：基于硬件 2×2 比较的多次偏移采样，kernel 由 `shadow_pcf_radius` 控制（1=3×3, 2=5×5, 3=7×7）
-- [ ] `shadow.glsl` `select_cascade()` 输出 `blend_factor`，forward.frag 在 blend region 内采样相邻 cascade 做 lerp
+- [ ] `shadow.glsl` `select_cascade()` 输出 `blend_factor`，`shadow.glsl` 新增 `blend_cascade_shadow()` 封装 blend 逻辑（预留 dithering 切换），forward.frag 通过此函数获取最终 shadow 值
 - [ ] Distance fade：最后一级 cascade 远端 blend 到 1.0（无阴影），复用 blend 逻辑
 - [ ] `framework/culling.h` 重构为纯几何剔除：`Frustum` 结构体 + `extract_frustum(mat4 vp)` + `cull_against_frustum(instances, frustum, out_visible)`（预分配 buffer 版），删除旧 `perform_culling()`
 - [ ] ShadowPass per-cascade 调用 `cull_against_frustum()`（输入全部场景物体）替代暴力全画，cull 结果按 alpha_mode 分桶为 opaque/mask 列表
