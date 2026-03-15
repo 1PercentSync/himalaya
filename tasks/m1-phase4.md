@@ -78,8 +78,8 @@
 - [ ] `shadow.glsl` 新增 `sample_shadow_pcf()`：基于硬件 2×2 比较的多次偏移采样，kernel 由 `shadow_pcf_radius` 控制（1=3×3, 2=5×5, 3=7×7）
 - [ ] `shadow.glsl` `select_cascade()` 输出 `blend_factor`，forward.frag 在 blend region 内采样相邻 cascade 做 lerp
 - [ ] Distance fade：最后一级 cascade 远端 blend 到 1.0（无阴影），复用 blend 逻辑
-- [ ] `framework/culling.h` 新增 `Frustum` 结构体（6 平面）+ `extract_frustum(mat4 vp)` + `cull_against_frustum(instances, frustum)` 通用接口
-- [ ] ShadowPass per-cascade 调用 `cull_against_frustum()` 替代暴力全画
-- [ ] 现有相机 frustum cull 迁移到通用接口（`Culling` 模块调用 `extract_frustum(camera_vp)` + `cull_against_frustum()`）
+- [ ] `framework/culling.h` 重构为纯几何剔除：`Frustum` 结构体 + `extract_frustum(mat4 vp)` + `cull_against_frustum(instances, frustum, out_visible)`（预分配 buffer 版），删除旧 `perform_culling()`
+- [ ] ShadowPass per-cascade 调用 `cull_against_frustum()`（输入全部场景物体）替代暴力全画，cull 结果按 alpha_mode 分桶为 opaque/mask 列表
+- [ ] 现有相机 frustum cull 迁移到通用接口：`cull_against_frustum()` + 调用方内联分桶（opaque/transparent）+ 透明排序
 - [ ] DebugUI Shadow 面板扩展：PCF radius 下拉（Off/3×3/5×5/7×7）+ blend width 滑条
 - [ ] 最终验证：阴影边缘柔和（PCF），cascade 过渡平滑（blend），per-cascade 剔除生效（RenderDoc 对比 draw call 数减少）

@@ -732,7 +732,9 @@ public:
 
 #### Culling 泛化接口（阶段四 Step 6 引入）
 
-通用 frustum 剔除。定义在 `framework/culling.h`。
+纯几何 frustum 剔除。定义在 `framework/culling.h`。设计决策见 `m1-design-decisions.md`「Per-cascade 剔除与 Culling 模块重构」。
+
+`culling.h` 只包含几何剔除逻辑。材质分桶（opaque/transparent、opaque/mask）和透明排序不属于 culling 模块，由调用方内联——不同消费者的分桶标准不同（camera: opaque vs transparent，shadow: opaque vs mask）。
 
 ```cpp
 /// 6 平面 frustum（从 view-projection 矩阵提取，正交/透视均适用）
@@ -743,9 +745,12 @@ struct Frustum {
 /// 从 VP 矩阵提取 frustum 6 平面
 Frustum extract_frustum(const glm::mat4& view_projection);
 
-/// 通用 AABB-frustum 剔除，返回通过测试的实例索引
-std::vector<uint32_t> cull_against_frustum(
-    std::span<const MeshInstance> instances, const Frustum& frustum);
+/// AABB-frustum 剔除，通过测试的实例索引写入 out_visible。
+/// out_visible 由调用方持有并跨帧复用（clear + push_back，首帧后零分配）。
+void cull_against_frustum(
+    std::span<const MeshInstance> instances,
+    const Frustum& frustum,
+    std::vector<uint32_t>& out_visible);
 ```
 
 ---
