@@ -21,6 +21,19 @@
 
 参考：Frostbite GDC 演讲（经典参考），多个开源 Vulkan 实现。
 
+#### 资源管理准则
+
+GPU image 资源根据是否需要跟随屏幕尺寸 resize 选择管理方式：
+
+| 准则 | 管理方式 | 典型资源 |
+|------|---------|---------|
+| 需要 resize（屏幕尺寸相关） | **RG Managed**：RG 创建、缓存、resize 自动重建 | Depth/Normal/HDR Color buffer、AO texture、Bloom chain |
+| 不需要 resize（固定尺寸） | **Pass 自管理 + 每帧 `import_image()`**：Pass 完全拥有资源生命周期，RG 仅管 barrier | Shadow map array、Shadow Atlas、Froxel 3D texture |
+
+RG Managed 的不可替代价值是 resize 自动重建。不需要 resize 的资源用 RG Managed 只会分裂所有权（image 归 RG、特殊 views 归 Pass），零收益多一层协调。自管理资源通过 `import_image()` 仍然获得 RG barrier 自动化。
+
+RG Temporal 是 RG Managed 的子集——屏幕尺寸 + 需要历史帧数据的资源（如 AO history），由 RG 管理 double buffer 和帧间切换。
+
 ### 资源抽象层
 
 封装 Vulkan 底层资源（VkImage、VkBuffer、VkSampler 等），不是为跨 API，而是为了：
