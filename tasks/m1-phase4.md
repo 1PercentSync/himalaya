@@ -65,7 +65,7 @@
 ## Step 5：Texel snapping + cascade 可视化 + runtime config change
 
 - [ ] Texel snapping：per-cascade 正交投影边界 snap 到 texel 对齐位置
-- [ ] Debug render mode 追加 cascade index 可视化（每 cascade 不同颜色），forward.frag 新增对应分支，归入材质属性模式（跳过 ACES）
+- [ ] Debug render mode 追加 `DEBUG_MODE_SHADOW_CASCADES`（passthrough 模式末尾，每 cascade 不同颜色），forward.frag 新增对应分支
 - [ ] DebugUI 渲染模式下拉列表追加 "Shadow Cascades"
 - [ ] `Renderer::handle_shadow_config_changed(uint32_t new_cascade_count, uint32_t new_resolution)`：`vkQueueWaitIdle` → `shadow_pass_.on_shadow_config_changed()` 重建 image + views → 更新 Set 2 binding 5
 - [ ] ShadowPass `on_shadow_config_changed()` 实现：销毁旧 image + views → 创建新 image（new layers / new resolution）+ 新 views

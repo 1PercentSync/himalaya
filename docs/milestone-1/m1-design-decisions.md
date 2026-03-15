@@ -1300,7 +1300,29 @@ forward.vert 保持不变（输出 world position / normal / uv0 / tangent）。
 
 Step 7 通过 `GlobalUBO.debug_render_mode` 控制 forward.frag 输出不同分量（Diffuse Only / Normal / Metallic / Roughness / IBL Only 等）。Debug 输出通常是 [0,1] 线性值，经过 ACES tonemapping 会失真（如 normal 编码的 0.5 经 ACES 变成 ~0.47）。
 
-**选择：材质属性模式跳过 ACES。** TonemappingPass 检查 `debug_render_mode`——>= 4（Normal/Metallic/Roughness/AO）时 passthrough（不做 exposure 和 ACES，只保留硬件 linear→sRGB），0-3（Full PBR/Diffuse Only/Specular Only/IBL Only）走正常 exposure + ACES——这些模式输出 HDR 值，需要 tonemapping 才能正确显示。
+**选择：HDR / passthrough 二分 + 命名常量。** 分类依据是输出性质而非功能类别——HDR 模式输出高动态范围值需要 exposure + ACES，passthrough 模式输出 [0,1] 线性值直接写入（只保留硬件 linear→sRGB）。
+
+`bindings.glsl` 中定义命名常量和阈值：
+
+```glsl
+#define DEBUG_MODE_FULL_PBR          0
+#define DEBUG_MODE_DIFFUSE_ONLY      1
+#define DEBUG_MODE_SPECULAR_ONLY     2
+#define DEBUG_MODE_IBL_ONLY          3
+// --- HDR modes above, passthrough modes below ---
+#define DEBUG_MODE_PASSTHROUGH_START 4
+#define DEBUG_MODE_NORMAL            4
+#define DEBUG_MODE_METALLIC          5
+#define DEBUG_MODE_ROUGHNESS         6
+#define DEBUG_MODE_AO                7
+#define DEBUG_MODE_SHADOW_CASCADES   8   // 阶段四新增
+```
+
+TonemappingPass 检查 `debug_render_mode >= DEBUG_MODE_PASSTHROUGH_START` 决定是否 passthrough。
+
+**排列约定**：HDR 模式（光照分量隔离）排在 `PASSTHROUGH_START` 之前，passthrough 模式追加到末尾。新增 HDR 模式插入并递增 `PASSTHROUGH_START`，新增 passthrough 模式直接追加。HDR 模式是有限集合（Direct / Specular / IBL / Indirect），passthrough 模式会随阶段持续增长。
+
+C++ 侧使用对应 enum，DebugUI 下拉列表用 `ImGui::Separator()` 按类别分组显示，不影响编号。
 
 ### Forward Shader 跨阶段演进
 

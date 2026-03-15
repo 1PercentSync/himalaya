@@ -376,7 +376,7 @@ struct GlobalUniformData {
     uint32_t skybox_cubemap_index;              // offset 308 — cubemaps[] 下标（Skybox Pass 天空渲染用）
     float ibl_rotation_sin;                     // offset 312 — IBL 水平旋转 sin(yaw)
     float ibl_rotation_cos;                     // offset 316 — IBL 水平旋转 cos(yaw)
-    uint32_t debug_render_mode;                 // offset 320 — 0=Full PBR, 1-7=debug 可视化
+    uint32_t debug_render_mode;                 // offset 320 — DEBUG_MODE_* 常量，见 bindings.glsl
     // --- 阶段四新增 ---
     uint32_t feature_flags;                     // offset 324 — bitmask: FEATURE_SHADOWS 等
     uint32_t shadow_cascade_count;              // offset 328 — 活跃 cascade 数量
@@ -918,6 +918,18 @@ public:
 // Shadow cascade 常量
 #define MAX_SHADOW_CASCADES 4
 
+// Debug render mode 常量（HDR modes < PASSTHROUGH_START, passthrough modes >= PASSTHROUGH_START）
+#define DEBUG_MODE_FULL_PBR          0
+#define DEBUG_MODE_DIFFUSE_ONLY      1
+#define DEBUG_MODE_SPECULAR_ONLY     2
+#define DEBUG_MODE_IBL_ONLY          3
+#define DEBUG_MODE_PASSTHROUGH_START 4
+#define DEBUG_MODE_NORMAL            4
+#define DEBUG_MODE_METALLIC          5
+#define DEBUG_MODE_ROUGHNESS         6
+#define DEBUG_MODE_AO                7
+#define DEBUG_MODE_SHADOW_CASCADES   8
+
 layout(set = 0, binding = 0) uniform GlobalUBO {
     mat4 view;
     mat4 projection;
@@ -935,7 +947,7 @@ layout(set = 0, binding = 0) uniform GlobalUBO {
     uint skybox_cubemap_index;              // cubemaps[] 下标（Skybox Pass 天空渲染用）
     float ibl_rotation_sin;                 // IBL 水平旋转 sin(yaw)
     float ibl_rotation_cos;                 // IBL 水平旋转 cos(yaw)
-    uint debug_render_mode;                 // 0=Full PBR, 1-N=debug 可视化
+    uint debug_render_mode;                 // DEBUG_MODE_* 常量（见上方定义）
     // --- 阶段四新增 ---
     uint feature_flags;                     // bitmask: FEATURE_SHADOWS 等
     uint shadow_cascade_count;              // 活跃 cascade 数量
