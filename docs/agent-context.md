@@ -8,19 +8,16 @@
 
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
-- **Phase**：阶段三 — PBR 光照基础（Cook-Torrance + IBL + MSAA + HDR）
-- **进度**：Step 7 进行中（PBR Shader 升级），第 1-5 项已完成
+- **Phase**：阶段三 → 阶段四过渡中（阶段三代码完成待最终验证，阶段四文档设计中）
+- **进度**：阶段四决策讨论已完成，待编写阶段四详细文档
 
 ### 下一个任务
 
-Step 7 第 6 项：验证 — glTF 场景正确 PBR 渲染，Cook-Torrance 直射光 + IBL 环境光，金属表面反射环境，粗糙表面漫反射，Debug 各模式可用。
+编写阶段四详细文档（current-phase.md + tasks + m1-interfaces.md 更新 + m1-design-decisions.md 更新）。
 
-### 代码审查修复记录
+### 阶段三遗留
 
-Phase 3 全面代码审查（Step 1 ~ Step 6）发现并修复了两处 bug：
-
-1. **`generate_mips()` cubemap 支持**（影响 Step 6 IBL）：barrier/blit 硬编码 `layerCount=1`，cubemap 面 1-5 的 mip 链未生成。prefilter shader 对非 +X 面高 roughness 采样到 UNDEFINED 数据。已修复为使用 `img.desc.array_layers`。
-2. **`forward.frag` 双重曝光**（影响 Step 4b Exposure）：exposure 在 forward.frag 和 tonemapping.frag 各乘一次，导致 exposure²。EV=0 时不可见（1²=1），EV≠0 时画面过亮/过暗。已移除 forward.frag 中的 exposure。
+Step 7 最终验证（第 6 项）尚未由用户确认完成。阶段四文档就绪后由用户决定何时切换。
 
 ---
 
@@ -31,9 +28,9 @@ CLAUDE.md 已自动加载，以下为额外必读：
 | 文档 | 说明 |
 |------|------|
 | `docs/milestone-1/milestone-1.md` | M1 范围、预期效果、已知局限性 |
-| `docs/current-phase.md` | 当前阶段实现步骤（阶段三） |
+| `docs/current-phase.md` | 当前阶段实现步骤（阶段四就绪后更新） |
 | `docs/milestone-1/m1-interfaces.md` | M1 接口与目标结构：文件结构、关键接口与数据结构 |
-| `tasks/m1-phase3.md` | 阶段三任务清单（复选框进度跟踪） |
+| `tasks/m1-phase4.md` | 阶段四任务清单（待创建） |
 
 ## 按需文档
 
@@ -60,6 +57,8 @@ CLAUDE.md 已自动加载，以下为额外必读：
 | `docs/archive/m1-phase1-plan.md` | M1 阶段一实现步骤（已完成） |
 | `docs/archive/m1-phase2-plan.md` | M1 阶段二实现步骤（已完成） |
 | `docs/archive/m1-phase2-tasks.md` | M1 阶段二任务清单（已完成） |
+| `docs/archive/m1-phase3-plan.md` | M1 阶段三实现步骤（已完成） |
+| `tasks/archive/m1-phase3.md` | M1 阶段三任务清单（已完成） |
 
 ---
 
