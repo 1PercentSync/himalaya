@@ -8,16 +8,12 @@
 
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
-- **Phase**：阶段三 → 阶段四过渡中（阶段四文档已就绪，待用户确认阶段三最终验证后正式切换）
-- **进度**：阶段四文档全部完成（current-phase.md + tasks + interfaces + design decisions + frame flow + development order + roadmap 更新）
+- **Phase**：阶段四 — 阴影
+- **进度**：阶段三完成，阶段四开发准备中（文档更新完毕，待补充测试场景后进入 Step 1）
 
 ### 下一个任务
 
-用户确认阶段三 Step 7 最终验证通过后，正式进入阶段四 Step 1（RenderFeatures 基础设施）。
-
-### 阶段三遗留
-
-Step 7 最终验证（第 6 项）尚未由用户确认完成。
+补充适合 CSM 阴影测试的室外场景，然后进入阶段四 Step 1（RenderFeatures 基础设施 + Shader 热重载）。
 
 ---
 

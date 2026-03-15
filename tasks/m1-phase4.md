@@ -4,6 +4,10 @@
 
 ---
 
+## 准备工作
+
+- [ ] 补充适合 CSM 阴影测试的室外场景（需要方向光、不同深度的物体分布、开阔空间验证 cascade 分割）
+
 ## Step 1：RenderFeatures 基础设施
 
 - [ ] `framework/scene_data.h` 新增 `RenderFeatures` 结构体（`skybox` bool 默认 true + `shadows` bool 默认 true）
@@ -14,7 +18,9 @@
 - [ ] Renderer 根据 `features.skybox` 条件调用 `skybox_pass_.record()`
 - [ ] Application 新增 `RenderFeatures` 和 `ShadowConfig` 成员，构造 RenderInput 时传入
 - [ ] DebugUI 新增 Features 面板（Skybox checkbox）
-- [ ] 验证：Skybox 可通过 DebugUI 切换开/关，无 validation 报错
+- [ ] Shader 热重载：各 pass 新增 `rebuild_pipelines()` 公开方法（调用已有 `create_pipelines()`）
+- [ ] DebugUI 新增 "Reload Shaders" 按钮，Renderer 检测触发后 `vkQueueWaitIdle()` → 遍历所有 pass `rebuild_pipelines()`
+- [ ] 验证：Skybox 可通过 DebugUI 切换开/关，修改 shader 后点击 Reload 生效，无 validation 报错
 
 ## Step 2：Shadow 资源 + ShadowPass + 单 cascade 深度渲染
 

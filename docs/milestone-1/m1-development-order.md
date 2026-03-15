@@ -113,6 +113,8 @@
 
 **产出：** 玻璃窗、半透明物体正确显示，有折射效果。
 
+**开发前检查：** transparent.frag 需要复用 forward.frag 的大量光照代码（PBR 直射光、IBL、阴影、AO 等），开发前评估是否需要将 forward.frag 光照逻辑重构为可复用的 `common/lighting.glsl`。
+
 ---
 
 ## 阶段八：后处理链 + 大气

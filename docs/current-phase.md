@@ -47,17 +47,19 @@ Step 6: PCF + cascade blend + 剔除泛化 + 最终验证
 - RenderInput 新增 `features` 和 `shadow_config` 引用
 - Renderer 根据 `features.skybox` 条件调用 `skybox_pass_.record()`
 - DebugUI 新增 Features 面板（Skybox checkbox）
-- **验证**：Skybox 可通过 DebugUI 切换开/关，无 validation 报错
+- Shader 热重载：各 pass 新增 `rebuild_pipelines()` 公开方法（调用已有 `create_pipelines()`），DebugUI 新增 "Reload Shaders" 按钮，Renderer 检测触发后 `vkQueueWaitIdle()` → 遍历所有 pass `rebuild_pipelines()`
+- **验证**：Skybox 可通过 DebugUI 切换开/关，无 validation 报错；修改 shader 后点击 Reload 按钮生效
 
 #### 设计要点
 
-RenderFeatures + feature_flags 机制见 `milestone-1/m1-design-decisions.md`「Pass 运行时开关」。
+RenderFeatures + feature_flags 机制见 `milestone-1/m1-design-decisions.md`「Pass 运行时开关」。热重载机制见「Pipeline 创建与热重载预留」。
 
 关键设计：
 - RenderFeatures 控制 Renderer 是否调用 pass 的 `record()`，feature_flags 控制 shader 是否采样被禁用 pass 的输出
 - Skybox 不需要 feature_flags（独立 RG pass，不调用 `record()` 即跳过，forward.frag 不采样 skybox 数据）
 - Shadow 需要 feature_flags（forward.frag 采样 Set 2 binding 5，PARTIALLY_BOUND 未绑定 binding 为未定义行为）
 - ShadowConfig 在此 Step 定义但部分字段在后续 Step 才使用（DebugUI 控件随 Step 逐步添加）
+- 热重载基于 `create_pipelines()` 预留结构，ShaderCompiler 缓存 key 基于源码文本，include 变化通过内容比对检测
 
 ---
 

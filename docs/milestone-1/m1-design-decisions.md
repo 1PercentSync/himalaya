@@ -405,7 +405,7 @@ private:
 
 **阶段三不实现热重载**——shader 数量有限（7 个文件），重启应用 < 2 秒。ShaderCompiler 已有完善的缓存和 include 依赖追踪机制（缓存 key 基于源码文本，include 变化通过内容比对检测），热重载的检测能力已就绪，缺失的仅是触发机制。
 
-**预计引入时机**：后续阶段 shader 调参密集时（阶段七或阶段八），以 DebugUI "Reload Shaders" 按钮形式引入。Renderer 检测按钮触发后 `vkQueueWaitIdle()` → 遍历所有 pass 调用 `rebuild_pipelines()`。
+**引入时机**：阶段四 Step 1。以 DebugUI "Reload Shaders" 按钮形式引入，Renderer 检测按钮触发后 `vkQueueWaitIdle()` → 遍历所有 pass 调用 `rebuild_pipelines()`。
 
 #### Attachment Format 处理
 
