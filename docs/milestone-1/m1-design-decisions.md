@@ -1936,6 +1936,28 @@ ShadowPass 持有：shadow map ImageHandle、per-layer VkImageView 数组、opaq
 
 业界最常用方案（GPU Gems、NVIDIA、Unity/UE 均采用变体）。`shadow_max_distance` 限制分割范围（不一定等于相机 far plane），避免远距离浪费分辨率。
 
+### Shadow Max Distance 初始化
+
+**选择：场景加载时根据 scene AABB 自动初始化**
+
+候选方案：
+
+| 方案 | 说明 |
+|------|------|
+| A. 固定默认值 200m | 简单，但对小场景（Sponza ~30m）浪费大量分辨率 |
+| B. 场景加载时自动计算 | SceneLoader 暴露 scene AABB，Application 设置 `max_distance = diagonal × 1.5` |
+| C. 运行时自动追踪 | 每帧根据可见物体动态调整 |
+
+**选择 B。** `shadow_max_distance` 直接决定 PSSM 分割质量。以 Sponza（~30m 跨度）为例，固定 200m 时 cascade 0 的 texel density 仅 ~159 px/m（cascade 2-3 浪费在空旷区域），自动计算后（max_distance ≈ 55m）cascade 0 密度达 ~554 px/m，近处阴影质量提升 3.5 倍。
+
+排除 A：不同场景尺度差异巨大（室内 30m vs 室外 500m），固定值对多数场景不是最优。排除 C：M1 静态场景，max_distance 不需要帧间变化。
+
+**计算方式**：`max_distance = scene_aabb.diagonal_length() × 1.5`。乘 1.5 覆盖方向光在 ~60° 入射角下的阴影投射范围（此时阴影长度约为物体高度的 1.73 倍）。倍率硬编码，不作为可调参数——这是"合理默认值"的计算系数，不是用户关注点。
+
+**退化防护**：场景为空或几何体退化时（diagonal ≈ 0），fallback 到 100m。不设人为 clamp 范围——基于实际场景几何的计算结果对该场景总是合理的。
+
+**实现位置**：SceneLoader 加载完成后计算场景 AABB（所有 mesh instance 的 `world_bounds` 求并集），暴露 `scene_bounds()` getter。Application 在场景加载后、首帧渲染前设置 `shadow_config.max_distance`。DebugUI 仍允许手动覆盖（对数滑条）。
+
 ### Cascade 混合策略
 
 **选择：Lerp blend（阶段四），M2 切换为 dithering**
@@ -1951,6 +1973,18 @@ ShadowPass 持有：shadow map ImageHandle、per-layer VkImageView 数组、opaq
 **阶段四选 B。** M1 阶段五才引入 temporal filtering，且 temporal 是 SSAO 专用，不覆盖 shadow 信号。无 temporal 的 dithering 效果比硬切换更差（脏噪点 vs 干净线）。Lerp blend 的性能开销局限在 blend region（~10% 阴影像素 2x 采样），可接受。
 
 **M2 演进：** FSR/DLSS 接入后对整个画面做 temporal accumulation，shadow dithering 噪点被自然平滑，可切换为 dithering 省去 blend region 双重采样。
+
+#### Blend Width 默认值分析
+
+`blend_width = 0.1`（cascade blend region 占 cascade 范围的 10%）。以 auto max_distance ≈ 55m 的 Sponza 场景为例分析绝对 blend 距离：
+
+| 过渡 | cascade 范围 | blend 绝对宽度 | 过渡位置 | 相邻密度比 |
+|------|-------------|---------------|---------|-----------|
+| 0→1 | 3.7m | 0.37m | ~3.4m | 1.3:1 |
+| 1→2 | 4.9m | 0.49m | ~8.2m | 2.1:1 |
+| 2→3 | 10.5m | 1.05m | ~18.2m | 3.5:1 |
+
+比例制的隐含优势：近处 cascade（密度比小、质量差异小）获得窄 blend，远处 cascade（密度比大但视距远、屏幕占比小）获得宽 blend，匹配人眼对不同距离的敏感度差异。0.1 作为默认值合理，DebugUI 可调。
 
 ### Shadow Bias 策略
 
@@ -2060,3 +2094,5 @@ Shadow pass 的输入不是相机剔除结果（会遗漏 off-screen shadow cast
 | Shadow shader | `common/shadow.glsl` 分步函数（select_cascade / sample_shadow_pcf / distance_fade），数据全部在 GlobalUBO | forward.frag 组装调用，debug cascade 可视化无障碍 |
 | PushConstantData | 68 → 72 bytes（新增 cascade_index），所有 pipeline 统一 layout | shadow VS 读 cascade_vp[cascade_index]，forward/prepass 不读 |
 | Per-cascade 剔除 | 先暴力全画验证，后泛化 Culling 模块为通用 frustum 剔除 | 正确性优先，泛化后 camera/shadow/probe cull 统一 |
+| Shadow max_distance 初始化 | 场景加载时 `scene_aabb.diagonal() × 1.5`，退化时 fallback 100m，DebugUI 对数滑条可覆盖 | PSSM 分割质量直接取决于 max_distance，auto 初始化避免不同场景手动调参 |
+| Cascade blend_width | 0.1（10% 比例制），近处窄 blend + 远处宽 blend 匹配人眼敏感度 | DebugUI 可调，默认值经分析合理 |

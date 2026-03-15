@@ -17,6 +17,8 @@
 - [ ] RenderInput 新增 `const RenderFeatures& features` + `const ShadowConfig& shadow_config`
 - [ ] Renderer 根据 `features.skybox` 条件调用 `skybox_pass_.record()`
 - [ ] Application 新增 `RenderFeatures` 和 `ShadowConfig` 成员，构造 RenderInput 时传入
+- [ ] SceneLoader 计算并暴露场景 AABB（`scene_bounds()`：所有 mesh instance 的 `world_bounds` 求并集）
+- [ ] Application 在场景加载后根据 scene AABB 初始化 `shadow_config.max_distance`（`diagonal × 1.5`，退化时 fallback 100m）
 - [ ] DebugUI 新增 Features 面板（Skybox checkbox）
 - [ ] Shader 热重载：各 pass 新增 `rebuild_pipelines()` 公开方法（调用已有 `create_pipelines()`）
 - [ ] DebugUI 新增 "Reload Shaders" 按钮，Renderer 检测触发后 `vkQueueWaitIdle()` → 遍历所有 pass `rebuild_pipelines()`
@@ -57,7 +59,7 @@
 - [ ] Per-cascade 光空间 frustum tight fitting（正交投影紧密包围 cascade sub-frustum 的 8 个角点）
 - [ ] `shadow.glsl` `select_cascade()` 更新：view-space depth 与 `cascade_splits` 比较，返回正确 cascade index
 - [ ] ShadowPass `record()` 循环 4 次，per-cascade `cmd.begin_debug_label("Cascade N")`
-- [ ] DebugUI Shadow 面板扩展：split lambda 滑条 + max distance 滑条
+- [ ] DebugUI Shadow 面板扩展：split lambda 滑条 + max distance 对数滑条
 - [ ] 验证：近中远距离均有合理阴影覆盖，各 cascade 范围无明显间隙
 
 ## Step 5：Texel snapping + cascade 可视化 + runtime config change
@@ -68,6 +70,7 @@
 - [ ] `Renderer::handle_shadow_config_changed(uint32_t new_cascade_count, uint32_t new_resolution)`：`vkQueueWaitIdle` → `shadow_pass_.on_shadow_config_changed()` 重建 image + views → 更新 Set 2 binding 5
 - [ ] ShadowPass `on_shadow_config_changed()` 实现：销毁旧 image + views → 创建新 image（new layers / new resolution）+ 新 views
 - [ ] DebugUI Shadow 面板扩展：cascade count 下拉（2/3/4）+ resolution 下拉（512/1024/2048/4096）
+- [ ] DebugUI Shadow 面板底部新增 cascade 统计信息：每个 cascade 的覆盖范围（近/远边界 m）和 texel density（px/m）
 - [ ] 验证：相机移动/旋转时阴影边缘无闪烁，cascade 可视化显示正确分层，cascade 数量和分辨率可运行时切换
 
 ## Step 6：PCF + cascade blend + 剔除泛化 + 最终验证

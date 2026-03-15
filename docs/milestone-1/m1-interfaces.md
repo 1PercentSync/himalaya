@@ -817,6 +817,21 @@ public:
 
 命名空间：`himalaya::app`。文件位置：`app/include/himalaya/app/renderer.h` + `app/src/renderer.cpp`。
 
+#### SceneLoader 场景数据（app/scene_loader.h）
+
+SceneLoader 加载 glTF 场景后暴露场景级元数据。设计决策见 `m1-design-decisions.md`「Shadow Max Distance 初始化」。
+
+```cpp
+class SceneLoader {
+public:
+    // ... 已有接口（场景加载、mesh/material 数据访问等）...
+
+    /// 场景 AABB（所有 mesh instance 的 world_bounds 求并集），加载完成后可用。
+    /// 用途：Application 初始化 ShadowConfig.max_distance。
+    const AABB& scene_bounds() const;
+};
+```
+
 ---
 
 ### Layer 1 — 材质系统（framework/material_system.h）
