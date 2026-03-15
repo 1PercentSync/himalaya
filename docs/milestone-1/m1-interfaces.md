@@ -157,7 +157,7 @@ struct SamplerHandle  { uint32_t index = UINT32_MAX; uint32_t generation = 0; bo
 struct BindlessIndex { uint32_t index = UINT32_MAX; };
 ```
 
-Pipeline 不使用 handle 体系——所有权单一明确（pass / MaterialTemplate 直接持有 `Pipeline` 值类型），详见 `m1-design-decisions.md`「资源句柄设计」。
+Pipeline 不使用 handle 体系——所有权单一明确（pass 直接持有 `Pipeline` 值类型），详见 `m1-design-decisions.md`「资源句柄设计」。
 
 #### 资源创建描述
 
@@ -821,19 +821,10 @@ public:
 
 ### Layer 1 — 材质系统（framework/material_system.h）
 
-#### 材质模板（定义着色模型）
-
-```cpp
-struct MaterialTemplate {
-    std::string name;           // 如 "StandardPBR"
-    Pipeline pipeline;
-    Pipeline depth_prepass_pipeline;
-    Pipeline shadow_pipeline;
-    uint32_t material_data_size;  // GPU 材质数据结构体大小（字节）
-};
-```
-
 #### 材质实例（具体参数值）
+
+> M1 只有标准 PBR 一种着色模型，各 pass 自行持有 pipeline（按 alpha_mode 选择 opaque/mask 变体）。
+> M3 引入场景卡通渲染（第二种着色模型）时设计多 pipeline 变体的管理方式。
 
 ```cpp
 struct MaterialInstance {
