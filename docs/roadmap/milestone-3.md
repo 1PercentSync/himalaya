@@ -13,6 +13,7 @@
 | Multiscatter GGX | 高粗糙度金属表面亮度修正。一张 LUT + 十几行 shader，IBL LUT 基础设施已有 |
 | Khronos PBR Neutral | 替换 ACES tonemapping，PBR 材质所见即所得，最小化 tonemapping 对材质外观的干扰 |
 | 门状态 Lightmap | 门完全开/完全关各烘焙一套 Lightmap，过渡期 SSGI 补充（设计约束：同时仅一扇可见门可交互）|
+| 卡通渲染着色模型（场景） | 引入第二种着色模型（色阶化光照、风格化阴影等），Forward+ 下不同物体绑不同 pipeline 天然适配。首次需要材质系统支持多 pipeline 变体 |
 
 ---
 
