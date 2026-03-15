@@ -120,7 +120,7 @@ Irradiance Probes + SDF GI（条件性，依赖 SDF 基础设施）
 
 跳过 HBAO。烘焙 AO 随 Lightmap 和材质管线自然覆盖。
 
-> **Per-effect temporal vs 全画面 temporal**：per-effect temporal 作用于独立的中间效果纹理（AO、SSR 等），不能平滑嵌在最终颜色中的噪声（如 shadow dithering）。全画面 temporal（FSR/DLSS SDK 自带）对最终颜色做时域积累，覆盖所有信号噪声，依赖 Motion Vectors。两者是独立系统，不共享基础设施。
+> **Per-effect temporal vs 全画面 temporal**：per-effect temporal 作用于独立的中间效果纹理（AO、SSR 等），不能平滑嵌在最终颜色中的噪声（如 specular aliasing）。全画面 temporal（FSR/DLSS SDK 自带）对最终颜色做时域积累，覆盖所有信号噪声，依赖 Motion Vectors。两者是独立系统，不共享基础设施。
 
 ---
 
