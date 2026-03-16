@@ -66,6 +66,14 @@ namespace himalaya::framework {
         /** @brief All mesh instances in the scene. */
         std::span<const MeshInstance> mesh_instances;
 
+        // ---- Instancing draw groups (Renderer fills after culling) ----
+
+        /** @brief Opaque draw groups (AlphaMode::Opaque, sorted by mesh_id). */
+        std::span<const MeshDrawGroup> opaque_draw_groups;
+
+        /** @brief Alpha-mask draw groups (AlphaMode::Mask, sorted by mesh_id). */
+        std::span<const MeshDrawGroup> mask_draw_groups;
+
         // ---- Frame parameters ----
 
         /** @brief Current frame-in-flight index (0 to kMaxFramesInFlight-1). */

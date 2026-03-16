@@ -420,6 +420,70 @@ namespace himalaya::app {
                         light_count * sizeof(framework::GPUDirectionalLight));
         }
 
+        // --- Build instancing draw groups + fill InstanceBuffer ---
+        {
+            // Sort visible opaque indices by mesh_id for grouping
+            sorted_opaque_indices_.assign(
+                input.cull_result.visible_opaque_indices.begin(),
+                input.cull_result.visible_opaque_indices.end());
+            std::sort(sorted_opaque_indices_.begin(), sorted_opaque_indices_.end(),
+                      [&](const uint32_t a, const uint32_t b) {
+                          return input.mesh_instances[a].mesh_id < input.mesh_instances[b].mesh_id;
+                      });
+
+            opaque_draw_groups_.clear();
+            mask_draw_groups_.clear();
+
+            const auto &inst_buf = resource_manager_->get_buffer(instance_buffers_[input.frame_index]);
+            auto *gpu_instances = static_cast<framework::GPUInstanceData *>(
+                inst_buf.allocation_info.pMappedData);
+            uint32_t instance_offset = 0;
+
+            // Group consecutive same-mesh_id entries
+            const auto count = static_cast<uint32_t>(sorted_opaque_indices_.size());
+            uint32_t group_start = 0;
+            while (group_start < count) {
+                const uint32_t first_idx = sorted_opaque_indices_[group_start];
+                const uint32_t mesh_id = input.mesh_instances[first_idx].mesh_id;
+                const auto &material = input.materials[input.mesh_instances[first_idx].material_id];
+
+                // Find end of group (all same mesh_id)
+                uint32_t group_end = group_start + 1;
+                while (group_end < count &&
+                       input.mesh_instances[sorted_opaque_indices_[group_end]].mesh_id == mesh_id) {
+                    ++group_end;
+                }
+
+                const uint32_t group_count = group_end - group_start;
+                const uint32_t group_first = instance_offset;
+
+                // Fill InstanceBuffer entries for this group
+                for (uint32_t i = group_start; i < group_end; ++i) {
+                    const auto &inst = input.mesh_instances[sorted_opaque_indices_[i]];
+                    gpu_instances[instance_offset++] = {
+                        .model = inst.transform,
+                        .material_index = input.materials[inst.material_id].buffer_offset,
+                    };
+                }
+
+                // Route to opaque or mask list based on alpha mode
+                const framework::MeshDrawGroup group{
+                    .mesh_id = mesh_id,
+                    .first_instance = group_first,
+                    .instance_count = group_count,
+                    .double_sided = material.double_sided,
+                };
+
+                if (material.alpha_mode == framework::AlphaMode::Mask) {
+                    mask_draw_groups_.push_back(group);
+                } else {
+                    opaque_draw_groups_.push_back(group);
+                }
+
+                group_start = group_end;
+            }
+        }
+
         // --- Build render graph ---
         render_graph_.clear();
 
@@ -458,6 +522,8 @@ namespace himalaya::app {
         frame_ctx.materials = input.materials;
         frame_ctx.cull_result = &input.cull_result;
         frame_ctx.mesh_instances = input.mesh_instances;
+        frame_ctx.opaque_draw_groups = opaque_draw_groups_;
+        frame_ctx.mask_draw_groups = mask_draw_groups_;
         frame_ctx.frame_index = input.frame_index;
         frame_ctx.sample_count = current_sample_count_;
 

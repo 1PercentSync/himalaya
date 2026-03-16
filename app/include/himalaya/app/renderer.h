@@ -241,6 +241,17 @@ namespace himalaya::app {
         /** @brief Registered ImageHandles for swapchain images (one per swapchain image). */
         std::vector<rhi::ImageHandle> swapchain_image_handles_;
 
+        // ---- Instancing working buffers (reused across frames, zero-alloc after first frame) ----
+
+        /** @brief Sorted copy of visible_opaque_indices (by mesh_id). */
+        std::vector<uint32_t> sorted_opaque_indices_;
+
+        /** @brief Opaque draw groups built from sorted indices (AlphaMode::Opaque). */
+        std::vector<framework::MeshDrawGroup> opaque_draw_groups_;
+
+        /** @brief Mask draw groups built from sorted indices (AlphaMode::Mask). */
+        std::vector<framework::MeshDrawGroup> mask_draw_groups_;
+
         // --- Private helpers ---
 
         /** @brief Updates Set 2 binding 0 with the current hdr_color backing image. */
