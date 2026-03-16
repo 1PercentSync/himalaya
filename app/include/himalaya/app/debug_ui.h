@@ -6,6 +6,7 @@
  */
 
 #include <cstdint>
+#include <string>
 #include <vector>
 
 namespace himalaya::rhi {
@@ -74,6 +75,14 @@ namespace himalaya::app {
         /** @brief Bitmask of GPU-supported MSAA sample counts (VkSampleCountFlags). */
         uint32_t supported_sample_counts;
 
+        // --- Current file paths (display) ---
+
+        /** @brief Current scene file path (empty = no scene loaded). */
+        const std::string& scene_path;
+
+        /** @brief Current HDR environment map path (empty = fallback). */
+        const std::string& env_path;
+
         // --- Scene statistics (display) ---
 
         /** @brief Per-frame scene statistics computed after frustum culling. */
@@ -105,6 +114,18 @@ namespace himalaya::app {
 
         /** @brief New MSAA sample count (valid only when msaa_changed is true). */
         uint32_t new_sample_count = 0;
+
+        /** @brief True if the user requested loading a new scene file. */
+        bool scene_load_requested = false;
+
+        /** @brief Path selected by the user (valid only when scene_load_requested is true). */
+        std::string new_scene_path;
+
+        /** @brief True if the user requested loading a new HDR environment. */
+        bool env_load_requested = false;
+
+        /** @brief Path selected by the user (valid only when env_load_requested is true). */
+        std::string new_env_path;
     };
 
     /**

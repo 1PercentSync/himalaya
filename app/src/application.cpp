@@ -252,6 +252,8 @@ namespace himalaya::app {
             .debug_render_mode = debug_render_mode_,
             .current_sample_count = renderer_.current_sample_count(),
             .supported_sample_counts = context_.msaa_sample_counts,
+            .scene_path = config_.scene_path,
+            .env_path = config_.env_path,
             .scene_stats = {
                 .total_instances = total_instances,
                 .total_meshes = static_cast<uint32_t>(meshes.size()),
@@ -272,6 +274,14 @@ namespace himalaya::app {
 
         if (actions.msaa_changed) {
             renderer_.handle_msaa_change(actions.new_sample_count);
+        }
+
+        if (actions.scene_load_requested) {
+            switch_scene(actions.new_scene_path);
+        }
+
+        if (actions.env_load_requested) {
+            switch_environment(actions.new_env_path);
         }
     }
 

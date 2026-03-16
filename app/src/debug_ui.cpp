@@ -10,12 +10,46 @@
 #include <himalaya/rhi/swapchain.h>
 
 #include <algorithm>
+#include <filesystem>
 
 #include <glm/trigonometric.hpp>
 #include <imgui.h>
 #include <spdlog/spdlog.h>
 
+#ifdef _WIN32
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <Windows.h>
+#include <commdlg.h>
+#endif
+
 namespace {
+#ifdef _WIN32
+    /**
+     * Opens a Windows native file dialog and returns the selected path.
+     * Returns empty string if cancelled. filter uses the GetOpenFileName
+     * double-null-terminated format: "Description\0*.ext1;*.ext2\0\0"
+     */
+    // ReSharper disable CppDFAConstantParameter
+    std::string open_file_dialog(const wchar_t *filter, const wchar_t *title) {
+        // ReSharper restore CppDFAConstantParameter
+        wchar_t file_path[MAX_PATH] = {};
+        OPENFILENAMEW ofn = {};
+        ofn.lStructSize = sizeof(ofn);
+        ofn.lpstrFilter = filter;
+        ofn.lpstrFile = file_path;
+        ofn.nMaxFile = MAX_PATH;
+        ofn.lpstrTitle = title;
+        ofn.Flags = OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST | OFN_NOCHANGEDIR;
+
+        if (GetOpenFileNameW(&ofn)) {
+            return std::filesystem::path(file_path).string();
+        }
+        return {};
+    }
+#endif
+
     /**
      * SliderFloat that applies immediately during mouse drag but defers
      * Ctrl+Click text-input changes until Enter / click-away / Tab.
@@ -163,9 +197,35 @@ namespace himalaya::app {
                                   ImGuiSliderFlags_Logarithmic);
         }
 
-        // Scene statistics section
+        // Scene section (file loading + statistics)
         ImGui::Separator();
         if (ImGui::CollapsingHeader("Scene", ImGuiTreeNodeFlags_DefaultOpen)) {
+            // Current scene file
+            if (ctx.scene_path.empty()) {
+                ImGui::TextDisabled("No scene loaded");
+            } else {
+                const auto filename = std::filesystem::path(ctx.scene_path).filename().string();
+                ImGui::Text("Scene: %s", filename.c_str());
+                if (ImGui::IsItemHovered()) {
+                    ImGui::SetTooltip("%s", ctx.scene_path.c_str());
+                }
+            }
+
+#ifdef _WIN32
+            ImGui::SameLine();
+            if (ImGui::Button("Load Scene...")) {
+                auto path = open_file_dialog(
+                    L"glTF Files (*.gltf;*.glb)\0*.gltf;*.glb\0All Files (*.*)\0*.*\0",
+                    L"Load Scene");
+                if (!path.empty()) {
+                    actions.scene_load_requested = true;
+                    actions.new_scene_path = std::move(path);
+                }
+            }
+#endif
+
+            ImGui::Separator();
+
             // ReSharper disable once CppUseStructuredBinding
             const auto &stats = ctx.scene_stats;
 
