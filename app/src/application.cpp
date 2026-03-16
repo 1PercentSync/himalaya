@@ -10,7 +10,6 @@
 #include <himalaya/framework/scene_data.h>
 #include <himalaya/rhi/commands.h>
 
-#include <algorithm>
 #include <cmath>
 
 #include <GLFW/glfw3.h>
@@ -66,6 +65,7 @@ namespace himalaya::app {
         camera_controller_.init(window_, &camera_);
 
         // --- Renderer (owns pipelines, buffers, default textures, sampler) ---
+        // HDR failure is handled internally by IBL (fallback to gray cubemap).
         renderer_.init(context_,
                        swapchain_,
                        resource_manager_,
@@ -74,12 +74,18 @@ namespace himalaya::app {
                        config.env_path);
 
         // --- Scene loading (uses Renderer's default resources) ---
+        // Scene failure → empty scene (0 instances), skybox still renders if HDR loaded.
         if (!config.scene_path.empty()) {
             context_.begin_immediate();
-            scene_loader_.load(config.scene_path, resource_manager_, descriptor_manager_,
-                               renderer_.material_system(), renderer_.default_textures(),
-                               renderer_.default_sampler());
+            const bool scene_ok = scene_loader_.load(
+                config.scene_path, resource_manager_, descriptor_manager_,
+                renderer_.material_system(), renderer_.default_textures(),
+                renderer_.default_sampler());
             context_.end_immediate();
+
+            if (!scene_ok) {
+                spdlog::warn("Starting with empty scene (skybox only)");
+            }
         }
     }
 
@@ -158,7 +164,9 @@ namespace himalaya::app {
 
         // Determine light source (scene lights or none when disabled)
         const auto scene_lights = scene_loader_.directional_lights();
+        // ReSharper disable once CppDFAConstantConditions
         const auto lights = disable_scene_lights_
+                                // ReSharper disable once CppDFAUnreachableCode
                                 ? std::span<const framework::DirectionalLight>{}
                                 : scene_lights;
 

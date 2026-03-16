@@ -18,6 +18,7 @@
 #include <filesystem>
 #include <limits>
 #include <map>
+#include <stdexcept>
 
 namespace himalaya::app {
     namespace {
@@ -48,25 +49,25 @@ namespace himalaya::app {
                                std::visit(fastgltf::visitor{
                                               [&](const fastgltf::sources::Array &arr) {
                                                   result = framework::load_image_from_memory(
-                                                      reinterpret_cast<const uint8_t *>(arr.bytes.data()) + view.
-                                                      byteOffset,
+                                                      reinterpret_cast<const uint8_t *>(arr.bytes.data()) +
+                                                      view.byteOffset,
                                                       view.byteLength);
                                               },
                                               [&](const fastgltf::sources::Vector &v) {
                                                   result = framework::load_image_from_memory(
-                                                      reinterpret_cast<const uint8_t *>(v.bytes.data()) + view.
-                                                      byteOffset,
+                                                      reinterpret_cast<const uint8_t *>(v.bytes.data()) +
+                                                      view.byteOffset,
                                                       view.byteLength);
                                               },
                                               [&](const fastgltf::sources::ByteView &bytes) {
                                                   result = framework::load_image_from_memory(
-                                                      reinterpret_cast<const uint8_t *>(bytes.bytes.data()) + view.
-                                                      byteOffset,
+                                                      reinterpret_cast<const uint8_t *>(bytes.bytes.data()) +
+                                                      view.byteOffset,
                                                       view.byteLength);
                                               },
                                               [](auto &&) {
-                                                  spdlog::error("Unsupported buffer data source for image");
-                                                  std::abort();
+                                                  throw std::runtime_error(
+                                                      "Unsupported buffer data source for image");
                                               }
                                           }, buffer.data);
                            },
@@ -76,15 +77,12 @@ namespace himalaya::app {
                                    bytes.bytes.size());
                            },
                            [](auto &&) {
-                               spdlog::error("Unsupported image source type");
-                               std::abort();
+                               throw std::runtime_error("Unsupported image source type");
                            }
                        }, image.data);
 
             if (!result.valid()) {
-                spdlog::error("Failed to decode glTF image '{}'",
-                              std::string(image.name));
-                std::abort();
+                throw std::runtime_error("Failed to decode glTF image '" + std::string(image.name) + "'");
             }
 
             return result;
@@ -202,7 +200,7 @@ namespace himalaya::app {
         }
     }
 
-    void SceneLoader::load(const std::string &path,
+    bool SceneLoader::load(const std::string &path,
                            rhi::ResourceManager &resource_manager,
                            rhi::DescriptorManager &descriptor_manager,
                            framework::MaterialSystem &material_system,
@@ -213,41 +211,44 @@ namespace himalaya::app {
 
         spdlog::info("Loading scene: {}", path);
 
-        if (!std::filesystem::exists(path)) {
-            spdlog::error("Scene file not found: {}", path);
-            std::abort();
+        try {
+            if (!std::filesystem::exists(path)) {
+                throw std::runtime_error("Scene file not found: " + path);
+            }
+
+            // Parse glTF
+            auto gltf_data = fastgltf::GltfDataBuffer::FromPath(path);
+            if (gltf_data.error() != fastgltf::Error::None) {
+                throw std::runtime_error("Failed to read glTF file: " + path);
+            }
+
+            constexpr auto options = fastgltf::Options::LoadExternalBuffers | fastgltf::Options::LoadExternalImages;
+
+            fastgltf::Parser parser(fastgltf::Extensions::KHR_lights_punctual);
+            const auto base_dir = std::filesystem::path(path).parent_path();
+            auto asset = parser.loadGltf(gltf_data.get(), base_dir, options);
+            if (asset.error() != fastgltf::Error::None) {
+                throw std::runtime_error("Failed to parse glTF '" + path
+                                         + "' (error " + std::to_string(static_cast<int>(asset.error())) + ")");
+            }
+
+            auto &gltf = asset.get();
+
+            spdlog::info("glTF parsed: {} meshes, {} materials, {} textures, {} nodes",
+                         gltf.meshes.size(),
+                         gltf.materials.size(),
+                         gltf.textures.size(),
+                         gltf.nodes.size());
+
+            const auto mesh_data = load_meshes(gltf);
+            load_materials(gltf, base_dir.string(), material_system, default_textures, default_sampler);
+            build_mesh_instances(gltf, mesh_data);
+            return true;
+        } catch (const std::exception &e) {
+            spdlog::error("Scene loading failed: {}", e.what());
+            destroy();
+            return false;
         }
-
-        // Parse glTF
-        auto gltf_data = fastgltf::GltfDataBuffer::FromPath(path);
-        if (gltf_data.error() != fastgltf::Error::None) {
-            spdlog::error("Failed to read glTF file: {}", path);
-            std::abort();
-        }
-
-        constexpr auto options = fastgltf::Options::LoadExternalBuffers
-                                 | fastgltf::Options::LoadExternalImages;
-
-        fastgltf::Parser parser(fastgltf::Extensions::KHR_lights_punctual);
-        const auto base_dir = std::filesystem::path(path).parent_path();
-        auto asset = parser.loadGltf(gltf_data.get(), base_dir, options);
-        if (asset.error() != fastgltf::Error::None) {
-            spdlog::error("Failed to parse glTF '{}' (error {})",
-                          path, static_cast<int>(asset.error()));
-            std::abort();
-        }
-
-        auto &gltf = asset.get();
-
-        spdlog::info("glTF parsed: {} meshes, {} materials, {} textures, {} nodes",
-                     gltf.meshes.size(),
-                     gltf.materials.size(),
-                     gltf.textures.size(),
-                     gltf.nodes.size());
-
-        const auto mesh_data = load_meshes(gltf);
-        load_materials(gltf, base_dir.string(), material_system, default_textures, default_sampler);
-        build_mesh_instances(gltf, mesh_data);
     }
 
     SceneLoader::MeshLoadResult SceneLoader::load_meshes(const fastgltf::Asset &gltf) {
@@ -260,9 +261,9 @@ namespace himalaya::app {
                 // Position (required by glTF spec)
                 const auto pos_it = primitive.findAttribute("POSITION");
                 if (pos_it == primitive.attributes.end()) {
-                    spdlog::error("Mesh '{}' primitive missing POSITION attribute",
-                                  std::string(gltf_mesh.name));
-                    std::abort();
+                    throw std::runtime_error("Mesh '"
+                                             + std::string(gltf_mesh.name)
+                                             + "' primitive missing POSITION attribute");
                 }
                 const auto &pos_accessor = gltf.accessors[pos_it->accessorIndex];
                 const auto vertex_count = pos_accessor.count;
@@ -359,18 +360,22 @@ namespace himalaya::app {
                 const auto vb_size = vertices.size() * sizeof(framework::Vertex);
                 const auto ib_size = indices.size() * sizeof(uint32_t);
 
-                const auto prim_label = std::string(gltf_mesh.name)
-                    + " [Prim " + std::to_string(meshes_.size()) + "]";
+                const auto prim_label = std::string(gltf_mesh.name) +
+                                        " [Prim " +
+                                        std::to_string(meshes_.size()) +
+                                        "]";
                 auto vb = resource_manager_->create_buffer({
-                    .size = vb_size,
-                    .usage = rhi::BufferUsage::VertexBuffer | rhi::BufferUsage::TransferDst,
-                    .memory = rhi::MemoryUsage::GpuOnly,
-                }, (prim_label + " VB").c_str());
+                                                               .size = vb_size,
+                                                               .usage = rhi::BufferUsage::VertexBuffer |
+                                                                        rhi::BufferUsage::TransferDst,
+                                                               .memory = rhi::MemoryUsage::GpuOnly,
+                                                           }, (prim_label + " VB").c_str());
                 auto ib = resource_manager_->create_buffer({
-                    .size = ib_size,
-                    .usage = rhi::BufferUsage::IndexBuffer | rhi::BufferUsage::TransferDst,
-                    .memory = rhi::MemoryUsage::GpuOnly,
-                }, (prim_label + " IB").c_str());
+                                                               .size = ib_size,
+                                                               .usage = rhi::BufferUsage::IndexBuffer |
+                                                                        rhi::BufferUsage::TransferDst,
+                                                               .memory = rhi::MemoryUsage::GpuOnly,
+                                                           }, (prim_label + " IB").c_str());
 
                 resource_manager_->upload_buffer(vb, vertices.data(), vb_size);
                 resource_manager_->upload_buffer(ib, indices.data(), ib_size);
@@ -387,9 +392,8 @@ namespace himalaya::app {
 
                 // Track per-primitive metadata for node traversal
                 if (!primitive.materialIndex.has_value()) {
-                    spdlog::error("Mesh '{}' primitive has no material (required by renderer)",
-                                  std::string(gltf_mesh.name));
-                    std::abort();
+                    throw std::runtime_error("Mesh '" + std::string(gltf_mesh.name)
+                                             + "' primitive has no material (required by renderer)");
                 }
                 result.material_ids.push_back(static_cast<uint32_t>(*primitive.materialIndex));
                 result.local_bounds.push_back({local_min, local_max});

@@ -44,7 +44,8 @@ namespace himalaya::app {
          * @brief Loads a glTF scene from the given file path.
          *
          * Must be called within a Context::begin_immediate() / end_immediate()
-         * scope. Parsing failure or missing resources trigger log error + abort.
+         * scope. On failure, logs the error, cleans up any partial state, and
+         * returns false (caller gets an empty scene).
          *
          * @param path               Path to the .gltf or .glb file.
          * @param resource_manager   Resource manager for buffer/image/sampler creation.
@@ -52,8 +53,9 @@ namespace himalaya::app {
          * @param material_system    Material system for SSBO upload.
          * @param default_textures   Default textures for missing material slots.
          * @param default_sampler    Fallback sampler for textures without a glTF sampler.
+         * @return true on success, false on failure (scene remains empty).
          */
-        void load(const std::string &path,
+        bool load(const std::string &path,
                   rhi::ResourceManager &resource_manager,
                   rhi::DescriptorManager &descriptor_manager,
                   framework::MaterialSystem &material_system,
