@@ -107,7 +107,7 @@
 - [ ] ShadowPass `record()` 实现：`import_image()` 到 RG → `add_pass()` → lambda 内循环 cascade（=1）→ begin rendering(layer view) → set depth bias → draw opaque → draw mask → end rendering
 - [ ] 绘制全部场景物体（暴力，iterate `mesh_instances`），先 opaque 后 mask
 - [ ] GlobalUBO 新增 shadow 字段：`shadow_cascade_count`、`shadow_normal_offset`、`shadow_texel_size`、`shadow_max_distance`、`shadow_blend_width`、`shadow_pcf_radius`、`cascade_view_proj[4]`、`cascade_splits`；`bindings.glsl` GlobalUBO 同步更新
-- [ ] PushConstantData 扩展为 72 bytes（新增 `uint cascade_index`），所有 pipeline layout 更新
+- [ ] ShadowPass pipeline layout 声明 push constant range（4 bytes `cascade_index`，shadow pass 专用）
 - [ ] Renderer 在 `render()` 中填充 GlobalUBO shadow 字段（cascade VP、cascade splits、shadow params）
 - [ ] 验证：RenderDoc 检查 shadow map 内容正确（从光源视角的场景深度图）
 
