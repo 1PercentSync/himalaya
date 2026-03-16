@@ -198,11 +198,19 @@ struct SamplerDesc {
 // Format 枚举 → VkFormat 映射
 VkFormat to_vk_format(Format format);
 
+// VkFormat → Format 枚举反向映射（KTX2 读取时使用，不识别的值返回 Undefined）
+Format from_vk_format(VkFormat vk_format);
+
 // Format 枚举 → VkImageAspectFlags 推导（depth → DEPTH_BIT, color → COLOR_BIT）
 VkImageAspectFlags aspect_from_format(Format format);
+
+// 格式工具函数
+uint32_t format_bytes_per_block(Format format);                   // 每 texel block 字节数（BC=16, RGBA8=4, ...）
+std::pair<uint32_t, uint32_t> format_block_extent(Format format); // block texel 维度（BC={4,4}, 其他={1,1}）
+bool format_is_block_compressed(Format format);                   // BC 格式返回 true
 ```
 
-与 `Format` 枚举定义在同一文件中。RG 的 barrier 计算、ResourceManager 的 image 创建等处统一使用。
+与 `Format` 枚举定义在同一文件中。RG 的 barrier 计算、ResourceManager 的 image 创建、KTX2 读写等处统一使用。设计决策见 `m1-design-decisions.md`「KTX2 读写模块」「多级上传 API」。
 
 #### ResourceManager 扩展接口
 
@@ -221,10 +229,23 @@ public:
     // 取消注册外部 image（释放 slot，递增 generation，不调用 vmaDestroyImage）
     void unregister_external_image(ImageHandle handle);
 
-    // Image 上传（staging buffer + vkCmdCopyBufferToImage，在 immediate scope 内调用）
+    // Image 上传 — mip 0 only（staging buffer + vkCmdCopyBufferToImage，在 immediate scope 内调用）
     // dst_stage: 最终 barrier 的 dstStageMask（调用方按消费者指定）
     void upload_image(ImageHandle handle, const void* data, uint64_t size,
                       VkPipelineStageFlags2 dst_stage);
+
+    // Image 上传 — 预建 mip chain（2D / cubemap 通用，在 immediate scope 内调用）
+    // 单 staging buffer 装全部 mip 数据，多 VkBufferImageCopy2 region 一次提交。
+    // cubemap 时 layerCount=6，每级内 face 0..5 连续排列（与 KTX2 布局一致）。
+    struct MipUploadRegion {
+        uint64_t buffer_offset;  ///< 该 mip 数据在 data 中的起始偏移
+        uint32_t width;          ///< 该 mip 的像素宽度
+        uint32_t height;         ///< 该 mip 的像素高度
+    };
+    void upload_image_all_levels(ImageHandle handle,
+                                 const void* data, uint64_t total_size,
+                                 std::span<const MipUploadRegion> mip_regions,
+                                 VkPipelineStageFlags2 dst_stage);
 
     // GPU 端 mip 生成（逐级 vkCmdBlitImage，在 immediate scope 内调用）
     void generate_mips(ImageHandle handle);
@@ -437,6 +458,53 @@ namespace himalaya::framework {
                                      std::string_view hash,
                                      std::string_view extension);
 }
+```
+
+---
+
+### Layer 1 — KTX2 读写模块接口（framework/ktx2.h）
+
+最小 KTX2 读写模块，纹理缓存和 IBL 缓存共用。不依赖 libktx，只支持 6 种格式的 2D/cubemap + mip chain 读写。设计决策见 `m1-design-decisions.md`「KTX2 读写模块」。
+
+```cpp
+namespace himalaya::framework {
+
+/// 从 KTX2 文件读取的数据
+struct Ktx2Data {
+    rhi::Format format;
+    uint32_t base_width;
+    uint32_t base_height;
+    uint32_t face_count;     ///< 1 (2D) or 6 (cubemap)
+    uint32_t level_count;
+
+    struct Level {
+        uint64_t offset;     ///< Byte offset into blob
+        uint64_t size;       ///< Byte size of this level (all faces)
+    };
+    std::vector<Level> levels;   ///< levels[0] = base, levels[N-1] = smallest mip
+    std::vector<uint8_t> blob;   ///< Owns the raw file data
+};
+
+/// 写入 KTX2 时每级的数据描述
+struct Ktx2WriteLevel {
+    const void* data;        ///< This level's data (cubemap: all 6 faces concatenated)
+    uint64_t size;           ///< Byte size
+};
+
+/// 写入 KTX2 文件。levels[0] = base level (最大), levels[N-1] = smallest mip。
+/// cubemap: 每级的 data 包含 6 faces 连续排列。
+bool write_ktx2(const std::filesystem::path& path,
+                rhi::Format format,
+                uint32_t base_width, uint32_t base_height,
+                uint32_t face_count,
+                std::span<const Ktx2WriteLevel> levels);
+
+/// 读取 KTX2 文件。返回 nullopt 表示格式不支持或文件损坏。
+/// 返回的 Ktx2Data::blob 持有文件数据，levels 的 offset 索引 blob。
+/// 消费者通过 blob.data() + levels[i].offset 获取 mip 数据传给 upload_image_all_levels()。
+std::optional<Ktx2Data> read_ktx2(const std::filesystem::path& path);
+
+}  // namespace himalaya::framework
 ```
 
 ---
@@ -932,7 +1000,7 @@ public:
 };
 ```
 
-`begin_immediate()` 是纯状态切换（设置 scope 标志、reset/begin 内部 command buffer），不返回 `CommandBuffer`。所有命令录制通过 `ResourceManager` 的 `upload_buffer()` / `upload_image()` / `generate_mips()` 方法完成，它们内部直接访问 `Context::immediate_command_buffer` 录制。调用方无需也不应手动录制 immediate command。
+`begin_immediate()` 是纯状态切换（设置 scope 标志、reset/begin 内部 command buffer），不返回 `CommandBuffer`。所有命令录制通过 `ResourceManager` 的 `upload_buffer()` / `upload_image()` / `upload_image_all_levels()` / `generate_mips()` 方法完成，它们内部直接访问 `Context::immediate_command_buffer` 录制。调用方无需也不应手动录制 immediate command。
 
 `upload_buffer()` 等方法为录制模式：在活跃的 begin/end_immediate scope 内调用时，只录制 copy 命令到内部 command buffer，不自行 submit。staging buffer 由 Context 收集，`end_immediate()` submit + wait 完成后统一销毁。scope 外调用 `upload_buffer()` 会 assert 失败。
 

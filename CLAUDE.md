@@ -177,7 +177,8 @@ himalaya/
 | Dear ImGui | 调试 UI |
 | fastgltf | glTF 场景加载 |
 | stb_image | JPEG/PNG 图像解码 |
-| CLI11 | 命令行参数解析 |
+| nlohmann/json | 配置持久化（JSON） |
+| xxHash | 内容哈希（XXH3_128，缓存 key） |
 
 ---
 

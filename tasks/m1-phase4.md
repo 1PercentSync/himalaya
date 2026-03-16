@@ -39,10 +39,13 @@
 
 ## 准备工作 D：缓存基础设施 + BC 纹理压缩 + IBL 缓存
 
-### D-1：缓存模块（共享基础设施）
+### D-1：缓存模块 + KTX2 读写（共享基础设施）
 
-- [ ] vcpkg.json + CMakeLists.txt 添加 xxHash、libktx 依赖（需用户在 CLion 中确认构建配置）
-- [ ] `framework/cache.h/cpp` 新增缓存模块：`cache_root()`（`%TEMP%\himalaya\`）+ `content_hash()` (XXH3_128)+ `cache_path(category, hash, ext)`
+- [ ] vcpkg.json + CMakeLists.txt 添加 xxHash 依赖（需用户在 CLion 中确认构建配置）
+- [ ] `rhi/types.h` Format 枚举新增 BC 格式（Bc5UnormBlock / Bc7UnormBlock / Bc7SrgbBlock）+ `from_vk_format()` 反向转换 + 格式工具函数（`format_bytes_per_block` / `format_block_extent` / `format_is_block_compressed`）
+- [ ] `rhi/resources.h/cpp` 新增 `upload_image_all_levels()`：预建 mip chain + cubemap 一次性上传（单 staging buffer、多 VkBufferImageCopy2 region）
+- [ ] `framework/cache.h/cpp` 新增缓存模块：`cache_root()`（`%TEMP%\himalaya\`）+ `content_hash()`（XXH3_128）+ `cache_path(category, hash, ext)`
+- [ ] `framework/ktx2.h/cpp` 新增最小 KTX2 读写模块：`write_ktx2()`（2D / cubemap + mip chain）+ `read_ktx2()`（返回 format + mip offset 索引 + 数据 blob），DFD 按支持格式硬编码，读取时仅解析 header + level index
 
 ### D-2：BC 纹理压缩 + KTX2 缓存
 
@@ -50,8 +53,8 @@
 - [ ] 集成 stb_image_resize2 头文件
 - [ ] `framework/texture.h/cpp` 新增 CPU mip 生成（stb_image_resize2 逐级缩放，非 4 对齐纹理先 resize 到 4 的倍数）
 - [ ] `framework/texture.h/cpp` 新增 BC 压缩：BC7（SRGB/UNORM）+ BC5（UNORM，法线用）
-- [ ] `framework/texture.h/cpp` 新增 KTX2 写入（libktx）：BC 数据 + 所有 mip 级别写入 KTX2 文件
-- [ ] `framework/texture.h/cpp` 新增 KTX2 读取（libktx）：缓存命中时直接读取 BC 数据上传 GPU
+- [ ] `framework/texture.h/cpp` 新增 KTX2 缓存写入：BC 数据 + 所有 mip 级别通过 `write_ktx2()` 写入缓存
+- [ ] `framework/texture.h/cpp` 新增 KTX2 缓存读取：`read_ktx2()` + `upload_image_all_levels()` 直接上传 BC 数据
 - [ ] `framework/texture.h/cpp` 重构 `create_texture()`：缓存命中 → KTX2 直接上传 / 缓存未命中 → 解码 → CPU mip → BC 压缩 → 上传 + 写缓存
 - [ ] `app/scene_loader.cpp` 适配新的纹理加载接口（TextureRole 扩展区分法线用 BC5）
 - [ ] 纹理级并行压缩（std::async / thread pool，首次加载多线程）
@@ -60,8 +63,8 @@
 ### D-3：IBL 缓存
 
 - [ ] `framework/ibl.cpp` init() 末尾新增 GPU → CPU readback：staging buffer + `vkCmdCopyImageToBuffer` 读回 4 个 IBL 产物
-- [ ] `framework/ibl.cpp` 新增 KTX2 写入：将 readback 数据写为 KTX2 cubemap 缓存（irradiance / prefiltered / skybox cubemap）+ 2D 缓存（BRDF LUT）
-- [ ] `framework/ibl.cpp` init() 入口新增缓存检查：HDR 内容哈希 → 缓存命中时直接加载 KTX2 + 注册 bindless，跳过全部 GPU compute
+- [ ] `framework/ibl.cpp` 新增 KTX2 缓存写入：通过 `write_ktx2()` 将 readback 数据写为 KTX2 cubemap 缓存（irradiance / prefiltered / skybox cubemap）+ 2D 缓存（BRDF LUT）
+- [ ] `framework/ibl.cpp` init() 入口新增缓存检查：HDR 内容哈希 → 缓存命中时 `read_ktx2()` + `upload_image_all_levels()` 直接加载 + 注册 bindless，跳过全部 GPU compute
 - [ ] BRDF LUT 使用固定 cache key（与 HDR 无关，永久缓存）
 - [ ] 验证：首次启动完成 IBL 计算并写缓存，后续启动秒级加载，IBL 渲染结果与未缓存时一致
 

@@ -74,29 +74,35 @@ Instancing 设计见 `milestone-1/m1-design-decisions.md`「Instancing」。
 > 三个子系统共享同一缓存模块：`framework/cache.h`（目录解析 + 内容哈希 + 路径拼接）。
 > 纹理压缩解决大型场景 VRAM 问题，IBL 缓存解决启动慢问题。
 
-**D-1：缓存模块** — `framework/cache.h/cpp`，提供 `cache_root()`（`%TEMP%\himalaya\`）、`content_hash()`（XXH3_128）、`cache_path(category, hash, ext)` 三个共享工具函数。所有缓存消费者（纹理、IBL）通过此模块统一管理缓存路径和失效策略。
+**D-1：缓存模块 + KTX2 读写** — 共享基础设施，包含三部分：
+- `framework/cache.h/cpp`：缓存工具函数（`cache_root()`、`content_hash()`、`cache_path()`）
+- `framework/ktx2.h/cpp`：最小 KTX2 读写模块（自写，不依赖 libktx），支持 2D / cubemap + mip chain，DFD 按支持格式硬编码
+- RHI 扩展：Format 枚举新增 BC 格式 + `from_vk_format()` + 格式工具函数 + `upload_image_all_levels()` 多级上传 API
 
 **D-2：BC 纹理压缩 + KTX2 缓存** — 首次加载时 CPU 端 BC 压缩并缓存为 KTX2，后续直接加载 BC 数据：
-- bc7enc（源文件集成）做 BC7/BC5 压缩，libktx（vcpkg）做 KTX2 读写，stb_image_resize2 做 CPU mip 生成
+- bc7enc（源文件集成）做 BC7/BC5 压缩，`write_ktx2()` 写缓存，`read_ktx2()` + `upload_image_all_levels()` 读缓存
 - 法线 → BC5_UNORM（2 通道专用），其他 → BC7_SRGB / BC7_UNORM
-- 非 4 对齐纹理 resize 到 4 的倍数，CPU mip 生成替代 GPU blit
+- 非 4 对齐纹理 resize 到 4 的倍数，CPU mip 生成（stb_image_resize2）替代 GPU blit
 - 纹理级并行压缩（std::async），缓存路径 `%TEMP%\himalaya\textures\<hash>.ktx2`
 - **验证**：纹理 VRAM 显著降低（RGBA8 → BC 约 4:1 压缩比）
 
 **D-3：IBL 缓存** — 首次 GPU 预计算后 readback 并缓存为 KTX2，后续直接加载：
 - GPU → CPU readback（staging buffer + `vkCmdCopyImageToBuffer`）读回 4 个 IBL 产物
-- 缓存为 KTX2 cubemap（skybox / irradiance / prefiltered）+ KTX2 2D（BRDF LUT）
+- 通过 `write_ktx2()` 缓存为 KTX2 cubemap（skybox / irradiance / prefiltered）+ KTX2 2D（BRDF LUT）
+- 缓存命中时 `read_ktx2()` + `upload_image_all_levels()` 直接加载，跳过全部 GPU compute
 - 缓存路径 `%TEMP%\himalaya\ibl\<hash>.ktx2`，BRDF LUT 使用固定 key（与 HDR 无关）
 - **验证**：后续启动秒级加载，IBL 渲染结果一致
 
 #### 设计要点
 
-缓存基础设施和纹理压缩策略见 `milestone-1/m1-design-decisions.md`「缓存基础设施」「纹理压缩与缓存」「IBL 缓存」。
+缓存基础设施和纹理压缩策略见 `milestone-1/m1-design-decisions.md`「缓存基础设施」「纹理压缩与缓存」「KTX2 读写模块」「多级上传 API」「IBL 缓存」。
 
 关键设计：
 - 缓存模块是纯工具层，不知道具体缓存格式——消费者各自处理序列化
 - 缓存放在 `%TEMP%`（Windows Disk Cleanup / Storage Sense 可自动清理），缓存丢了就重算
 - XXH3_128 哈希：极快（>10 GB/s）、低碰撞、128 位做文件名足够
+- KTX2 读写自写（不依赖 libktx）：只需 6 种格式的 2D/cubemap + mip chain 读写，DFD 硬编码，读取只解析 header + level index
+- `upload_image_all_levels()` 补充现有 `upload_image()`：单 staging buffer + 多 `VkBufferImageCopy2` region，KTX2 数据布局与 Vulkan buffer-to-image copy 天然兼容
 - BC5 法线质量优于 BC7（2 通道专用编码），shader 重建 `Z = sqrt(1 - R² - G²)`
 - IBL readback 在 immediate scope 内一次性完成，后续启动跳过全部 GPU compute
 - BRDF LUT 与环境无关，永久缓存（固定 key），更换 HDR 时只重算 3 个 cubemap

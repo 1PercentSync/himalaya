@@ -271,7 +271,7 @@ GPU-Driven Rendering、Mesh Shader、HLOD
 
 | 演进 | 方案 |
 |------|------|
-| Pass 1 | 运行时 BC 压缩 + KTX2 缓存（BC7 通用 + BC5 法线，首次 CPU 压缩后缓存） |
+| Pass 1 | 运行时 BC 压缩 + KTX2 缓存（BC7 通用 + BC5 法线，首次 CPU 压缩后缓存，自写最小 KTX2 读写） |
 | Pass 2 | 离线预处理管线（构建时生成 KTX2，运行时直接加载） |
 
 POM 纳入计划。
