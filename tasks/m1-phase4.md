@@ -35,7 +35,7 @@
 - [x] `app/debug_ui.cpp` 新增 Scene 面板：当前 scene path 显示 + "Load Scene..." 按钮（Windows `GetOpenFileNameW` 对话框，过滤 .gltf/.glb）
 - [x] `app/debug_ui.cpp` 新增 Environment 面板：当前 HDR path 显示 + "Load HDR..." 按钮（过滤 .hdr）
 - [x] 加载失败时 DebugUI 显示错误提示，不 abort
-- [ ] 验证：运行时切换 scene/HDR 正常，配置持久化，重启后恢复上次文件，文件丢失时 fallback 正确
+- [x] 验证：运行时切换 scene/HDR 正常，配置持久化，重启后恢复上次文件，文件丢失时 fallback 正确
 
 ## 准备工作 D：缓存基础设施 + BC 纹理压缩 + IBL 缓存
 
