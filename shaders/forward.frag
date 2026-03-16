@@ -31,7 +31,7 @@ vec3 rotate_y(vec3 d, float s, float c) {
 }
 
 void main() {
-    GPUMaterialData mat = materials[pc.material_index];
+    GPUMaterialData mat = materials[instances[gl_InstanceIndex].material_index];
 
     // Base color
     vec4 base_color = texture(textures[nonuniformEXT(mat.base_color_tex)], frag_uv0)
