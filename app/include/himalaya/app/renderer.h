@@ -8,6 +8,7 @@
 #include <himalaya/framework/ibl.h>
 #include <himalaya/framework/material_system.h>
 #include <himalaya/framework/render_graph.h>
+#include <himalaya/framework/scene_data.h>
 #include <himalaya/framework/texture.h>
 #include <himalaya/passes/depth_prepass.h>
 #include <himalaya/passes/forward_pass.h>
