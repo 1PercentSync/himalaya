@@ -7,6 +7,7 @@
  * - GlobalUniformData       (scene_data.h)
  * - GPUDirectionalLight     (scene_data.h)
  * - GPUMaterialData         (material_system.h)
+ * - GPUInstanceData         (scene_data.h)
  * - PushConstantData        (scene_data.h)
  */
 
@@ -19,6 +20,13 @@
 struct GPUDirectionalLight {
     vec4 direction_and_intensity;   // xyz = direction, w = intensity
     vec4 color_and_shadow;          // xyz = color, w = cast_shadows (0.0 / 1.0)
+};
+
+/** Per-instance data (std430, 80 bytes). */
+struct GPUInstanceData {
+    mat4 model;                     // 64 bytes — world-space transform
+    uint material_index;            //  4 bytes — index into MaterialBuffer SSBO
+    uint _padding[3];               // 12 bytes — align to 80 (multiple of 16)
 };
 
 /** PBR material data (std430, 80 bytes). */
@@ -72,16 +80,21 @@ layout(set = 0, binding = 2) readonly buffer MaterialBuffer {
     GPUMaterialData materials[];
 };
 
+layout(set = 0, binding = 3) readonly buffer InstanceBuffer {
+    GPUInstanceData instances[];
+};
+
 // ---- Set 1: Bindless arrays ----
 
 layout(set = 1, binding = 0) uniform sampler2D textures[];
 layout(set = 1, binding = 1) uniform samplerCube cubemaps[];
 
 // ---- Per-draw data (push constants) ----
+// Only used by shadow pass (cascade_index). Forward and depth prepass
+// read model + material_index from InstanceBuffer via gl_InstanceIndex.
 
 layout(push_constant) uniform PushConstants {
-    mat4 model;             // 64 bytes — vertex stage
-    uint material_index;    //  4 bytes — fragment stage
+    uint cascade_index;     //  4 bytes — shadow.vert cascade selection
 } pc;
 
 #endif // BINDINGS_GLSL
