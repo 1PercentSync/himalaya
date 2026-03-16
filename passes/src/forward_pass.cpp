@@ -173,28 +173,16 @@ namespace himalaya::passes {
             cmd.set_depth_write_enable(false);
             cmd.set_depth_compare_op(VK_COMPARE_OP_EQUAL);
 
-            // Draw visible opaque instances (zero-overdraw via EQUAL depth test).
+            // Draw visible opaque instances via instanced draw groups.
             // Transparent instances are skipped — EQUAL test rejects them since
             // they were not rendered in PrePass. Phase 7 Transparent Pass fixes this.
-            auto draw_instance = [&](const uint32_t idx) {
-                const auto &instance = ctx.mesh_instances[idx];
-                const auto &mesh = ctx.meshes[instance.mesh_id];
-                const auto &material = ctx.materials[instance.material_id];
+            auto draw_group = [&](const framework::MeshDrawGroup &group) {
+                const auto &mesh = ctx.meshes[group.mesh_id];
 
                 cmd.set_cull_mode(
-                    material.double_sided
+                    group.double_sided
                         ? VK_CULL_MODE_NONE
                         : VK_CULL_MODE_BACK_BIT);
-
-                const framework::PushConstantData pc{
-                    .model = instance.transform,
-                    .material_index = material.buffer_offset,
-                };
-                cmd.push_constants(
-                    pipeline_.layout,
-                    VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-                    &pc,
-                    sizeof(pc));
 
                 cmd.bind_vertex_buffer(
                     0,
@@ -202,11 +190,13 @@ namespace himalaya::passes {
                 cmd.bind_index_buffer(
                     rm_->get_buffer(mesh.index_buffer).buffer,
                     VK_INDEX_TYPE_UINT32);
-                cmd.draw_indexed(mesh.index_count);
+                cmd.draw_indexed(mesh.index_count, group.instance_count, 0, 0, group.first_instance);
             };
 
-            for (const auto idx : ctx.cull_result->visible_opaque_indices)
-                draw_instance(idx);
+            for (const auto &group : ctx.opaque_draw_groups)
+                draw_group(group);
+            for (const auto &group : ctx.mask_draw_groups)
+                draw_group(group);
 
             cmd.end_rendering();
         };
