@@ -25,7 +25,7 @@ layout(location = 2) in vec4 frag_tangent;
 layout(location = 0) out vec4 out_normal;
 
 void main() {
-    GPUMaterialData mat = materials[pc.material_index];
+    GPUMaterialData mat = materials[instances[gl_InstanceIndex].material_index];
 
     // Alpha test: discard fragments below cutoff
     float alpha = texture(textures[nonuniformEXT(mat.base_color_tex)], frag_uv0).a

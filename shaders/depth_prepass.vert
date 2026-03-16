@@ -33,11 +33,13 @@ layout(location = 2) out vec4 frag_tangent;
 invariant gl_Position;
 
 void main() {
-    vec4 world_pos = pc.model * vec4(in_position, 1.0);
+    mat4 model = instances[gl_InstanceIndex].model;
+
+    vec4 world_pos = model * vec4(in_position, 1.0);
     gl_Position = global.view_projection * world_pos;
 
     // Inverse-transpose handles non-uniform scale correctly.
-    mat3 normal_matrix = transpose(inverse(mat3(pc.model)));
+    mat3 normal_matrix = transpose(inverse(mat3(model)));
     frag_normal = normalize(normal_matrix * in_normal);
 
     frag_uv0 = in_uv0;
