@@ -281,10 +281,10 @@ namespace himalaya::app {
 
     // ---- Environment reload ----
 
-    void Renderer::reload_environment(const std::string &hdr_path) {
+    bool Renderer::reload_environment(const std::string &hdr_path) {
         // Caller guarantees GPU idle (vkQueueWaitIdle already called).
         ibl_.destroy();
-        ibl_.init(*ctx_, *resource_manager_, *descriptor_manager_, shader_compiler_, hdr_path);
+        return ibl_.init(*ctx_, *resource_manager_, *descriptor_manager_, shader_compiler_, hdr_path);
     }
 
     // ---- MSAA switching ----

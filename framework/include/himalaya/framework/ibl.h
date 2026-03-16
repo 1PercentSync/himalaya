@@ -56,8 +56,9 @@ namespace himalaya::framework {
          * @param dm       Descriptor manager for bindless cubemap/texture registration.
          * @param sc       Shader compiler for compute shader compilation.
          * @param hdr_path Filesystem path to an equirectangular .hdr environment map.
+         * @return true if the HDR file loaded successfully, false if fallback cubemaps were used.
          */
-        void init(rhi::Context &ctx,
+        bool init(rhi::Context &ctx,
                   rhi::ResourceManager &rm,
                   rhi::DescriptorManager &dm,
                   rhi::ShaderCompiler &sc,

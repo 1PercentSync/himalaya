@@ -167,7 +167,7 @@ namespace himalaya::app {
             ImGui::PopStyleColor();
             ImGui::SameLine();
             if (ImGui::SmallButton("X")) {
-                ctx.error_message.clear();
+                actions.error_dismissed = true;
             }
         }
 

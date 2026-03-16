@@ -83,18 +83,31 @@ namespace himalaya::app {
     void save_config(const AppConfig& config) {
         try {
             const auto path = config_file_path();
+            const auto tmp = path.parent_path() / "config.json.tmp";
 
-            nlohmann::json json;
-            json["scene_path"] = config.scene_path;
-            json["env_path"] = config.env_path;
+            // Write to temp file first
+            {
+                std::ofstream file(tmp);
+                if (!file.is_open()) {
+                    spdlog::warn("Failed to open temp config file for writing: {}", tmp.string());
+                    return;
+                }
 
-            std::ofstream file(path);
-            if (!file.is_open()) {
-                spdlog::warn("Failed to open config file for writing: {}", path.string());
+                nlohmann::json j;
+                j["scene_path"] = config.scene_path;
+                j["env_path"] = config.env_path;
+                file << j.dump(2);
+            }
+
+            // Atomic replace (rename is atomic on NTFS)
+            std::error_code ec;
+            std::filesystem::rename(tmp, path, ec);
+            if (ec) {
+                spdlog::warn("Failed to rename config file: {}", ec.message());
+                std::filesystem::remove(tmp, ec);
                 return;
             }
 
-            file << json.dump(2);
             spdlog::info("Saved config to {}", path.string());
         } catch (const std::exception& e) {
             spdlog::warn("Failed to save config: {}", e.what());

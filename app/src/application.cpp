@@ -121,7 +121,13 @@ namespace himalaya::app {
     void Application::switch_environment(const std::string &path) {
         vkQueueWaitIdle(context_.graphics_queue);
 
-        renderer_.reload_environment(path);
+        const bool ok = renderer_.reload_environment(path);
+
+        if (!ok && !path.empty()) {
+            error_message_ = "Failed to load HDR: " + path;
+        } else {
+            error_message_.clear();
+        }
 
         config_.env_path = path;
         save_config(config_);
@@ -271,6 +277,10 @@ namespace himalaya::app {
             },
         });
 
+        if (actions.error_dismissed) {
+            error_message_.clear();
+        }
+
         if (actions.vsync_toggled) {
             vsync_changed_ = true;
         }
@@ -281,6 +291,16 @@ namespace himalaya::app {
 
         if (actions.scene_load_requested) {
             switch_scene(actions.new_scene_path);
+
+            // Refresh scene data after switch — the old spans and cull indices
+            // are dangling because switch_scene() destroyed the previous scene.
+            const auto new_lights = scene_loader_.directional_lights();
+            scene_render_data_.mesh_instances = scene_loader_.mesh_instances();
+            scene_render_data_.directional_lights = disable_scene_lights_
+                                                        ? std::span<const framework::DirectionalLight>{}
+                                                        : new_lights;
+            cull_result_ = framework::cull_frustum(scene_render_data_,
+                                                   scene_loader_.material_instances());
         }
 
         if (actions.env_load_requested) {

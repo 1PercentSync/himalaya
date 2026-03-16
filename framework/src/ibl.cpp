@@ -28,7 +28,7 @@
 #include <vector>
 
 namespace himalaya::framework {
-    void IBL::init(rhi::Context &ctx,
+    bool IBL::init(rhi::Context &ctx,
                    rhi::ResourceManager &rm,
                    rhi::DescriptorManager &dm,
                    rhi::ShaderCompiler &sc,
@@ -41,8 +41,9 @@ namespace himalaya::framework {
         ctx.begin_immediate();
 
         auto [equirect, eq_width] = load_equirect(hdr_path);
+        const bool hdr_loaded = equirect.valid();
 
-        if (equirect.valid()) {
+        if (hdr_loaded) {
             // Normal path: equirect → cubemap → irradiance / prefiltered
             convert_equirect_to_cubemap(ctx, sc, equirect, eq_width, deferred);
             compute_irradiance(ctx, sc, deferred);
@@ -59,11 +60,12 @@ namespace himalaya::framework {
 
         // Safe to destroy after GPU completion (end_immediate does vkQueueWaitIdle)
         for (auto &fn: deferred) fn();
-        if (equirect.valid()) {
+        if (hdr_loaded) {
             rm_->destroy_image(equirect);
         }
 
         register_bindless_resources();
+        return hdr_loaded;
     }
 
     // -----------------------------------------------------------------------

@@ -153,8 +153,9 @@ namespace himalaya::app {
          * Empty or invalid path triggers IBL fallback (gray cubemaps).
          *
          * @param hdr_path Path to the new .hdr environment map.
+         * @return true if the HDR file loaded successfully, false if fallback was used.
          */
-        void reload_environment(const std::string &hdr_path);
+        bool reload_environment(const std::string &hdr_path);
 
         // --- Accessors ---
 

@@ -85,8 +85,8 @@ namespace himalaya::app {
 
         // --- Error display ---
 
-        /** @brief Error message to show in UI (empty = no error). Mutable for auto-dismiss. */
-        std::string& error_message;
+        /** @brief Error message to show in UI (empty = no error). */
+        const std::string& error_message;
 
         // --- Scene statistics (display) ---
 
@@ -125,6 +125,9 @@ namespace himalaya::app {
 
         /** @brief Path selected by the user (valid only when scene_load_requested is true). */
         std::string new_scene_path;
+
+        /** @brief True if the user dismissed the error banner. */
+        bool error_dismissed = false;
 
         /** @brief True if the user requested loading a new HDR environment. */
         bool env_load_requested = false;
