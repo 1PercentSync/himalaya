@@ -23,6 +23,15 @@ namespace himalaya::app {
     /** @brief Maximum directional lights the LightBuffer can hold. */
     constexpr uint32_t kMaxDirectionalLights = 4;
 
+    /**
+     * @brief Maximum instances the InstanceBuffer can hold.
+     *
+     * 65536 × 80 bytes = 5 MB per frame — trivial for modern GPUs.
+     * Covers any realistic scene complexity for CPU-driven draw submission.
+     * Scenes exceeding this should use GPU-driven indirect rendering (M3+).
+     */
+    constexpr uint32_t kMaxInstances = 65536;
+
     // ---- Init / Destroy ----
 
     void Renderer::init(rhi::Context &ctx,
@@ -163,6 +172,20 @@ namespace himalaya::app {
                 i, 1, light_buffers_[i], light_buffer_size);
         }
 
+        // --- InstanceBuffer SSBOs (per-frame, CpuToGpu, fixed upper bound) ---
+        constexpr auto instance_buffer_size = static_cast<uint64_t>(kMaxInstances) *
+                                              sizeof(framework::GPUInstanceData);
+        constexpr const char *kInstanceBufferNames[] = {"Instance SSBO [Frame 0]", "Instance SSBO [Frame 1]"};
+        static_assert(std::size(kInstanceBufferNames) == rhi::kMaxFramesInFlight);
+        for (uint32_t i = 0; i < rhi::kMaxFramesInFlight; ++i) {
+            instance_buffers_[i] = resource_manager_->create_buffer({
+                                                                        .size = instance_buffer_size,
+                                                                        .usage = rhi::BufferUsage::StorageBuffer,
+                                                                        .memory = rhi::MemoryUsage::CpuToGpu,
+                                                                    }, kInstanceBufferNames[i]);
+            descriptor_manager_->write_set0_buffer(i, 3, instance_buffers_[i], instance_buffer_size);
+        }
+
         // --- Default sampler ---
         default_sampler_ = resource_manager_->create_sampler({
                                                                  .mag_filter = rhi::Filter::Linear,
@@ -229,6 +252,9 @@ namespace himalaya::app {
             resource_manager_->destroy_buffer(ubo);
         }
         for (const auto buf: light_buffers_) {
+            resource_manager_->destroy_buffer(buf);
+        }
+        for (const auto buf: instance_buffers_) {
             resource_manager_->destroy_buffer(buf);
         }
 

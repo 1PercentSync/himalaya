@@ -235,6 +235,9 @@ namespace himalaya::app {
         /** @brief Per-frame LightBuffer SSBOs (CpuToGpu, one per frame in flight). */
         std::array<rhi::BufferHandle, rhi::kMaxFramesInFlight> light_buffers_{};
 
+        /** @brief Per-frame InstanceBuffer SSBOs (CpuToGpu, one per frame in flight). */
+        std::array<rhi::BufferHandle, rhi::kMaxFramesInFlight> instance_buffers_{};
+
         /** @brief Registered ImageHandles for swapchain images (one per swapchain image). */
         std::vector<rhi::ImageHandle> swapchain_image_handles_;
 
