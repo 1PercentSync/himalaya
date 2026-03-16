@@ -422,13 +422,21 @@ namespace himalaya::app {
 
         // --- Build instancing draw groups + fill InstanceBuffer ---
         {
-            // Sort visible opaque indices by mesh_id for grouping
+            // Sort visible opaque indices by (mesh_id, alpha_mode, double_sided)
+            // so that instances sharing the same mesh AND material properties
+            // are adjacent — each group has consistent cull mode and pipeline.
             sorted_opaque_indices_.assign(
                 input.cull_result.visible_opaque_indices.begin(),
                 input.cull_result.visible_opaque_indices.end());
             std::sort(sorted_opaque_indices_.begin(), sorted_opaque_indices_.end(),
                       [&](const uint32_t a, const uint32_t b) {
-                          return input.mesh_instances[a].mesh_id < input.mesh_instances[b].mesh_id;
+                          const auto &ia = input.mesh_instances[a];
+                          const auto &ib = input.mesh_instances[b];
+                          if (ia.mesh_id != ib.mesh_id) return ia.mesh_id < ib.mesh_id;
+                          const auto &ma = input.materials[ia.material_id];
+                          const auto &mb = input.materials[ib.material_id];
+                          if (ma.alpha_mode != mb.alpha_mode) return ma.alpha_mode < mb.alpha_mode;
+                          return ma.double_sided < mb.double_sided;
                       });
 
             opaque_draw_groups_.clear();
@@ -439,7 +447,7 @@ namespace himalaya::app {
                 inst_buf.allocation_info.pMappedData);
             uint32_t instance_offset = 0;
 
-            // Group consecutive same-mesh_id entries
+            // Group consecutive entries sharing (mesh_id, alpha_mode, double_sided)
             const auto count = static_cast<uint32_t>(sorted_opaque_indices_.size());
             uint32_t group_start = 0;
             while (group_start < count) {
@@ -447,14 +455,27 @@ namespace himalaya::app {
                 const uint32_t mesh_id = input.mesh_instances[first_idx].mesh_id;
                 const auto &material = input.materials[input.mesh_instances[first_idx].material_id];
 
-                // Find end of group (all same mesh_id)
+                // Find end of group (same mesh_id + alpha_mode + double_sided)
                 uint32_t group_end = group_start + 1;
-                while (group_end < count &&
-                       input.mesh_instances[sorted_opaque_indices_[group_end]].mesh_id == mesh_id) {
+                while (group_end < count) {
+                    const auto &inst_e = input.mesh_instances[sorted_opaque_indices_[group_end]];
+                    const auto &mat_e = input.materials[inst_e.material_id];
+                    if (inst_e.mesh_id != mesh_id ||
+                        mat_e.alpha_mode != material.alpha_mode ||
+                        mat_e.double_sided != material.double_sided) break;
                     ++group_end;
                 }
 
                 const uint32_t group_count = group_end - group_start;
+
+                // Guard against InstanceBuffer overflow
+                if (instance_offset + group_count > kMaxInstances) {
+                    spdlog::warn("InstanceBuffer overflow: {} instances exceed limit {}, "
+                                 "dropping remaining draw groups",
+                                 instance_offset + group_count, kMaxInstances);
+                    break;
+                }
+
                 const uint32_t group_first = instance_offset;
 
                 // Fill InstanceBuffer entries for this group
