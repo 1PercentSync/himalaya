@@ -9,6 +9,100 @@
 
 ## 实现步骤
 
+### 准备工作 A：测试场景
+
+- 补充适合 CSM 阴影测试的室外场景（Intel Sponza）— **已完成**
+
+---
+
+### 准备工作 B：Instancing
+
+> 大型场景 hundreds of unique mesh 被实例化为数千 instance。当前每个 visible instance 独立 draw call，密集区域数千 draw calls。
+> 瓶颈在 CPU 侧 draw call 提交开销而非 GPU 三角处理。Phase 4 引入 CSM shadow pass 后 draw call 进一步翻倍。
+> 同一 mesh 的所有 instance 共享同一 material（glTF primitive 级别绑定），instancing 无 state change 障碍。
+
+- Per-instance SSBO（Set 0, Binding 3）替代 push constant 传递 model matrix + material_index
+- Shader 通过 `gl_InstanceIndex` 索引 instance 数据，push constant 缩减为 `cascade_index`（4 bytes，shadow pass 用）
+- 剔除后按 mesh_id 分组构建 MeshDrawGroup 列表 + 填充 InstanceBuffer
+- 各 pass draw loop 改为 group iteration：bind VB/IB 一次 → `draw_indexed(instanceCount=N, firstInstance=offset)`
+- DepthPrePass opaque groups 和 mask groups 分别迭代
+- **验证**：密集场景 draw call 显著减少，渲染结果一致
+
+#### 设计要点
+
+Instancing 设计见 `milestone-1/m1-design-decisions.md`「Instancing」。
+
+关键设计：
+- CullResult 不变（仍输出 flat visible indices），分组逻辑在 Renderer 侧——不同消费者可按需分组
+- InstanceBuffer 使用 CpuToGpu 内存 per-frame 写入，固定大小（场景最大 instance 数），无需每帧重建 GPU buffer
+- `vkCmdDrawIndexed` 的 `firstInstance` 参数作为 instance SSBO 的起始偏移，无需额外 push constant
+- 透明物体（Blend）不做 instancing（数量少且需要 back-to-front 排序）
+- 此变更提前了原计划阶段六的 per-instance SSBO 迁移，同时实现了 M3 规划的 Instancing
+
+---
+
+### 准备工作 C：运行时场景/HDR 加载 + 配置持久化
+
+> 退役 CLI11 命令行参数，改为 ImGui 运行时选择 glTF 场景和 HDR 环境贴图。
+> 配置持久化到 `%LOCALAPPDATA%\himalaya\config.json`，重启恢复上次文件。
+> 加载失败时优雅降级：scene 失败 = 空场景仅 skybox，HDR 失败 = 灰色 fallback cubemap，两者独立。
+
+- 移除 CLI11 依赖，添加 nlohmann/json（vcpkg）
+- CMakeLists.txt 移除 scene/HDR 资产拷贝到 build 目录的规则
+- `app/config.h/cpp` 新增 AppConfig + JSON load/save
+- 启动流程：读配置 → 分别尝试加载 scene 和 HDR → 部分失败时另一项正常加载
+- `switch_scene()` / `switch_environment()`：`vkQueueWaitIdle` → destroy → load → 更新 descriptors → 保存配置
+- DebugUI：Scene/Environment 面板显示当前路径 + "Load..." 按钮（Windows `GetOpenFileNameW` 原生对话框）
+- 加载失败时 DebugUI 显示错误提示，不 abort
+- **验证**：运行时切换正常，配置持久化，重启恢复，文件丢失时 fallback 正确
+
+#### 设计要点
+
+运行时加载策略见 `milestone-1/m1-design-decisions.md`「运行时场景/HDR 加载」。
+
+关键设计：
+- Scene 和 HDR 独立加载/失败——不因一个失败影响另一个
+- Windows 原生文件对话框（`GetOpenFileNameW`），零额外 UI 依赖
+- 配置放在 `%LOCALAPPDATA%\himalaya\`（用户数据标准目录），不放在可执行文件旁
+- `switch_scene()` 复用 MSAA 切换的 `vkQueueWaitIdle` 模式，SceneLoader 已有 destroy + load
+- 空场景 = 0 mesh instances + 0 directional lights，skybox 正常渲染（如果 HDR 成功）
+
+---
+
+### 准备工作 D：缓存基础设施 + BC 纹理压缩 + IBL 缓存
+
+> 三个子系统共享同一缓存模块：`framework/cache.h`（目录解析 + 内容哈希 + 路径拼接）。
+> 纹理压缩解决大型场景 VRAM 问题，IBL 缓存解决启动慢问题。
+
+**D-1：缓存模块** — `framework/cache.h/cpp`，提供 `cache_root()`（`%TEMP%\himalaya\`）、`content_hash()`（XXH3_128）、`cache_path(category, hash, ext)` 三个共享工具函数。所有缓存消费者（纹理、IBL）通过此模块统一管理缓存路径和失效策略。
+
+**D-2：BC 纹理压缩 + KTX2 缓存** — 首次加载时 CPU 端 BC 压缩并缓存为 KTX2，后续直接加载 BC 数据：
+- bc7enc（源文件集成）做 BC7/BC5 压缩，libktx（vcpkg）做 KTX2 读写，stb_image_resize2 做 CPU mip 生成
+- 法线 → BC5_UNORM（2 通道专用），其他 → BC7_SRGB / BC7_UNORM
+- 非 4 对齐纹理 resize 到 4 的倍数，CPU mip 生成替代 GPU blit
+- 纹理级并行压缩（std::async），缓存路径 `%TEMP%\himalaya\textures\<hash>.ktx2`
+- **验证**：纹理 VRAM 显著降低（RGBA8 → BC 约 4:1 压缩比）
+
+**D-3：IBL 缓存** — 首次 GPU 预计算后 readback 并缓存为 KTX2，后续直接加载：
+- GPU → CPU readback（staging buffer + `vkCmdCopyImageToBuffer`）读回 4 个 IBL 产物
+- 缓存为 KTX2 cubemap（skybox / irradiance / prefiltered）+ KTX2 2D（BRDF LUT）
+- 缓存路径 `%TEMP%\himalaya\ibl\<hash>.ktx2`，BRDF LUT 使用固定 key（与 HDR 无关）
+- **验证**：后续启动秒级加载，IBL 渲染结果一致
+
+#### 设计要点
+
+缓存基础设施和纹理压缩策略见 `milestone-1/m1-design-decisions.md`「缓存基础设施」「纹理压缩与缓存」「IBL 缓存」。
+
+关键设计：
+- 缓存模块是纯工具层，不知道具体缓存格式——消费者各自处理序列化
+- 缓存放在 `%TEMP%`（Windows Disk Cleanup / Storage Sense 可自动清理），缓存丢了就重算
+- XXH3_128 哈希：极快（>10 GB/s）、低碰撞、128 位做文件名足够
+- BC5 法线质量优于 BC7（2 通道专用编码），shader 重建 `Z = sqrt(1 - R² - G²)`
+- IBL readback 在 immediate scope 内一次性完成，后续启动跳过全部 GPU compute
+- BRDF LUT 与环境无关，永久缓存（固定 key），更换 HDR 时只重算 3 个 cubemap
+
+---
+
 #### 依赖关系
 
 ```

@@ -257,7 +257,7 @@ Lens Flare（基于 Bloom 降采样）
 
 ### 实例化
 
-Instancing
+CPU 侧 mesh_id 分组 + per-instance SSBO + instanced draw（M1 阶段四准备工作引入）
 
 ### 不采用
 
@@ -269,7 +269,12 @@ GPU-Driven Rendering、Mesh Shader、HLOD
 
 ### 纹理格式
 
-ASTC（主）+ BC（回退），构建时同时生成两套。POM 纳入计划。
+| 演进 | 方案 |
+|------|------|
+| Pass 1 | 运行时 BC 压缩 + KTX2 缓存（BC7 通用 + BC5 法线，首次 CPU 压缩后缓存） |
+| Pass 2 | 离线预处理管线（构建时生成 KTX2，运行时直接加载） |
+
+POM 纳入计划。
 
 ### Virtual Texturing
 

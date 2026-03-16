@@ -46,7 +46,7 @@
 
 **产出：** 能加载一个 glTF 场景，用基础 Lit shader（Lambert + 从 LightBuffer 读取方向光）渲染出来，相机能移动，ImGui 能显示。画面上就是一个有纹理和基础光照的静态场景。
 
-**暂不实现：** BC 纹理压缩（阶段二直接加载 JPEG/PNG）、RG transient 资源管理（阶段三引入）、RG temporal 资源管理（阶段五引入）、Pass 抽象基类（阶段三引入）。
+**暂不实现：** RG transient 资源管理（阶段三引入）、RG temporal 资源管理（阶段五引入）、Pass 抽象基类（阶段三引入）。BC 纹理压缩在阶段四准备工作引入（运行时压缩 + KTX2 缓存）。
 
 > 详细步骤见 `../current-phase.md`
 
@@ -69,6 +69,9 @@
 
 ## 阶段四：阴影
 
+- Instancing：per-instance SSBO + mesh_id 分组 + instanced draw，push constant 72→4 bytes
+- 运行时场景/HDR 加载：ImGui + Windows 原生对话框 + JSON 配置持久化，CLI11 退役
+- 缓存基础设施 + BC 纹理压缩 + IBL 缓存：BC7 + BC5 + KTX2 缓存 + IBL readback 缓存
 - RenderFeatures 运行时开关机制（为后续可选效果奠基）
 - 直接实现 CSM（cascade=1 起步，不经单张中间步骤，4 cascade 2048²，PSSM 分割、texel snapping）
 - PCF 软阴影 + cascade blend + triple bias（constant + slope + normal offset）

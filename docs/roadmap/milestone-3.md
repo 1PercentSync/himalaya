@@ -34,7 +34,7 @@
 |------|------|
 | Clustered Forward | 从 Tiled 升级，沿深度方向切分为 3D Cluster，光源数量增长后的性能保障 |
 | Hardware Occlusion Query | 保守两趟策略，零瑕疵的遮挡剔除。复用深度 PrePass，室内多房间场景收益大 |
-| Instancing | 大量重复物体（树木、道具）的 drawcall 优化 |
+| ~~Instancing~~ | ~~已提前到 M1 阶段四准备工作实现（CPU 侧 mesh_id 分组 + per-instance SSBO）~~ |
 | 离散 LOD + dithering cross-fade | 远处物体减面，大场景性能保障 |
 | Shadow Atlas | 多光源阴影的统一管理和调度，按重要性分配分辨率、按需更新 |
 

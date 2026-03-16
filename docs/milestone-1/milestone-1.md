@@ -34,6 +34,7 @@
 
 - Forward+（暴力 Forward，无 Light Culling）
 - 视锥剔除（CPU 端）
+- Instancing（CPU 侧 mesh_id 分组 + per-instance SSBO + instanced draw）
 
 ### 材质
 
@@ -87,8 +88,9 @@
 - 动态光源阴影
 - Motion Vectors / Motion Blur / DOF
 - 体积雾 / God Rays
-- LOD / 遮挡剔除 / Instancing
+- LOD / 遮挡剔除
 - 粒子系统
 - 地形 / 水体
 - SSS
 - 纹理 Streaming
+- 离线纹理预处理（M1 使用运行时 BC 压缩 + KTX2 缓存）
