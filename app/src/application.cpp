@@ -33,8 +33,11 @@ namespace himalaya::app {
 
     // ---- Init / Destroy ----
 
-    void Application::init(const AppConfig &config) {
+    void Application::init() {
         spdlog::set_level(kLogLevel);
+
+        const auto config = load_config();
+
         glfwInit();
         glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 
@@ -71,11 +74,13 @@ namespace himalaya::app {
                        config.env_path);
 
         // --- Scene loading (uses Renderer's default resources) ---
-        context_.begin_immediate();
-        scene_loader_.load(config.scene_path, resource_manager_, descriptor_manager_,
-                           renderer_.material_system(), renderer_.default_textures(),
-                           renderer_.default_sampler());
-        context_.end_immediate();
+        if (!config.scene_path.empty()) {
+            context_.begin_immediate();
+            scene_loader_.load(config.scene_path, resource_manager_, descriptor_manager_,
+                               renderer_.material_system(), renderer_.default_textures(),
+                               renderer_.default_sampler());
+            context_.end_immediate();
+        }
     }
 
     void Application::destroy() {
