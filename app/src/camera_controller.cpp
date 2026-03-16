@@ -9,6 +9,9 @@
 #include <algorithm>
 
 namespace himalaya::app {
+    /** @brief Sprint speed multiplier when Shift is held. */
+    constexpr float kSprintMultiplier = 3.0f;
+
     void CameraController::init(GLFWwindow *window, framework::Camera *camera) {
         window_ = window;
         camera_ = camera;
@@ -68,10 +71,13 @@ namespace himalaya::app {
             if (glfwGetKey(window_, GLFW_KEY_D) == GLFW_PRESS) move += right;
             if (glfwGetKey(window_, GLFW_KEY_A) == GLFW_PRESS) move -= right;
             if (glfwGetKey(window_, GLFW_KEY_SPACE) == GLFW_PRESS) move += world_up;
-            if (glfwGetKey(window_, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS) move -= world_up;
+            if (glfwGetKey(window_, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS) move -= world_up;
 
             if (glm::dot(move, move) > 0.0f) {
-                camera_->position += glm::normalize(move) * move_speed * delta_time;
+                const float speed = glfwGetKey(window_, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS
+                                        ? move_speed * kSprintMultiplier
+                                        : move_speed;
+                camera_->position += glm::normalize(move) * speed * delta_time;
             }
         }
 

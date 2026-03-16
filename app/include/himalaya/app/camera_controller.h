@@ -16,8 +16,9 @@ namespace himalaya::app {
      * @brief Free-roaming camera controller with WASD movement and mouse look.
      *
      * Hold right mouse button to rotate the camera. WASD moves along the
-     * camera's forward/right directions, Space/Shift moves along world Y.
-     * Call update() once per frame after glfwPollEvents().
+     * camera's forward/right directions, Space ascends, Ctrl descends.
+     * Hold Shift to sprint (3x speed). Call update() once per frame
+     * after glfwPollEvents().
      */
     class CameraController {
     public:
