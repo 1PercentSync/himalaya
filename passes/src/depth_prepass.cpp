@@ -201,26 +201,14 @@ namespace himalaya::passes {
             cmd.set_depth_write_enable(true);
             cmd.set_depth_compare_op(VK_COMPARE_OP_GREATER); // Reverse-Z
 
-            // Draw helper: push constants, bind buffers, draw
-            auto draw_instance = [&](const rhi::Pipeline &pipeline, const uint32_t idx) {
-                const auto &instance = ctx.mesh_instances[idx];
-                const auto &mesh = ctx.meshes[instance.mesh_id];
-                const auto &material = ctx.materials[instance.material_id];
+            // Draw helper: bind buffers, instanced draw
+            auto draw_group = [&](const framework::MeshDrawGroup &group) {
+                const auto &mesh = ctx.meshes[group.mesh_id];
 
                 cmd.set_cull_mode(
-                    material.double_sided
+                    group.double_sided
                         ? VK_CULL_MODE_NONE
                         : VK_CULL_MODE_BACK_BIT);
-
-                const framework::PushConstantData pc{
-                    .model = instance.transform,
-                    .material_index = material.buffer_offset,
-                };
-                cmd.push_constants(
-                    pipeline.layout,
-                    VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-                    &pc,
-                    sizeof(pc));
 
                 cmd.bind_vertex_buffer(
                     0,
@@ -228,7 +216,7 @@ namespace himalaya::passes {
                 cmd.bind_index_buffer(
                     rm_->get_buffer(mesh.index_buffer).buffer,
                     VK_INDEX_TYPE_UINT32);
-                cmd.draw_indexed(mesh.index_count);
+                cmd.draw_indexed(mesh.index_count, group.instance_count, 0, 0, group.first_instance);
             };
 
             // Bind common descriptor sets
@@ -241,23 +229,15 @@ namespace himalaya::passes {
             cmd.bind_pipeline(opaque_pipeline_);
             cmd.bind_descriptor_sets(opaque_pipeline_.layout, 0, sets, 2);
 
-            for (const auto idx: ctx.cull_result->visible_opaque_indices) {
-                const auto &material = ctx.materials[ctx.mesh_instances[idx].material_id];
-                if (material.alpha_mode == framework::AlphaMode::Opaque) {
-                    draw_instance(opaque_pipeline_, idx);
-                }
-            }
+            for (const auto &group : ctx.opaque_draw_groups)
+                draw_group(group);
 
             // --- Mask batch second (uses existing depth to reject occluded fragments) ---
             cmd.bind_pipeline(mask_pipeline_);
             cmd.bind_descriptor_sets(mask_pipeline_.layout, 0, sets, 2);
 
-            for (const auto idx: ctx.cull_result->visible_opaque_indices) {
-                const auto &material = ctx.materials[ctx.mesh_instances[idx].material_id];
-                if (material.alpha_mode == framework::AlphaMode::Mask) {
-                    draw_instance(mask_pipeline_, idx);
-                }
-            }
+            for (const auto &group : ctx.mask_draw_groups)
+                draw_group(group);
 
             cmd.end_rendering();
         };
