@@ -450,7 +450,8 @@ class IBL {
 public:
     /// 加载 .hdr 文件，执行全部预计算（equirect → cubemap → irradiance/prefiltered/BRDF LUT），
     /// 注册产物到 Set 1 bindless 数组。在 begin_immediate() / end_immediate() scope 内执行。
-    void init(rhi::Context& ctx, rhi::ResourceManager& rm,
+    /// 返回 true 表示 HDR 加载成功，false 表示使用了 fallback cubemap。
+    bool init(rhi::Context& ctx, rhi::ResourceManager& rm,
               rhi::DescriptorManager& dm, rhi::ShaderCompiler& sc,
               const std::string& hdr_path);
 
