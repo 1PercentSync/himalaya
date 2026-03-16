@@ -10,31 +10,31 @@
 
 ## 准备工作 B：Instancing
 
-- [ ] `framework/scene_data.h` 新增 `GPUInstanceData`（model mat4 + material_index uint, 80 bytes std430）和 `MeshDrawGroup`（mesh_id, first_instance, instance_count, double_sided）
-- [ ] `shaders/common/bindings.glsl` 新增 InstanceBuffer SSBO（Set 0, Binding 3），PushConstantData 缩减为 `cascade_index`（4 bytes）
-- [ ] `shaders/forward.vert` model 和 material_index 改为从 `instances[gl_InstanceIndex]` 读取
-- [ ] `shaders/forward.frag` material_index 改为从 `instances[gl_InstanceIndex]` 读取
-- [ ] `shaders/depth_prepass.vert` 同上
-- [ ] `shaders/depth_prepass.frag` 同上
-- [ ] `shaders/depth_prepass_masked.frag` 同上
-- [ ] `rhi/descriptors.h/cpp` Set 0 layout 新增 Binding 3（InstanceBuffer SSBO）
-- [ ] `app/renderer.h/cpp` 新增 per-frame InstanceBuffer（CpuToGpu, 固定大小），pipeline layout 更新（push constant 72→4 bytes）
-- [ ] `app/renderer.cpp` render() 新增 post-cull 分组逻辑：visible indices 按 (mesh_id, alpha_mode, double_sided) 排序 → 构建 MeshDrawGroup 列表 + 填充 InstanceBuffer（含 overflow guard）
-- [ ] `passes/forward_pass.cpp` draw loop 改为 MeshDrawGroup iteration + `draw_indexed(instanceCount=N, firstInstance=offset)`
-- [ ] `passes/depth_prepass.cpp` draw loop 改为 MeshDrawGroup iteration（opaque groups + mask groups 分别迭代）
-- [ ] 验证：密集场景 draw call 显著减少，渲染结果与 instancing 前一致，无 validation 报错
+- [x] `framework/scene_data.h` 新增 `GPUInstanceData`（model mat4 + material_index uint, 80 bytes std430）和 `MeshDrawGroup`（mesh_id, first_instance, instance_count, double_sided）
+- [x] `shaders/common/bindings.glsl` 新增 InstanceBuffer SSBO（Set 0, Binding 3），PushConstantData 缩减为 `cascade_index`（4 bytes）
+- [x] `shaders/forward.vert` model 和 material_index 改为从 `instances[gl_InstanceIndex]` 读取
+- [x] `shaders/forward.frag` material_index 改为从 `instances[gl_InstanceIndex]` 读取
+- [x] `shaders/depth_prepass.vert` 同上
+- [x] `shaders/depth_prepass.frag` 同上
+- [x] `shaders/depth_prepass_masked.frag` 同上
+- [x] `rhi/descriptors.h/cpp` Set 0 layout 新增 Binding 3（InstanceBuffer SSBO）
+- [x] `app/renderer.h/cpp` 新增 per-frame InstanceBuffer（CpuToGpu, 固定大小），pipeline layout 更新（push constant 72→4 bytes）
+- [x] `app/renderer.cpp` render() 新增 post-cull 分组逻辑：visible indices 按 (mesh_id, alpha_mode, double_sided) 排序 → 构建 MeshDrawGroup 列表 + 填充 InstanceBuffer（含 overflow guard）
+- [x] `passes/forward_pass.cpp` draw loop 改为 MeshDrawGroup iteration + `draw_indexed(instanceCount=N, firstInstance=offset)`
+- [x] `passes/depth_prepass.cpp` draw loop 改为 MeshDrawGroup iteration（opaque groups + mask groups 分别迭代）
+- [x] 验证：密集场景 draw call 显著减少，渲染结果与 instancing 前一致，无 validation 报错
 
 ## 准备工作 C：运行时场景/HDR 加载 + 配置持久化
 
-- [ ] vcpkg.json + CMakeLists.txt 移除 CLI11，添加 nlohmann/json（需用户在 CLion 中确认构建配置）
-- [ ] CMakeLists.txt 移除 scene/HDR 资产拷贝到 build 目录的规则
-- [ ] `app/config.h/cpp` 新增 AppConfig 结构体（scene_path + env_path）+ JSON load/save（`%LOCALAPPDATA%\himalaya\config.json`）
-- [ ] `app/application.h/cpp` 移除 CLI11 命令行参数解析，改为读取 AppConfig
-- [ ] `app/application.cpp` 启动流程：读配置 → 分别尝试加载 scene/HDR → 部分失败时另一项正常加载（scene 失败 = 空场景仅 skybox，HDR 失败 = 灰色 fallback cubemap）
-- [ ] `app/application.cpp` 新增 `switch_scene(path)` / `switch_environment(path)`：`vkQueueWaitIdle` → destroy → load → 更新 descriptors → 保存配置
-- [ ] `app/debug_ui.cpp` 新增 Scene 面板：当前 scene path 显示 + "Load Scene..." 按钮（Windows `GetOpenFileNameW` 对话框，过滤 .gltf/.glb）
-- [ ] `app/debug_ui.cpp` 新增 Environment 面板：当前 HDR path 显示 + "Load HDR..." 按钮（过滤 .hdr）
-- [ ] 加载失败时 DebugUI 显示错误提示，不 abort
+- [x] vcpkg.json + CMakeLists.txt 移除 CLI11，添加 nlohmann/json（需用户在 CLion 中确认构建配置）
+- [x] CMakeLists.txt 移除 scene/HDR 资产拷贝到 build 目录的规则
+- [x] `app/config.h/cpp` 新增 AppConfig 结构体（scene_path + env_path）+ JSON load/save（`%LOCALAPPDATA%\himalaya\config.json`）
+- [x] `app/application.h/cpp` 移除 CLI11 命令行参数解析，改为读取 AppConfig
+- [x] `app/application.cpp` 启动流程：读配置 → 分别尝试加载 scene/HDR → 部分失败时另一项正常加载（scene 失败 = 空场景仅 skybox，HDR 失败 = 灰色 fallback cubemap）
+- [x] `app/application.cpp` 新增 `switch_scene(path)` / `switch_environment(path)`：`vkQueueWaitIdle` → destroy → load → 更新 descriptors → 保存配置
+- [x] `app/debug_ui.cpp` 新增 Scene 面板：当前 scene path 显示 + "Load Scene..." 按钮（Windows `GetOpenFileNameW` 对话框，过滤 .gltf/.glb）
+- [x] `app/debug_ui.cpp` 新增 Environment 面板：当前 HDR path 显示 + "Load HDR..." 按钮（过滤 .hdr）
+- [x] 加载失败时 DebugUI 显示错误提示，不 abort
 - [ ] 验证：运行时切换 scene/HDR 正常，配置持久化，重启后恢复上次文件，文件丢失时 fallback 正确
 
 ## 准备工作 D：缓存基础设施 + BC 纹理压缩 + IBL 缓存
