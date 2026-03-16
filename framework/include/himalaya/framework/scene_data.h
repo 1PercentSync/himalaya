@@ -149,14 +149,43 @@ namespace himalaya::framework {
     };
 
     /**
+     * @brief Per-instance GPU data (Set 0, Binding 3 SSBO element).
+     *
+     * std430 layout, 80 bytes per element, aligned to 16.
+     * Shader reads via instances[gl_InstanceIndex]. The vkCmdDrawIndexed
+     * firstInstance parameter sets the SSBO base offset for each draw group.
+     */
+    struct GPUInstanceData {
+        glm::mat4 model; ///< 64 bytes — world-space transform
+        uint32_t material_index; ///<  4 bytes — index into MaterialBuffer SSBO
+        uint32_t _padding[3]{}; ///< 12 bytes — align to 80 (multiple of 16)
+    };
+
+    /**
      * @brief Per-draw push constant data.
      *
-     * 68 bytes, within the 128-byte minimum guarantee.
-     * Sent via vkCmdPushConstants for each draw call.
+     * 4 bytes. Only used by shadow pass (cascade_index); forward and
+     * depth prepass do not push constants (model + material_index moved
+     * to InstanceBuffer SSBO).
      */
     struct PushConstantData {
-        glm::mat4 model; ///< 64 bytes — vertex shader
-        uint32_t material_index; ///<  4 bytes — fragment shader
+        uint32_t cascade_index; ///< 4 bytes — shadow.vert cascade selection
+    };
+
+    // ---- CPU-side Draw Grouping ----
+
+    /**
+     * @brief A group of instances sharing the same mesh, for instanced draw.
+     *
+     * CPU-only — not uploaded to GPU. Built each frame by sorting visible
+     * opaque indices by mesh_id after culling. Transparent objects (Blend)
+     * are not grouped (they need back-to-front ordering).
+     */
+    struct MeshDrawGroup {
+        uint32_t mesh_id; ///< Which mesh resource to bind (VB/IB)
+        uint32_t first_instance; ///< InstanceBuffer SSBO offset (firstInstance param)
+        uint32_t instance_count; ///< Number of instances in this group
+        bool double_sided; ///< Cached from material — controls face culling
     };
 
     // ---- GPU struct size guards ----
@@ -164,5 +193,6 @@ namespace himalaya::framework {
     // corrupts GPU reads, so catch it at compile time.
     static_assert(sizeof(GlobalUniformData) == 336, "GlobalUniformData must be 336 bytes (std140)");
     static_assert(sizeof(GPUDirectionalLight) == 32, "GPUDirectionalLight must be 32 bytes (std430)");
-    static_assert(sizeof(PushConstantData) == 68, "PushConstantData must be 68 bytes");
+    static_assert(sizeof(GPUInstanceData) == 80, "GPUInstanceData must be 80 bytes (std430)");
+    static_assert(sizeof(PushConstantData) == 4, "PushConstantData must be 4 bytes");
 } // namespace himalaya::framework
