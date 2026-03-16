@@ -2,13 +2,15 @@
  * @file bindings.glsl
  * @brief Global binding layout shared by all shaders.
  *
- * Defines Set 0 (per-frame global data), Set 1 (bindless textures),
- * and push constants. Must match the C++ side data structures exactly:
+ * Defines Set 0 (per-frame global data) and Set 1 (bindless textures).
+ * Must match the C++ side data structures exactly:
  * - GlobalUniformData       (scene_data.h)
  * - GPUDirectionalLight     (scene_data.h)
  * - GPUMaterialData         (material_system.h)
  * - GPUInstanceData         (scene_data.h)
- * - PushConstantData        (scene_data.h)
+ *
+ * Push constants are pass-specific and declared in the shaders that
+ * use them (e.g. shadow.vert), not here.
  */
 
 #ifndef BINDINGS_GLSL
@@ -88,13 +90,5 @@ layout(set = 0, binding = 3) readonly buffer InstanceBuffer {
 
 layout(set = 1, binding = 0) uniform sampler2D textures[];
 layout(set = 1, binding = 1) uniform samplerCube cubemaps[];
-
-// ---- Per-draw data (push constants) ----
-// Only used by shadow pass (cascade_index). Forward and depth prepass
-// read model + material_index from InstanceBuffer via gl_InstanceIndex.
-
-layout(push_constant) uniform PushConstants {
-    uint cascade_index;     //  4 bytes — shadow.vert cascade selection
-} pc;
 
 #endif // BINDINGS_GLSL

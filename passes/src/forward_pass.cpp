@@ -84,14 +84,6 @@ namespace himalaya::passes {
         const auto set_layouts = dm_->get_global_set_layouts();
         desc.descriptor_set_layouts = {set_layouts.begin(), set_layouts.end()};
 
-        desc.push_constant_ranges = {
-            {
-                .stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-                .offset = 0,
-                .size = sizeof(framework::PushConstantData),
-            },
-        };
-
         pipeline_ = rhi::create_graphics_pipeline(ctx_->device, desc);
 
         vkDestroyShaderModule(ctx_->device, frag_module, nullptr);

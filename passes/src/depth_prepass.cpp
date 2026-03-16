@@ -89,13 +89,6 @@ namespace himalaya::passes {
             desc.vertex_bindings = {binding};
             desc.vertex_attributes = {attributes.begin(), attributes.end()};
             desc.descriptor_set_layouts = {set_layouts.begin(), set_layouts.end()};
-            desc.push_constant_ranges = {
-                {
-                    .stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-                    .offset = 0,
-                    .size = sizeof(framework::PushConstantData),
-                },
-            };
             return desc;
         };
 
