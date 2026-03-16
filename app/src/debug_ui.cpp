@@ -245,6 +245,33 @@ namespace himalaya::app {
                         stats.draw_calls, stats.rendered_triangles);
         }
 
+        // Environment section
+        ImGui::Separator();
+        if (ImGui::CollapsingHeader("Environment", ImGuiTreeNodeFlags_DefaultOpen)) {
+            if (ctx.env_path.empty()) {
+                ImGui::TextDisabled("No HDR loaded (fallback)");
+            } else {
+                const auto filename = std::filesystem::path(ctx.env_path).filename().string();
+                ImGui::Text("HDR: %s", filename.c_str());
+                if (ImGui::IsItemHovered()) {
+                    ImGui::SetTooltip("%s", ctx.env_path.c_str());
+                }
+            }
+
+#ifdef _WIN32
+            ImGui::SameLine();
+            if (ImGui::Button("Load HDR...")) {
+                auto path = open_file_dialog(
+                    L"HDR Files (*.hdr)\0*.hdr\0All Files (*.*)\0*.*\0",
+                    L"Load HDR Environment");
+                if (!path.empty()) {
+                    actions.env_load_requested = true;
+                    actions.new_env_path = std::move(path);
+                }
+            }
+#endif
+        }
+
         // Lighting section
         ImGui::Separator();
         if (ImGui::CollapsingHeader("Lighting", ImGuiTreeNodeFlags_DefaultOpen)) {
