@@ -22,6 +22,7 @@ layout(location = 0) in vec3 frag_world_pos;
 layout(location = 1) in vec3 frag_normal;
 layout(location = 2) in vec2 frag_uv0;
 layout(location = 3) in vec4 frag_tangent;
+layout(location = 4) flat in uint frag_material_index;
 
 layout(location = 0) out vec4 out_color;
 
@@ -31,7 +32,7 @@ vec3 rotate_y(vec3 d, float s, float c) {
 }
 
 void main() {
-    GPUMaterialData mat = materials[instances[gl_InstanceIndex].material_index];
+    GPUMaterialData mat = materials[frag_material_index];
 
     // Base color
     vec4 base_color = texture(textures[nonuniformEXT(mat.base_color_tex)], frag_uv0)

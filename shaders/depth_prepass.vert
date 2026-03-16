@@ -28,6 +28,7 @@ layout(location = 4) in vec2 in_uv1;
 layout(location = 0) out vec3 frag_normal;
 layout(location = 1) out vec2 frag_uv0;
 layout(location = 2) out vec4 frag_tangent;
+layout(location = 3) flat out uint frag_material_index;
 
 // Guarantee bit-identical gl_Position with forward.vert for EQUAL depth test
 invariant gl_Position;
@@ -46,4 +47,6 @@ void main() {
 
     // Tangent uses the same normal matrix; preserve handedness in w
     frag_tangent = vec4(normalize(normal_matrix * in_tangent.xyz), in_tangent.w);
+
+    frag_material_index = instances[gl_InstanceIndex].material_index;
 }
