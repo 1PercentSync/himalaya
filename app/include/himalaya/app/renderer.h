@@ -159,6 +159,9 @@ namespace himalaya::app {
         /** @brief Returns the material system for SSBO management. */
         framework::MaterialSystem &material_system();
 
+        /** @brief Returns the number of instanced draw calls from the last frame. */
+        [[nodiscard]] uint32_t last_draw_call_count() const;
+
     private:
         // --- Subsystem references (non-owning, set during init) ---
 

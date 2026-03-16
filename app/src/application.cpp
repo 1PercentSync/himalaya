@@ -212,7 +212,7 @@ namespace himalaya::app {
                 .visible_opaque = visible_opaque,
                 .visible_transparent = visible_transparent,
                 .culled = total_instances - visible_opaque - visible_transparent,
-                .draw_calls = visible_opaque + visible_transparent,
+                .draw_calls = renderer_.last_draw_call_count(),
                 .rendered_triangles = rendered_triangles,
             },
         });

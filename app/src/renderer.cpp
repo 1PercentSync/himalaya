@@ -605,6 +605,10 @@ namespace himalaya::app {
         return material_system_;
     }
 
+    uint32_t Renderer::last_draw_call_count() const {
+        return static_cast<uint32_t>(opaque_draw_groups_.size() + mask_draw_groups_.size());
+    }
+
     // ---- HDR color descriptor update ----
 
     void Renderer::update_hdr_color_descriptor() const {
