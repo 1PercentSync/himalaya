@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段四 — 阴影
-- **进度**：准备工作 A/B/C 完成，准备工作 D 构建配置和文档已完成（xxHash vcpkg + 自写 KTX2 方案确定），D-1 代码待实现
+- **进度**：准备工作 A/B/C 完成，准备工作 D-1 第一小项（xxHash 依赖）完成，剩余 D-1 代码待实现
 
 ### 下一个任务
 
-准备工作 D-1 第一小项：vcpkg.json + CMakeLists.txt 添加 xxHash 依赖（已完成，待用户在 CLion 中确认构建）。
+准备工作 D-1 第二小项：`rhi/types.h` Format 枚举新增 BC 格式 + `from_vk_format()` + 格式工具函数。
 
 ---
 
