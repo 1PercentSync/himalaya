@@ -171,7 +171,7 @@ namespace himalaya::app {
         /** @brief Returns the material system for SSBO management. */
         framework::MaterialSystem &material_system();
 
-        /** @brief Returns the number of instanced draw calls from the last frame. */
+        /** @brief Returns the total GPU draw calls (vkCmdDrawIndexed) from the last frame. */
         [[nodiscard]] uint32_t last_draw_call_count() const;
 
     private:
@@ -267,6 +267,9 @@ namespace himalaya::app {
 
         /** @brief Mask draw groups built from sorted indices (AlphaMode::Mask). */
         std::vector<framework::MeshDrawGroup> mask_draw_groups_;
+
+        /** @brief Total vkCmdDrawIndexed calls from the last frame (across all scene passes). */
+        uint32_t draw_call_count_ = 0;
 
         // --- Private helpers ---
 

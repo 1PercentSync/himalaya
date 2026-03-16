@@ -513,6 +513,12 @@ namespace himalaya::app {
             }
         }
 
+        // Total scene draw calls: each draw group is issued once per scene pass
+        // (currently DepthPrePass + ForwardPass = 2 passes).
+        const auto scene_draw_groups = static_cast<uint32_t>(
+            opaque_draw_groups_.size() + mask_draw_groups_.size());
+        draw_call_count_ = scene_draw_groups * 2; // prepass + forward
+
         // --- Build render graph ---
         render_graph_.clear();
 
@@ -635,7 +641,7 @@ namespace himalaya::app {
     }
 
     uint32_t Renderer::last_draw_call_count() const {
-        return static_cast<uint32_t>(opaque_draw_groups_.size() + mask_draw_groups_.size());
+        return draw_call_count_;
     }
 
     // ---- HDR color descriptor update ----
