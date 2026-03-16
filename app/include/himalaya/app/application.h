@@ -175,5 +175,30 @@ namespace himalaya::app {
          * the cursor (unlike right-click camera rotation).
          */
         void update_ibl_input();
+
+        // --- Runtime scene/environment switching ---
+
+        /**
+         * @brief Switches to a new glTF scene file.
+         *
+         * Waits for GPU idle, destroys current scene, loads new scene,
+         * and saves config. On failure, remains with an empty scene.
+         *
+         * @param path Absolute path to the new .gltf / .glb file.
+         */
+        void switch_scene(const std::string &path);
+
+        /**
+         * @brief Switches to a new HDR environment map.
+         *
+         * Waits for GPU idle, destroys current IBL, loads new environment,
+         * and saves config. On failure, IBL falls back to gray cubemaps.
+         *
+         * @param path Absolute path to the new .hdr file.
+         */
+        void switch_environment(const std::string &path);
+
+        /** @brief Persistent config (updated on scene/environment switch). */
+        AppConfig config_{};
     };
 } // namespace himalaya::app

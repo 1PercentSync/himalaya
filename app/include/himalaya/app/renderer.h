@@ -145,6 +145,17 @@ namespace himalaya::app {
          */
         void handle_msaa_change(uint32_t new_sample_count);
 
+        /**
+         * @brief Reloads the IBL environment from a new HDR file.
+         *
+         * Caller must ensure GPU is idle (vkQueueWaitIdle) before calling.
+         * Destroys current IBL resources and reinitializes from the new path.
+         * Empty or invalid path triggers IBL fallback (gray cubemaps).
+         *
+         * @param hdr_path Path to the new .hdr environment map.
+         */
+        void reload_environment(const std::string &hdr_path);
+
         // --- Accessors ---
 
         /** @brief Returns the current MSAA sample count (1 = no MSAA). */

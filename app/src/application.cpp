@@ -35,7 +35,7 @@ namespace himalaya::app {
     void Application::init() {
         spdlog::set_level(kLogLevel);
 
-        const auto config = load_config();
+        config_ = load_config();
 
         glfwInit();
         glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
@@ -71,15 +71,18 @@ namespace himalaya::app {
                        resource_manager_,
                        descriptor_manager_,
                        imgui_backend_,
-                       config.env_path);
+                       config_.env_path);
 
         // --- Scene loading (uses Renderer's default resources) ---
         // Scene failure → empty scene (0 instances), skybox still renders if HDR loaded.
-        if (!config.scene_path.empty()) {
+        if (!config_.scene_path.empty()) {
             context_.begin_immediate();
             const bool scene_ok = scene_loader_.load(
-                config.scene_path, resource_manager_, descriptor_manager_,
-                renderer_.material_system(), renderer_.default_textures(),
+                config_.scene_path,
+                resource_manager_,
+                descriptor_manager_,
+                renderer_.material_system(),
+                renderer_.default_textures(),
                 renderer_.default_sampler());
             context_.end_immediate();
 
@@ -87,6 +90,39 @@ namespace himalaya::app {
                 spdlog::warn("Starting with empty scene (skybox only)");
             }
         }
+    }
+
+    // ---- Runtime scene/environment switching ----
+
+    void Application::switch_scene(const std::string &path) {
+        vkQueueWaitIdle(context_.graphics_queue);
+
+        scene_loader_.destroy();
+
+        if (!path.empty()) {
+            context_.begin_immediate();
+            const bool ok = scene_loader_.load(
+                path, resource_manager_, descriptor_manager_,
+                renderer_.material_system(), renderer_.default_textures(),
+                renderer_.default_sampler());
+            context_.end_immediate();
+
+            if (!ok) {
+                spdlog::warn("Scene switch failed, continuing with empty scene");
+            }
+        }
+
+        config_.scene_path = path;
+        save_config(config_);
+    }
+
+    void Application::switch_environment(const std::string &path) {
+        vkQueueWaitIdle(context_.graphics_queue);
+
+        renderer_.reload_environment(path);
+
+        config_.env_path = path;
+        save_config(config_);
     }
 
     void Application::destroy() {

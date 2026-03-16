@@ -279,6 +279,14 @@ namespace himalaya::app {
         unregister_swapchain_images();
     }
 
+    // ---- Environment reload ----
+
+    void Renderer::reload_environment(const std::string &hdr_path) {
+        // Caller guarantees GPU idle (vkQueueWaitIdle already called).
+        ibl_.destroy();
+        ibl_.init(*ctx_, *resource_manager_, *descriptor_manager_, shader_compiler_, hdr_path);
+    }
+
     // ---- MSAA switching ----
 
     void Renderer::handle_msaa_change(const uint32_t new_sample_count) {
