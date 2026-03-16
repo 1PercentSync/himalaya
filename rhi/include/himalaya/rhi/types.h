@@ -6,6 +6,7 @@
  */
 
 #include <cstdint>
+#include <utility>
 
 #include <vulkan/vulkan.h>
 
@@ -114,6 +115,11 @@ namespace himalaya::rhi {
         A2B10G10R10UnormPack32,
         B10G11R11UfloatPack32,
 
+        // Block-compressed (4x4 texel blocks, 16 bytes per block)
+        Bc5UnormBlock,
+        Bc7UnormBlock,
+        Bc7SrgbBlock,
+
         // Depth / stencil
         D32Sfloat,
         D24UnormS8Uint,
@@ -162,6 +168,9 @@ namespace himalaya::rhi {
             case Format::R32G32B32A32Sfloat: return VK_FORMAT_R32G32B32A32_SFLOAT;
             case Format::A2B10G10R10UnormPack32: return VK_FORMAT_A2B10G10R10_UNORM_PACK32;
             case Format::B10G11R11UfloatPack32: return VK_FORMAT_B10G11R11_UFLOAT_PACK32;
+            case Format::Bc5UnormBlock: return VK_FORMAT_BC5_UNORM_BLOCK;
+            case Format::Bc7UnormBlock: return VK_FORMAT_BC7_UNORM_BLOCK;
+            case Format::Bc7SrgbBlock: return VK_FORMAT_BC7_SRGB_BLOCK;
             case Format::D32Sfloat: return VK_FORMAT_D32_SFLOAT;
             case Format::D24UnormS8Uint: return VK_FORMAT_D24_UNORM_S8_UINT;
         }
@@ -181,6 +190,97 @@ namespace himalaya::rhi {
                 return VK_IMAGE_ASPECT_DEPTH_BIT;
             default:
                 return VK_IMAGE_ASPECT_COLOR_BIT;
+        }
+    }
+
+    /**
+     * @brief Converts a VkFormat value back to the corresponding Format enum.
+     *
+     * Returns Format::Undefined for unrecognized VkFormat values.
+     * Used by KTX2 reader to map the file's vkFormat field to Format.
+     */
+    inline Format from_vk_format(const VkFormat vk_format) {
+        switch (vk_format) {
+            case VK_FORMAT_R8_UNORM: return Format::R8Unorm;
+            case VK_FORMAT_R8G8_UNORM: return Format::R8G8Unorm;
+            case VK_FORMAT_R8G8B8A8_UNORM: return Format::R8G8B8A8Unorm;
+            case VK_FORMAT_R8G8B8A8_SRGB: return Format::R8G8B8A8Srgb;
+            case VK_FORMAT_B8G8R8A8_UNORM: return Format::B8G8R8A8Unorm;
+            case VK_FORMAT_B8G8R8A8_SRGB: return Format::B8G8R8A8Srgb;
+            case VK_FORMAT_R16G16_UNORM: return Format::R16G16Unorm;
+            case VK_FORMAT_R16_SFLOAT: return Format::R16Sfloat;
+            case VK_FORMAT_R16G16_SFLOAT: return Format::R16G16Sfloat;
+            case VK_FORMAT_R16G16B16A16_SFLOAT: return Format::R16G16B16A16Sfloat;
+            case VK_FORMAT_R32_SFLOAT: return Format::R32Sfloat;
+            case VK_FORMAT_R32G32_SFLOAT: return Format::R32G32Sfloat;
+            case VK_FORMAT_R32G32B32A32_SFLOAT: return Format::R32G32B32A32Sfloat;
+            case VK_FORMAT_A2B10G10R10_UNORM_PACK32: return Format::A2B10G10R10UnormPack32;
+            case VK_FORMAT_B10G11R11_UFLOAT_PACK32: return Format::B10G11R11UfloatPack32;
+            case VK_FORMAT_BC5_UNORM_BLOCK: return Format::Bc5UnormBlock;
+            case VK_FORMAT_BC7_UNORM_BLOCK: return Format::Bc7UnormBlock;
+            case VK_FORMAT_BC7_SRGB_BLOCK: return Format::Bc7SrgbBlock;
+            case VK_FORMAT_D32_SFLOAT: return Format::D32Sfloat;
+            case VK_FORMAT_D24_UNORM_S8_UINT: return Format::D24UnormS8Uint;
+            default: return Format::Undefined;
+        }
+    }
+
+    // ---- Format property utilities ----
+
+    /**
+     * @brief Returns the byte size of one texel block for the given format.
+     *
+     * For block-compressed formats (BC5/BC7), a block is 4x4 texels = 16 bytes.
+     * For uncompressed formats, a "block" is a single texel.
+     */
+    inline uint32_t format_bytes_per_block(const Format format) {
+        switch (format) {
+            case Format::R8Unorm: return 1;
+            case Format::R8G8Unorm: return 2;
+            case Format::R8G8B8A8Unorm:
+            case Format::R8G8B8A8Srgb:
+            case Format::B8G8R8A8Unorm:
+            case Format::B8G8R8A8Srgb: return 4;
+            case Format::R16G16Unorm: return 4;
+            case Format::R16Sfloat: return 2;
+            case Format::R16G16Sfloat: return 4;
+            case Format::R16G16B16A16Sfloat: return 8;
+            case Format::R32Sfloat: return 4;
+            case Format::R32G32Sfloat: return 8;
+            case Format::R32G32B32A32Sfloat: return 16;
+            case Format::A2B10G10R10UnormPack32: return 4;
+            case Format::B10G11R11UfloatPack32: return 4;
+            case Format::Bc5UnormBlock:
+            case Format::Bc7UnormBlock:
+            case Format::Bc7SrgbBlock: return 16;
+            case Format::D32Sfloat: return 4;
+            case Format::D24UnormS8Uint: return 4;
+            default: return 0;
+        }
+    }
+
+    /**
+     * @brief Returns the texel block extent {width, height} for the given format.
+     *
+     * Block-compressed formats cover 4x4 texels per block.
+     * Uncompressed formats have a 1x1 block extent.
+     */
+    inline std::pair<uint32_t, uint32_t> format_block_extent(const Format format) {
+        switch (format) {
+            case Format::Bc5UnormBlock:
+            case Format::Bc7UnormBlock:
+            case Format::Bc7SrgbBlock: return {4, 4};
+            default: return {1, 1};
+        }
+    }
+
+    /** @brief Returns true if the format is block-compressed (BC). */
+    inline bool format_is_block_compressed(const Format format) {
+        switch (format) {
+            case Format::Bc5UnormBlock:
+            case Format::Bc7UnormBlock:
+            case Format::Bc7SrgbBlock: return true;
+            default: return false;
         }
     }
 } // namespace himalaya::rhi
