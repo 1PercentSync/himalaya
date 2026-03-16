@@ -864,7 +864,7 @@ public:
     // ... 已有接口（场景加载、mesh/material 数据访问等）...
 
     /// 场景 AABB（所有 mesh instance 的 world_bounds 求并集），加载完成后可用。
-    /// 用途：Application 初始化 ShadowConfig.max_distance。
+    /// 用途：Application 初始化 ShadowConfig.max_distance 和相机初始位置/朝向。
     const AABB& scene_bounds() const;
 };
 ```

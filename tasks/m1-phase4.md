@@ -76,6 +76,7 @@
 - [ ] Application 新增 `RenderFeatures` 和 `ShadowConfig` 成员，构造 RenderInput 时传入
 - [ ] SceneLoader 计算并暴露场景 AABB（`scene_bounds()`：所有 mesh instance 的 `world_bounds` 求并集）
 - [ ] Application 在场景加载后根据 scene AABB 初始化 `shadow_config.max_distance`（`diagonal × 1.5`，退化时 fallback 100m）
+- [ ] Application 在场景加载后根据 scene AABB 初始化相机位置和朝向（45° 俯角俯瞰整个场景，距离由 AABB 对角线和 FOV 推算，退化时 fallback 默认位置）
 - [ ] DebugUI 新增 Features 面板（Skybox checkbox）
 - [ ] 验证：Skybox 可通过 DebugUI 切换开/关，无 validation 报错
 
