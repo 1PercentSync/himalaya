@@ -18,7 +18,7 @@
 int main(const int argc, char *argv[]) {
     CLI::App cli{"Himalaya Renderer"};
     argv = cli.ensure_utf8(argv);
-    std::string scene_path = "assets/DamagedHelmet/DamagedHelmet.gltf";
+    std::string scene_path = "assets/Sponza_Intel/NewSponza_Main_glTF_003.gltf";
     cli.add_option("--scene", scene_path, "Path to glTF scene file");
 
     std::string env_path = "assets/environment.hdr";
