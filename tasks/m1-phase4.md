@@ -19,7 +19,7 @@
 - [ ] `shaders/depth_prepass_masked.frag` 同上
 - [ ] `rhi/descriptors.h/cpp` Set 0 layout 新增 Binding 3（InstanceBuffer SSBO）
 - [ ] `app/renderer.h/cpp` 新增 per-frame InstanceBuffer（CpuToGpu, 固定大小），pipeline layout 更新（push constant 72→4 bytes）
-- [ ] `app/renderer.cpp` render() 新增 post-cull 分组逻辑：visible indices 按 mesh_id 排序 → 构建 MeshDrawGroup 列表 + 填充 InstanceBuffer
+- [ ] `app/renderer.cpp` render() 新增 post-cull 分组逻辑：visible indices 按 (mesh_id, alpha_mode, double_sided) 排序 → 构建 MeshDrawGroup 列表 + 填充 InstanceBuffer（含 overflow guard）
 - [ ] `passes/forward_pass.cpp` draw loop 改为 MeshDrawGroup iteration + `draw_indexed(instanceCount=N, firstInstance=offset)`
 - [ ] `passes/depth_prepass.cpp` draw loop 改为 MeshDrawGroup iteration（opaque groups + mask groups 分别迭代）
 - [ ] 验证：密集场景 draw call 显著减少，渲染结果与 instancing 前一致，无 validation 报错

@@ -23,7 +23,7 @@
 
 - Per-instance SSBO（Set 0, Binding 3）替代 push constant 传递 model matrix + material_index
 - Shader 通过 `gl_InstanceIndex` 索引 instance 数据，push constant 缩减为 `cascade_index`（4 bytes，shadow pass 用）
-- 剔除后按 mesh_id 分组构建 MeshDrawGroup 列表 + 填充 InstanceBuffer
+- 剔除后按 (mesh_id, alpha_mode, double_sided) 排序分组构建 MeshDrawGroup 列表 + 填充 InstanceBuffer（含 overflow guard）
 - 各 pass draw loop 改为 group iteration：bind VB/IB 一次 → `draw_indexed(instanceCount=N, firstInstance=offset)`
 - DepthPrePass opaque groups 和 mask groups 分别迭代
 - **验证**：密集场景 draw call 显著减少，渲染结果一致
