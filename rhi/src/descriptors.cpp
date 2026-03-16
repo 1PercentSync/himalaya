@@ -208,7 +208,7 @@ namespace himalaya::rhi {
                                               const BufferHandle buffer,
                                               const uint64_t range) const {
         assert(frame_index < kMaxFramesInFlight && "Frame index out of range");
-        assert(binding <= 2 && "Set 0 only has bindings 0-2");
+        assert(binding <= 3 && "Set 0 only has bindings 0-3");
 
         const auto &buf = resource_manager_->get_buffer(buffer);
 
@@ -218,7 +218,7 @@ namespace himalaya::rhi {
             .range = static_cast<VkDeviceSize>(range),
         };
 
-        // Binding 0 is UBO, bindings 1-2 are SSBO (matches create_layouts)
+        // Binding 0 is UBO, bindings 1-3 are SSBO (matches create_layouts)
         const VkDescriptorType type = (binding == 0)
                                           ? VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER
                                           : VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
@@ -244,7 +244,7 @@ namespace himalaya::rhi {
     }
 
     void DescriptorManager::create_layouts() {
-        // --- Set 0: GlobalUBO (binding 0) + LightBuffer (binding 1) + MaterialBuffer (binding 2) ---
+        // --- Set 0: GlobalUBO (0) + LightBuffer (1) + MaterialBuffer (2) + InstanceBuffer (3) ---
         constexpr VkDescriptorSetLayoutBinding set0_bindings[] = {
             {
                 .binding = 0,
@@ -264,12 +264,18 @@ namespace himalaya::rhi {
                 .descriptorCount = 1,
                 .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
             },
+            {
+                .binding = 3,
+                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                .descriptorCount = 1,
+                .stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+            },
         };
 
         // ReSharper disable once CppVariableCanBeMadeConstexpr
         const VkDescriptorSetLayoutCreateInfo set0_info{
             .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-            .bindingCount = 3,
+            .bindingCount = 4,
             .pBindings = set0_bindings,
         };
 
@@ -348,10 +354,10 @@ namespace himalaya::rhi {
     }
 
     void DescriptorManager::create_pools() {
-        // --- Normal pool for Set 0 (maxSets=2, 2 UBO + 4 SSBO) ---
+        // --- Normal pool for Set 0 (maxSets=2, 2 UBO + 6 SSBO) ---
         constexpr VkDescriptorPoolSize set0_pool_sizes[] = {
             {.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, .descriptorCount = 2},
-            {.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, .descriptorCount = 4},
+            {.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, .descriptorCount = 6},
         };
 
         // ReSharper disable once CppVariableCanBeMadeConstexpr

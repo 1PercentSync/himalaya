@@ -29,7 +29,7 @@ namespace himalaya::rhi {
      * @brief Manages descriptor set layouts, descriptor pools, and bindless texture registration.
      *
      * Owns three descriptor set layouts:
-     * - Set 0: per-frame global data (GlobalUBO + LightBuffer + MaterialBuffer)
+     * - Set 0: per-frame global data (GlobalUBO + LightBuffer + MaterialBuffer + InstanceBuffer)
      * - Set 1: bindless arrays (binding 0: sampler2D[], binding 1: samplerCube[])
      * - Set 2: render target intermediates (8 named bindings, PARTIALLY_BOUND)
      *
@@ -101,7 +101,7 @@ namespace himalaya::rhi {
          * frame in flight has its own buffer.
          *
          * @param frame_index Frame in flight index (0 to kMaxFramesInFlight-1).
-         * @param binding     Binding index within Set 0 (0 = GlobalUBO, 1 = LightBuffer, 2 = MaterialBuffer).
+         * @param binding     Binding index within Set 0 (0 = GlobalUBO, 1 = LightBuffer, 2 = MaterialBuffer, 3 = InstanceBuffer).
          * @param buffer      Buffer handle to bind.
          * @param range       Byte range of the buffer to expose to the shader.
          */
@@ -112,7 +112,7 @@ namespace himalaya::rhi {
          *
          * Use this for frame-invariant resources (MaterialBuffer) shared across all frames.
          *
-         * @param binding Binding index within Set 0 (0 = GlobalUBO, 1 = LightBuffer, 2 = MaterialBuffer).
+         * @param binding Binding index within Set 0 (0 = GlobalUBO, 1 = LightBuffer, 2 = MaterialBuffer, 3 = InstanceBuffer).
          * @param buffer  Buffer handle to bind.
          * @param range   Byte range of the buffer to expose to the shader.
          */
@@ -173,7 +173,7 @@ namespace himalaya::rhi {
 
         // ---- Layouts ----
 
-        /** @brief Set 0: GlobalUBO (binding 0) + LightBuffer (binding 1) + MaterialBuffer (binding 2). */
+        /** @brief Set 0: GlobalUBO (0) + LightBuffer (1) + MaterialBuffer (2) + InstanceBuffer (3). */
         VkDescriptorSetLayout set0_layout_ = VK_NULL_HANDLE;
 
         /** @brief Set 1: bindless sampler2D array (binding 0) + samplerCube array (binding 1). */
