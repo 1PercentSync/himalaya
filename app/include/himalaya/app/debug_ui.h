@@ -83,6 +83,11 @@ namespace himalaya::app {
         /** @brief Current HDR environment map path (empty = fallback). */
         const std::string& env_path;
 
+        // --- Error display ---
+
+        /** @brief Error message to show in UI (empty = no error). Mutable for auto-dismiss. */
+        std::string& error_message;
+
         // --- Scene statistics (display) ---
 
         /** @brief Per-frame scene statistics computed after frustum culling. */

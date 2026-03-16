@@ -200,5 +200,8 @@ namespace himalaya::app {
 
         /** @brief Persistent config (updated on scene/environment switch). */
         AppConfig config_{};
+
+        /** @brief Error message shown in DebugUI (empty = no error, auto-dismissed after timeout). */
+        std::string error_message_;
     };
 } // namespace himalaya::app

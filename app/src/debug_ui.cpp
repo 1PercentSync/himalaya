@@ -160,6 +160,17 @@ namespace himalaya::app {
             actions.vsync_toggled = true;
         }
 
+        // Error banner (dismissable)
+        if (!ctx.error_message.empty()) {
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.4f, 0.4f, 1.0f));
+            ImGui::TextWrapped("%s", ctx.error_message.c_str());
+            ImGui::PopStyleColor();
+            ImGui::SameLine();
+            if (ImGui::SmallButton("X")) {
+                ctx.error_message.clear();
+            }
+        }
+
         int current_log_level = spdlog::get_level();
         constexpr const char *kLogLevelNames[] = {"Trace", "Debug", "Info", "Warn", "Error", "Critical", "Off"};
         if (ImGui::Combo("Log Level",

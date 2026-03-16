@@ -87,7 +87,7 @@ namespace himalaya::app {
             context_.end_immediate();
 
             if (!scene_ok) {
-                spdlog::warn("Starting with empty scene (skybox only)");
+                error_message_ = "Failed to load scene: " + config_.scene_path;
             }
         }
     }
@@ -108,7 +108,9 @@ namespace himalaya::app {
             context_.end_immediate();
 
             if (!ok) {
-                spdlog::warn("Scene switch failed, continuing with empty scene");
+                error_message_ = "Failed to load scene: " + path;
+            } else {
+                error_message_.clear();
             }
         }
 
@@ -254,6 +256,7 @@ namespace himalaya::app {
             .supported_sample_counts = context_.msaa_sample_counts,
             .scene_path = config_.scene_path,
             .env_path = config_.env_path,
+            .error_message = error_message_,
             .scene_stats = {
                 .total_instances = total_instances,
                 .total_meshes = static_cast<uint32_t>(meshes.size()),
