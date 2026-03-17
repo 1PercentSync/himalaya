@@ -25,5 +25,5 @@ target_include_directories(himalaya_framework PRIVATE ${Stb_INCLUDE_DIR})
 
 target_link_libraries(himalaya_framework
         PUBLIC himalaya_rhi imgui::imgui
-        PRIVATE mikktspace::mikktspace xxHash::xxhash
+        PRIVATE mikktspace::mikktspace xxHash::xxhash bc7enc
 )
