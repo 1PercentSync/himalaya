@@ -45,7 +45,7 @@
 - [x] `rhi/types.h` Format 枚举新增 BC 格式（Bc5UnormBlock / Bc7UnormBlock / Bc7SrgbBlock）+ `from_vk_format()` 反向转换 + 格式工具函数（`format_bytes_per_block` / `format_block_extent` / `format_is_block_compressed`）
 - [x] `rhi/resources.h/cpp` 新增 `upload_image_all_levels()`：预建 mip chain + cubemap 一次性上传（单 staging buffer、多 VkBufferImageCopy2 region）
 - [x] `framework/cache.h/cpp` 新增缓存模块：`cache_root()`（`%TEMP%\himalaya\`）+ `content_hash()`（XXH3_128）+ `cache_path(category, hash, ext)`
-- [ ] `framework/ktx2.h/cpp` 新增最小 KTX2 读写模块：`write_ktx2()`（2D / cubemap + mip chain）+ `read_ktx2()`（返回 format + mip offset 索引 + 数据 blob），DFD 按支持格式硬编码，读取时仅解析 header + level index
+- [x] `framework/ktx2.h/cpp` 新增最小 KTX2 读写模块：`write_ktx2()`（2D / cubemap + mip chain）+ `read_ktx2()`（返回 format + mip offset 索引 + 数据 blob），DFD 按支持格式硬编码，读取时仅解析 header + level index
 
 ### D-2：BC 纹理压缩 + KTX2 缓存
 
