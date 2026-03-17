@@ -6,8 +6,10 @@
  */
 
 #include <himalaya/rhi/types.h>
+#include <cstdint>
 #include <memory>
 #include <string>
+#include <vector>
 
 namespace himalaya::rhi {
     class DescriptorManager;
@@ -75,19 +77,65 @@ namespace himalaya::framework {
     };
 
     /**
-     * @brief Creates a GPU texture from CPU pixel data and registers it to bindless.
+     * @brief Per-level region descriptor within PreparedTexture::data.
+     */
+    struct PreparedMipRegion {
+        uint64_t buffer_offset;  ///< Byte offset into PreparedTexture::data.
+        uint32_t width;          ///< Pixel width of this mip level.
+        uint32_t height;         ///< Pixel height of this mip level.
+    };
+
+    /**
+     * @brief CPU-side result of prepare_texture(). Ready for GPU upload.
+     *
+     * Holds compressed mip data (contiguous buffer) and per-level upload regions.
+     * Thread-safe to produce; must be consumed by finalize_texture() in an
+     * immediate command scope.
+     */
+    struct PreparedTexture {
+        rhi::Format format;
+        uint32_t base_width;
+        uint32_t base_height;
+        uint32_t level_count;
+        std::vector<uint8_t> data;              ///< Contiguous compressed mip data.
+        std::vector<PreparedMipRegion> regions;  ///< Per-level descriptors.
+    };
+
+    /**
+     * @brief CPU-only texture preparation: hash, cache check, mip gen, BC compress.
+     *
+     * Thread-safe — can be called from multiple threads simultaneously (after
+     * bc7enc/rgbcx one-time init). Does NOT touch any GPU state.
+     *
+     * @param data  CPU pixel data (must be valid).
+     * @param role  Texture role determining the BC format.
+     * @return PreparedTexture ready for finalize_texture().
+     */
+    [[nodiscard]] PreparedTexture prepare_texture(const ImageData &data, TextureRole role);
+
+    /**
+     * @brief GPU upload + bindless registration for a prepared texture.
      *
      * Must be called within a Context::begin_immediate() / end_immediate() scope.
-     * Full pipeline: create image → upload via staging → generate mips → register
-     * to bindless array. The image ends in SHADER_READ_ONLY layout.
+     * Writes KTX2 cache if the texture was freshly compressed (best-effort).
      *
-     * @param resource_manager   RHI resource manager for image/buffer operations.
+     * @param resource_manager   RHI resource manager.
      * @param descriptor_manager Descriptor manager for bindless registration.
-     * @param data               CPU pixel data (must be valid).
-     * @param role               Texture role determining the GPU format.
+     * @param prepared           Result from prepare_texture().
      * @param sampler            Sampler to pair with the texture.
-     * @param debug_name         Human-readable name for the GPU image (must not be null).
+     * @param debug_name         Human-readable name for the GPU image.
      * @return Image handle and bindless index.
+     */
+    [[nodiscard]] TextureResult finalize_texture(rhi::ResourceManager &resource_manager,
+                                                 rhi::DescriptorManager &descriptor_manager,
+                                                 const PreparedTexture &prepared,
+                                                 rhi::SamplerHandle sampler,
+                                                 const char *debug_name);
+
+    /**
+     * @brief Convenience wrapper: prepare + finalize in one call (serial).
+     *
+     * Must be called within a Context::begin_immediate() / end_immediate() scope.
      */
     [[nodiscard]] TextureResult create_texture(rhi::ResourceManager &resource_manager,
                                                rhi::DescriptorManager &descriptor_manager,
@@ -95,6 +143,14 @@ namespace himalaya::framework {
                                                TextureRole role,
                                                rhi::SamplerHandle sampler,
                                                const char *debug_name);
+
+    /**
+     * @brief Ensures bc7enc/rgbcx one-time initialization is done.
+     *
+     * Must be called from a single thread before launching parallel
+     * prepare_texture() calls. Safe to call multiple times.
+     */
+    void ensure_bc_init();
 
     /**
      * @brief Holds the three default 1x1 textures and their bindless indices.

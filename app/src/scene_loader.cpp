@@ -8,6 +8,8 @@
 #include <himalaya/rhi/descriptors.h>
 #include <himalaya/rhi/resources.h>
 
+#include <himalaya/framework/texture.h>
+
 #include <fastgltf/core.hpp>
 #include <fastgltf/math.hpp>
 #include <fastgltf/tools.hpp>
@@ -16,6 +18,7 @@
 
 #include <cassert>
 #include <filesystem>
+#include <future>
 #include <limits>
 #include <map>
 #include <stdexcept>
@@ -422,37 +425,88 @@ namespace himalaya::app {
 
         spdlog::info("Created {} samplers", samplers_.size());
 
-        // Texture cache: (gltf_texture_index, role) → bindless index.
-        // Avoids creating duplicate GPU textures when multiple materials
-        // reference the same glTF texture with the same role.
-        std::map<std::pair<size_t, framework::TextureRole>, rhi::BindlessIndex> tex_cache;
+        // ---- Texture-level parallel preparation ----
+        // Phase 1: Collect unique (texture_index, role) pairs across all materials.
+        // Phase 2: Parallel CPU work (hash, cache check, mip gen, BC compress).
+        // Phase 3: Serial GPU upload (create image, upload, register bindless).
 
-        // Resolves a glTF texture reference to a bindless index, loading
-        // the image on demand and caching the result.
-        auto resolve_texture = [&](const size_t texture_index, const framework::TextureRole role) -> uint32_t {
-            const auto key = std::make_pair(texture_index, role);
-            if (const auto it = tex_cache.find(key); it != tex_cache.end()) {
-                return it->second.index;
-            }
+        using TexKey = std::pair<size_t, framework::TextureRole>;
+        std::map<TexKey, size_t> unique_tex_map; // key → index into unique_entries
+        struct TexEntry {
+            size_t texture_index;
+            framework::TextureRole role;
+        };
+        std::vector<TexEntry> unique_entries;
 
-            const auto &tex = gltf.textures[texture_index];
+        // Scan all materials to collect unique texture references
+        for (const auto &mat : gltf.materials) {
+            const auto &pbr = mat.pbrData;
+            auto collect = [&](const auto &opt_tex, const framework::TextureRole role) {
+                if (!opt_tex.has_value()) return;
+                const auto key = std::make_pair(opt_tex->textureIndex, role);
+                if (unique_tex_map.contains(key)) return;
+                unique_tex_map[key] = unique_entries.size();
+                unique_entries.push_back({opt_tex->textureIndex, role});
+            };
+            collect(pbr.baseColorTexture, framework::TextureRole::Color);
+            collect(pbr.metallicRoughnessTexture, framework::TextureRole::Linear);
+            collect(mat.normalTexture, framework::TextureRole::Normal);
+            collect(mat.occlusionTexture, framework::TextureRole::Linear);
+            collect(mat.emissiveTexture, framework::TextureRole::Color);
+        }
+
+        // Phase 2: Decode images + prepare textures in parallel
+        framework::ensure_bc_init();
+
+        std::vector<framework::ImageData> decoded_images(unique_entries.size());
+        std::vector<std::future<framework::PreparedTexture>> futures(unique_entries.size());
+
+        for (size_t i = 0; i < unique_entries.size(); ++i) {
+            const auto &entry = unique_entries[i];
+            const auto &tex = gltf.textures[entry.texture_index];
             assert(tex.imageIndex.has_value() && "glTF texture must have an image source");
 
-            const auto sampler = tex.samplerIndex.has_value() ? samplers_[*tex.samplerIndex] : default_sampler;
+            // Decode image (must happen before async — fastgltf data may not be thread-safe)
+            decoded_images[i] = decode_gltf_image(gltf, gltf.images[*tex.imageIndex], base_dir);
 
-            const auto pixels = decode_gltf_image(gltf, gltf.images[*tex.imageIndex], base_dir);
-            const auto tex_name = "Texture " + std::to_string(texture_index);
-            const auto [image, bindless_index] = framework::create_texture(*resource_manager_,
-                                                                           *descriptor_manager_,
-                                                                           pixels,
-                                                                           role,
-                                                                           sampler,
-                                                                           tex_name.c_str());
+            const auto *pixels_ptr = &decoded_images[i];
+            const auto role = entry.role;
+            futures[i] = std::async(std::launch::async, [pixels_ptr, role] {
+                return framework::prepare_texture(*pixels_ptr, role);
+            });
+        }
+
+        // Phase 3: Wait for each and upload serially (GPU operations)
+        std::map<TexKey, rhi::BindlessIndex> tex_cache;
+        std::vector<framework::PreparedTexture> prepared_textures(unique_entries.size());
+
+        for (size_t i = 0; i < unique_entries.size(); ++i) {
+            prepared_textures[i] = futures[i].get();
+        }
+        // Free decoded images — no longer needed after prepare
+        decoded_images.clear();
+
+        for (size_t i = 0; i < unique_entries.size(); ++i) {
+            const auto &entry = unique_entries[i];
+            const auto &tex = gltf.textures[entry.texture_index];
+            const auto sampler = tex.samplerIndex.has_value() ? samplers_[*tex.samplerIndex] : default_sampler;
+            const auto tex_name = "Texture " + std::to_string(entry.texture_index);
+
+            const auto [image, bindless_index] = framework::finalize_texture(
+                *resource_manager_, *descriptor_manager_,
+                prepared_textures[i], sampler, tex_name.c_str());
 
             images_.push_back(image);
             bindless_indices_.push_back(bindless_index);
-            tex_cache[key] = bindless_index;
-            return bindless_index.index;
+            tex_cache[{entry.texture_index, entry.role}] = bindless_index;
+        }
+        prepared_textures.clear();
+
+        // Resolve texture helper — now just a cache lookup
+        auto resolve_texture = [&](const size_t texture_index, const framework::TextureRole role) -> uint32_t {
+            const auto it = tex_cache.find({texture_index, role});
+            assert(it != tex_cache.end() && "Texture must have been prepared");
+            return it->second.index;
         };
 
         std::vector<framework::GPUMaterialData> gpu_materials;

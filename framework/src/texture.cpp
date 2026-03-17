@@ -52,13 +52,13 @@ namespace himalaya::framework {
 
     namespace {
         bool g_bc_initialized = false;
+    }
 
-        void ensure_bc_init() {
-            if (g_bc_initialized) return;
-            bc7enc_compress_block_init();
-            rgbcx::init();
-            g_bc_initialized = true;
-        }
+    void ensure_bc_init() {
+        if (g_bc_initialized) return;
+        bc7enc_compress_block_init();
+        rgbcx::init();
+        g_bc_initialized = true;
     }
 
     // ---- CPU mip chain generation ----
@@ -238,16 +238,10 @@ namespace himalaya::framework {
         }
     }
 
-    // ---- create_texture (refactored with BC compression + KTX2 cache) ----
+    // ---- prepare_texture (CPU-only, thread-safe after ensure_bc_init) ----
 
-    TextureResult create_texture(rhi::ResourceManager &resource_manager,
-                                 rhi::DescriptorManager &descriptor_manager,
-                                 const ImageData &data,
-                                 const TextureRole role,
-                                 const rhi::SamplerHandle sampler,
-                                 const char *debug_name) {
+    PreparedTexture prepare_texture(const ImageData &data, const TextureRole role) {
         assert(data.valid() && "ImageData must be valid");
-        ensure_bc_init();
 
         const rhi::Format bc_format = bc_format_for_role(role);
 
@@ -255,52 +249,37 @@ namespace himalaya::framework {
         const auto hash = content_hash(data.pixels.get(), data.size_bytes());
         const auto ktx2_path = cache_path("textures", hash + format_suffix(role), ".ktx2");
 
-        // ---- Cache hit: read KTX2 and upload directly ----
+        // ---- Cache hit: read KTX2 ----
         if (std::filesystem::exists(ktx2_path)) {
             if (auto ktx2 = read_ktx2(ktx2_path); ktx2 && ktx2->format == bc_format) {
-                const rhi::ImageDesc desc{
-                    .width = ktx2->base_width,
-                    .height = ktx2->base_height,
-                    .depth = 1,
-                    .mip_levels = ktx2->level_count,
-                    .array_layers = 1,
-                    .sample_count = 1,
-                    .format = bc_format,
-                    .usage = rhi::ImageUsage::Sampled | rhi::ImageUsage::TransferDst,
-                };
+                PreparedTexture result;
+                result.format = bc_format;
+                result.base_width = ktx2->base_width;
+                result.base_height = ktx2->base_height;
+                result.level_count = ktx2->level_count;
 
-                const auto image = resource_manager.create_image(desc, debug_name);
-
-                // Build upload regions from KTX2 level index
-                std::vector<rhi::ResourceManager::MipUploadRegion> regions(ktx2->level_count);
+                // Build regions from KTX2 level index
+                result.regions.resize(ktx2->level_count);
                 for (uint32_t i = 0; i < ktx2->level_count; ++i) {
-                    regions[i] = {
+                    result.regions[i] = {
                         .buffer_offset = ktx2->levels[i].offset,
                         .width = std::max(1u, ktx2->base_width >> i),
                         .height = std::max(1u, ktx2->base_height >> i),
                     };
                 }
-
-                resource_manager.upload_image_all_levels(
-                    image, ktx2->blob.data(), ktx2->blob.size(),
-                    regions, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT);
-
-                const auto bindless_index = descriptor_manager.register_texture(image, sampler);
-                spdlog::debug("Texture cache hit: {}", debug_name);
-                return {image, bindless_index};
+                result.data = std::move(ktx2->blob);
+                return result;
             }
-            // Cache file invalid/wrong format — fall through to compress
         }
 
-        // ---- Cache miss: CPU mip gen → BC compress → upload → write cache ----
+        // ---- Cache miss: CPU mip gen → BC compress ----
 
-        // 1. Generate RGBA8 mip chain (base resized to 4-aligned if needed)
         auto mip_chain = generate_cpu_mip_chain(data.pixels.get(), data.width, data.height);
         const uint32_t base_w = mip_chain[0].width;
         const uint32_t base_h = mip_chain[0].height;
         const auto level_count = static_cast<uint32_t>(mip_chain.size());
 
-        // 2. BC compress each mip level (serial — texture-level parallelism deferred)
+        // BC compress each mip level
         std::vector<std::vector<uint8_t>> compressed(level_count);
         for (uint32_t i = 0; i < level_count; ++i) {
             const auto &mip = mip_chain[i];
@@ -311,63 +290,96 @@ namespace himalaya::framework {
                                              role == TextureRole::Color);
             }
         }
-
-        // Free RGBA8 mip chain — no longer needed after compression
         mip_chain.clear();
 
-        // 3. Build contiguous upload buffer + upload regions
+        // Build contiguous upload buffer + regions
         uint64_t total_size = 0;
-        for (const auto &c: compressed) {
-            total_size += c.size();
-        }
+        for (const auto &c : compressed) total_size += c.size();
 
-        std::vector<uint8_t> upload_buf(total_size);
-        std::vector<rhi::ResourceManager::MipUploadRegion> regions(level_count);
+        PreparedTexture result;
+        result.format = bc_format;
+        result.base_width = base_w;
+        result.base_height = base_h;
+        result.level_count = level_count;
+        result.data.resize(total_size);
+        result.regions.resize(level_count);
+
         uint64_t offset = 0;
         for (uint32_t i = 0; i < level_count; ++i) {
-            regions[i] = {
+            result.regions[i] = {
                 .buffer_offset = offset,
                 .width = std::max(1u, base_w >> i),
                 .height = std::max(1u, base_h >> i),
             };
-            std::memcpy(upload_buf.data() + offset, compressed[i].data(), compressed[i].size());
+            std::memcpy(result.data.data() + offset, compressed[i].data(), compressed[i].size());
             offset += compressed[i].size();
         }
 
-        // 4. Create GPU image and upload
-        const rhi::ImageDesc desc{
-            .width = base_w,
-            .height = base_h,
-            .depth = 1,
-            .mip_levels = level_count,
-            .array_layers = 1,
-            .sample_count = 1,
-            .format = bc_format,
-            .usage = rhi::ImageUsage::Sampled | rhi::ImageUsage::TransferDst,
-        };
-
-        const auto image = resource_manager.create_image(desc, debug_name);
-        resource_manager.upload_image_all_levels(
-            image,
-            upload_buf.data(),
-            total_size,
-            regions,
-            VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT);
-
-        const auto bindless_index = descriptor_manager.register_texture(image, sampler);
-
-        // 5. Write KTX2 cache (non-blocking to rendering, best-effort)
+        // Write KTX2 cache (best-effort, IO only)
         std::vector<Ktx2WriteLevel> write_levels(level_count);
         for (uint32_t i = 0; i < level_count; ++i) {
-            write_levels[i] = {compressed[i].data(), compressed[i].size()};
+            write_levels[i] = {
+                result.data.data() + result.regions[i].buffer_offset,
+                (i + 1 < level_count)
+                    ? result.regions[i + 1].buffer_offset - result.regions[i].buffer_offset
+                    : result.data.size() - result.regions[i].buffer_offset,
+            };
         }
         if (!write_ktx2(ktx2_path, bc_format, base_w, base_h, 1, write_levels)) {
             spdlog::warn("Failed to write texture cache: {}", ktx2_path.string());
         }
 
-        spdlog::debug("Texture compressed and cached: {} ({}x{}, {} mips)",
-                      debug_name, base_w, base_h, level_count);
+        return result;
+    }
+
+    // ---- finalize_texture (GPU upload + bindless + cache write) ----
+
+    TextureResult finalize_texture(rhi::ResourceManager &resource_manager,
+                                   rhi::DescriptorManager &descriptor_manager,
+                                   const PreparedTexture &prepared,
+                                   const rhi::SamplerHandle sampler,
+                                   const char *debug_name) {
+        const rhi::ImageDesc desc{
+            .width = prepared.base_width,
+            .height = prepared.base_height,
+            .depth = 1,
+            .mip_levels = prepared.level_count,
+            .array_layers = 1,
+            .sample_count = 1,
+            .format = prepared.format,
+            .usage = rhi::ImageUsage::Sampled | rhi::ImageUsage::TransferDst,
+        };
+
+        const auto image = resource_manager.create_image(desc, debug_name);
+
+        // Convert PreparedMipRegion → MipUploadRegion (identical layout)
+        std::vector<rhi::ResourceManager::MipUploadRegion> upload_regions(prepared.level_count);
+        for (uint32_t i = 0; i < prepared.level_count; ++i) {
+            upload_regions[i] = {
+                .buffer_offset = prepared.regions[i].buffer_offset,
+                .width = prepared.regions[i].width,
+                .height = prepared.regions[i].height,
+            };
+        }
+        resource_manager.upload_image_all_levels(
+            image, prepared.data.data(), prepared.data.size(),
+            upload_regions, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT);
+
+        const auto bindless_index = descriptor_manager.register_texture(image, sampler);
         return {image, bindless_index};
+    }
+
+    // ---- create_texture (convenience wrapper) ----
+
+    TextureResult create_texture(rhi::ResourceManager &resource_manager,
+                                 rhi::DescriptorManager &descriptor_manager,
+                                 const ImageData &data,
+                                 const TextureRole role,
+                                 const rhi::SamplerHandle sampler,
+                                 const char *debug_name) {
+        ensure_bc_init();
+        auto prepared = prepare_texture(data, role);
+        return finalize_texture(resource_manager, descriptor_manager, prepared, sampler, debug_name);
     }
 
     namespace {
