@@ -581,6 +581,126 @@ namespace himalaya::rhi {
         context_->push_staging_buffer(staging_buffer, staging_allocation);
     }
 
+    void ResourceManager::upload_image_all_levels(const ImageHandle handle,
+                                                  const void *data,
+                                                  const uint64_t total_size,
+                                                  const std::span<const MipUploadRegion> mip_regions,
+                                                  const VkPipelineStageFlags2 dst_stage) const {
+        assert(context_->is_immediate_active()
+            && "upload_image_all_levels must be called within begin_immediate/end_immediate scope");
+        assert(data && "Upload source data must not be null");
+        assert(total_size > 0 && "Upload size must be greater than zero");
+        assert(!mip_regions.empty() && "Must provide at least one mip region");
+
+        const auto &dst = get_image(handle);
+        assert(has_flag(dst.desc.usage, ImageUsage::TransferDst)
+            && "Destination image must have TransferDst usage");
+        assert(mip_regions.size() == dst.desc.mip_levels
+            && "mip_regions count must match image mip_levels");
+
+        // 1. Create staging buffer
+        VkBufferCreateInfo staging_buffer_info{};
+        staging_buffer_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        staging_buffer_info.size = total_size;
+        staging_buffer_info.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+        staging_buffer_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+        VmaAllocationCreateInfo staging_alloc_info{};
+        staging_alloc_info.usage = VMA_MEMORY_USAGE_AUTO;
+        staging_alloc_info.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT
+                                   | VMA_ALLOCATION_CREATE_MAPPED_BIT;
+
+        VkBuffer staging_buffer = VK_NULL_HANDLE;
+        VmaAllocation staging_allocation = VK_NULL_HANDLE;
+        VmaAllocationInfo staging_info{};
+
+        VK_CHECK(vmaCreateBuffer(context_->allocator,
+            &staging_buffer_info,
+            &staging_alloc_info,
+            &staging_buffer,
+            &staging_allocation,
+            &staging_info));
+
+        std::memcpy(staging_info.pMappedData, data, total_size);
+
+        // 2. Record commands
+        // ReSharper disable once CppLocalVariableMayBeConst
+        VkCommandBuffer cmd = context_->immediate_command_buffer;
+        const VkImageAspectFlags aspect = aspect_from_format(dst.desc.format);
+        const uint32_t layer_count = dst.desc.array_layers;
+
+        // Transition all subresources: UNDEFINED -> TRANSFER_DST_OPTIMAL
+        VkImageMemoryBarrier2 to_transfer{};
+        to_transfer.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+        to_transfer.srcStageMask = VK_PIPELINE_STAGE_2_NONE;
+        to_transfer.srcAccessMask = VK_ACCESS_2_NONE;
+        to_transfer.dstStageMask = VK_PIPELINE_STAGE_2_COPY_BIT;
+        to_transfer.dstAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
+        to_transfer.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        to_transfer.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+        to_transfer.image = dst.image;
+        to_transfer.subresourceRange = {
+            aspect,
+            0,
+            static_cast<uint32_t>(mip_regions.size()),
+            0,
+            layer_count
+        };
+
+        VkDependencyInfo dep{};
+        dep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+        dep.imageMemoryBarrierCount = 1;
+        dep.pImageMemoryBarriers = &to_transfer;
+        vkCmdPipelineBarrier2(cmd, &dep);
+
+        // Build copy regions — one per mip level, each covering all array layers
+        std::vector<VkBufferImageCopy2> regions(mip_regions.size());
+        for (size_t i = 0; i < mip_regions.size(); ++i) {
+            auto &r = regions[i];
+            r.sType = VK_STRUCTURE_TYPE_BUFFER_IMAGE_COPY_2;
+            r.pNext = nullptr;
+            r.bufferOffset = mip_regions[i].buffer_offset;
+            r.bufferRowLength = 0;
+            r.bufferImageHeight = 0;
+            r.imageSubresource = {aspect, static_cast<uint32_t>(i), 0, layer_count};
+            r.imageOffset = {0, 0, 0};
+            r.imageExtent = {mip_regions[i].width, mip_regions[i].height, 1};
+        }
+
+        VkCopyBufferToImageInfo2 copy_info{};
+        copy_info.sType = VK_STRUCTURE_TYPE_COPY_BUFFER_TO_IMAGE_INFO_2;
+        copy_info.srcBuffer = staging_buffer;
+        copy_info.dstImage = dst.image;
+        copy_info.dstImageLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+        copy_info.regionCount = static_cast<uint32_t>(regions.size());
+        copy_info.pRegions = regions.data();
+        vkCmdCopyBufferToImage2(cmd, &copy_info);
+
+        // Transition all subresources: TRANSFER_DST_OPTIMAL -> SHADER_READ_ONLY_OPTIMAL
+        VkImageMemoryBarrier2 to_read{};
+        to_read.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+        to_read.srcStageMask = VK_PIPELINE_STAGE_2_COPY_BIT;
+        to_read.srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
+        to_read.dstStageMask = dst_stage;
+        to_read.dstAccessMask = VK_ACCESS_2_SHADER_SAMPLED_READ_BIT;
+        to_read.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+        to_read.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        to_read.image = dst.image;
+        to_read.subresourceRange = {
+            aspect,
+            0,
+            static_cast<uint32_t>(mip_regions.size()),
+            0,
+            layer_count
+        };
+
+        dep.pImageMemoryBarriers = &to_read;
+        vkCmdPipelineBarrier2(cmd, &dep);
+
+        // 3. Register staging buffer for deferred cleanup
+        context_->push_staging_buffer(staging_buffer, staging_allocation);
+    }
+
     void ResourceManager::generate_mips(const ImageHandle handle) const {
         assert(context_->is_immediate_active()
             && "generate_mips must be called within begin_immediate/end_immediate scope");

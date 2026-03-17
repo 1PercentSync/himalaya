@@ -7,6 +7,7 @@
 
 #include <himalaya/rhi/types.h>
 
+#include <span>
 #include <vector>
 
 #include <vulkan/vulkan.h>
@@ -398,6 +399,33 @@ namespace himalaya::rhi {
                           const void *data,
                           uint64_t size,
                           VkPipelineStageFlags2 dst_stage) const;
+
+        /** @brief Describes one mip level region for upload_image_all_levels(). */
+        struct MipUploadRegion {
+            uint64_t buffer_offset; ///< Byte offset of this level's data within the source buffer.
+            uint32_t width;         ///< Pixel width of this mip level.
+            uint32_t height;        ///< Pixel height of this mip level.
+        };
+
+        /**
+         * @brief Uploads a pre-built mip chain to an image (2D or cubemap).
+         *
+         * Must be called within a Context::begin_immediate() / end_immediate() scope.
+         * Creates a single staging buffer, records one VkBufferImageCopy2 per mip level,
+         * then transitions the image to SHADER_READ_ONLY. For cubemaps (array_layers=6),
+         * each level's data must contain all 6 faces contiguous — matching KTX2 layout.
+         *
+         * @param handle      Destination image (must have TransferDst usage).
+         * @param data        Source data containing all mip levels.
+         * @param total_size  Total byte size of data.
+         * @param mip_regions Per-level descriptors; mip_regions[0] = base level.
+         * @param dst_stage   Pipeline stage that will first consume the image.
+         */
+        void upload_image_all_levels(ImageHandle handle,
+                                     const void *data,
+                                     uint64_t total_size,
+                                     std::span<const MipUploadRegion> mip_regions,
+                                     VkPipelineStageFlags2 dst_stage) const;
 
         /**
          * @brief Records mip generation commands into the active immediate scope.
