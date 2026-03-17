@@ -56,7 +56,7 @@
 - [x] `framework/texture.h/cpp` 新增 KTX2 缓存写入：BC 数据 + 所有 mip 级别通过 `write_ktx2()` 写入缓存
 - [x] `framework/texture.h/cpp` 新增 KTX2 缓存读取：`read_ktx2()` + `upload_image_all_levels()` 直接上传 BC 数据
 - [x] `framework/texture.h/cpp` 重构 `create_texture()`：缓存命中 → KTX2 直接上传 / 缓存未命中 → 解码 → CPU mip → BC 压缩 → 上传 + 写缓存
-- [ ] `app/scene_loader.cpp` 适配新的纹理加载接口（TextureRole 扩展区分法线用 BC5）
+- [x] `app/scene_loader.cpp` 适配新的纹理加载接口（TextureRole 扩展区分法线用 BC5）
 - [ ] 纹理级并行压缩（std::async / thread pool，首次加载多线程）
 - [ ] 验证：纹理 VRAM 显著降低（RGBA8 → BC 约 4:1），缓存命中时跳过压缩，画质无明显退化
 
