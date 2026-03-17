@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段四 — 阴影
-- **进度**：准备工作 A/B/C 完成，D-1 前两小项完成（xxHash 依赖 + Format BC 扩展），剩余 D-1 代码待实现
+- **进度**：准备工作 A/B/C 完成，D-1 前三小项完成（xxHash 依赖 + Format BC 扩展 + upload_image_all_levels），剩余 D-1：cache 模块 + KTX2 读写
 
 ### 下一个任务
 
-准备工作 D-1 第三小项：`rhi/resources.h/cpp` 新增 `upload_image_all_levels()`。
+准备工作 D-1 第四小项：`framework/cache.h/cpp` 新增缓存模块。
 
 ---
 
