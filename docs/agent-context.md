@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段四 — 阴影
-- **进度**：准备工作 A/B/C 完成，D-1 全部完成，D-2 核心完成（bc7enc 集成 + CPU mip + BC 压缩 + KTX2 缓存 + create_texture 重构），剩余 scene_loader 适配 + 并行压缩 + 验证
+- **进度**：准备工作 A/B/C 完成，D-1 全部完成，D-2 代码全部完成（bc7enc + CPU mip + BC 压缩 + KTX2 缓存 + prepare/finalize 拆分 + 纹理级并行 + scene_loader 适配），待验证
 
 ### 下一个任务
 
-准备工作 D-2：`app/scene_loader.cpp` 适配新的纹理加载接口（TextureRole 扩展区分法线用 BC5）。
+准备工作 D-2 验证：纹理 VRAM 显著降低（RGBA8 → BC 约 4:1），缓存命中时跳过压缩，画质无明显退化。
 
 ---
 
