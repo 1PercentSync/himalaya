@@ -19,14 +19,16 @@
  *
  * @param N             Normalized geometric normal (world-space)
  * @param tangent       Vertex tangent (xyz = direction, w = handedness sign)
- * @param normal_sample Raw normal map texel (RGB, [0,1] encoded)
+ * @param normal_rg     Normal map RG texel ([0,1] encoded, from BC5 texture)
  * @param normal_scale  Normal map intensity scale (glTF normalTexture.scale)
  * @return Normalized world-space shading normal
  */
-vec3 get_shading_normal(vec3 N, vec4 tangent, vec3 normal_sample, float normal_scale) {
-    // Decode tangent-space normal from [0,1] to [-1,1]
-    vec3 ts_normal = normal_sample * 2.0 - 1.0;
-    ts_normal.xy *= normal_scale;
+vec3 get_shading_normal(vec3 N, vec4 tangent, vec2 normal_rg, float normal_scale) {
+    // Decode tangent-space XY from [0,1] to [-1,1], reconstruct Z from BC5 RG
+    vec2 xy = normal_rg * 2.0 - 1.0;
+    xy *= normal_scale;
+    float z = sqrt(max(0.0, 1.0 - dot(xy, xy)));
+    vec3 ts_normal = vec3(xy, z);
 
     // Degenerate tangent guard: skip TBN if tangent is zero-length
     float tangent_len = length(tangent.xyz);

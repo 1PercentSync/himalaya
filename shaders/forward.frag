@@ -45,8 +45,8 @@ void main() {
 
     // Shading normal (geometric normal + normal map via TBN)
     vec3 N = normalize(frag_normal);
-    vec3 normal_sample = texture(textures[nonuniformEXT(mat.normal_tex)], frag_uv0).rgb;
-    N = get_shading_normal(N, frag_tangent, normal_sample, mat.normal_scale);
+    vec2 normal_rg = texture(textures[nonuniformEXT(mat.normal_tex)], frag_uv0).rg;
+    N = get_shading_normal(N, frag_tangent, normal_rg, mat.normal_scale);
 
     // Metallic/roughness from texture (glTF: G = roughness, B = metallic)
     vec4 mr_texel = texture(textures[nonuniformEXT(mat.metallic_roughness_tex)], frag_uv0);

@@ -36,11 +36,11 @@ void main() {
     }
 
     // Sample normal map
-    vec3 normal_sample = texture(textures[nonuniformEXT(mat.normal_tex)], frag_uv0).rgb;
+    vec2 normal_rg = texture(textures[nonuniformEXT(mat.normal_tex)], frag_uv0).rg;
 
     // Construct world-space shading normal via TBN
     vec3 N = normalize(frag_normal);
-    vec3 shading_normal = get_shading_normal(N, frag_tangent, normal_sample, mat.normal_scale);
+    vec3 shading_normal = get_shading_normal(N, frag_tangent, normal_rg, mat.normal_scale);
 
     // Encode to R10G10B10A2 UNORM
     out_normal = encode_normal_r10g10b10a2(shading_normal);
