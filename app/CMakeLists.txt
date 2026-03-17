@@ -12,8 +12,9 @@ target_include_directories(himalaya_app PRIVATE include)
 
 find_package(fastgltf CONFIG REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
+find_package(OpenMP REQUIRED)
 
-target_link_libraries(himalaya_app PRIVATE himalaya_rhi himalaya_framework himalaya_passes fastgltf::fastgltf nlohmann_json::nlohmann_json)
+target_link_libraries(himalaya_app PRIVATE himalaya_rhi himalaya_framework himalaya_passes fastgltf::fastgltf nlohmann_json::nlohmann_json OpenMP::OpenMP_CXX)
 
 # Clean and copy shaders to build directory after each build
 add_custom_command(TARGET himalaya_app POST_BUILD

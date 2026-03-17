@@ -18,7 +18,6 @@
 
 #include <cassert>
 #include <filesystem>
-#include <future>
 #include <limits>
 #include <map>
 #include <stdexcept>
@@ -455,36 +454,30 @@ namespace himalaya::app {
             collect(mat.emissiveTexture, framework::TextureRole::Color);
         }
 
-        // Phase 2: Decode images + prepare textures in parallel
+        // Phase 2: Decode images serially (fastgltf data not thread-safe)
         framework::ensure_bc_init();
+        const auto tex_count = static_cast<int>(unique_entries.size());
 
-        std::vector<framework::ImageData> decoded_images(unique_entries.size());
-        std::vector<std::future<framework::PreparedTexture>> futures(unique_entries.size());
-
-        for (size_t i = 0; i < unique_entries.size(); ++i) {
-            const auto &entry = unique_entries[i];
-            const auto &tex = gltf.textures[entry.texture_index];
+        std::vector<framework::ImageData> decoded_images(tex_count);
+        for (int i = 0; i < tex_count; ++i) {
+            const auto &tex = gltf.textures[unique_entries[i].texture_index];
             assert(tex.imageIndex.has_value() && "glTF texture must have an image source");
-
-            // Decode image (must happen before async — fastgltf data may not be thread-safe)
             decoded_images[i] = decode_gltf_image(gltf, gltf.images[*tex.imageIndex], base_dir);
-
-            const auto *pixels_ptr = &decoded_images[i];
-            const auto role = entry.role;
-            futures[i] = std::async(std::launch::async, [pixels_ptr, role] {
-                return framework::prepare_texture(*pixels_ptr, role);
-            });
         }
 
-        // Phase 3: Wait for each and upload serially (GPU operations)
-        std::map<TexKey, rhi::BindlessIndex> tex_cache;
-        std::vector<framework::PreparedTexture> prepared_textures(unique_entries.size());
+        // Phase 2b: Parallel BC compression via OpenMP (thread pool, dynamic scheduling)
+        std::vector<framework::PreparedTexture> prepared_textures(tex_count);
 
-        for (size_t i = 0; i < unique_entries.size(); ++i) {
-            prepared_textures[i] = futures[i].get();
+        #pragma omp parallel for schedule(dynamic)
+        for (int i = 0; i < tex_count; ++i) {
+            prepared_textures[i] = framework::prepare_texture(
+                decoded_images[i], unique_entries[i].role);
         }
-        // Free decoded images — no longer needed after prepare
+
         decoded_images.clear();
+
+        // Phase 3: Serial GPU upload
+        std::map<TexKey, rhi::BindlessIndex> tex_cache;
 
         for (size_t i = 0; i < unique_entries.size(); ++i) {
             const auto &entry = unique_entries[i];
