@@ -9,29 +9,61 @@
 
 namespace himalaya::framework {
 
-    // ---- KTX2 file format constants ----
+    // ---- KTX2 binary layout ----
 
     static constexpr uint8_t kKtx2Identifier[12] = {
         0xAB, 0x4B, 0x54, 0x58, 0x20, 0x32, 0x30, 0xBB, 0x0D, 0x0A, 0x1A, 0x0A
     };
 
-    static constexpr uint32_t kHeaderSize = 80;  // identifier(12) + header(36) + index(32)
+    /// Maps 1:1 to the first 80 bytes of a KTX2 file (little-endian, x86/x64).
+#pragma pack(push, 1)
+    struct Ktx2FileHeader {
+        uint8_t  identifier[12];
+        // Header fields (9 × uint32)
+        uint32_t vk_format;
+        uint32_t type_size;
+        uint32_t pixel_width;
+        uint32_t pixel_height;
+        uint32_t pixel_depth;
+        uint32_t layer_count;
+        uint32_t face_count;
+        uint32_t level_count;
+        uint32_t supercompression_scheme;
+        // Index section (4 × uint32 + 2 × uint64)
+        uint32_t dfd_byte_offset;
+        uint32_t dfd_byte_length;
+        uint32_t kvd_byte_offset;
+        uint32_t kvd_byte_length;
+        uint64_t sgd_byte_offset;
+        uint64_t sgd_byte_length;
+    };
+
+    /// One entry in the per-level index (3 × uint64 = 24 bytes).
+    struct Ktx2LevelIndexEntry {
+        uint64_t byte_offset;
+        uint64_t byte_length;
+        uint64_t uncompressed_byte_length;
+    };
+#pragma pack(pop)
+
+    static_assert(sizeof(Ktx2FileHeader) == 80);
+    static_assert(sizeof(Ktx2LevelIndexEntry) == 24);
 
     // ---- KHR Data Format constants ----
 
-    static constexpr uint8_t kDfModelRgbsda  = 1;
-    static constexpr uint8_t kDfModelBc5     = 132;
-    static constexpr uint8_t kDfModelBc7     = 134;
-    static constexpr uint8_t kDfTransferLinear = 1;
-    static constexpr uint8_t kDfTransferSrgb   = 2;
-    static constexpr uint8_t kDfPrimariesBt709 = 1;
-    static constexpr uint16_t kDfVersion13     = 2;
+    static constexpr uint8_t kDfModelRgbsda    = 1;
+    static constexpr uint8_t kDfModelBc5       = 132;
+    static constexpr uint8_t kDfModelBc7       = 134;
+    static constexpr uint8_t kDfTransferLinear  = 1;
+    static constexpr uint8_t kDfTransferSrgb    = 2;
+    static constexpr uint8_t kDfPrimariesBt709  = 1;
+    static constexpr uint16_t kDfVersion        = 2; // KHR Data Format 1.3
 
-    // Sample datatype flags (stored in upper bits of channelType byte)
-    static constexpr uint8_t kDfSampleFloat  = 0x80;
-    static constexpr uint8_t kDfSampleSigned = 0x40;
+    // Sample datatype flags (upper bits of channelType byte)
+    static constexpr uint8_t kDfSampleFloat    = 0x80;
+    static constexpr uint8_t kDfSampleSigned   = 0x40;
 
-    // RGBSDA channel IDs
+    // Channel IDs (RGBSDA model; values also match BC5 model channels)
     static constexpr uint8_t kChannelR = 0;
     static constexpr uint8_t kChannelG = 1;
     static constexpr uint8_t kChannelB = 2;
@@ -48,18 +80,30 @@ namespace himalaya::framework {
         uint32_t upper;
     };
 
+    /// DFD basic block header parameters.
+    struct DfdBlockDesc {
+        uint8_t color_model;
+        uint8_t transfer;
+        uint8_t texel_dim_x;   ///< 0-indexed (value 3 → 4 texels).
+        uint8_t texel_dim_y;   ///< 0-indexed.
+        uint8_t bytes_plane0;
+    };
+
+    // DFD section sizes
+    static constexpr size_t kDfdPrefixSize      = 4;   // dfdTotalSize field
+    static constexpr size_t kDfdBlockHeaderSize  = 24;  // 6 × uint32
+    static constexpr size_t kDfdSampleSize       = 16;  // 4 × uint32 per sample
+
     /// Builds the complete DFD (including dfdTotalSize prefix) as a byte vector.
     static std::vector<uint8_t> build_dfd(
-        const uint8_t color_model,
-        const uint8_t transfer_function,
-        const uint8_t texel_dim_x, const uint8_t texel_dim_y,
-        const uint8_t bytes_plane0,
+        const DfdBlockDesc &block,
         const std::vector<DfdSample> &samples) {
 
-        const uint32_t descriptor_block_size = 24 + 16 * static_cast<uint32_t>(samples.size());
-        const uint32_t dfd_total_size = 4 + descriptor_block_size;
+        const auto sample_count = static_cast<uint32_t>(samples.size());
+        const uint32_t block_size = kDfdBlockHeaderSize + kDfdSampleSize * sample_count;
+        const uint32_t total_size = kDfdPrefixSize + block_size;
 
-        std::vector<uint8_t> dfd(dfd_total_size, 0);
+        std::vector<uint8_t> dfd(total_size, 0);
         auto write32 = [&](const size_t off, const uint32_t v) {
             std::memcpy(dfd.data() + off, &v, 4);
         };
@@ -67,39 +111,30 @@ namespace himalaya::framework {
             std::memcpy(dfd.data() + off, &v, 2);
         };
 
-        // dfdTotalSize
-        write32(0, dfd_total_size);
+        // dfdTotalSize prefix
+        write32(0, total_size);
 
-        // Descriptor block header (offset 4)
-        // Word 0: vendorId(0:16)=0 | descriptorType(17:31)=0
-        write32(4, 0);
-        // Word 1: versionNumber(0:15) | descriptorBlockSize(16:31)
-        write32(8, static_cast<uint32_t>(kDfVersion13)
-                 | (descriptor_block_size << 16));
-        // Word 2: colorModel(0:7) | primaries(8:15) | transfer(16:23) | flags(24:31)
-        write32(12, static_cast<uint32_t>(color_model)
-                  | (static_cast<uint32_t>(kDfPrimariesBt709) << 8)
-                  | (static_cast<uint32_t>(transfer_function) << 16)
-                  | (0u << 24)); // flags = 0 (alpha straight)
-        // Word 3: texelBlockDimension[4] (0-indexed)
-        write32(16, static_cast<uint32_t>(texel_dim_x)
-                  | (static_cast<uint32_t>(texel_dim_y) << 8));
-        // Word 4: bytesPlane[0-3]
-        write32(20, static_cast<uint32_t>(bytes_plane0));
-        // Word 5: bytesPlane[4-7] = 0 (already zeroed)
+        // Block header (6 words starting after prefix)
+        const size_t hdr = kDfdPrefixSize;
+        write32(hdr,      0); // vendorId(0) | descriptorType(0) — Khronos basic
+        write32(hdr + 4,  static_cast<uint32_t>(kDfVersion) | (block_size << 16));
+        write32(hdr + 8,  static_cast<uint32_t>(block.color_model)
+                         | (static_cast<uint32_t>(kDfPrimariesBt709) << 8)
+                         | (static_cast<uint32_t>(block.transfer) << 16));
+        write32(hdr + 12, static_cast<uint32_t>(block.texel_dim_x)
+                         | (static_cast<uint32_t>(block.texel_dim_y) << 8));
+        write32(hdr + 16, static_cast<uint32_t>(block.bytes_plane0));
+        // Word 5 (bytesPlane[4-7]) = 0, already zeroed
 
-        // Sample descriptors (offset 28 within DFD = 4 + 24 header bytes)
+        // Sample descriptors
         for (size_t i = 0; i < samples.size(); ++i) {
-            const size_t base = 28 + i * 16;
+            const size_t base = kDfdPrefixSize + kDfdBlockHeaderSize + i * kDfdSampleSize;
             const auto &s = samples[i];
-            // Word 0: bitOffset(0:15) | bitLength(16:23) | channelType(24:31)
-            write16(base, s.bit_offset);
-            dfd[base + 2] = s.bit_length;
-            dfd[base + 3] = s.channel_type;
-            // Word 1: samplePosition[4] = 0 (already zeroed)
-            // Word 2: sampleLower
-            write32(base + 8, s.lower);
-            // Word 3: sampleUpper
+            write16(base,     s.bit_offset);
+            dfd[base + 2]   = s.bit_length;
+            dfd[base + 3]   = s.channel_type;
+            // samplePosition[4] = 0, already zeroed
+            write32(base + 8,  s.lower);
             write32(base + 12, s.upper);
         }
 
@@ -110,33 +145,33 @@ namespace himalaya::framework {
     static std::vector<uint8_t> build_dfd_for_format(const rhi::Format format) {
         switch (format) {
             case rhi::Format::Bc7UnormBlock:
-                return build_dfd(kDfModelBc7, kDfTransferLinear, 3, 3, 16,
+                return build_dfd({kDfModelBc7, kDfTransferLinear, 3, 3, 16},
                     {{0, 127, 0, 0, UINT32_MAX}});
 
             case rhi::Format::Bc7SrgbBlock:
-                return build_dfd(kDfModelBc7, kDfTransferSrgb, 3, 3, 16,
+                return build_dfd({kDfModelBc7, kDfTransferSrgb, 3, 3, 16},
                     {{0, 127, 0, 0, UINT32_MAX}});
 
             case rhi::Format::Bc5UnormBlock:
-                return build_dfd(kDfModelBc5, kDfTransferLinear, 3, 3, 16,
+                return build_dfd({kDfModelBc5, kDfTransferLinear, 3, 3, 16},
                     {{0,  63, kChannelR, 0, UINT32_MAX},
                      {64, 63, kChannelG, 0, UINT32_MAX}});
 
             case rhi::Format::R16G16B16A16Sfloat:
-                return build_dfd(kDfModelRgbsda, kDfTransferLinear, 0, 0, 8,
+                return build_dfd({kDfModelRgbsda, kDfTransferLinear, 0, 0, 8},
                     {{ 0, 15, static_cast<uint8_t>(kChannelR | kDfSampleFloat | kDfSampleSigned), 0xBF800000, 0x3F800000},
                      {16, 15, static_cast<uint8_t>(kChannelG | kDfSampleFloat | kDfSampleSigned), 0xBF800000, 0x3F800000},
                      {32, 15, static_cast<uint8_t>(kChannelB | kDfSampleFloat | kDfSampleSigned), 0xBF800000, 0x3F800000},
                      {48, 15, static_cast<uint8_t>(kChannelA | kDfSampleFloat | kDfSampleSigned), 0xBF800000, 0x3F800000}});
 
             case rhi::Format::B10G11R11UfloatPack32:
-                return build_dfd(kDfModelRgbsda, kDfTransferLinear, 0, 0, 4,
+                return build_dfd({kDfModelRgbsda, kDfTransferLinear, 0, 0, 4},
                     {{ 0, 10, static_cast<uint8_t>(kChannelR | kDfSampleFloat), 0, 0x3F800000},
                      {11, 10, static_cast<uint8_t>(kChannelG | kDfSampleFloat), 0, 0x3F800000},
                      {22,  9, static_cast<uint8_t>(kChannelB | kDfSampleFloat), 0, 0x3F800000}});
 
             case rhi::Format::R16G16Unorm:
-                return build_dfd(kDfModelRgbsda, kDfTransferLinear, 0, 0, 4,
+                return build_dfd({kDfModelRgbsda, kDfTransferLinear, 0, 0, 4},
                     {{ 0, 15, kChannelR, 0, 0xFFFF},
                      {16, 15, kChannelG, 0, 0xFFFF}});
 
@@ -180,87 +215,56 @@ namespace himalaya::framework {
         }
 
         const auto level_count = static_cast<uint32_t>(levels.size());
-        const uint32_t level_index_size = level_count * 24; // 3 × uint64 per level
         const uint32_t block_bytes = rhi::format_bytes_per_block(format);
         const uint64_t mip_alignment = std::lcm(static_cast<uint64_t>(block_bytes), uint64_t{4});
 
-        // Compute DFD offset: right after level index
-        const uint32_t dfd_offset = kHeaderSize + level_index_size;
-        const auto dfd_length = static_cast<uint32_t>(dfd.size());
+        // 1. Fill header
+        Ktx2FileHeader header{};
+        std::memcpy(header.identifier, kKtx2Identifier, 12);
+        header.vk_format               = static_cast<uint32_t>(rhi::to_vk_format(format));
+        header.type_size               = ktx2_type_size(format);
+        header.pixel_width             = base_width;
+        header.pixel_height            = base_height;
+        header.face_count              = face_count;
+        header.level_count             = level_count;
+        header.dfd_byte_offset         = sizeof(Ktx2FileHeader)
+                                       + level_count * sizeof(Ktx2LevelIndexEntry);
+        header.dfd_byte_length         = static_cast<uint32_t>(dfd.size());
+        // pixel_depth, layer_count, supercompression_scheme,
+        // kvd_*, sgd_* all zero-initialized
 
-        // Compute mip data start: after DFD, aligned
-        uint64_t data_cursor = align_up(dfd_offset + dfd_length, mip_alignment);
+        // 2. Compute level index (mip data stored smallest-first per KTX2 spec)
+        uint64_t data_cursor = align_up(
+            header.dfd_byte_offset + header.dfd_byte_length, mip_alignment);
 
-        // KTX2 stores mip data smallest-first. Build per-level file offsets.
-        struct LevelEntry {
-            uint64_t byte_offset;
-            uint64_t byte_length;
-        };
-        std::vector<LevelEntry> level_entries(level_count);
-
-        // First pass: compute offsets for levels stored smallest-to-largest in file
+        std::vector<Ktx2LevelIndexEntry> level_index(level_count);
         for (uint32_t i = level_count; i-- > 0; ) {
             data_cursor = align_up(data_cursor, mip_alignment);
-            level_entries[i].byte_offset = data_cursor;
-            level_entries[i].byte_length = levels[i].size;
+            level_index[i] = {
+                .byte_offset = data_cursor,
+                .byte_length = levels[i].size,
+                .uncompressed_byte_length = levels[i].size, // no supercompression
+            };
             data_cursor += levels[i].size;
         }
 
-        const auto total_file_size = data_cursor;
+        // 3. Assemble file in memory
+        std::vector<uint8_t> file_buf(data_cursor, 0);
 
-        // Build the file in memory
-        std::vector<uint8_t> file_buf(total_file_size, 0);
-        auto write8 = [&](const size_t off, const uint8_t *src, const size_t n) {
-            std::memcpy(file_buf.data() + off, src, n);
-        };
-        auto write32 = [&](const size_t off, const uint32_t v) {
-            std::memcpy(file_buf.data() + off, &v, 4);
-        };
-        auto write64 = [&](const size_t off, const uint64_t v) {
-            std::memcpy(file_buf.data() + off, &v, 8);
-        };
+        std::memcpy(file_buf.data(),
+                    &header, sizeof(header));
+        std::memcpy(file_buf.data() + sizeof(header),
+                    level_index.data(), level_count * sizeof(Ktx2LevelIndexEntry));
+        std::memcpy(file_buf.data() + header.dfd_byte_offset,
+                    dfd.data(), dfd.size());
 
-        // 1. Identifier
-        write8(0, kKtx2Identifier, 12);
-
-        // 2. Header fields
-        write32(12, static_cast<uint32_t>(rhi::to_vk_format(format)));  // vkFormat
-        write32(16, ktx2_type_size(format));                             // typeSize
-        write32(20, base_width);                                         // pixelWidth
-        write32(24, base_height);                                        // pixelHeight
-        write32(28, 0);                                                  // pixelDepth (2D)
-        write32(32, 0);                                                  // layerCount (non-array)
-        write32(36, face_count);                                         // faceCount
-        write32(40, level_count);                                        // levelCount
-        write32(44, 0);                                                  // supercompressionScheme (none)
-
-        // 3. Index section
-        write32(48, dfd_offset);    // dfdByteOffset
-        write32(52, dfd_length);    // dfdByteLength
-        write32(56, 0);             // kvdByteOffset (none)
-        write32(60, 0);             // kvdByteLength (none)
-        write64(64, 0);             // sgdByteOffset (none)
-        write64(72, 0);             // sgdByteLength (none)
-
-        // 4. Level index (offset 80)
         for (uint32_t i = 0; i < level_count; ++i) {
-            const size_t off = kHeaderSize + i * 24;
-            write64(off,      level_entries[i].byte_offset);
-            write64(off + 8,  level_entries[i].byte_length);
-            write64(off + 16, level_entries[i].byte_length); // uncompressed = compressed (no supercompression)
+            std::memcpy(file_buf.data() + level_index[i].byte_offset,
+                        static_cast<const uint8_t *>(levels[i].data),
+                        levels[i].size);
         }
 
-        // 5. DFD
-        write8(dfd_offset, dfd.data(), dfd.size());
-
-        // 6. Mip data (file stores smallest-first, but we write via offset)
-        for (uint32_t i = 0; i < level_count; ++i) {
-            write8(static_cast<size_t>(level_entries[i].byte_offset),
-                   static_cast<const uint8_t *>(levels[i].data),
-                   static_cast<size_t>(levels[i].size));
-        }
-
-        // Write to disk
+        // 4. Write to disk
         std::ofstream ofs(path, std::ios::binary | std::ios::trunc);
         if (!ofs) {
             spdlog::error("ktx2: cannot open file for writing: {}", path.string());
@@ -281,102 +285,97 @@ namespace himalaya::framework {
         }
 
         const auto file_size = static_cast<size_t>(ifs.tellg());
-        if (file_size < kHeaderSize) {
+        if (file_size < sizeof(Ktx2FileHeader)) {
             spdlog::warn("ktx2: file too small: {}", path.string());
             return std::nullopt;
         }
 
         ifs.seekg(0);
-        std::vector<uint8_t> blob(file_size);
-        ifs.read(reinterpret_cast<char *>(blob.data()), static_cast<std::streamsize>(file_size));
+        std::vector<uint8_t> file(file_size);
+        ifs.read(reinterpret_cast<char *>(file.data()), static_cast<std::streamsize>(file_size));
         if (!ifs.good()) {
             spdlog::warn("ktx2: read error: {}", path.string());
             return std::nullopt;
         }
 
-        auto read32 = [&](const size_t off) -> uint32_t {
-            uint32_t v;
-            std::memcpy(&v, blob.data() + off, 4);
-            return v;
-        };
-        auto read64 = [&](const size_t off) -> uint64_t {
-            uint64_t v;
-            std::memcpy(&v, blob.data() + off, 8);
-            return v;
-        };
+        // 1. Parse header
+        Ktx2FileHeader header;
+        std::memcpy(&header, file.data(), sizeof(header));
 
-        // 1. Validate identifier
-        if (std::memcmp(blob.data(), kKtx2Identifier, 12) != 0) {
+        if (std::memcmp(header.identifier, kKtx2Identifier, 12) != 0) {
             spdlog::warn("ktx2: invalid identifier: {}", path.string());
             return std::nullopt;
         }
 
-        // 2. Parse header
-        const auto vk_format = static_cast<VkFormat>(read32(12));
-        const auto format = rhi::from_vk_format(vk_format);
+        const auto format = rhi::from_vk_format(static_cast<VkFormat>(header.vk_format));
         if (format == rhi::Format::Undefined) {
-            spdlog::warn("ktx2: unsupported vkFormat {}: {}", read32(12), path.string());
+            spdlog::warn("ktx2: unsupported vkFormat {}: {}", header.vk_format, path.string());
             return std::nullopt;
         }
 
-        const uint32_t pixel_width  = read32(20);
-        const uint32_t pixel_height = read32(24);
-        const uint32_t pixel_depth  = read32(28);
-        const uint32_t layer_count  = read32(32);
-        const uint32_t face_count   = read32(36);
-        const uint32_t level_count  = read32(40);
-        const uint32_t supercompression = read32(44);
-
-        if (pixel_depth != 0) {
+        if (header.pixel_depth != 0) {
             spdlog::warn("ktx2: 3D textures not supported: {}", path.string());
             return std::nullopt;
         }
-        if (layer_count != 0) {
+        if (header.layer_count != 0) {
             spdlog::warn("ktx2: array textures not supported: {}", path.string());
             return std::nullopt;
         }
-        if (face_count != 1 && face_count != 6) {
-            spdlog::warn("ktx2: invalid faceCount {}: {}", face_count, path.string());
+        if (header.face_count != 1 && header.face_count != 6) {
+            spdlog::warn("ktx2: invalid faceCount {}: {}", header.face_count, path.string());
             return std::nullopt;
         }
-        if (level_count == 0) {
+        if (header.level_count == 0) {
             spdlog::warn("ktx2: levelCount is 0: {}", path.string());
             return std::nullopt;
         }
-        if (supercompression != 0) {
+        if (header.supercompression_scheme != 0) {
             spdlog::warn("ktx2: supercompression not supported: {}", path.string());
             return std::nullopt;
         }
 
-        // 3. Parse level index (starts at offset 80)
-        const size_t level_index_end = kHeaderSize + static_cast<size_t>(level_count) * 24;
+        // 2. Parse level index
+        const size_t level_index_end = sizeof(header)
+            + static_cast<size_t>(header.level_count) * sizeof(Ktx2LevelIndexEntry);
         if (file_size < level_index_end) {
             spdlog::warn("ktx2: file too small for level index: {}", path.string());
             return std::nullopt;
         }
 
-        Ktx2Data result;
-        result.format = format;
-        result.base_width = pixel_width;
-        result.base_height = pixel_height;
-        result.face_count = face_count;
-        result.level_count = level_count;
-        result.levels.resize(level_count);
+        std::vector<Ktx2LevelIndexEntry> level_index(header.level_count);
+        std::memcpy(level_index.data(),
+                    file.data() + sizeof(header),
+                    header.level_count * sizeof(Ktx2LevelIndexEntry));
 
-        for (uint32_t i = 0; i < level_count; ++i) {
-            const size_t off = kHeaderSize + static_cast<size_t>(i) * 24;
-            const uint64_t byte_offset = read64(off);
-            const uint64_t byte_length = read64(off + 8);
-
-            if (byte_offset + byte_length > file_size) {
+        // Validate bounds and compute total mip size
+        uint64_t total_mip_size = 0;
+        for (uint32_t i = 0; i < header.level_count; ++i) {
+            if (level_index[i].byte_offset + level_index[i].byte_length > file_size) {
                 spdlog::warn("ktx2: level {} data out of bounds: {}", i, path.string());
                 return std::nullopt;
             }
-
-            result.levels[i] = {byte_offset, byte_length};
+            total_mip_size += level_index[i].byte_length;
         }
 
-        result.blob = std::move(blob);
+        // 3. Extract mip data into contiguous buffer (strips KTX2 metadata)
+        Ktx2Data result;
+        result.format      = format;
+        result.base_width  = header.pixel_width;
+        result.base_height = header.pixel_height;
+        result.face_count  = header.face_count;
+        result.level_count = header.level_count;
+        result.levels.resize(header.level_count);
+        result.blob.resize(total_mip_size);
+
+        uint64_t cursor = 0;
+        for (uint32_t i = 0; i < header.level_count; ++i) {
+            std::memcpy(result.blob.data() + cursor,
+                        file.data() + level_index[i].byte_offset,
+                        level_index[i].byte_length);
+            result.levels[i] = {cursor, level_index[i].byte_length};
+            cursor += level_index[i].byte_length;
+        }
+
         return result;
     }
 

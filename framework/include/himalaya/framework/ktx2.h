@@ -32,7 +32,7 @@ namespace himalaya::framework {
         };
 
         std::vector<Level> levels; ///< levels[0] = base (largest), levels[N-1] = smallest.
-        std::vector<uint8_t> blob; ///< Owns the raw file data.
+        std::vector<uint8_t> blob; ///< Contiguous mip data (KTX2 metadata stripped).
     };
 
     /** @brief Per-level data descriptor for write_ktx2(). */
@@ -60,7 +60,7 @@ namespace himalaya::framework {
      * @brief Reads a KTX2 file.
      *
      * @return Ktx2Data on success, nullopt on unsupported format or corrupt file.
-     *         The returned blob owns the file data; Level::offset indexes into blob.
+     *         The returned blob contains only mip data; Level::offset indexes into it.
      */
     std::optional<Ktx2Data> read_ktx2(const std::filesystem::path &path);
 } // namespace himalaya::framework
