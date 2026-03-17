@@ -207,8 +207,8 @@ namespace himalaya::framework {
                         out.data() + (static_cast<size_t>(by) * bx_count + bx) * 16,
                         block_pixels,
                         0,
-                        0,
-                        1);
+                        1,
+                        4);
                 }
             }
             return out;
