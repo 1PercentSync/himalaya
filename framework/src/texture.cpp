@@ -14,7 +14,6 @@
 #include <cassert>
 #include <cmath>
 #include <filesystem>
-#include <future>
 
 namespace himalaya::framework {
     ImageData load_image(const std::string &path) {
@@ -301,24 +300,16 @@ namespace himalaya::framework {
         const uint32_t base_h = mip_chain[0].height;
         const auto level_count = static_cast<uint32_t>(mip_chain.size());
 
-        // 2. BC compress each mip level (parallel across levels)
-        std::vector<std::future<std::vector<uint8_t>>> futures(level_count);
-        for (uint32_t i = 0; i < level_count; ++i) {
-            const auto *pixels = mip_chain[i].data.data();
-            const uint32_t mw = mip_chain[i].width;
-            const uint32_t mh = mip_chain[i].height;
-            const bool perceptual = (role == TextureRole::Color);
-            const bool is_normal = (role == TextureRole::Normal);
-
-            futures[i] = std::async(std::launch::async, [pixels, mw, mh, perceptual, is_normal] {
-                return is_normal ? compress_bc5(pixels, mw, mh)
-                                 : compress_bc7(pixels, mw, mh, perceptual);
-            });
-        }
-
+        // 2. BC compress each mip level (serial — texture-level parallelism deferred)
         std::vector<std::vector<uint8_t>> compressed(level_count);
         for (uint32_t i = 0; i < level_count; ++i) {
-            compressed[i] = futures[i].get();
+            const auto &mip = mip_chain[i];
+            if (role == TextureRole::Normal) {
+                compressed[i] = compress_bc5(mip.data.data(), mip.width, mip.height);
+            } else {
+                compressed[i] = compress_bc7(mip.data.data(), mip.width, mip.height,
+                                             role == TextureRole::Color);
+            }
         }
 
         // Free RGBA8 mip chain — no longer needed after compression
