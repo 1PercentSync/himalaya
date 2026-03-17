@@ -1,6 +1,7 @@
 add_library(himalaya_framework STATIC)
 
 target_sources(himalaya_framework PRIVATE
+        src/cache.cpp
         src/camera.cpp
         src/culling.cpp
         src/ibl.cpp
