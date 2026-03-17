@@ -22,8 +22,9 @@ namespace himalaya::framework {
      * Linear data (normal, roughness, occlusion) uses UNORM for raw values.
      */
     enum class TextureRole {
-        Color, ///< R8G8B8A8_SRGB (gamma-correct color data)
-        Linear, ///< R8G8B8A8_UNORM (linear data: normals, roughness, etc.)
+        Color,  ///< BC7_SRGB (gamma-correct color data: base color, emissive)
+        Linear, ///< BC7_UNORM (linear data: roughness, metallic, occlusion)
+        Normal, ///< BC5_UNORM (tangent-space normals, RG only, Z reconstructed in shader)
     };
 
     /**
