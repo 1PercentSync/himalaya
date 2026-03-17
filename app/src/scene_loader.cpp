@@ -495,7 +495,7 @@ namespace himalaya::app {
                                               : UINT32_MAX;
             data.normal_tex = mat.normalTexture.has_value()
                                   ? resolve_texture(mat.normalTexture->textureIndex,
-                                                    framework::TextureRole::Linear)
+                                                    framework::TextureRole::Normal)
                                   : UINT32_MAX;
             data.occlusion_tex = mat.occlusionTexture.has_value()
                                      ? resolve_texture(mat.occlusionTexture->textureIndex,
