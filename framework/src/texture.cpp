@@ -176,6 +176,8 @@ namespace himalaya::framework {
                                           const bool perceptual) {
             bc7enc_compress_block_params params{};
             bc7enc_compress_block_params_init(&params);
+            params.m_uber_level = BC7ENC_MAX_UBER_LEVEL;
+            params.m_mode17_partition_estimation_filterbank = false;
             if (perceptual) {
                 bc7enc_compress_block_params_init_perceptual_weights(&params);
             }
@@ -209,7 +211,7 @@ namespace himalaya::framework {
                     extract_block(rgba, w, h, bx, by, block_pixels);
                     // BC5 = two BC4 blocks. rgbcx::encode_bc5 takes RGBA pixels,
                     // chan0=R(0), chan1=G(1), stride=4 bytes per pixel.
-                    rgbcx::encode_bc5(
+                    rgbcx::encode_bc5_hq(
                         out.data() + (static_cast<size_t>(by) * bx_count + bx) * 16,
                         block_pixels,
                         0,
