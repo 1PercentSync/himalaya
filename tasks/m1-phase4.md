@@ -98,7 +98,7 @@
 
 - [x] `framework/culling.h` 重构为纯几何剔除：`Frustum` 结构体 + `extract_frustum(mat4 vp)` + `cull_against_frustum(instances, frustum, out_visible)`（预分配 buffer 版），删除旧 `cull_frustum()`
 - [x] 现有相机 frustum cull 迁移到通用接口：`cull_against_frustum()` + 调用方内联分桶（opaque/transparent）+ 透明排序
-- [ ] 验证：现有相机剔除行为不变（渲染输出与重构前一致），无 validation 报错
+- [x] 验证：现有相机剔除行为不变（渲染输出与重构前一致），无 validation 报错
 
 ## Step 2：Shadow 资源 + ShadowPass + 单 cascade 深度渲染
 
