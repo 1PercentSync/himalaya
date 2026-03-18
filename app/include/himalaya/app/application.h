@@ -194,6 +194,14 @@ namespace himalaya::app {
         void update_ibl_input();
 
         /**
+         * @brief Positions the camera to overlook the current scene.
+         *
+         * Sets yaw=0, pitch=-45 degrees, and computes position from scene AABB
+         * using compute_focus_position(). No-op if the scene AABB is degenerate.
+         */
+        void auto_position_camera();
+
+        /**
          * @brief Updates shadow_config_.max_distance from current scene AABB.
          *
          * Called after scene load/switch. If the scene AABB diagonal is valid,

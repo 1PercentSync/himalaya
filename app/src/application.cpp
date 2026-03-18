@@ -92,6 +92,20 @@ namespace himalaya::app {
         }
 
         update_shadow_config_from_scene();
+        auto_position_camera();
+    }
+
+    void Application::auto_position_camera() {
+        const auto &bounds = scene_loader_.scene_bounds();
+        const float diagonal = glm::length(bounds.max - bounds.min);
+
+        constexpr float kEpsilon = 1e-4f;
+        if (diagonal < kEpsilon) return; // degenerate — keep default position
+
+        camera_.yaw = 0.0f;
+        camera_.pitch = glm::radians(-45.0f);
+        camera_.position = camera_.compute_focus_position(bounds);
+        camera_.update_all();
     }
 
     void Application::update_shadow_config_from_scene() {
@@ -127,6 +141,7 @@ namespace himalaya::app {
         }
 
         update_shadow_config_from_scene();
+        auto_position_camera();
 
         config_.scene_path = path;
         save_config(config_);
