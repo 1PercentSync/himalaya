@@ -54,13 +54,13 @@ void main() {
     float roughness = mr_texel.g * mat.roughness_factor;
 
     // ---- Debug: material property visualizations (early out, no lighting) ----
-    if (global.debug_render_mode >= 4u) {
+    if (global.debug_render_mode >= DEBUG_MODE_PASSTHROUGH_START) {
         vec3 vis;
         switch (global.debug_render_mode) {
-            case 4u: vis = N * 0.5 + 0.5; break;
-            case 5u: vis = vec3(metallic); break;
-            case 6u: vis = vec3(roughness); break;
-            case 7u: vis = vec3(texture(textures[nonuniformEXT(mat.occlusion_tex)], frag_uv0).r); break;
+            case DEBUG_MODE_NORMAL:    vis = N * 0.5 + 0.5; break;
+            case DEBUG_MODE_METALLIC:  vis = vec3(metallic); break;
+            case DEBUG_MODE_ROUGHNESS: vis = vec3(roughness); break;
+            case DEBUG_MODE_AO:        vis = vec3(texture(textures[nonuniformEXT(mat.occlusion_tex)], frag_uv0).r); break;
             default: vis = vec3(1.0, 0.0, 1.0); break;
         }
         out_color = vec4(vis, 1.0);
@@ -123,16 +123,16 @@ void main() {
     // ---- Combine based on debug render mode ----
     vec3 color;
     switch (global.debug_render_mode) {
-        case 1u: // Diffuse Only
+        case DEBUG_MODE_DIFFUSE_ONLY:
             color = direct_diffuse + global.ibl_intensity * ibl_diffuse * ao;
             break;
-        case 2u: // Specular Only
+        case DEBUG_MODE_SPECULAR_ONLY:
             color = direct_specular + global.ibl_intensity * ibl_specular * ao;
             break;
-        case 3u: // IBL Only
+        case DEBUG_MODE_IBL_ONLY:
             color = global.ibl_intensity * (ibl_diffuse + ibl_specular) * ao;
             break;
-        default: // Full PBR
+        default: // DEBUG_MODE_FULL_PBR
             color = (direct_diffuse + direct_specular)
                   + global.ibl_intensity * (ibl_diffuse + ibl_specular) * ao
                   + emissive;

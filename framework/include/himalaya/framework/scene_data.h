@@ -181,8 +181,9 @@ namespace himalaya::framework {
         uint32_t skybox_cubemap_index = UINT32_MAX; ///< offset 308 — bindless index into cubemaps[]
         float ibl_rotation_sin = 0.0f; ///< offset 312 — sin(ibl_yaw) for environment rotation
         float ibl_rotation_cos = 1.0f; ///< offset 316 — cos(ibl_yaw) for environment rotation
-        uint32_t debug_render_mode = 0; ///< offset 320 — 0=Full PBR, 1-7=debug visualizations
-        uint32_t _pad[3]{}; ///< padding to 336 (std140 requires multiple of 16)
+        uint32_t debug_render_mode = 0; ///< offset 320 — DEBUG_MODE_* constants
+        uint32_t feature_flags = 0; ///< offset 324 — bitmask: FEATURE_SHADOWS, etc.
+        uint32_t _pad[2]{}; ///< padding to 336 (std140 requires multiple of 16)
     };
 
     /**

@@ -36,8 +36,8 @@ vec3 aces_tonemap(vec3 x) {
 void main() {
     vec3 hdr = texture(rt_hdr_color, in_uv).rgb;
 
-    // Material property modes (4+): passthrough, no exposure/ACES
-    if (global.debug_render_mode >= 4u) {
+    // Passthrough modes: no exposure/ACES (material property visualizations etc.)
+    if (global.debug_render_mode >= DEBUG_MODE_PASSTHROUGH_START) {
         out_color = vec4(hdr, 1.0);
         return;
     }

@@ -52,6 +52,22 @@ struct GPUMaterialData {
     uint  _padding;                 // offset 76
 };
 
+// ---- Feature flags (bitmask for GlobalUBO.feature_flags) ----
+
+#define FEATURE_SHADOWS (1u << 0)
+
+// ---- Debug render mode constants ----
+
+#define DEBUG_MODE_FULL_PBR          0
+#define DEBUG_MODE_DIFFUSE_ONLY      1
+#define DEBUG_MODE_SPECULAR_ONLY     2
+#define DEBUG_MODE_IBL_ONLY          3
+#define DEBUG_MODE_PASSTHROUGH_START 4
+#define DEBUG_MODE_NORMAL            4
+#define DEBUG_MODE_METALLIC          5
+#define DEBUG_MODE_ROUGHNESS         6
+#define DEBUG_MODE_AO                7
+
 // ---- Set 0: Global data (updated once per frame) ----
 
 layout(set = 0, binding = 0) uniform GlobalUBO {
@@ -71,7 +87,8 @@ layout(set = 0, binding = 0) uniform GlobalUBO {
     uint skybox_cubemap_index;              // offset 308 — bindless index into cubemaps[]
     float ibl_rotation_sin;                 // offset 312 — sin(ibl_yaw) for environment rotation
     float ibl_rotation_cos;                 // offset 316 — cos(ibl_yaw) for environment rotation
-    uint debug_render_mode;                 // offset 320 — 0=Full PBR, 1-7=debug visualizations
+    uint debug_render_mode;                 // offset 320 — DEBUG_MODE_* constants
+    uint feature_flags;                     // offset 324 — bitmask: FEATURE_SHADOWS, etc.
 } global;
 
 layout(set = 0, binding = 1) readonly buffer LightBuffer {
