@@ -89,8 +89,9 @@ namespace himalaya::framework {
             // sRGB textures must be filtered in linear space to avoid darkening
             // artifacts in lower mip levels. stbir_resize_uint8_srgb handles
             // the decode (gamma expand) → filter → encode (gamma compress) cycle.
-            const auto resize = srgb ? stbir_resize_uint8_srgb
-                                     : stbir_resize_uint8_linear;
+            const auto resize = srgb
+                                    ? stbir_resize_uint8_srgb
+                                    : stbir_resize_uint8_linear;
 
             std::vector<CpuMipLevel> levels(level_count);
 
@@ -243,43 +244,53 @@ namespace himalaya::framework {
         }
     }
 
-    // ---- prepare_texture (CPU-only, thread-safe after ensure_bc_init) ----
+    // ---- Cache lookup ----
 
-    PreparedTexture prepare_texture(const ImageData &data, const TextureRole role) {
+    std::optional<PreparedTexture> load_cached_texture(const std::string_view source_hash, const TextureRole role) {
+        const rhi::Format bc_format = bc_format_for_role(role);
+        const auto ktx2_path = cache_path(
+            "textures",
+            std::string(source_hash) + format_suffix(role),
+            ".ktx2");
+
+        if (!std::filesystem::exists(ktx2_path)) {
+            return std::nullopt;
+        }
+
+        auto ktx2 = read_ktx2(ktx2_path);
+        if (!ktx2 || ktx2->format != bc_format) {
+            return std::nullopt;
+        }
+
+        PreparedTexture result;
+        result.format = bc_format;
+        result.base_width = ktx2->base_width;
+        result.base_height = ktx2->base_height;
+        result.level_count = ktx2->level_count;
+        result.regions.resize(ktx2->level_count);
+        for (uint32_t i = 0; i < ktx2->level_count; ++i) {
+            result.regions[i] = {
+                .buffer_offset = ktx2->levels[i].offset,
+                .width = std::max(1u, ktx2->base_width >> i),
+                .height = std::max(1u, ktx2->base_height >> i),
+            };
+        }
+        result.data = std::move(ktx2->blob);
+        return result;
+    }
+
+    // ---- CPU compression + cache write ----
+
+    PreparedTexture compress_texture(const ImageData &data,
+                                     const TextureRole role,
+                                     const std::string_view source_hash) {
         assert(data.valid() && "ImageData must be valid");
 
         const rhi::Format bc_format = bc_format_for_role(role);
 
-        // Compute cache key: content hash + format suffix
-        const auto hash = content_hash(data.pixels.get(), data.size_bytes());
-        const auto ktx2_path = cache_path("textures", hash + format_suffix(role), ".ktx2");
-
-        // ---- Cache hit: read KTX2 ----
-        if (std::filesystem::exists(ktx2_path)) {
-            if (auto ktx2 = read_ktx2(ktx2_path); ktx2 && ktx2->format == bc_format) {
-                PreparedTexture result;
-                result.format = bc_format;
-                result.base_width = ktx2->base_width;
-                result.base_height = ktx2->base_height;
-                result.level_count = ktx2->level_count;
-
-                // Build regions from KTX2 level index
-                result.regions.resize(ktx2->level_count);
-                for (uint32_t i = 0; i < ktx2->level_count; ++i) {
-                    result.regions[i] = {
-                        .buffer_offset = ktx2->levels[i].offset,
-                        .width = std::max(1u, ktx2->base_width >> i),
-                        .height = std::max(1u, ktx2->base_height >> i),
-                    };
-                }
-                result.data = std::move(ktx2->blob);
-                return result;
-            }
-        }
-
-        // ---- Cache miss: CPU mip gen → BC compress ----
-
-        auto mip_chain = generate_cpu_mip_chain(data.pixels.get(), data.width, data.height,
+        auto mip_chain = generate_cpu_mip_chain(data.pixels.get(),
+                                                data.width,
+                                                data.height,
                                                 role == TextureRole::Color);
         const uint32_t base_w = mip_chain[0].width;
         const uint32_t base_h = mip_chain[0].height;
@@ -324,7 +335,11 @@ namespace himalaya::framework {
             offset += compressed[i].size();
         }
 
-        // Write KTX2 cache (best-effort, IO only)
+        // Write KTX2 cache (best-effort)
+        const auto ktx2_path = cache_path(
+            "textures",
+            std::string(source_hash) + format_suffix(role),
+            ".ktx2");
         std::vector<Ktx2WriteLevel> write_levels(level_count);
         for (uint32_t i = 0; i < level_count; ++i) {
             write_levels[i] = {
@@ -339,6 +354,17 @@ namespace himalaya::framework {
         }
 
         return result;
+    }
+
+    // ---- prepare_texture (convenience: hash pixels, check cache, compress if miss) ----
+
+    PreparedTexture prepare_texture(const ImageData &data, const TextureRole role) {
+        assert(data.valid() && "ImageData must be valid");
+        const auto hash = content_hash(data.pixels.get(), data.size_bytes());
+        if (auto cached = load_cached_texture(hash, role)) {
+            return std::move(*cached);
+        }
+        return compress_texture(data, role, hash);
     }
 
     // ---- finalize_texture (GPU upload + bindless + cache write) ----

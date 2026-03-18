@@ -8,6 +8,7 @@
 #include <himalaya/rhi/descriptors.h>
 #include <himalaya/rhi/resources.h>
 
+#include <himalaya/framework/cache.h>
 #include <himalaya/framework/texture.h>
 
 #include <fastgltf/core.hpp>
@@ -88,6 +89,65 @@ namespace himalaya::app {
             }
 
             return result;
+        }
+
+        // Computes a content hash of the raw source bytes (JPEG/PNG) for a glTF
+        // image, without decoding. Much faster than hashing decoded RGBA pixels.
+        std::string hash_gltf_image(const fastgltf::Asset &gltf,
+                                    const fastgltf::Image &image) {
+            std::string hash;
+
+            auto hash_bytes = [&](const auto *data, const size_t size) {
+                hash = framework::content_hash(data, size);
+            };
+
+            std::visit(fastgltf::visitor{
+                           [](const fastgltf::sources::URI &) {
+                               assert(false && "URI source should not appear with LoadExternalImages");
+                           },
+                           [&](const fastgltf::sources::Array &array) {
+                               hash_bytes(array.bytes.data(), array.bytes.size_bytes());
+                           },
+                           [&](const fastgltf::sources::Vector &vec) {
+                               hash_bytes(vec.bytes.data(), vec.bytes.size());
+                           },
+                           [&](const fastgltf::sources::BufferView &bv) {
+                               const auto &view = gltf.bufferViews[bv.bufferViewIndex];
+                               const auto &buffer = gltf.buffers[view.bufferIndex];
+                               std::visit(fastgltf::visitor{
+                                              [&](const fastgltf::sources::Array &arr) {
+                                                  hash_bytes(
+                                                      reinterpret_cast<const uint8_t *>(arr.bytes.data()) +
+                                                      view.byteOffset,
+                                                      view.byteLength);
+                                              },
+                                              [&](const fastgltf::sources::Vector &v) {
+                                                  hash_bytes(
+                                                      reinterpret_cast<const uint8_t *>(v.bytes.data()) +
+                                                      view.byteOffset,
+                                                      view.byteLength);
+                                              },
+                                              [&](const fastgltf::sources::ByteView &bytes) {
+                                                  hash_bytes(
+                                                      reinterpret_cast<const uint8_t *>(bytes.bytes.data()) +
+                                                      view.byteOffset,
+                                                      view.byteLength);
+                                              },
+                                              [](auto &&) {
+                                                  throw std::runtime_error(
+                                                      "Unsupported buffer data source for image hashing");
+                                              }
+                                          }, buffer.data);
+                           },
+                           [&](const fastgltf::sources::ByteView &bytes) {
+                               hash_bytes(bytes.bytes.data(), bytes.bytes.size());
+                           },
+                           [](auto &&) {
+                               throw std::runtime_error("Unsupported image source type for hashing");
+                           }
+                       }, image.data);
+
+            return hash;
         }
 
         // Converts a fastgltf sampler to our SamplerDesc.
@@ -454,24 +514,39 @@ namespace himalaya::app {
             collect(mat.emissiveTexture, framework::TextureRole::Color);
         }
 
-        // Phase 2: Decode images serially (fastgltf data not thread-safe)
+        // Phase 2a: Hash source bytes + cache check (serial, fast)
         framework::ensure_bc_init();
         const auto tex_count = static_cast<int>(unique_entries.size());
 
-        std::vector<framework::ImageData> decoded_images(tex_count);
+        std::vector<std::string> source_hashes(tex_count);
+        std::vector<framework::PreparedTexture> prepared_textures(tex_count);
+        std::vector<bool> cache_hit(tex_count, false);
+
         for (int i = 0; i < tex_count; ++i) {
             const auto &tex = gltf.textures[unique_entries[i].texture_index];
             assert(tex.imageIndex.has_value() && "glTF texture must have an image source");
+            source_hashes[i] = hash_gltf_image(gltf, gltf.images[*tex.imageIndex]);
+            if (auto cached = framework::load_cached_texture(
+                    source_hashes[i], unique_entries[i].role)) {
+                prepared_textures[i] = std::move(*cached);
+                cache_hit[i] = true;
+            }
+        }
+
+        // Phase 2b: Decode only cache-miss images (serial, skips cached textures)
+        std::vector<framework::ImageData> decoded_images(tex_count);
+        for (int i = 0; i < tex_count; ++i) {
+            if (cache_hit[i]) continue;
+            const auto &tex = gltf.textures[unique_entries[i].texture_index];
             decoded_images[i] = decode_gltf_image(gltf, gltf.images[*tex.imageIndex], base_dir);
         }
 
-        // Phase 2b: Parallel BC compression via OpenMP (thread pool, dynamic scheduling)
-        std::vector<framework::PreparedTexture> prepared_textures(tex_count);
-
+        // Phase 2c: Parallel BC compression for cache misses only
         #pragma omp parallel for schedule(dynamic)
         for (int i = 0; i < tex_count; ++i) {
-            prepared_textures[i] = framework::prepare_texture(
-                decoded_images[i], unique_entries[i].role);
+            if (cache_hit[i]) continue;
+            prepared_textures[i] = framework::compress_texture(
+                decoded_images[i], unique_entries[i].role, source_hashes[i]);
         }
 
         decoded_images.clear();

@@ -8,7 +8,9 @@
 #include <himalaya/rhi/types.h>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace himalaya::rhi {
@@ -102,10 +104,38 @@ namespace himalaya::framework {
     };
 
     /**
-     * @brief CPU-only texture preparation: hash, cache check, mip gen, BC compress.
+     * @brief Cache-only texture lookup by pre-computed source hash.
      *
-     * Thread-safe — can be called from multiple threads simultaneously (after
-     * bc7enc/rgbcx one-time init). Does NOT touch any GPU state.
+     * Thread-safe. Does NOT decode images or touch GPU state.
+     * Use this to skip image decoding entirely when the cache has a hit.
+     *
+     * @param source_hash Content hash of the source file bytes (not decoded pixels).
+     * @param role        Texture role determining the BC format.
+     * @return PreparedTexture on cache hit, nullopt on miss.
+     */
+    [[nodiscard]] std::optional<PreparedTexture> load_cached_texture(
+        std::string_view source_hash, TextureRole role);
+
+    /**
+     * @brief CPU mip generation + BC compression + cache write.
+     *
+     * Thread-safe (after ensure_bc_init()). Does NOT check the cache —
+     * caller should have already checked via load_cached_texture().
+     *
+     * @param data        CPU pixel data (must be valid).
+     * @param role        Texture role determining the BC format.
+     * @param source_hash Pre-computed hash used as the cache key.
+     * @return PreparedTexture ready for finalize_texture().
+     */
+    [[nodiscard]] PreparedTexture compress_texture(
+        const ImageData &data, TextureRole role, std::string_view source_hash);
+
+    /**
+     * @brief Convenience: hash decoded pixels, check cache, compress if miss.
+     *
+     * Thread-safe (after ensure_bc_init()). Does NOT touch GPU state.
+     * Prefer load_cached_texture() + compress_texture() in batch pipelines
+     * to avoid decoding images that are already cached.
      *
      * @param data  CPU pixel data (must be valid).
      * @param role  Texture role determining the BC format.
