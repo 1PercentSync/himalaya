@@ -1467,7 +1467,7 @@ if ((global.feature_flags & FEATURE_SSAO) != 0u) {
 
 **保留中间 cubemap**：M1 规划包含"静态 HDR Cubemap 天空"（见 `milestone-1.md`），中间 cubemap 是 Skybox Pass 的源数据。M2 Bruneton 大气散射替换天空后可改为销毁。
 
-**Mip 剥离优化**：中间 cubemap 创建时带完整 mip chain（供 `compute_prefiltered` 的 `textureLod` 采样降噪），预滤波完成后 mip 1..N 不再需要。`strip_skybox_mips()` 在预滤波后创建 mip-0-only 副本替换原 cubemap，释放约 25% 显存（8K HDR 下 ~64 MB）。Skybox 渲染仅用 `texture()` 自动 LOD 采样基础级别，mip 剥离不影响画面。缓存命中路径同样执行剥离（兼容旧缓存）。
+**Mip 剥离优化**：中间 cubemap 创建时带完整 mip chain（供 `compute_prefiltered` 的 `textureLod` 采样降噪），预滤波完成后 mip 1..N 不再需要。`strip_skybox_mips()` 在预滤波后创建 mip-0-only 副本替换原 cubemap，释放约 25% 显存（8K HDR 下 ~64 MB）。Skybox 渲染仅用 `texture()` 自动 LOD 采样基础级别，mip 剥离不影响画面。缓存写入在剥离之后，因此缓存文件已是 mip-0-only。
 
 **BC6H 压缩**：mip 剥离后，skybox 和 prefiltered cubemap 通过 GPU compute shader 压缩为 BC6H unsigned float 格式（`compress_cubemap_bc6h()`）。压缩使用 Betsy/GPURealTimeBC6H 的 GLSL 移植版（`shaders/compress/bc6h.comp`），quality 模式（mode 11 + 32 partition × mode 2/6）。每个 face×mip 独立 dispatch，通过 SSBO + `vkCmdCopyBufferToImage2` 写入 BC6H cubemap。压缩后替换原 uncompressed 版本，运行时渲染直接使用 BC6H 纹理（硬件原生解码）。
 
