@@ -683,7 +683,7 @@ void push_descriptor_set(VkPipelineLayout layout, uint32_t set,
 > 阶段三引入。阶段二直接在 RG lambda 回调中编写渲染逻辑。
 > 阶段三所有 pass 统一放在 Layer 2（`passes/`），使用具体类（非虚基类），Renderer 持有具体类型成员。设计决策见 `m1-design-decisions.md`「Pass 类设计」。
 
-每个 Pass 使用具体类（非虚函数），`setup()` 签名因 pass 而异。Attachment format 在 pass 内部硬编码。各 pass 的方法集允许不统一（如 SkyboxPass 无 `on_resize()`），但同功能的方法保持同名（如 `record()`、`destroy()`）。
+每个 Pass 使用具体类（非虚函数），`setup()` 签名因 pass 而异。Attachment format 在 pass 内部硬编码。各 pass 的方法集允许不统一，只保留有实际作用的方法，但同功能的方法保持同名（如 `record()`、`destroy()`、`rebuild_pipelines()`）。
 
 ```cpp
 // MSAA 相关 pass（ForwardPass、DepthPrePass）
@@ -694,14 +694,14 @@ public:
                rhi::DescriptorManager& dm, rhi::ShaderCompiler& sc,
                uint32_t sample_count);
 
-    /// 创建/重建 resolution-dependent 资源（init 时在 setup 后调用，resize 时单独调用）
-    void on_resize(uint32_t width, uint32_t height);
-
     /// MSAA 切换时重建 pipeline
     void on_sample_count_changed(uint32_t sample_count);
 
     /// 每帧：向 RG 注册资源使用声明 + execute lambda
     void record(RenderGraph& rg, const FrameContext& ctx);
+
+    /// 重编译 shader 重建 pipeline（热重载）
+    void rebuild_pipelines();
 
     /// 销毁 pipeline + 私有资源
     void destroy();
@@ -714,8 +714,8 @@ public:
     void setup(rhi::Context& ctx, rhi::ResourceManager& rm,
                rhi::DescriptorManager& dm, rhi::ShaderCompiler& sc,
                VkFormat swapchain_format);
-    void on_resize(uint32_t width, uint32_t height);
     void record(RenderGraph& rg, const FrameContext& ctx);
+    void rebuild_pipelines();
     void destroy();
 };
 
@@ -725,6 +725,7 @@ public:
     void setup(rhi::Context& ctx, rhi::ResourceManager& rm,
                rhi::DescriptorManager& dm, rhi::ShaderCompiler& sc);
     void record(RenderGraph& rg, const FrameContext& ctx);
+    void rebuild_pipelines();
     void destroy();
 };
 ```
