@@ -10,6 +10,8 @@
  */
 
 #include <himalaya/framework/ibl.h>
+#include <himalaya/framework/cache.h>
+#include <himalaya/framework/ktx2.h>
 #include <himalaya/rhi/context.h>
 #include <himalaya/rhi/resources.h>
 #include <himalaya/rhi/descriptors.h>
@@ -181,6 +183,32 @@ namespace {
             vmaDestroyBuffer(allocator, product.buffer, product.allocation);
         }
     }
+
+    // Writes a single readback product to a KTX2 cache file.
+    void write_readback_cache(const ReadbackProduct &product,
+                              std::string_view category,
+                              std::string_view cache_key) {
+        const auto path = himalaya::framework::cache_path(category, cache_key, ".ktx2");
+
+        std::vector<himalaya::framework::Ktx2WriteLevel> write_levels(product.level_count);
+        const auto *base = static_cast<const uint8_t *>(product.mapped_data);
+        for (uint32_t i = 0; i < product.level_count; ++i) {
+            write_levels[i] = {
+                base + product.levels[i].offset,
+                product.levels[i].size,
+            };
+        }
+
+        if (!himalaya::framework::write_ktx2(path, product.format,
+                product.base_width, product.base_height,
+                product.face_count, write_levels)) {
+            spdlog::warn("IBL: failed to write cache: {}", path.string());
+        } else {
+            spdlog::info("IBL: cached {} ({:.1f} MB)",
+                         path.filename().string(),
+                         static_cast<double>(product.total_size) / (1024.0 * 1024.0));
+        }
+    }
 } // anonymous namespace
 
 namespace himalaya::framework {
@@ -235,7 +263,17 @@ namespace himalaya::framework {
                      readback_products.size(),
                      static_cast<double>(total_readback) / (1024.0 * 1024.0));
 
-        // TODO (D-3 checkbox 2): write readback data to KTX2 cache files here
+        // --- Write readback data to KTX2 cache files ---
+        if (hdr_loaded) {
+            const auto hdr_hash = content_hash(std::filesystem::path(hdr_path));
+            if (!hdr_hash.empty()) {
+                write_readback_cache(readback_products[0], "ibl", hdr_hash + "_skybox");
+                write_readback_cache(readback_products[1], "ibl", hdr_hash + "_irradiance");
+                write_readback_cache(readback_products[2], "ibl", hdr_hash + "_prefiltered");
+            }
+        }
+        // BRDF LUT: fixed key (environment-independent, permanent cache)
+        write_readback_cache(readback_products.back(), "ibl", "brdf_lut");
 
         // Destroy readback staging buffers
         for (const auto &p: readback_products) {
