@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 1b 全部完成（验证通过）。下一个任务：Step 1c 第一项（framework/culling.h 重构为纯几何剔除）
+Step 1c 第一项完成（culling.h 重构为纯几何剔除）。下一个任务：Step 1c 第二项（现有相机 frustum cull 迁移到通用接口）
 
 ---
 
