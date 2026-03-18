@@ -60,6 +60,31 @@ namespace himalaya::framework {
         return content_hash(buf.data(), buf.size());
     }
 
+    void clear_cache(const std::string_view category) {
+        std::error_code ec;
+        const auto dir = cache_root() / category;
+        if (!std::filesystem::exists(dir, ec)) return;
+        const auto removed = std::filesystem::remove_all(dir, ec);
+        if (ec) {
+            spdlog::warn("cache: failed to clear '{}': {}", dir.string(), ec.message());
+        } else {
+            spdlog::info("cache: cleared '{}' ({} entries removed)",
+                         std::string(category), removed);
+        }
+    }
+
+    void clear_all_cache() {
+        std::error_code ec;
+        const auto root = cache_root();
+        if (!std::filesystem::exists(root, ec)) return;
+        const auto removed = std::filesystem::remove_all(root, ec);
+        if (ec) {
+            spdlog::warn("cache: failed to clear root: {}", ec.message());
+        } else {
+            spdlog::info("cache: cleared all ({} entries removed)", removed);
+        }
+    }
+
     std::filesystem::path cache_path(const std::string_view category,
                                      const std::string_view hash,
                                      const std::string_view extension) {

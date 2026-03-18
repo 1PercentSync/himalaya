@@ -5,6 +5,7 @@
 
 #include <himalaya/app/debug_ui.h>
 
+#include <himalaya/framework/cache.h>
 #include <himalaya/framework/camera.h>
 #include <himalaya/rhi/context.h>
 #include <himalaya/rhi/swapchain.h>
@@ -335,6 +336,21 @@ namespace himalaya::app {
             auto mode = static_cast<int>(ctx.debug_render_mode);
             if (ImGui::Combo("Debug View", &mode, kModeLabels, IM_ARRAYSIZE(kModeLabels))) {
                 ctx.debug_render_mode = static_cast<uint32_t>(mode);
+            }
+        }
+
+        // Cache section
+        ImGui::Separator();
+        if (ImGui::CollapsingHeader("Cache")) {
+            if (ImGui::Button("Clear Texture Cache")) {
+                framework::clear_cache("textures");
+            }
+            if (ImGui::Button("Clear IBL Cache")) {
+                framework::clear_cache("ibl");
+            }
+            ImGui::Spacing();
+            if (ImGui::Button("Clear All Cache")) {
+                framework::clear_all_cache();
             }
         }
 

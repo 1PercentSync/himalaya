@@ -33,6 +33,17 @@ namespace himalaya::framework {
     std::string content_hash(const std::filesystem::path &file);
 
     /**
+     * @brief Removes all files in a cache category subdirectory.
+     * @param category Subdirectory name (e.g. "textures", "ibl").
+     */
+    void clear_cache(std::string_view category);
+
+    /**
+     * @brief Removes all files under cache_root() (all categories).
+     */
+    void clear_all_cache();
+
+    /**
      * @brief Builds a cache file path: cache_root() / category / (hash + extension).
      *
      * Creates the category subdirectory if it does not exist.
