@@ -82,8 +82,10 @@ Instancing 设计见 `milestone-1/m1-design-decisions.md`「Instancing」。
 **D-2：BC 纹理压缩 + KTX2 缓存** — 首次加载时 CPU 端 BC 压缩并缓存为 KTX2，后续直接加载 BC 数据：
 - bc7enc（源文件集成）做 BC7/BC5 压缩，`write_ktx2()` 写缓存，`read_ktx2()` + `upload_image_all_levels()` 读缓存
 - 法线 → BC5_UNORM（2 通道专用），其他 → BC7_SRGB / BC7_UNORM
-- 非 4 对齐纹理 resize 到 4 的倍数，CPU mip 生成（stb_image_resize2）替代 GPU blit
-- 纹理级并行压缩（std::async），缓存路径 `%TEMP%\himalaya\textures\<hash>.ktx2`
+- 非 4 对齐纹理 resize 到 4 的倍数，CPU mip 生成（stb_image_resize2，Color 用 sRGB-correct filtering）替代 GPU blit
+- 纹理级 OpenMP 并行压缩，缓存路径 `%TEMP%\himalaya\textures\<hash>.ktx2`
+- 缓存键基于源文件字节（JPEG/PNG）哈希，缓存命中时完全跳过图像解码
+- 三函数拆分：`load_cached_texture()` 缓存查找 / `compress_texture()` 压缩+写缓存 / `prepare_texture()` 便捷包装
 - **验证**：纹理 VRAM 显著降低（RGBA8 → BC 约 4:1 压缩比）
 
 **D-3：IBL 缓存** — 首次 GPU 预计算后 readback 并缓存为 KTX2，后续直接加载：

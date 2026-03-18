@@ -51,14 +51,14 @@
 
 - [x] 集成 bc7enc 源文件（bc7enc.h/cpp + rgbcx.h）到项目
 - [x] 集成 stb_image_resize2 头文件（vcpkg stb 包已包含）
-- [x] `framework/texture.h/cpp` 新增 CPU mip 生成（stb_image_resize2 逐级缩放，非 4 对齐纹理先 resize 到 4 的倍数）
+- [x] `framework/texture.h/cpp` 新增 CPU mip 生成（stb_image_resize2 逐级缩放，Color 用 sRGB-correct filtering，非 4 对齐纹理先 resize 到 4 的倍数）
 - [x] `framework/texture.h/cpp` 新增 BC 压缩：BC7（SRGB/UNORM）+ BC5（UNORM，法线用）
-- [x] `framework/texture.h/cpp` 新增 KTX2 缓存写入：BC 数据 + 所有 mip 级别通过 `write_ktx2()` 写入缓存
-- [x] `framework/texture.h/cpp` 新增 KTX2 缓存读取：`read_ktx2()` + `upload_image_all_levels()` 直接上传 BC 数据
-- [x] `framework/texture.h/cpp` 重构 `create_texture()`：缓存命中 → KTX2 直接上传 / 缓存未命中 → 解码 → CPU mip → BC 压缩 → 上传 + 写缓存
-- [x] `app/scene_loader.cpp` 适配新的纹理加载接口（TextureRole 扩展区分法线用 BC5）
-- [x] 纹理级并行压缩（std::async / thread pool，首次加载多线程）
-- [ ] 验证：纹理 VRAM 显著降低（RGBA8 → BC 约 4:1），缓存命中时跳过压缩，画质无明显退化
+- [x] `framework/texture.h/cpp` 新增 KTX2 缓存写入：BC 数据 + 所有 mip 级别通过 `write_ktx2()` 写入缓存（write-to-temp + rename 原子写入）
+- [x] `framework/texture.h/cpp` 新增 KTX2 缓存读取：`read_ktx2()` + `upload_image_all_levels()` 直接上传 BC 数据（读取时剥离 KTX2 元数据，仅保留 mip 数据）
+- [x] `framework/texture.h/cpp` 三函数拆分：`load_cached_texture()` 缓存查找 / `compress_texture()` 压缩+写缓存 / `prepare_texture()` 便捷包装
+- [x] `app/scene_loader.cpp` 适配：TextureRole::Normal（BC5）+ 源文件字节哈希（缓存命中跳过解码）+ 4 阶段流水线（hash+check → decode misses → parallel compress → upload）
+- [x] 纹理级 OpenMP 并行压缩（`schedule(dynamic)`，仅压缩缓存未命中的纹理）
+- [ ] 验证：纹理 VRAM 显著降低（RGBA8 → BC 约 4:1），缓存命中时跳过解码和压缩，画质无明显退化
 
 ### D-3：IBL 缓存
 

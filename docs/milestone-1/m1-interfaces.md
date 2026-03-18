@@ -482,7 +482,7 @@ struct Ktx2Data {
         uint64_t size;       ///< Byte size of this level (all faces)
     };
     std::vector<Level> levels;   ///< levels[0] = base, levels[N-1] = smallest mip
-    std::vector<uint8_t> blob;   ///< Owns the raw file data
+    std::vector<uint8_t> blob;   ///< Contiguous mip data (KTX2 metadata stripped)
 };
 
 /// 写入 KTX2 时每级的数据描述
@@ -500,8 +500,7 @@ bool write_ktx2(const std::filesystem::path& path,
                 std::span<const Ktx2WriteLevel> levels);
 
 /// 读取 KTX2 文件。返回 nullopt 表示格式不支持或文件损坏。
-/// 返回的 Ktx2Data::blob 持有文件数据，levels 的 offset 索引 blob。
-/// 消费者通过 blob.data() + levels[i].offset 获取 mip 数据传给 upload_image_all_levels()。
+/// 返回的 blob 仅包含 mip 数据（KTX2 header/DFD/level index 已剥离），levels 的 offset 索引 blob。
 std::optional<Ktx2Data> read_ktx2(const std::filesystem::path& path);
 
 }  // namespace himalaya::framework
