@@ -89,10 +89,10 @@ Instancing 设计见 `milestone-1/m1-design-decisions.md`「Instancing」。
 - **验证**：纹理 VRAM 显著降低（RGBA8 → BC 约 4:1 压缩比）
 
 **D-3：IBL 缓存** — 首次 GPU 预计算后 readback 并缓存为 KTX2，后续直接加载：
-- GPU → CPU readback（staging buffer + `vkCmdCopyImageToBuffer`）读回 4 个 IBL 产物
-- 通过 `write_ktx2()` 缓存为 KTX2 cubemap（skybox / irradiance / prefiltered）+ KTX2 2D（BRDF LUT）
-- 缓存命中时 `read_ktx2()` + `upload_image_all_levels()` 直接加载，跳过全部 GPU compute
-- 缓存路径 `%TEMP%\himalaya\ibl\<hash>.ktx2`，BRDF LUT 使用固定 key（与 HDR 无关）
+- 缓存分两组独立检查：BRDF LUT（固定 key，永久缓存）+ 3 cubemaps（HDR 内容哈希 key）
+- 每组各自决定路径：命中 → `read_ktx2()` + `upload_image_all_levels()` 直接加载；未命中 → GPU compute + readback + `write_ktx2()` 写缓存
+- GPU → CPU readback（per-product staging buffer + `vkCmdCopyImageToBuffer`）读回未命中的产物
+- 缓存路径 `%TEMP%\himalaya\ibl\<hash>.ktx2`，切换 HDR 时 BRDF 命中只重算 3 cubemaps
 - **验证**：后续启动秒级加载，IBL 渲染结果一致
 
 #### 设计要点
@@ -106,8 +106,8 @@ Instancing 设计见 `milestone-1/m1-design-decisions.md`「Instancing」。
 - KTX2 读写自写（不依赖 libktx）：只需 6 种格式的 2D/cubemap + mip chain 读写，DFD 硬编码，读取只解析 header + level index
 - `upload_image_all_levels()` 补充现有 `upload_image()`：单 staging buffer + 多 `VkBufferImageCopy2` region，KTX2 数据布局与 Vulkan buffer-to-image copy 天然兼容
 - BC5 法线质量优于 BC7（2 通道专用编码），shader 重建 `Z = sqrt(1 - R² - G²)`
-- IBL readback 在 immediate scope 内一次性完成，后续启动跳过全部 GPU compute
-- BRDF LUT 与环境无关，永久缓存（固定 key），更换 HDR 时只重算 3 个 cubemap
+- IBL 缓存分两组独立检查：BRDF LUT（固定 key）和 3 cubemaps（HDR hash），每组各自决定 compute 或缓存加载
+- 切换 HDR 时 BRDF 缓存命中直接加载，只重算 3 个 cubemap；readback 使用 per-product staging buffer 避免单次大分配
 
 ---
 
