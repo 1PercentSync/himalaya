@@ -24,6 +24,8 @@
 
 #include <array>
 
+#include <spdlog/spdlog.h>
+
 namespace himalaya::passes {
     // ---- Attachment formats (hardcoded per design) ----
     constexpr VkFormat kDepthFormat = VK_FORMAT_D32_SFLOAT;
@@ -62,15 +64,26 @@ namespace himalaya::passes {
     // ---- Pipeline creation ----
 
     void DepthPrePass::create_pipelines(const uint32_t sample_count) {
-        // Destroy previous pipelines if rebuilding (MSAA switch).
+        // Compile all shaders first — if any compilation fails, keep the old
+        // pipelines intact so the renderer can continue with previous shaders.
+        const auto vert_spirv = sc_->compile_from_file("depth_prepass.vert",
+                                                       rhi::ShaderStage::Vertex);
+        const auto opaque_frag_spirv = sc_->compile_from_file("depth_prepass.frag",
+                                                               rhi::ShaderStage::Fragment);
+        const auto mask_frag_spirv = sc_->compile_from_file("depth_prepass_masked.frag",
+                                                             rhi::ShaderStage::Fragment);
+
+        if (vert_spirv.empty() || opaque_frag_spirv.empty() || mask_frag_spirv.empty()) {
+            spdlog::warn("DepthPrePass: shader compilation failed, keeping previous pipelines");
+            return;
+        }
+
+        // All shaders compiled successfully — safe to destroy old pipelines
         if (opaque_pipeline_.pipeline != VK_NULL_HANDLE)
             opaque_pipeline_.destroy(ctx_->device);
         if (mask_pipeline_.pipeline != VK_NULL_HANDLE)
             mask_pipeline_.destroy(ctx_->device);
 
-        // Shared vertex shader (invariant gl_Position)
-        const auto vert_spirv = sc_->compile_from_file("depth_prepass.vert",
-                                                       rhi::ShaderStage::Vertex);
         // ReSharper disable once CppLocalVariableMayBeConst
         VkShaderModule vert_module = rhi::create_shader_module(ctx_->device, vert_spirv);
 
@@ -94,22 +107,16 @@ namespace himalaya::passes {
 
         // Opaque pipeline (no discard)
         {
-            const auto frag_spirv = sc_->compile_from_file("depth_prepass.frag",
-                                                           rhi::ShaderStage::Fragment);
             // ReSharper disable once CppLocalVariableMayBeConst
-            VkShaderModule frag_module = rhi::create_shader_module(ctx_->device, frag_spirv);
-
+            VkShaderModule frag_module = rhi::create_shader_module(ctx_->device, opaque_frag_spirv);
             opaque_pipeline_ = rhi::create_graphics_pipeline(ctx_->device, make_desc(frag_module));
             vkDestroyShaderModule(ctx_->device, frag_module, nullptr);
         }
 
         // Mask pipeline (alpha test + discard)
         {
-            const auto frag_spirv = sc_->compile_from_file("depth_prepass_masked.frag",
-                                                           rhi::ShaderStage::Fragment);
             // ReSharper disable once CppLocalVariableMayBeConst
-            VkShaderModule frag_module = rhi::create_shader_module(ctx_->device, frag_spirv);
-
+            VkShaderModule frag_module = rhi::create_shader_module(ctx_->device, mask_frag_spirv);
             mask_pipeline_ = rhi::create_graphics_pipeline(ctx_->device, make_desc(frag_module));
             vkDestroyShaderModule(ctx_->device, frag_module, nullptr);
         }

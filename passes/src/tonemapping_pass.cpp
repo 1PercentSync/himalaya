@@ -15,6 +15,8 @@
 
 #include <array>
 
+#include <spdlog/spdlog.h>
+
 namespace himalaya::passes {
     // ---- Init / Destroy ----
 
@@ -43,14 +45,22 @@ namespace himalaya::passes {
     // ---- Pipeline creation ----
 
     void TonemappingPass::create_pipelines() {
-        if (pipeline_.pipeline != VK_NULL_HANDLE) {
-            pipeline_.destroy(ctx_->device);
-        }
-
+        // Compile shaders first — if compilation fails, keep the old pipeline
+        // intact so the renderer can continue with the previous working shaders.
         const auto vert_spirv = sc_->compile_from_file("fullscreen.vert",
                                                        rhi::ShaderStage::Vertex);
         const auto frag_spirv = sc_->compile_from_file("tonemapping.frag",
                                                        rhi::ShaderStage::Fragment);
+
+        if (vert_spirv.empty() || frag_spirv.empty()) {
+            spdlog::warn("TonemappingPass: shader compilation failed, keeping previous pipeline");
+            return;
+        }
+
+        // Shaders compiled successfully — safe to destroy old pipeline
+        if (pipeline_.pipeline != VK_NULL_HANDLE) {
+            pipeline_.destroy(ctx_->device);
+        }
 
         // ReSharper disable once CppLocalVariableMayBeConst
         VkShaderModule vert_module = rhi::create_shader_module(ctx_->device, vert_spirv);

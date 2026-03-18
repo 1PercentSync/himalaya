@@ -17,6 +17,8 @@
 
 #include <array>
 
+#include <spdlog/spdlog.h>
+
 namespace himalaya::passes {
     // ---- HDR color attachment format (hardcoded per design) ----
     constexpr VkFormat kHdrColorFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
@@ -54,15 +56,22 @@ namespace himalaya::passes {
     // ---- Pipeline creation ----
 
     void ForwardPass::create_pipelines(const uint32_t sample_count) {
-        // Destroy previous pipeline if rebuilding (MSAA switch).
-        if (pipeline_.pipeline != VK_NULL_HANDLE) {
-            pipeline_.destroy(ctx_->device);
-        }
-
+        // Compile shaders first — if compilation fails, keep the old pipeline
+        // intact so the renderer can continue with the previous working shaders.
         const auto vert_spirv = sc_->compile_from_file("forward.vert",
                                                        rhi::ShaderStage::Vertex);
         const auto frag_spirv = sc_->compile_from_file("forward.frag",
                                                        rhi::ShaderStage::Fragment);
+
+        if (vert_spirv.empty() || frag_spirv.empty()) {
+            spdlog::warn("ForwardPass: shader compilation failed, keeping previous pipeline");
+            return;
+        }
+
+        // Shaders compiled successfully — safe to destroy old pipeline
+        if (pipeline_.pipeline != VK_NULL_HANDLE) {
+            pipeline_.destroy(ctx_->device);
+        }
 
         // ReSharper disable once CppLocalVariableMayBeConst
         VkShaderModule vert_module = rhi::create_shader_module(ctx_->device, vert_spirv);
