@@ -2242,7 +2242,7 @@ namespace himalaya::framework {
 
 **选择：bc7e.ispc（ISPC SIMD 向量化） + rgbcx（BC4/BC5）**
 
-BC7 编码器使用 Binomial 的 bc7e.ispc（Apache 2.0），通过 ISPC 编译器生成 SSE2/SSE4/AVX2/AVX-512 四种 SIMD 变体，运行时自动选择最佳指令集。支持全部 8 种 BC7 mode，使用 slowest 质量预设（uber_level=4 + pbit search + 全 partition 搜索）。BC4/BC5 编码沿用 rgbcx（算法简单，SIMD 加速无意义）。
+BC7 编码器使用 Binomial 的 bc7e.ispc（Apache 2.0），通过 ISPC 编译器生成 SSE2/SSE4/AVX2/AVX-512 四种 SIMD 变体，运行时自动选择最佳指令集。支持全部 8 种 BC7 mode，质量预设按构建类型区分：Release 使用 slowest（uber_level=4 + pbit search + 全 partition 搜索），Debug 使用 slow（uber_level=0 + pbit search）以加快迭代。BC4/BC5 编码沿用 rgbcx（算法简单，SIMD 加速无意义）。
 
 ISPC 编译器作为构建依赖，CMake 4.1 原生支持 ISPC 语言（`project(... LANGUAGES CXX ISPC)`），通过 `CMAKE_ISPC_COMPILER` 指定路径。
 
