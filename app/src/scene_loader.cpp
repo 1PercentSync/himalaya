@@ -25,48 +25,42 @@
 
 namespace himalaya::app {
     namespace {
-        // Decodes a glTF image from any source type into CPU RGBA8 pixel data.
-        // Handles URI (fallback), Array, Vector, BufferView, and ByteView sources.
-        framework::ImageData decode_gltf_image(const fastgltf::Asset &gltf,
-                                               const fastgltf::Image &image,
-                                               const std::filesystem::path &base_dir) {
-            framework::ImageData result;
+        // Visits the raw encoded bytes (JPEG/PNG) of a glTF image and invokes
+        // the callback with (const uint8_t* data, size_t size). Handles all
+        // fastgltf source types: Array, Vector, BufferView, ByteView.
+        template<typename Fn>
+        void visit_gltf_image_bytes(const fastgltf::Asset &gltf,
+                                    const fastgltf::Image &image,
+                                    Fn &&callback) {
+            auto invoke = [&](const auto *data, const size_t size) {
+                callback(reinterpret_cast<const uint8_t *>(data), size);
+            };
 
             std::visit(fastgltf::visitor{
-                           [&](const fastgltf::sources::URI &) {
+                           [](const fastgltf::sources::URI &) {
                                assert(false && "URI source should not appear with LoadExternalImages");
                            },
                            [&](const fastgltf::sources::Array &array) {
-                               result = framework::load_image_from_memory(
-                                   reinterpret_cast<const uint8_t *>(array.bytes.data()),
-                                   array.bytes.size_bytes());
+                               invoke(array.bytes.data(), array.bytes.size_bytes());
                            },
                            [&](const fastgltf::sources::Vector &vec) {
-                               result = framework::load_image_from_memory(
-                                   reinterpret_cast<const uint8_t *>(vec.bytes.data()),
-                                   vec.bytes.size());
+                               invoke(vec.bytes.data(), vec.bytes.size());
                            },
                            [&](const fastgltf::sources::BufferView &bv) {
                                const auto &view = gltf.bufferViews[bv.bufferViewIndex];
                                const auto &buffer = gltf.buffers[view.bufferIndex];
                                std::visit(fastgltf::visitor{
                                               [&](const fastgltf::sources::Array &arr) {
-                                                  result = framework::load_image_from_memory(
-                                                      reinterpret_cast<const uint8_t *>(arr.bytes.data()) +
-                                                      view.byteOffset,
-                                                      view.byteLength);
+                                                  invoke(arr.bytes.data() + view.byteOffset,
+                                                         view.byteLength);
                                               },
                                               [&](const fastgltf::sources::Vector &v) {
-                                                  result = framework::load_image_from_memory(
-                                                      reinterpret_cast<const uint8_t *>(v.bytes.data()) +
-                                                      view.byteOffset,
-                                                      view.byteLength);
+                                                  invoke(v.bytes.data() + view.byteOffset,
+                                                         view.byteLength);
                                               },
                                               [&](const fastgltf::sources::ByteView &bytes) {
-                                                  result = framework::load_image_from_memory(
-                                                      reinterpret_cast<const uint8_t *>(bytes.bytes.data()) +
-                                                      view.byteOffset,
-                                                      view.byteLength);
+                                                  invoke(bytes.bytes.data() + view.byteOffset,
+                                                         view.byteLength);
                                               },
                                               [](auto &&) {
                                                   throw std::runtime_error(
@@ -75,78 +69,36 @@ namespace himalaya::app {
                                           }, buffer.data);
                            },
                            [&](const fastgltf::sources::ByteView &bytes) {
-                               result = framework::load_image_from_memory(
-                                   reinterpret_cast<const uint8_t *>(bytes.bytes.data()),
-                                   bytes.bytes.size());
+                               invoke(bytes.bytes.data(), bytes.bytes.size());
                            },
                            [](auto &&) {
                                throw std::runtime_error("Unsupported image source type");
                            }
                        }, image.data);
+        }
+
+        // Decodes a glTF image into CPU RGBA8 pixel data.
+        framework::ImageData decode_gltf_image(const fastgltf::Asset &gltf,
+                                               const fastgltf::Image &image,
+                                               const std::filesystem::path &) {
+            framework::ImageData result;
+            visit_gltf_image_bytes(gltf, image, [&](const uint8_t *data, const size_t size) {
+                result = framework::load_image_from_memory(data, size);
+            });
 
             if (!result.valid()) {
                 throw std::runtime_error("Failed to decode glTF image '" + std::string(image.name) + "'");
             }
-
             return result;
         }
 
-        // Computes a content hash of the raw source bytes (JPEG/PNG) for a glTF
-        // image, without decoding. Much faster than hashing decoded RGBA pixels.
+        // Computes a content hash of the raw source bytes (JPEG/PNG) without decoding.
         std::string hash_gltf_image(const fastgltf::Asset &gltf,
                                     const fastgltf::Image &image) {
             std::string hash;
-
-            auto hash_bytes = [&](const auto *data, const size_t size) {
+            visit_gltf_image_bytes(gltf, image, [&](const uint8_t *data, const size_t size) {
                 hash = framework::content_hash(data, size);
-            };
-
-            std::visit(fastgltf::visitor{
-                           [](const fastgltf::sources::URI &) {
-                               assert(false && "URI source should not appear with LoadExternalImages");
-                           },
-                           [&](const fastgltf::sources::Array &array) {
-                               hash_bytes(array.bytes.data(), array.bytes.size_bytes());
-                           },
-                           [&](const fastgltf::sources::Vector &vec) {
-                               hash_bytes(vec.bytes.data(), vec.bytes.size());
-                           },
-                           [&](const fastgltf::sources::BufferView &bv) {
-                               const auto &view = gltf.bufferViews[bv.bufferViewIndex];
-                               const auto &buffer = gltf.buffers[view.bufferIndex];
-                               std::visit(fastgltf::visitor{
-                                              [&](const fastgltf::sources::Array &arr) {
-                                                  hash_bytes(
-                                                      reinterpret_cast<const uint8_t *>(arr.bytes.data()) +
-                                                      view.byteOffset,
-                                                      view.byteLength);
-                                              },
-                                              [&](const fastgltf::sources::Vector &v) {
-                                                  hash_bytes(
-                                                      reinterpret_cast<const uint8_t *>(v.bytes.data()) +
-                                                      view.byteOffset,
-                                                      view.byteLength);
-                                              },
-                                              [&](const fastgltf::sources::ByteView &bytes) {
-                                                  hash_bytes(
-                                                      reinterpret_cast<const uint8_t *>(bytes.bytes.data()) +
-                                                      view.byteOffset,
-                                                      view.byteLength);
-                                              },
-                                              [](auto &&) {
-                                                  throw std::runtime_error(
-                                                      "Unsupported buffer data source for image hashing");
-                                              }
-                                          }, buffer.data);
-                           },
-                           [&](const fastgltf::sources::ByteView &bytes) {
-                               hash_bytes(bytes.bytes.data(), bytes.bytes.size());
-                           },
-                           [](auto &&) {
-                               throw std::runtime_error("Unsupported image source type for hashing");
-                           }
-                       }, image.data);
-
+            });
             return hash;
         }
 
