@@ -117,6 +117,7 @@ namespace himalaya::rhi {
 
         // Block-compressed (4x4 texel blocks, 16 bytes per block)
         Bc5UnormBlock,
+        Bc6hUfloatBlock,
         Bc7UnormBlock,
         Bc7SrgbBlock,
 
@@ -169,6 +170,7 @@ namespace himalaya::rhi {
             case Format::A2B10G10R10UnormPack32: return VK_FORMAT_A2B10G10R10_UNORM_PACK32;
             case Format::B10G11R11UfloatPack32: return VK_FORMAT_B10G11R11_UFLOAT_PACK32;
             case Format::Bc5UnormBlock: return VK_FORMAT_BC5_UNORM_BLOCK;
+            case Format::Bc6hUfloatBlock: return VK_FORMAT_BC6H_UFLOAT_BLOCK;
             case Format::Bc7UnormBlock: return VK_FORMAT_BC7_UNORM_BLOCK;
             case Format::Bc7SrgbBlock: return VK_FORMAT_BC7_SRGB_BLOCK;
             case Format::D32Sfloat: return VK_FORMAT_D32_SFLOAT;
@@ -217,6 +219,7 @@ namespace himalaya::rhi {
             case VK_FORMAT_A2B10G10R10_UNORM_PACK32: return Format::A2B10G10R10UnormPack32;
             case VK_FORMAT_B10G11R11_UFLOAT_PACK32: return Format::B10G11R11UfloatPack32;
             case VK_FORMAT_BC5_UNORM_BLOCK: return Format::Bc5UnormBlock;
+            case VK_FORMAT_BC6H_UFLOAT_BLOCK: return Format::Bc6hUfloatBlock;
             case VK_FORMAT_BC7_UNORM_BLOCK: return Format::Bc7UnormBlock;
             case VK_FORMAT_BC7_SRGB_BLOCK: return Format::Bc7SrgbBlock;
             case VK_FORMAT_D32_SFLOAT: return Format::D32Sfloat;
@@ -251,6 +254,7 @@ namespace himalaya::rhi {
             case Format::A2B10G10R10UnormPack32: return 4;
             case Format::B10G11R11UfloatPack32: return 4;
             case Format::Bc5UnormBlock:
+            case Format::Bc6hUfloatBlock:
             case Format::Bc7UnormBlock:
             case Format::Bc7SrgbBlock: return 16;
             case Format::D32Sfloat: return 4;
@@ -268,6 +272,7 @@ namespace himalaya::rhi {
     inline std::pair<uint32_t, uint32_t> format_block_extent(const Format format) {
         switch (format) {
             case Format::Bc5UnormBlock:
+            case Format::Bc6hUfloatBlock:
             case Format::Bc7UnormBlock:
             case Format::Bc7SrgbBlock: return {4, 4};
             default: return {1, 1};
@@ -278,6 +283,7 @@ namespace himalaya::rhi {
     inline bool format_is_block_compressed(const Format format) {
         switch (format) {
             case Format::Bc5UnormBlock:
+            case Format::Bc6hUfloatBlock:
             case Format::Bc7UnormBlock:
             case Format::Bc7SrgbBlock: return true;
             default: return false;

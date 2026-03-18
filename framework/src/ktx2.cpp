@@ -53,6 +53,7 @@ namespace himalaya::framework {
 
     static constexpr uint8_t kDfModelRgbsda    = 1;
     static constexpr uint8_t kDfModelBc5       = 132;
+    static constexpr uint8_t kDfModelBc6h      = 133;
     static constexpr uint8_t kDfModelBc7       = 134;
     static constexpr uint8_t kDfTransferLinear  = 1;
     static constexpr uint8_t kDfTransferSrgb    = 2;
@@ -150,6 +151,10 @@ namespace himalaya::framework {
 
             case rhi::Format::Bc7SrgbBlock:
                 return build_dfd({kDfModelBc7, kDfTransferSrgb, 3, 3, 16},
+                    {{0, 127, 0, 0, UINT32_MAX}});
+
+            case rhi::Format::Bc6hUfloatBlock:
+                return build_dfd({kDfModelBc6h, kDfTransferLinear, 3, 3, 16},
                     {{0, 127, 0, 0, UINT32_MAX}});
 
             case rhi::Format::Bc5UnormBlock:
