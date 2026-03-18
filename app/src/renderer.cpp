@@ -437,16 +437,16 @@ namespace himalaya::app {
             sorted_opaque_indices_.assign(
                 input.cull_result.visible_opaque_indices.begin(),
                 input.cull_result.visible_opaque_indices.end());
-            std::sort(sorted_opaque_indices_.begin(), sorted_opaque_indices_.end(),
-                      [&](const uint32_t a, const uint32_t b) {
-                          const auto &ia = input.mesh_instances[a];
-                          const auto &ib = input.mesh_instances[b];
-                          if (ia.mesh_id != ib.mesh_id) return ia.mesh_id < ib.mesh_id;
-                          const auto &ma = input.materials[ia.material_id];
-                          const auto &mb = input.materials[ib.material_id];
-                          if (ma.alpha_mode != mb.alpha_mode) return ma.alpha_mode < mb.alpha_mode;
-                          return ma.double_sided < mb.double_sided;
-                      });
+            std::ranges::sort(sorted_opaque_indices_,
+                              [&](const uint32_t a, const uint32_t b) {
+                                  const auto &ia = input.mesh_instances[a];
+                                  const auto &ib = input.mesh_instances[b];
+                                  if (ia.mesh_id != ib.mesh_id) return ia.mesh_id < ib.mesh_id;
+                                  const auto &ma = input.materials[ia.material_id];
+                                  const auto &mb = input.materials[ib.material_id];
+                                  if (ma.alpha_mode != mb.alpha_mode) return ma.alpha_mode < mb.alpha_mode;
+                                  return ma.double_sided < mb.double_sided;
+                              });
 
             opaque_draw_groups_.clear();
             mask_draw_groups_.clear();
@@ -514,11 +514,12 @@ namespace himalaya::app {
             }
         }
 
-        // Total scene draw calls: each draw group is issued once per scene pass
-        // (currently DepthPrePass + ForwardPass = 2 passes).
-        const auto scene_draw_groups = static_cast<uint32_t>(
+        // Total scene draw calls — explicitly counted per pass that iterates
+        // draw groups. Update this sum when adding new scene passes (e.g. ShadowPass).
+        const auto groups = static_cast<uint32_t>(
             opaque_draw_groups_.size() + mask_draw_groups_.size());
-        draw_call_count_ = scene_draw_groups * 2; // prepass + forward
+        draw_call_count_ = groups   // DepthPrePass
+                         + groups;  // ForwardPass
 
         // --- Build render graph ---
         render_graph_.clear();
