@@ -112,11 +112,23 @@ namespace himalaya::rhi {
          */
         void set_scissor(const VkRect2D &scissor) const;
 
+        // --- Synchronization & Transfer ---
+
         /**
          * @brief Inserts a pipeline barrier using the Synchronization2 API.
          * @param dependency_info Barrier specification (image/buffer/memory barriers).
          */
         void pipeline_barrier(const VkDependencyInfo &dependency_info) const;
+
+        /**
+         * @brief Copies data from a buffer to an image.
+         *
+         * Thin wrapper around vkCmdCopyBufferToImage2. Used for uploading
+         * block-compressed data (e.g. BC6H) from a staging buffer to a GPU image.
+         *
+         * @param copy_info Fully populated VkCopyBufferToImageInfo2.
+         */
+        void copy_buffer_to_image(const VkCopyBufferToImageInfo2 &copy_info) const;
 
         // --- Push constants ---
 

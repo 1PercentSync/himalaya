@@ -10,8 +10,8 @@
  * partition patterns (modes 7.6 and 9.5), picks lowest MSLE.
  *
  * Input:  sampler2D  — HDR source texture (per cubemap face view)
- * Output: uimage2D   — rgba32ui, each pixel = one BC6H block (4x uint32)
- * Push constant: vec2 texel_size_rcp (1.0 / source dimensions)
+ * Output: SSBO       — uvec4 per block, linear layout (row-major)
+ * Push constant: vec2 texel_size_rcp, uint blocks_per_row
  *
  * Dispatch: ceil(width/4 / 8) x ceil(height/4 / 8) x 1
  */
@@ -21,10 +21,14 @@
 layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 
 layout(set = 0, binding = 0) uniform sampler2D u_src;
-layout(set = 0, binding = 1, rgba32ui) writeonly uniform uimage2D u_dst;
+
+layout(set = 0, binding = 1) writeonly buffer DstBuffer {
+    uvec4 blocks[];
+} u_dst;
 
 layout(push_constant) uniform PushConstants {
     vec2 texel_size_rcp;
+    uint blocks_per_row;  // ceil(src_width / 4)
 };
 
 // --- Half-float conversion helpers ---
@@ -479,5 +483,5 @@ void main() {
         EncodeP2Pattern(block, blockMSLE, i, texels);
     }
 
-    imageStore(u_dst, ivec2(gl_GlobalInvocationID.xy), block);
+    u_dst.blocks[gl_GlobalInvocationID.y * blocks_per_row + gl_GlobalInvocationID.x] = block;
 }

@@ -201,6 +201,25 @@ namespace himalaya::framework {
         void strip_skybox_mips(const rhi::Context &ctx, DeferredCleanup &deferred);
 
         /**
+         * @brief Compress an HDR cubemap to BC6H unsigned float via GPU compute.
+         *
+         * Uses the BC6H compute shader (Betsy/GPURealTimeBC6H port) to compress
+         * each face×mip of the source cubemap. Creates a new BC6H format image,
+         * replaces the source handle, and defers destruction of the original.
+         * The source cubemap must be in SHADER_READ_ONLY layout.
+         * Must be called within an active immediate scope.
+         *
+         * @param ctx      RHI context (device, immediate command buffer).
+         * @param sc       Shader compiler for compute shader compilation.
+         * @param handle   [in/out] Cubemap handle — replaced with BC6H version.
+         * @param deferred Cleanup functions executed after GPU completion.
+         */
+        void compress_cubemap_bc6h(rhi::Context &ctx,
+                                   rhi::ShaderCompiler &sc,
+                                   rhi::ImageHandle &handle,
+                                   DeferredCleanup &deferred);
+
+        /**
          * @brief Compute the BRDF integration lookup table for Split-Sum IBL.
          *
          * Creates a 256x256 R16G16_UNORM 2D image. For each (NdotV, roughness) pair,

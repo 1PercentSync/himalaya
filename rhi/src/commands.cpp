@@ -129,6 +129,10 @@ namespace himalaya::rhi {
                                writes.data());
     }
 
+    void CommandBuffer::copy_buffer_to_image(const VkCopyBufferToImageInfo2 &copy_info) const {
+        vkCmdCopyBufferToImage2(cmd_, &copy_info);
+    }
+
     namespace {
         PFN_vkCmdBeginDebugUtilsLabelEXT pfn_begin_label = nullptr;
         PFN_vkCmdEndDebugUtilsLabelEXT pfn_end_label = nullptr;
