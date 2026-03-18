@@ -293,7 +293,6 @@ namespace himalaya::framework {
     std::optional<Ktx2Data> read_ktx2(const std::filesystem::path &path) {
         std::ifstream ifs(path, std::ios::binary | std::ios::ate);
         if (!ifs) {
-            spdlog::warn("ktx2: cannot open file: {}", path.string());
             return std::nullopt;
         }
 
