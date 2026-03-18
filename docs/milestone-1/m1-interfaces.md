@@ -417,14 +417,17 @@ struct alignas(16) GPUDirectionalLight {
     glm::vec4 color_and_shadow;                 // xyz = color, w = cast_shadows (0.0 / 1.0)
 };
 
-// Per-instance 数据 — std430 layout, 80 bytes per element
+// Per-instance 数据 — std430 layout, 128 bytes per element
 // 对应 shader: Set 0, Binding 3 (InstanceBuffer SSBO)
 // 阶段四准备工作引入（提前合并原计划阶段六 per-instance SSBO 迁移 + M3 Instancing）
 // 未来扩展：M2 的 prev_model (motion vectors)、阶段六的 lightmap UV transform
 struct GPUInstanceData {
     glm::mat4 model;                            // 64 bytes — 世界变换矩阵
+    glm::vec4 normal_col0;                      // 16 bytes — normal matrix column 0 (xyz, w unused)
+    glm::vec4 normal_col1;                      // 16 bytes — normal matrix column 1 (xyz, w unused)
+    glm::vec4 normal_col2;                      // 16 bytes — normal matrix column 2 (xyz, w unused)
     uint32_t material_index;                    //  4 bytes — MaterialBuffer SSBO 索引
-    uint32_t _padding[3];                       // 12 bytes — 对齐到 80 bytes (16 的倍数)
+    uint32_t _padding[3];                       // 12 bytes — 对齐到 128 bytes (16 的倍数)
 };
 
 // Per-draw push constant — 4 bytes

@@ -220,7 +220,7 @@ RenderFeatures + feature_flags 机制见 `milestone-1/m1-design-decisions.md`「
 - Mask pipeline：VS（`shadow.vert`）+ FS（`shadow_masked.frag`），alpha test + discard
 - 绘制顺序：先 opaque 批次，再 mask 批次，暴力全画全部场景物体
 - GlobalUBO 新增 shadow 字段（`cascade_view_proj[4]`、`cascade_splits`、shadow 参数），`bindings.glsl` 同步更新
-- PushConstantData 扩展为 72 bytes（新增 `cascade_index`）
+- ShadowPass pipeline layout 声明 push constant range（4 bytes `cascade_index`，shadow pass 专用）
 - ShadowPass 提供 `shadow_map_image()` getter 供 Renderer 更新 Set 2
 - **验证**：RenderDoc 检查 shadow map 内容——应看到从光源视角的场景深度图
 
