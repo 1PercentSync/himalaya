@@ -117,7 +117,6 @@ namespace himalaya::framework {
      * @brief GPU upload + bindless registration for a prepared texture.
      *
      * Must be called within a Context::begin_immediate() / end_immediate() scope.
-     * Writes KTX2 cache if the texture was freshly compressed (best-effort).
      *
      * @param resource_manager   RHI resource manager.
      * @param descriptor_manager Descriptor manager for bindless registration.
