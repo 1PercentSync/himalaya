@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 1a 第十二项：CameraController set_focus_target + F 键 focus
+Step 1a 第十三项：Application 场景加载后调用 set_focus_target
 
 ---
 
