@@ -10,6 +10,7 @@
 #include <himalaya/framework/scene_data.h>
 #include <himalaya/rhi/commands.h>
 
+#include <algorithm>
 #include <cmath>
 
 #include <GLFW/glfw3.h>
@@ -253,9 +254,8 @@ namespace himalaya::app {
         scene_render_data_.directional_lights = lights;
         scene_render_data_.camera = camera_;
 
-        // Frustum culling
-        cull_result_ = framework::cull_frustum(scene_render_data_,
-                                               scene_loader_.material_instances());
+        // Frustum culling + material bucketing
+        perform_camera_culling();
 
         // Compute scene statistics for debug UI
         const auto meshes = scene_loader_.meshes();
@@ -336,8 +336,7 @@ namespace himalaya::app {
             scene_render_data_.directional_lights = disable_scene_lights_
                                                         ? std::span<const framework::DirectionalLight>{}
                                                         : new_lights;
-            cull_result_ = framework::cull_frustum(scene_render_data_,
-                                                   scene_loader_.material_instances());
+            perform_camera_culling();
         }
 
         if (actions.env_load_requested) {
@@ -458,6 +457,43 @@ namespace himalaya::app {
             ibl_yaw_ += dx * kSensitivity;
         } else {
             drag_active_ = false;
+        }
+    }
+    // ---- Camera frustum culling + material bucketing ----
+
+    void Application::perform_camera_culling() {
+        const auto frustum = framework::extract_frustum(camera_.view_projection);
+        framework::cull_against_frustum(scene_render_data_.mesh_instances,
+                                        frustum, visible_indices_);
+
+        // Bucket visible instances by alpha mode
+        cull_result_.visible_opaque_indices.clear();
+        cull_result_.visible_transparent_indices.clear();
+
+        const auto materials = scene_loader_.material_instances();
+        const auto &instances = scene_render_data_.mesh_instances;
+
+        for (const auto idx : visible_indices_) {
+            if (materials[instances[idx].material_id].alpha_mode == framework::AlphaMode::Blend) {
+                cull_result_.visible_transparent_indices.push_back(idx);
+            } else {
+                cull_result_.visible_opaque_indices.push_back(idx);
+            }
+        }
+
+        // Sort transparent instances back-to-front by AABB center distance
+        if (!cull_result_.visible_transparent_indices.empty()) {
+            const auto cam_pos = camera_.position;
+            std::ranges::sort(cull_result_.visible_transparent_indices,
+                              [&](const uint32_t a, const uint32_t b) {
+                                  const auto center_a = (instances[a].world_bounds.min +
+                                                         instances[a].world_bounds.max) * 0.5f;
+                                  const auto center_b = (instances[b].world_bounds.min +
+                                                         instances[b].world_bounds.max) * 0.5f;
+                                  const float dist_a = glm::dot(center_a - cam_pos, center_a - cam_pos);
+                                  const float dist_b = glm::dot(center_b - cam_pos, center_b - cam_pos);
+                                  return dist_a > dist_b; // far first
+                              });
         }
     }
 } // namespace himalaya::app

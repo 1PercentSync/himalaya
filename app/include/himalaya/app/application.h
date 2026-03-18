@@ -96,6 +96,9 @@ namespace himalaya::app {
         /** @brief Per-frame frustum culling result (populated in update()). */
         framework::CullResult cull_result_{};
 
+        /** @brief Flat visible-instance buffer for cull_against_frustum() (reused across frames). */
+        std::vector<uint32_t> visible_indices_;
+
         // --- Rendering parameters (controlled via DebugUI) ---
 
         /** @brief IBL environment light intensity multiplier (written to GlobalUBO each frame). */
@@ -208,6 +211,15 @@ namespace himalaya::app {
          * sets max_distance = diagonal * 1.5; otherwise keeps the 100m fallback.
          */
         void update_shadow_config_from_scene();
+
+        /**
+         * @brief Performs camera frustum culling and material bucketing.
+         *
+         * Extracts frustum from camera VP, runs cull_against_frustum() into
+         * visible_indices_, then buckets into cull_result_ (opaque/transparent)
+         * and sorts transparent back-to-front.
+         */
+        void perform_camera_culling();
 
         // --- Runtime scene/environment switching ---
 
