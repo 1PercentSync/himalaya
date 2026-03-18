@@ -58,7 +58,7 @@
 - [x] `framework/texture.h/cpp` 三函数拆分：`load_cached_texture()` 缓存查找 / `compress_texture()` 压缩+写缓存 / `prepare_texture()` 便捷包装
 - [x] `app/scene_loader.cpp` 适配：TextureRole::Normal（BC5）+ 源文件字节哈希（缓存命中跳过解码）+ 4 阶段流水线（hash+check → decode misses → parallel compress → upload）
 - [x] 纹理级 OpenMP 并行压缩（`schedule(dynamic)`，仅压缩缓存未命中的纹理）
-- [ ] 验证：纹理 VRAM 显著降低（RGBA8 → BC 约 4:1），缓存命中时跳过解码和压缩，画质无明显退化
+- [x] 验证：纹理 VRAM 显著降低（RGBA8 → BC 约 4:1），缓存命中时跳过解码和压缩，画质无明显退化
 
 ### D-3：IBL 缓存
 
