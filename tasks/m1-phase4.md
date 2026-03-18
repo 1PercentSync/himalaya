@@ -66,7 +66,7 @@
 - [x] `framework/ibl.cpp` 新增 KTX2 缓存写入：通过 `write_ktx2()` 将 readback 数据写为 KTX2 cubemap 缓存（irradiance / prefiltered / skybox cubemap）+ 2D 缓存（BRDF LUT）
 - [x] `framework/ibl.cpp` init() 入口新增缓存检查：HDR 内容哈希 → 缓存命中时 `read_ktx2()` + `upload_image_all_levels()` 直接加载 + 注册 bindless，跳过全部 GPU compute
 - [x] BRDF LUT 使用固定 cache key（与 HDR 无关，永久缓存）
-- [ ] 验证：首次启动完成 IBL 计算并写缓存，后续启动秒级加载，IBL 渲染结果与未缓存时一致
+- [x] 验证：首次启动完成 IBL 计算并写缓存，后续启动秒级加载，IBL 渲染结果与未缓存时一致
 
 ## Step 1a：RenderFeatures 基础设施
 
