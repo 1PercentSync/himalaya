@@ -13,6 +13,7 @@
 
 #include <glm/glm.hpp>
 
+#include <cstddef>
 #include <cstdint>
 #include <span>
 #include <vector>
@@ -236,11 +237,23 @@ namespace himalaya::framework {
         bool double_sided; ///< Cached from material — controls face culling
     };
 
-    // ---- GPU struct size guards ----
+    // ---- GPU struct layout guards ----
     // These must match the shader-side layout exactly. A mismatch silently
     // corrupts GPU reads, so catch it at compile time.
+    // Size assertions catch additions/removals; offset assertions catch
+    // C++ vs std140 alignment divergences (e.g. vec2 requires 8-byte
+    // alignment in std140 but glm::vec2 has natural alignment of 4).
     static_assert(sizeof(GlobalUniformData) == 336, "GlobalUniformData must be 336 bytes (std140)");
+    static_assert(offsetof(GlobalUniformData, view) == 0);
+    static_assert(offsetof(GlobalUniformData, camera_position_and_exposure) == 256);
+    static_assert(offsetof(GlobalUniformData, screen_size) == 272);
+    static_assert(offsetof(GlobalUniformData, time) == 280);
+    static_assert(offsetof(GlobalUniformData, directional_light_count) == 284);
+    static_assert(offsetof(GlobalUniformData, ibl_intensity) == 288);
+    static_assert(offsetof(GlobalUniformData, debug_render_mode) == 320);
+    static_assert(offsetof(GlobalUniformData, feature_flags) == 324);
     static_assert(sizeof(GPUDirectionalLight) == 32, "GPUDirectionalLight must be 32 bytes (std430)");
     static_assert(sizeof(GPUInstanceData) == 80, "GPUInstanceData must be 80 bytes (std430)");
+    static_assert(offsetof(GPUInstanceData, material_index) == 64);
     static_assert(sizeof(PushConstantData) == 4, "PushConstantData must be 4 bytes");
 } // namespace himalaya::framework
