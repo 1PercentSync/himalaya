@@ -4,7 +4,7 @@
 #include <himalaya/rhi/descriptors.h>
 #include <himalaya/rhi/resources.h>
 
-#include <himalaya/bc7enc/bc7enc.h>
+#include <bc7e_ispc.h>
 #include <himalaya/bc7enc/rgbcx.h>
 #include <spdlog/spdlog.h>
 #include <stb_image.h>
@@ -54,7 +54,7 @@ namespace himalaya::framework {
     void ensure_bc_init() {
         static std::once_flag flag;
         std::call_once(flag, [] {
-            bc7enc_compress_block_init();
+            ispc::bc7e_compress_block_init();
             rgbcx::init();
         });
     }
@@ -169,33 +169,36 @@ namespace himalaya::framework {
             }
         }
 
-        /// Compresses one RGBA8 mip level to BC7.
+        /// Compresses one RGBA8 mip level to BC7 using bc7e (ISPC SIMD).
         std::vector<uint8_t> compress_bc7(const uint8_t *rgba,
                                           const uint32_t w,
                                           const uint32_t h,
                                           const bool perceptual) {
-            bc7enc_compress_block_params params{};
-            bc7enc_compress_block_params_init(&params);
-            params.m_uber_level = BC7ENC_MAX_UBER_LEVEL;
-            params.m_mode17_partition_estimation_filterbank = false;
-            if (perceptual) {
-                bc7enc_compress_block_params_init_perceptual_weights(&params);
-            }
+            ispc::bc7e_compress_block_params params{};
+            ispc::bc7e_compress_block_params_init_slowest(&params, perceptual);
 
             const uint32_t bx_count = block_count(w);
             const uint32_t by_count = block_count(h);
-            std::vector<uint8_t> out(static_cast<size_t>(bx_count) * by_count * 16);
+            const uint32_t total_blocks = bx_count * by_count;
 
-            uint8_t block_pixels[64]; // 4x4 RGBA
+            // Pack all 4x4 blocks contiguously as uint32_t (RGBA8 per pixel).
+            // bc7e processes them in parallel via ISPC gang width.
+            std::vector<uint32_t> pixels(static_cast<size_t>(total_blocks) * 16);
+            uint8_t tmp[64];
             for (uint32_t by = 0; by < by_count; ++by) {
                 for (uint32_t bx = 0; bx < bx_count; ++bx) {
-                    extract_block(rgba, w, h, bx, by, block_pixels);
-                    bc7enc_compress_block(
-                        out.data() + (static_cast<size_t>(by) * bx_count + bx) * 16,
-                        block_pixels,
-                        &params);
+                    extract_block(rgba, w, h, bx, by, tmp);
+                    const auto idx = static_cast<size_t>(by) * bx_count + bx;
+                    std::memcpy(&pixels[idx * 16], tmp, 64);
                 }
             }
+
+            std::vector<uint8_t> out(static_cast<size_t>(total_blocks) * 16);
+            ispc::bc7e_compress_blocks(
+                total_blocks,
+                reinterpret_cast<uint64_t *>(out.data()),
+                pixels.data(),
+                &params);
             return out;
         }
 
