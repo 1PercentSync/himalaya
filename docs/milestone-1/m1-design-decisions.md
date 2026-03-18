@@ -1993,9 +1993,9 @@ ShadowPass 持有：shadow map ImageHandle、per-layer VkImageView 数组、opaq
 
 **计算方式**：`max_distance = scene_aabb.diagonal_length() × 1.5`。乘 1.5 覆盖方向光在 ~60° 入射角下的阴影投射范围（此时阴影长度约为物体高度的 1.73 倍）。倍率硬编码，不作为可调参数——这是"合理默认值"的计算系数，不是用户关注点。
 
-**退化防护**：ShadowConfig 默认值 `max_distance = 100.0f` 同时兼作退化 fallback。场景为空或几何体退化时（diagonal ≈ 0），不执行覆盖，保持默认 100m。不设人为 clamp 范围——基于实际场景几何的计算结果对该场景总是合理的。
+**退化防护**：Application 初始化 `max_distance = 100.0f`（退化 fallback）。场景 AABB 有效时覆盖为 `diagonal × 1.5`，退化时保持 100m。不设人为 clamp 范围——基于实际场景几何的计算结果对该场景总是合理的。
 
-**实现位置**：SceneLoader 加载完成后计算场景 AABB（所有 mesh instance 的 `world_bounds` 求并集），暴露 `scene_bounds()` getter。Application 在场景加载后、首帧渲染前：`if (diagonal > epsilon) max_distance = diagonal × 1.5`，否则保持默认 100m。DebugUI 仍允许手动覆盖（对数滑条）。
+**实现位置**：SceneLoader 加载完成后计算场景 AABB（所有 mesh instance 的 `world_bounds` 求并集），暴露 `scene_bounds()` getter。Application 在场景加载后、首帧渲染前：`if (diagonal > epsilon) max_distance = diagonal × 1.5`，否则保持初始 100m。DebugUI 仍允许手动覆盖（对数滑条）。RenderFeatures 和 ShadowConfig 均无 struct 默认值，Application 使用 designated initializers 显式初始化全部字段。
 
 ### 相机自动定位与 F 键 Focus
 

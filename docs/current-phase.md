@@ -147,7 +147,7 @@ Step 6: PCF + cascade blend + per-cascade 剔除 + 最终验证
 ### Step 1a：RenderFeatures 基础设施
 
 - 在 `framework/scene_data.h` 新增 `RenderFeatures` 结构体（`skybox` + `shadows` 两个 bool，默认 true）
-- 在 `framework/scene_data.h` 新增 `ShadowConfig` 结构体（split_lambda、max_distance、bias 参数、pcf_radius、blend_width），阶段四全部 shadow DebugUI 参数的集中定义
+- 在 `framework/scene_data.h` 新增 `ShadowConfig` 结构体（split_lambda、max_distance、bias 参数、pcf_radius、blend_width），无默认值，Application 显式初始化
 - GlobalUBO 新增 `feature_flags`（uint32_t bitmask），`bindings.glsl` 新增 `#define FEATURE_SHADOWS (1u << 0)` 常量
 - FrameContext 新增 `features` 和 `shadow_config` 指针
 - RenderInput 新增 `features` 和 `shadow_config` 引用
@@ -169,7 +169,7 @@ RenderFeatures + feature_flags 机制见 `milestone-1/m1-design-decisions.md`「
 - Skybox 不需要 feature_flags（独立 RG pass，不调用 `record()` 即跳过，forward.frag 不采样 skybox 数据）
 - Shadow 需要 feature_flags（forward.frag 采样 Set 2 binding 5，PARTIALLY_BOUND 未绑定 binding 为未定义行为）
 - ShadowConfig 在此 Step 定义但部分字段在后续 Step 才使用（DebugUI 控件随 Step 逐步添加）
-- Shadow max_distance 自动初始化见 `milestone-1/m1-design-decisions.md`「Shadow Max Distance 初始化」：ShadowConfig 默认值 100m 兼作退化 fallback，正常场景覆盖为 `diagonal × 1.5`
+- Shadow max_distance 自动初始化见 `milestone-1/m1-design-decisions.md`「Shadow Max Distance 初始化」：Application 初始化 100m 作为退化 fallback，正常场景覆盖为 `diagonal × 1.5`
 - 相机自动定位和 F 键 focus 共享 `Camera::compute_focus_position()` 纯计算，见 `milestone-1/m1-design-decisions.md`「相机自动定位与 F 键 Focus」
 
 ---
@@ -408,7 +408,7 @@ shaders/
 | RenderFeatures | Step 1a 引入骨架（skybox + shadows），阶段五扩展 ssao + contact_shadows |
 | feature_flags | GlobalUBO uint bitmask，shader 动态分支守护采样。Skybox 不需要（独立 pass 跳过即可），Shadow 需要（forward.frag 采样 Set 2） |
 | ShadowConfig 位置 | `framework/scene_data.h`，与 RenderFeatures 同位。Application 持有实例，DebugUI 直接操作 |
-| Shadow max_distance 初始化 | ShadowConfig 默认值 100m 兼作退化 fallback，正常场景覆盖为 `diagonal × 1.5`。DebugUI 对数滑条可覆盖 |
+| Shadow max_distance 初始化 | Application 初始化 100m 作为退化 fallback，正常场景覆盖为 `diagonal × 1.5`。DebugUI 对数滑条可覆盖 |
 | 相机自动定位 + F 键 Focus | `Camera::compute_focus_position(AABB)` 纯计算共享。场景加载设 pitch=-45° 后调用；F 键保持朝向直接调用。CameraController 持有 focus target 指针 |
 | Cascade 统计信息 | DebugUI Shadow 面板底部显示每个 cascade 的范围（近/远 m）和 texel density（px/m），辅助理解 max_distance / cascade count / resolution 的交互 |
 | Runtime config change | Cascade 数量和分辨率可运行时调整，沿用 MSAA 切换模式（`vkQueueWaitIdle` → 重建资源 → 更新 descriptor） |

@@ -119,10 +119,41 @@ namespace himalaya::framework {
      */
     struct RenderFeatures {
         /** @brief Enable skybox rendering (SkyboxPass). */
-        bool skybox = true;
+        bool skybox;
 
         /** @brief Enable shadow mapping (ShadowPass + forward sampling). */
-        bool shadows = true;
+        bool shadows;
+    };
+
+    /**
+     * @brief CSM shadow configuration parameters.
+     *
+     * Application holds the instance, DebugUI modifies fields directly,
+     * Renderer and ShadowPass consume them. Default max_distance (100m)
+     * doubles as the degenerate-scene fallback — only overridden when
+     * the loaded scene has a valid AABB (diagonal × 1.5).
+     */
+    struct ShadowConfig {
+        /** @brief PSSM log/linear blend factor (0 = linear, 1 = logarithmic). */
+        float split_lambda;
+
+        /** @brief Maximum shadow coverage distance in meters. */
+        float max_distance;
+
+        /** @brief Hardware depth bias constant factor. */
+        float constant_bias;
+
+        /** @brief Hardware depth bias slope factor. */
+        float slope_bias;
+
+        /** @brief Shader-side normal offset bias strength. */
+        float normal_offset;
+
+        /** @brief PCF kernel radius (0=off, 1=3x3, 2=5x5, ..., 5=11x11). */
+        uint32_t pcf_radius;
+
+        /** @brief Cascade blend region as fraction of cascade range. */
+        float blend_width;
     };
 
     // ---- GPU Data Structures ----
