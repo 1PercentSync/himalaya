@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 1a 第三项：GlobalUBO 新增 `feature_flags` + `bindings.glsl` 新增 `FEATURE_SHADOWS`
+Step 1a 第四项：FrameContext 新增 shadow_map + features + shadow_config
 
 ---
 
