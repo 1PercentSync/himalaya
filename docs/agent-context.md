@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 1a 第四项：FrameContext 新增 shadow_map + features + shadow_config
+Step 1a 第五项：RenderInput 新增 features + shadow_config
 
 ---
 
