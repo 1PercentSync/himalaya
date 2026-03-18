@@ -407,6 +407,7 @@ namespace himalaya::app {
         ubo_data.ibl_rotation_sin = input.ibl_rotation_sin;
         ubo_data.ibl_rotation_cos = input.ibl_rotation_cos;
         ubo_data.debug_render_mode = input.debug_render_mode;
+        ubo_data.feature_flags = 0; // populated in later steps as passes are added
 
         const auto light_count = static_cast<uint32_t>(
             std::min(input.lights.size(), static_cast<size_t>(kMaxDirectionalLights)));
@@ -559,6 +560,8 @@ namespace himalaya::app {
         frame_ctx.mesh_instances = input.mesh_instances;
         frame_ctx.opaque_draw_groups = opaque_draw_groups_;
         frame_ctx.mask_draw_groups = mask_draw_groups_;
+        frame_ctx.features = &input.features;
+        frame_ctx.shadow_config = &input.shadow_config;
         frame_ctx.frame_index = input.frame_index;
         frame_ctx.sample_count = current_sample_count_;
 
@@ -568,8 +571,10 @@ namespace himalaya::app {
         // --- Forward pass ---
         forward_pass_.record(render_graph_, frame_ctx);
 
-        // --- Skybox pass ---
-        skybox_pass_.record(render_graph_, frame_ctx);
+        // --- Skybox pass (conditional on feature toggle) ---
+        if (input.features.skybox) {
+            skybox_pass_.record(render_graph_, frame_ctx);
+        }
 
         // --- Tonemapping pass ---
         tonemapping_pass_.record(render_graph_, frame_ctx);
