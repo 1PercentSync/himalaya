@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 1a 第十三项：Application 场景加载后调用 set_focus_target
+Step 1a 第十四项：DebugUI 新增 Features 面板（Skybox checkbox）
 
 ---
 
