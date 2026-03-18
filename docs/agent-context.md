@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 1a 第五项：RenderInput 新增 features + shadow_config
+Step 1a 第六项：Renderer 根据 features.skybox 条件调用 skybox_pass_.record()
 
 ---
 
