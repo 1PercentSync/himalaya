@@ -276,8 +276,7 @@ namespace himalaya::app {
         const auto total_instances = static_cast<uint32_t>(instances.size());
 
         // Debug UI
-        // ReSharper disable once CppUseStructuredBinding
-        const auto actions = debug_ui_.draw({
+        DebugUIContext ui_ctx{
             .delta_time = delta_time,
             .context = context_,
             .swapchain = swapchain_,
@@ -307,7 +306,9 @@ namespace himalaya::app {
                 .draw_calls = renderer_.last_draw_call_count(),
                 .rendered_triangles = rendered_triangles,
             },
-        });
+        };
+        // ReSharper disable once CppUseStructuredBinding
+        const auto actions = debug_ui_.draw(ui_ctx);
 
         if (actions.error_dismissed) {
             error_message_.clear();

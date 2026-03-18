@@ -136,7 +136,8 @@ namespace himalaya::app {
 
     // ---- DebugUI ----
 
-    DebugUIActions DebugUI::draw(const DebugUIContext &ctx) {
+    // ReSharper disable once CppParameterMayBeConstPtrOrRef
+    DebugUIActions DebugUI::draw(DebugUIContext &ctx) {
         DebugUIActions actions;
 
         frame_stats_.push(ctx.delta_time);

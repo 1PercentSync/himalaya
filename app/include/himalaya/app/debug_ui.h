@@ -154,7 +154,7 @@ namespace himalaya::app {
          * @param ctx Per-frame data needed by the panel.
          * @return Actions triggered by the user (e.g. VSync toggle).
          */
-        DebugUIActions draw(const DebugUIContext& ctx);
+        DebugUIActions draw(DebugUIContext& ctx);
 
     private:
         /**
