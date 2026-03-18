@@ -89,8 +89,8 @@
 ## Step 1b：Shader 热重载
 
 - [x] 各 pass 新增 `rebuild_pipelines()` 公开方法（调用已有 `create_pipelines()`）
-- [ ] DebugUI 新增 "Reload Shaders" 按钮，Renderer 检测触发后 `vkQueueWaitIdle()` → 遍历所有 pass `rebuild_pipelines()`
-- [ ] 验证：修改 shader 后点击 Reload 生效，无 validation 报错
+- [x] DebugUI 新增 "Reload Shaders" 按钮，Renderer 检测触发后 `vkQueueWaitIdle()` → 遍历所有 pass `rebuild_pipelines()`
+- [x] 验证：修改 shader 后点击 Reload 生效，无 validation 报错
 
 ## Step 1c：Culling 模块重构
 

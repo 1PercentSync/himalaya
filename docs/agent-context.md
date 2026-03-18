@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 1b 第一项完成（rebuild_pipelines + 清理空 on_resize）。下一个任务：Step 1b 第二项（DebugUI Reload Shaders 按钮 + Renderer 触发逻辑）
+Step 1b 全部完成（验证通过）。下一个任务：Step 1c 第一项（framework/culling.h 重构为纯几何剔除）
 
 ---
 
