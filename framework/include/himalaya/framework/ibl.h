@@ -7,7 +7,9 @@
 
 #include <himalaya/rhi/types.h>
 #include <functional>
+#include <initializer_list>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace himalaya::rhi {
@@ -201,23 +203,24 @@ namespace himalaya::framework {
         void strip_skybox_mips(const rhi::Context &ctx, DeferredCleanup &deferred);
 
         /**
-         * @brief Compress an HDR cubemap to BC6H unsigned float via GPU compute.
+         * @brief Compress HDR cubemaps to BC6H unsigned float via GPU compute.
          *
          * Uses the BC6H compute shader (Betsy/GPURealTimeBC6H port) to compress
-         * each face×mip of the source cubemap. Creates a new BC6H format image,
-         * replaces the source handle, and defers destruction of the original.
-         * The source cubemap must be in SHADER_READ_ONLY layout.
+         * each face×mip of every source cubemap. Creates shared pipeline, sampler,
+         * and staging buffer once, then dispatches for each cubemap in sequence.
+         * Each source handle is replaced with a BC6H version; originals are deferred.
+         * Source cubemaps must be in SHADER_READ_ONLY layout.
          * Must be called within an active immediate scope.
          *
-         * @param ctx      RHI context (device, immediate command buffer).
+         * @param ctx      RHI context (device, immediate command buffer, allocator).
          * @param sc       Shader compiler for compute shader compilation.
-         * @param handle   [in/out] Cubemap handle — replaced with BC6H version.
+         * @param handles  [in/out] Cubemap handles — each replaced with BC6H version.
          * @param deferred Cleanup functions executed after GPU completion.
          */
-        void compress_cubemap_bc6h(rhi::Context &ctx,
-                                   rhi::ShaderCompiler &sc,
-                                   rhi::ImageHandle &handle,
-                                   DeferredCleanup &deferred);
+        void compress_cubemaps_bc6h(rhi::Context &ctx,
+                                    rhi::ShaderCompiler &sc,
+                                    std::initializer_list<std::pair<rhi::ImageHandle *, const char *>> handles,
+                                    DeferredCleanup &deferred);
 
         /**
          * @brief Compute the BRDF integration lookup table for Split-Sum IBL.

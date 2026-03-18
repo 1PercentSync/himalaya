@@ -233,7 +233,7 @@ namespace himalaya::rhi {
     /**
      * @brief Returns the byte size of one texel block for the given format.
      *
-     * For block-compressed formats (BC5/BC7), a block is 4x4 texels = 16 bytes.
+     * For block-compressed formats (BC5/BC6H/BC7), a block is 4x4 texels = 16 bytes.
      * For uncompressed formats, a "block" is a single texel.
      */
     inline uint32_t format_bytes_per_block(const Format format) {
