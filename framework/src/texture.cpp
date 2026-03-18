@@ -76,14 +76,23 @@ namespace himalaya::framework {
 
         /// Generates a full RGBA8 mip chain. Level 0 is the source, resized to
         /// 4-aligned dimensions if needed (for BC block alignment at base level).
+        /// When srgb is true, filtering is done in linear space (gamma-correct
+        /// for color textures); otherwise data is treated as linear.
         std::vector<CpuMipLevel> generate_cpu_mip_chain(
             const uint8_t *src,
             const uint32_t w,
-            const uint32_t h) {
+            const uint32_t h,
+            const bool srgb) {
             const uint32_t aw = align4(w);
             const uint32_t ah = align4(h);
             const uint32_t level_count = static_cast<uint32_t>(
                                              std::floor(std::log2(std::max(aw, ah)))) + 1;
+
+            // sRGB textures must be filtered in linear space to avoid darkening
+            // artifacts in lower mip levels. stbir_resize_uint8_srgb handles
+            // the decode (gamma expand) → filter → encode (gamma compress) cycle.
+            const auto resize = srgb ? stbir_resize_uint8_srgb
+                                     : stbir_resize_uint8_linear;
 
             std::vector<CpuMipLevel> levels(level_count);
 
@@ -92,16 +101,15 @@ namespace himalaya::framework {
             levels[0].height = ah;
             levels[0].data.resize(static_cast<size_t>(aw) * ah * 4);
             if (aw != w || ah != h) {
-                stbir_resize_uint8_linear(
-                    src,
-                    static_cast<int>(w),
-                    static_cast<int>(h),
-                    0,
-                    levels[0].data.data(),
-                    static_cast<int>(aw),
-                    static_cast<int>(ah),
-                    0,
-                    STBIR_RGBA);
+                resize(src,
+                       static_cast<int>(w),
+                       static_cast<int>(h),
+                       0,
+                       levels[0].data.data(),
+                       static_cast<int>(aw),
+                       static_cast<int>(ah),
+                       0,
+                       STBIR_RGBA);
             } else {
                 std::memcpy(levels[0].data.data(), src, levels[0].data.size());
             }
@@ -116,16 +124,15 @@ namespace himalaya::framework {
                 levels[i].width = nw;
                 levels[i].height = nh;
                 levels[i].data.resize(static_cast<size_t>(nw) * nh * 4);
-                stbir_resize_uint8_linear(
-                    levels[i - 1].data.data(),
-                    static_cast<int>(pw),
-                    static_cast<int>(ph),
-                    0,
-                    levels[i].data.data(),
-                    static_cast<int>(nw),
-                    static_cast<int>(nh),
-                    0,
-                    STBIR_RGBA);
+                resize(levels[i - 1].data.data(),
+                       static_cast<int>(pw),
+                       static_cast<int>(ph),
+                       0,
+                       levels[i].data.data(),
+                       static_cast<int>(nw),
+                       static_cast<int>(nh),
+                       0,
+                       STBIR_RGBA);
             }
 
             return levels;
@@ -274,7 +281,8 @@ namespace himalaya::framework {
 
         // ---- Cache miss: CPU mip gen → BC compress ----
 
-        auto mip_chain = generate_cpu_mip_chain(data.pixels.get(), data.width, data.height);
+        auto mip_chain = generate_cpu_mip_chain(data.pixels.get(), data.width, data.height,
+                                                role == TextureRole::Color);
         const uint32_t base_w = mip_chain[0].width;
         const uint32_t base_h = mip_chain[0].height;
         const auto level_count = static_cast<uint32_t>(mip_chain.size());
