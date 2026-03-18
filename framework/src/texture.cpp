@@ -14,6 +14,7 @@
 #include <cassert>
 #include <cmath>
 #include <filesystem>
+#include <mutex>
 
 namespace himalaya::framework {
     ImageData load_image(const std::string &path) {
@@ -50,15 +51,12 @@ namespace himalaya::framework {
 
     // ---- BC encoder one-time initialization ----
 
-    namespace {
-        bool g_bc_initialized = false;
-    }
-
     void ensure_bc_init() {
-        if (g_bc_initialized) return;
-        bc7enc_compress_block_init();
-        rgbcx::init();
-        g_bc_initialized = true;
+        static std::once_flag flag;
+        std::call_once(flag, [] {
+            bc7enc_compress_block_init();
+            rgbcx::init();
+        });
     }
 
     // ---- CPU mip chain generation ----
