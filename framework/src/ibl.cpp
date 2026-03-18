@@ -27,6 +27,162 @@
 #include <cmath>
 #include <vector>
 
+namespace {
+    // Holds readback result for a single IBL product.
+    // Staging buffer is self-managed (not pushed to Context's cleanup list)
+    // because data must survive end_immediate() for CPU-side cache writing.
+    struct ReadbackProduct {
+        VkBuffer buffer = VK_NULL_HANDLE;
+        VmaAllocation allocation = VK_NULL_HANDLE;
+        void *mapped_data = nullptr;
+        himalaya::rhi::Format format{};
+        uint32_t base_width = 0;
+        uint32_t base_height = 0;
+        uint32_t face_count = 0;
+        uint32_t level_count = 0;
+        uint64_t total_size = 0;
+
+        struct LevelRegion {
+            uint64_t offset;
+            uint64_t size;
+        };
+
+        std::vector<LevelRegion> levels;
+    };
+
+    // Records GPU->CPU readback commands for an image into the active immediate scope.
+    // Creates a GpuToCpu staging buffer that the caller must destroy after reading.
+    ReadbackProduct readback_image(const himalaya::rhi::Context &ctx,
+                                   const himalaya::rhi::ResourceManager &rm,
+                                   const himalaya::rhi::ImageHandle image) {
+        const auto &img = rm.get_image(image);
+        const auto &desc = img.desc;
+        const uint32_t bpp = himalaya::rhi::format_bytes_per_block(desc.format);
+        const uint32_t face_count = desc.array_layers;
+
+        ReadbackProduct result;
+        result.format = desc.format;
+        result.base_width = desc.width;
+        result.base_height = desc.height;
+        result.face_count = face_count;
+        result.level_count = desc.mip_levels;
+        result.levels.resize(desc.mip_levels);
+
+        // Calculate per-level sizes and total
+        uint64_t offset = 0;
+        for (uint32_t mip = 0; mip < desc.mip_levels; ++mip) {
+            const uint32_t w = std::max(desc.width >> mip, 1u);
+            const uint32_t h = std::max(desc.height >> mip, 1u);
+            const uint64_t level_size = static_cast<uint64_t>(w) * h * face_count * bpp;
+            result.levels[mip] = {offset, level_size};
+            offset += level_size;
+        }
+        result.total_size = offset;
+
+        // Create staging buffer (GpuToCpu, mapped for CPU read after GPU completion)
+        VkBufferCreateInfo buffer_ci{};
+        buffer_ci.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        buffer_ci.size = result.total_size;
+        buffer_ci.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+        buffer_ci.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+        VmaAllocationCreateInfo alloc_ci{};
+        alloc_ci.usage = VMA_MEMORY_USAGE_AUTO;
+        alloc_ci.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT
+                         | VMA_ALLOCATION_CREATE_MAPPED_BIT;
+
+        VmaAllocationInfo alloc_info{};
+        VK_CHECK(vmaCreateBuffer(ctx.allocator,
+            &buffer_ci, &alloc_ci,
+            &result.buffer, &result.allocation,
+            &alloc_info));
+        result.mapped_data = alloc_info.pMappedData;
+
+        // Record commands
+        // ReSharper disable once CppLocalVariableMayBeConst
+        VkCommandBuffer cmd = ctx.immediate_command_buffer;
+
+        // Transition SHADER_READ_ONLY -> TRANSFER_SRC
+        VkImageMemoryBarrier2 to_src{};
+        to_src.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+        to_src.srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
+        to_src.srcAccessMask = VK_ACCESS_2_NONE;
+        to_src.dstStageMask = VK_PIPELINE_STAGE_2_COPY_BIT;
+        to_src.dstAccessMask = VK_ACCESS_2_TRANSFER_READ_BIT;
+        to_src.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        to_src.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+        to_src.image = img.image;
+        to_src.subresourceRange = {
+            VK_IMAGE_ASPECT_COLOR_BIT,
+            0, desc.mip_levels,
+            0, face_count
+        };
+
+        VkDependencyInfo dep{};
+        dep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+        dep.imageMemoryBarrierCount = 1;
+        dep.pImageMemoryBarriers = &to_src;
+        vkCmdPipelineBarrier2(cmd, &dep);
+
+        // Record copy regions (one per mip level, all faces at once)
+        std::vector<VkBufferImageCopy2> regions(desc.mip_levels);
+        for (uint32_t mip = 0; mip < desc.mip_levels; ++mip) {
+            auto &r = regions[mip];
+            r.sType = VK_STRUCTURE_TYPE_BUFFER_IMAGE_COPY_2;
+            r.pNext = nullptr;
+            r.bufferOffset = result.levels[mip].offset;
+            r.bufferRowLength = 0;
+            r.bufferImageHeight = 0;
+            r.imageSubresource = {
+                VK_IMAGE_ASPECT_COLOR_BIT,
+                mip, 0, face_count
+            };
+            r.imageOffset = {0, 0, 0};
+            r.imageExtent = {
+                std::max(desc.width >> mip, 1u),
+                std::max(desc.height >> mip, 1u),
+                1
+            };
+        }
+
+        VkCopyImageToBufferInfo2 copy_info{};
+        copy_info.sType = VK_STRUCTURE_TYPE_COPY_IMAGE_TO_BUFFER_INFO_2;
+        copy_info.srcImage = img.image;
+        copy_info.srcImageLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+        copy_info.dstBuffer = result.buffer;
+        copy_info.regionCount = static_cast<uint32_t>(regions.size());
+        copy_info.pRegions = regions.data();
+        vkCmdCopyImageToBuffer2(cmd, &copy_info);
+
+        // Transition TRANSFER_SRC -> SHADER_READ_ONLY (restore for rendering)
+        VkImageMemoryBarrier2 to_read{};
+        to_read.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+        to_read.srcStageMask = VK_PIPELINE_STAGE_2_COPY_BIT;
+        to_read.srcAccessMask = VK_ACCESS_2_TRANSFER_READ_BIT;
+        to_read.dstStageMask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
+        to_read.dstAccessMask = VK_ACCESS_2_SHADER_SAMPLED_READ_BIT;
+        to_read.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+        to_read.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        to_read.image = img.image;
+        to_read.subresourceRange = {
+            VK_IMAGE_ASPECT_COLOR_BIT,
+            0, desc.mip_levels,
+            0, face_count
+        };
+
+        dep.pImageMemoryBarriers = &to_read;
+        vkCmdPipelineBarrier2(cmd, &dep);
+
+        return result;
+    }
+
+    void destroy_readback(VmaAllocator allocator, const ReadbackProduct &product) {
+        if (product.buffer != VK_NULL_HANDLE) {
+            vmaDestroyBuffer(allocator, product.buffer, product.allocation);
+        }
+    }
+} // anonymous namespace
+
 namespace himalaya::framework {
     bool IBL::init(rhi::Context &ctx,
                    rhi::ResourceManager &rm,
@@ -56,7 +212,35 @@ namespace himalaya::framework {
         // BRDF LUT is environment-independent — always compute
         compute_brdf_lut(ctx, sc, deferred);
 
+        // --- GPU → CPU readback for caching ---
+        // Record copy commands before end_immediate(). Staging buffers are
+        // self-managed (not pushed to Context) so we can read them after GPU completion.
+        std::vector<ReadbackProduct> readback_products;
+        if (hdr_loaded) {
+            readback_products.push_back(readback_image(ctx, rm, cubemap_));
+            readback_products.push_back(readback_image(ctx, rm, irradiance_cubemap_));
+            readback_products.push_back(readback_image(ctx, rm, prefiltered_cubemap_));
+        }
+        readback_products.push_back(readback_image(ctx, rm, brdf_lut_));
+
         ctx.end_immediate();
+
+        // GPU complete — staging buffers are now CPU-readable.
+        // Log readback sizes for verification.
+        uint64_t total_readback = 0;
+        for (const auto &p: readback_products) {
+            total_readback += p.total_size;
+        }
+        spdlog::info("IBL: readback {} products ({:.1f} MB total)",
+                     readback_products.size(),
+                     static_cast<double>(total_readback) / (1024.0 * 1024.0));
+
+        // TODO (D-3 checkbox 2): write readback data to KTX2 cache files here
+
+        // Destroy readback staging buffers
+        for (const auto &p: readback_products) {
+            destroy_readback(ctx.allocator, p);
+        }
 
         // Safe to destroy after GPU completion (end_immediate does vkQueueWaitIdle)
         for (auto &fn: deferred) fn();
@@ -338,7 +522,7 @@ namespace himalaya::framework {
             .array_layers = 6,
             .sample_count = 1,
             .format = rhi::Format::B10G11R11UfloatPack32,
-            .usage = rhi::ImageUsage::Sampled | rhi::ImageUsage::Storage,
+            .usage = rhi::ImageUsage::Sampled | rhi::ImageUsage::Storage | rhi::ImageUsage::TransferSrc,
         };
         irradiance_cubemap_ = rm_->create_image(irradiance_desc, "IBL Irradiance");
 
@@ -532,7 +716,7 @@ namespace himalaya::framework {
             .array_layers = 6,
             .sample_count = 1,
             .format = rhi::Format::R16G16B16A16Sfloat,
-            .usage = rhi::ImageUsage::Sampled | rhi::ImageUsage::Storage,
+            .usage = rhi::ImageUsage::Sampled | rhi::ImageUsage::Storage | rhi::ImageUsage::TransferSrc,
         };
         prefiltered_cubemap_ = rm_->create_image(prefiltered_desc, "IBL Prefiltered");
 
@@ -740,7 +924,7 @@ namespace himalaya::framework {
             .array_layers = 1,
             .sample_count = 1,
             .format = rhi::Format::R16G16Unorm,
-            .usage = rhi::ImageUsage::Sampled | rhi::ImageUsage::Storage,
+            .usage = rhi::ImageUsage::Sampled | rhi::ImageUsage::Storage | rhi::ImageUsage::TransferSrc,
         };
         brdf_lut_ = rm_->create_image(lut_desc, "IBL BRDF LUT");
 
