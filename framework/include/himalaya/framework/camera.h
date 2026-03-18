@@ -9,6 +9,8 @@
 
 namespace himalaya::framework {
 
+    struct AABB;
+
     /**
      * @brief Camera state: orientation, projection parameters, and derived matrices.
      *
@@ -84,6 +86,17 @@ namespace himalaya::framework {
          * @brief Convenience: update_view() + update_projection() + update_view_projection().
          */
         void update_all();
+
+        // --- Focus helpers ---
+
+        /**
+         * @brief Computes a camera position that frames the given AABB.
+         *
+         * Uses current yaw, pitch, and fov to calculate the distance needed
+         * to fit the AABB's bounding sphere in view. Does not modify camera state.
+         * Returns current position unchanged if the AABB is degenerate (diagonal ~ 0).
+         */
+        [[nodiscard]] glm::vec3 compute_focus_position(const AABB &bounds) const;
 
         // --- Direction helpers ---
 

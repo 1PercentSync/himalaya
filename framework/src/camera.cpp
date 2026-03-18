@@ -1,4 +1,5 @@
 #include <himalaya/framework/camera.h>
+#include <himalaya/framework/scene_data.h>
 
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -35,6 +36,20 @@ namespace himalaya::framework {
         update_view();
         update_projection();
         update_view_projection();
+    }
+
+    glm::vec3 Camera::compute_focus_position(const AABB &bounds) const {
+        const glm::vec3 center = (bounds.min + bounds.max) * 0.5f;
+        const float diagonal = glm::length(bounds.max - bounds.min);
+
+        constexpr float kEpsilon = 1e-4f;
+        if (diagonal < kEpsilon) {
+            return position;
+        }
+
+        const float radius = diagonal * 0.5f;
+        const float distance = radius / std::sin(fov * 0.5f);
+        return center - forward() * distance;
     }
 
     glm::vec3 Camera::forward() const {
