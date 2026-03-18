@@ -327,6 +327,8 @@ namespace himalaya::app {
             .ibl_rotation_sin = std::sin(ibl_yaw_),
             .ibl_rotation_cos = std::cos(ibl_yaw_),
             .debug_render_mode = debug_render_mode_,
+            .features = features_,
+            .shadow_config = shadow_config_,
         };
 
         renderer_.render(cmd, input);

@@ -115,6 +115,23 @@ namespace himalaya::app {
         /** @brief Debug render mode (0=Full PBR, 1-7=debug visualizations). */
         uint32_t debug_render_mode_ = 0;
 
+        /** @brief Runtime feature toggles (skybox, shadows, etc.). */
+        framework::RenderFeatures features_{
+            .skybox = true,
+            .shadows = true,
+        };
+
+        /** @brief CSM shadow configuration parameters. */
+        framework::ShadowConfig shadow_config_{
+            .split_lambda = 0.75f,
+            .max_distance = 100.0f,
+            .constant_bias = 0.002f,
+            .slope_bias = 1.5f,
+            .normal_offset = 1.0f,
+            .pcf_radius = 1,
+            .blend_width = 0.1f,
+        };
+
         // --- IBL rotation viewport drag state ---
 
         /** @brief Previous cursor X for left-click IBL drag delta. */
