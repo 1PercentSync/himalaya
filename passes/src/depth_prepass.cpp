@@ -13,7 +13,6 @@
 #include <himalaya/passes/depth_prepass.h>
 
 #include <himalaya/framework/frame_context.h>
-#include <himalaya/framework/material_system.h>
 #include <himalaya/framework/mesh.h>
 #include <himalaya/framework/render_graph.h>
 #include <himalaya/framework/scene_data.h>
@@ -42,16 +41,23 @@ namespace himalaya::passes {
         dm_ = &dm;
         sc_ = &sc;
 
+        current_sample_count_ = sample_count;
         create_pipelines(sample_count);
     }
 
+    // ReSharper disable once CppMemberFunctionMayBeStatic
     void DepthPrePass::on_resize([[maybe_unused]] const uint32_t width,
                                  [[maybe_unused]] const uint32_t height) {
         // No resolution-dependent private resources.
     }
 
     void DepthPrePass::on_sample_count_changed(const uint32_t sample_count) {
+        current_sample_count_ = sample_count;
         create_pipelines(sample_count);
+    }
+
+    void DepthPrePass::rebuild_pipelines() {
+        create_pipelines(current_sample_count_);
     }
 
     void DepthPrePass::destroy() const {

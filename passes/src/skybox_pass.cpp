@@ -34,6 +34,10 @@ namespace himalaya::passes {
         create_pipelines();
     }
 
+    void SkyboxPass::rebuild_pipelines() {
+        create_pipelines();
+    }
+
     void SkyboxPass::destroy() const {
         pipeline_.destroy(ctx_->device);
     }

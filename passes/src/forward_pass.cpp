@@ -6,7 +6,6 @@
 #include <himalaya/passes/forward_pass.h>
 
 #include <himalaya/framework/frame_context.h>
-#include <himalaya/framework/material_system.h>
 #include <himalaya/framework/mesh.h>
 #include <himalaya/framework/render_graph.h>
 #include <himalaya/framework/scene_data.h>
@@ -35,16 +34,23 @@ namespace himalaya::passes {
         dm_ = &dm;
         sc_ = &sc;
 
+        current_sample_count_ = sample_count;
         create_pipelines(sample_count);
     }
 
+    // ReSharper disable once CppMemberFunctionMayBeStatic
     void ForwardPass::on_resize([[maybe_unused]] const uint32_t width,
                                 [[maybe_unused]] const uint32_t height) {
         // Step 4a: no resolution-dependent private resources.
     }
 
     void ForwardPass::on_sample_count_changed(const uint32_t sample_count) {
+        current_sample_count_ = sample_count;
         create_pipelines(sample_count);
+    }
+
+    void ForwardPass::rebuild_pipelines() {
+        create_pipelines(current_sample_count_);
     }
 
     void ForwardPass::destroy() const {

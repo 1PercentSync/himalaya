@@ -79,6 +79,15 @@ namespace himalaya::passes {
         void record(framework::RenderGraph &rg, const framework::FrameContext &ctx) const;
 
         /**
+         * @brief Rebuild pipelines by recompiling shaders from disk.
+         *
+         * Caller must guarantee GPU is idle before calling (vkQueueWaitIdle).
+         * Uses the current sample count stored from the last setup() or
+         * on_sample_count_changed() call.
+         */
+        void rebuild_pipelines();
+
+        /**
          * @brief Destroy pipelines and release owned resources.
          */
         void destroy() const;
@@ -107,6 +116,11 @@ namespace himalaya::passes {
 
         /** @brief Shader compiler for GLSL -> SPIR-V compilation. */
         rhi::ShaderCompiler *sc_ = nullptr;
+
+        // ---- Configuration ----
+
+        /** @brief Current MSAA sample count (for rebuild_pipelines). */
+        uint32_t current_sample_count_ = 0;
 
         // ---- Owned resources ----
 

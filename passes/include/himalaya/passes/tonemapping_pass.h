@@ -71,6 +71,13 @@ namespace himalaya::passes {
         void record(framework::RenderGraph &rg, const framework::FrameContext &ctx) const;
 
         /**
+         * @brief Rebuild pipeline by recompiling shaders from disk.
+         *
+         * Caller must guarantee GPU is idle before calling (vkQueueWaitIdle).
+         */
+        void rebuild_pipelines();
+
+        /**
          * @brief Destroy pipeline and release owned resources.
          */
         void destroy() const;
