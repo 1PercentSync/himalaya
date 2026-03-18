@@ -333,6 +333,10 @@ namespace himalaya::app {
                 ImGui::EndCombo();
             }
 
+            if (ImGui::Button("Reload Shaders")) {
+                actions.reload_shaders = true;
+            }
+
             slider_float_deferred("IBL Intensity", &ctx.ibl_intensity, 0.0f, 5.0f, "%.2f");
             slider_float_deferred("EV", &ctx.ev, -4.0f, 4.0f, "%.1f");
 

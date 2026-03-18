@@ -152,6 +152,13 @@ namespace himalaya::app {
         void handle_msaa_change(uint32_t new_sample_count);
 
         /**
+         * @brief Recompiles all shaders from disk and rebuilds every pipeline.
+         *
+         * Waits for GPU idle, then calls rebuild_pipelines() on each pass.
+         */
+        void reload_shaders();
+
+        /**
          * @brief Reloads the IBL environment from a new HDR file.
          *
          * Caller must ensure GPU is idle (vkQueueWaitIdle) before calling.

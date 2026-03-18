@@ -378,6 +378,19 @@ namespace himalaya::app {
         forward_pass_.on_sample_count_changed(new_sample_count);
     }
 
+    // ---- Shader hot-reload ----
+
+    void Renderer::reload_shaders() {
+        vkQueueWaitIdle(ctx_->graphics_queue);
+
+        depth_prepass_.rebuild_pipelines();
+        forward_pass_.rebuild_pipelines();
+        skybox_pass_.rebuild_pipelines();
+        tonemapping_pass_.rebuild_pipelines();
+
+        spdlog::info("All shaders reloaded");
+    }
+
     uint32_t Renderer::current_sample_count() const {
         return current_sample_count_;
     }

@@ -318,6 +318,10 @@ namespace himalaya::app {
             vsync_changed_ = true;
         }
 
+        if (actions.reload_shaders) {
+            renderer_.reload_shaders();
+        }
+
         if (actions.msaa_changed) {
             renderer_.handle_msaa_change(actions.new_sample_count);
         }

@@ -133,6 +133,9 @@ namespace himalaya::app {
         /** @brief True if the user dismissed the error banner. */
         bool error_dismissed = false;
 
+        /** @brief True if the user clicked the Reload Shaders button. */
+        bool reload_shaders = false;
+
         /** @brief True if the user requested loading a new HDR environment. */
         bool env_load_requested = false;
 
