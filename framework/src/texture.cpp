@@ -280,13 +280,16 @@ namespace himalaya::framework {
         const auto level_count = static_cast<uint32_t>(mip_chain.size());
 
         // BC compress each mip level
-        std::vector<std::vector<uint8_t>> compressed(level_count);
+        std::vector<std::vector<uint8_t> > compressed(level_count);
         for (uint32_t i = 0; i < level_count; ++i) {
+            // ReSharper disable once CppUseStructuredBinding
             const auto &mip = mip_chain[i];
             if (role == TextureRole::Normal) {
                 compressed[i] = compress_bc5(mip.data.data(), mip.width, mip.height);
             } else {
-                compressed[i] = compress_bc7(mip.data.data(), mip.width, mip.height,
+                compressed[i] = compress_bc7(mip.data.data(),
+                                             mip.width,
+                                             mip.height,
                                              role == TextureRole::Color);
             }
         }
@@ -294,7 +297,7 @@ namespace himalaya::framework {
 
         // Build contiguous upload buffer + regions
         uint64_t total_size = 0;
-        for (const auto &c : compressed) total_size += c.size();
+        for (const auto &c: compressed) total_size += c.size();
 
         PreparedTexture result;
         result.format = bc_format;
@@ -362,8 +365,11 @@ namespace himalaya::framework {
             };
         }
         resource_manager.upload_image_all_levels(
-            image, prepared.data.data(), prepared.data.size(),
-            upload_regions, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT);
+            image,
+            prepared.data.data(),
+            prepared.data.size(),
+            upload_regions,
+            VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT);
 
         const auto bindless_index = descriptor_manager.register_texture(image, sampler);
         return {image, bindless_index};
@@ -378,7 +384,7 @@ namespace himalaya::framework {
                                  const rhi::SamplerHandle sampler,
                                  const char *debug_name) {
         ensure_bc_init();
-        auto prepared = prepare_texture(data, role);
+        const auto prepared = prepare_texture(data, role);
         return finalize_texture(resource_manager, descriptor_manager, prepared, sampler, debug_name);
     }
 
