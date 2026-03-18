@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 1a 第九项：Application 场景加载后初始化 shadow_config.max_distance
+Step 1a 第十项：Camera::compute_focus_position() 纯计算方法
 
 ---
 
