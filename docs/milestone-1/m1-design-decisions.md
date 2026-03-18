@@ -1467,6 +1467,8 @@ if ((global.feature_flags & FEATURE_SSAO) != 0u) {
 
 **保留中间 cubemap**：M1 规划包含"静态 HDR Cubemap 天空"（见 `milestone-1.md`），中间 cubemap 是 Skybox Pass 的源数据。M2 Bruneton 大气散射替换天空后可改为销毁。
 
+**Mip 剥离优化**：中间 cubemap 创建时带完整 mip chain（供 `compute_prefiltered` 的 `textureLod` 采样降噪），预滤波完成后 mip 1..N 不再需要。`strip_skybox_mips()` 在预滤波后创建 mip-0-only 副本替换原 cubemap，释放约 25% 显存（8K HDR 下 ~64 MB）。Skybox 渲染仅用 `texture()` 自动 LOD 采样基础级别，mip 剥离不影响画面。缓存命中路径同样执行剥离（兼容旧缓存）。
+
 ### 预计算策略
 
 **选择：GPU 计算 + 运行时缓存**
@@ -1715,7 +1717,8 @@ IBL 模块在 `init()` 中创建的所有 image（equirect 输入、中间 cubem
 | 资源 | 创建时机 | 销毁时机 | 说明 |
 |------|---------|---------|------|
 | Equirect 输入 image | `init()` 开头 | `init()` 末尾 | 转 cubemap 后立即销毁，不出 init scope |
-| 中间 cubemap | `init()` | `destroy()` | 保留用于 Skybox 渲染 |
+| 中间 cubemap（全 mip） | `init()` 内 | `init()` 内（预滤波后剥离） | `strip_skybox_mips()` 替换为 mip-0-only 副本 |
+| Skybox cubemap（mip 0） | `init()` 内（剥离后） | `destroy()` | 保留用于 Skybox 渲染 |
 | Irradiance cubemap | `init()` | `destroy()` | 注册到 Set 1 binding 1 |
 | Prefiltered cubemap | `init()` | `destroy()` | 注册到 Set 1 binding 1 |
 | BRDF LUT | `init()` | `destroy()` | 注册到 Set 1 binding 0 |
@@ -2339,7 +2342,7 @@ IBL 管线每次启动重新计算全部产物。主要耗时在 prefiltered env
 | 组 | 产物 | 格式 | 大小 | cache key |
 |----|------|------|------|-----------|
 | BRDF | BRDF LUT | R16G16_UNORM, 256² | ~0.25 MB | 固定 key（与 HDR 无关） |
-| Cubemaps | Skybox cubemap | R16G16B16A16F, 2048², 6 faces + mips | ~256 MB | HDR 内容哈希 |
+| Cubemaps | Skybox cubemap | R16G16B16A16F, 2048², 6 faces, mip 0 only | ~192 MB | HDR 内容哈希 |
 | Cubemaps | Irradiance | R11G11B10F, 32², 6 faces | ~0.03 MB | HDR 内容哈希 |
 | Cubemaps | Prefiltered | R16G16B16A16F, 512², 6 faces + mips | ~16 MB | HDR 内容哈希 |
 
@@ -2360,7 +2363,7 @@ init() 流程:
 
 KTX2 天然支持 cubemap 存储（`numFaces = 6` + mip chain），与纹理缓存共用自写 KTX2 读写模块。
 
-**Readback 方案**：compute 路径在 `end_immediate()` 之前，通过 per-product staging buffer + `vkCmdCopyImageToBuffer` 读回需要缓存的产物。immediate scope 内一次性开销，不影响运行时帧率。per-product 独立 staging buffer 避免单次分配 ~272 MB。
+**Readback 方案**：compute 路径在 `end_immediate()` 之前，通过 per-product staging buffer + `vkCmdCopyImageToBuffer` 读回需要缓存的产物。immediate scope 内一次性开销，不影响运行时帧率。per-product 独立 staging buffer 避免单次分配过大（skybox mip 剥离后 readback 从 ~272 MB 降至 ~208 MB）。
 
 **BRDF LUT 永久缓存**：BRDF Integration LUT 仅依赖 GGX BRDF 公式，与输入 HDR 无关。使用固定 cache key，更换 HDR 时不重算——切换 HDR 只需重算 3 个 cubemap。
 
