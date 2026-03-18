@@ -294,6 +294,12 @@ namespace himalaya::app {
             ImGui::EndDisabled();
         }
 
+        // Features section
+        ImGui::Separator();
+        if (ImGui::CollapsingHeader("Features", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::Checkbox("Skybox", &ctx.features.skybox);
+        }
+
         // Rendering section
         ImGui::Separator();
         if (ImGui::CollapsingHeader("Rendering", ImGuiTreeNodeFlags_DefaultOpen)) {

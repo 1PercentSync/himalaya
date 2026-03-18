@@ -16,6 +16,7 @@ namespace himalaya::rhi {
 
 namespace himalaya::framework {
     struct Camera;
+    struct RenderFeatures;
 } // namespace himalaya::framework
 
 namespace himalaya::app {
@@ -66,6 +67,9 @@ namespace himalaya::app {
 
         /** @brief Editable reference to the debug render mode (0=Full PBR, 1-7=debug). */
         uint32_t& debug_render_mode;
+
+        /** @brief Runtime feature toggles (skybox, shadows, etc.). */
+        framework::RenderFeatures& features;
 
         // --- MSAA (display + action) ---
 
