@@ -97,7 +97,7 @@
 > **已知问题**：当前 `cull_frustum()` 返回 `CullResult` 值，每帧内部构造两个 `std::vector`，导致 2 次 heap 分配 + 2 次释放。重构时必须改为调用方持有预分配 buffer（`clear()` + `push_back`，首帧后零分配），此问题随重构一并解决。
 
 - [x] `framework/culling.h` 重构为纯几何剔除：`Frustum` 结构体 + `extract_frustum(mat4 vp)` + `cull_against_frustum(instances, frustum, out_visible)`（预分配 buffer 版），删除旧 `cull_frustum()`
-- [ ] 现有相机 frustum cull 迁移到通用接口：`cull_against_frustum()` + 调用方内联分桶（opaque/transparent）+ 透明排序
+- [x] 现有相机 frustum cull 迁移到通用接口：`cull_against_frustum()` + 调用方内联分桶（opaque/transparent）+ 透明排序
 - [ ] 验证：现有相机剔除行为不变（渲染输出与重构前一致），无 validation 报错
 
 ## Step 2：Shadow 资源 + ShadowPass + 单 cascade 深度渲染
