@@ -299,6 +299,8 @@ namespace himalaya::framework {
             irr_ktx2.reset();
             pref_ktx2.reset();
             spdlog::info("IBL: 3 cubemaps loaded from cache");
+            // Old caches may store full mip chains; strip if present.
+            strip_skybox_mips(ctx, deferred);
         } else {
             auto [eq, eq_width] = load_equirect(hdr_path);
             equirect = eq;
@@ -307,6 +309,9 @@ namespace himalaya::framework {
                 convert_equirect_to_cubemap(ctx, sc, equirect, eq_width, deferred);
                 compute_irradiance(ctx, sc, deferred);
                 compute_prefiltered(ctx, sc, deferred);
+                // Prefiltering done — mip chain no longer needed for sampling.
+                // Replace with mip-0-only copy to free ~25% of cubemap memory.
+                strip_skybox_mips(ctx, deferred);
             } else {
                 create_fallback_cubemaps(ctx);
             }
@@ -1022,6 +1027,122 @@ namespace himalaya::framework {
 
         spdlog::info("IBL: prefiltered cubemap ({}x{} per face, {} mip levels)",
                      kFaceSize, kFaceSize, mip_count);
+    }
+
+    // -----------------------------------------------------------------------
+    // strip_skybox_mips — drop mip 1..N after prefiltering no longer needs them
+    // -----------------------------------------------------------------------
+
+    void IBL::strip_skybox_mips(const rhi::Context &ctx, DeferredCleanup &deferred) {
+        const auto &old_img = rm_->get_image(cubemap_);
+        if (old_img.desc.mip_levels <= 1) return;
+
+        // Capture values before create_image (which may reallocate the pool).
+        const VkImage old_vk = old_img.image;
+        const uint32_t w = old_img.desc.width;
+        const uint32_t h = old_img.desc.height;
+        const rhi::Format fmt = old_img.desc.format;
+        const uint32_t old_mips = old_img.desc.mip_levels;
+
+        // Calculate memory saved (mip 1..N across all 6 faces).
+        const uint32_t bpp = rhi::format_bytes_per_block(fmt);
+        uint64_t stripped_bytes = 0;
+        for (uint32_t m = 1; m < old_mips; ++m) {
+            const uint32_t mw = std::max(1u, w >> m);
+            const uint32_t mh = std::max(1u, h >> m);
+            stripped_bytes += static_cast<uint64_t>(mw) * mh * 6 * bpp;
+        }
+
+        // Create 1-mip replacement cubemap.
+        const rhi::ImageDesc new_desc{
+            .width = w,
+            .height = h,
+            .depth = 1,
+            .mip_levels = 1,
+            .array_layers = 6,
+            .sample_count = 1,
+            .format = fmt,
+            .usage = rhi::ImageUsage::Sampled
+                     | rhi::ImageUsage::TransferSrc
+                     | rhi::ImageUsage::TransferDst,
+        };
+        auto new_cubemap = rm_->create_image(new_desc, "IBL Cubemap");
+        const VkImage new_vk = rm_->get_image(new_cubemap).image;
+
+        // ReSharper disable once CppLocalVariableMayBeConst
+        VkCommandBuffer cmd = ctx.immediate_command_buffer;
+
+        // Barrier: old SHADER_READ_ONLY → TRANSFER_SRC (mip 0 only),
+        //          new UNDEFINED → TRANSFER_DST.
+        std::array<VkImageMemoryBarrier2, 2> pre{};
+        pre[0].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+        pre[0].srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+        pre[0].srcAccessMask = VK_ACCESS_2_SHADER_SAMPLED_READ_BIT;
+        pre[0].dstStageMask = VK_PIPELINE_STAGE_2_COPY_BIT;
+        pre[0].dstAccessMask = VK_ACCESS_2_TRANSFER_READ_BIT;
+        pre[0].oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        pre[0].newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+        pre[0].image = old_vk;
+        pre[0].subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 6};
+
+        pre[1].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+        pre[1].srcStageMask = VK_PIPELINE_STAGE_2_NONE;
+        pre[1].srcAccessMask = VK_ACCESS_2_NONE;
+        pre[1].dstStageMask = VK_PIPELINE_STAGE_2_COPY_BIT;
+        pre[1].dstAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
+        pre[1].oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        pre[1].newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+        pre[1].image = new_vk;
+        pre[1].subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 6};
+
+        VkDependencyInfo dep{};
+        dep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+        dep.imageMemoryBarrierCount = 2;
+        dep.pImageMemoryBarriers = pre.data();
+        vkCmdPipelineBarrier2(cmd, &dep);
+
+        // Copy mip 0 (all 6 faces) from old → new.
+        VkImageCopy2 region{};
+        region.sType = VK_STRUCTURE_TYPE_IMAGE_COPY_2;
+        region.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 6};
+        region.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 6};
+        region.extent = {w, h, 1};
+
+        VkCopyImageInfo2 copy{};
+        copy.sType = VK_STRUCTURE_TYPE_COPY_IMAGE_INFO_2;
+        copy.srcImage = old_vk;
+        copy.srcImageLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+        copy.dstImage = new_vk;
+        copy.dstImageLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+        copy.regionCount = 1;
+        copy.pRegions = &region;
+        vkCmdCopyImage2(cmd, &copy);
+
+        // Transition new cubemap to SHADER_READ_ONLY for rendering + readback.
+        VkImageMemoryBarrier2 post{};
+        post.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+        post.srcStageMask = VK_PIPELINE_STAGE_2_COPY_BIT;
+        post.srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
+        post.dstStageMask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
+        post.dstAccessMask = VK_ACCESS_2_SHADER_SAMPLED_READ_BIT;
+        post.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+        post.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        post.image = new_vk;
+        post.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 6};
+
+        dep.imageMemoryBarrierCount = 1;
+        dep.pImageMemoryBarriers = &post;
+        vkCmdPipelineBarrier2(cmd, &dep);
+
+        // Defer destruction of old cubemap (GPU may still reference it until
+        // end_immediate). Swap handle now so readback + bindless use the new image.
+        auto old_handle = cubemap_;
+        deferred.push_back([this, old_handle]() { rm_->destroy_image(old_handle); });
+        cubemap_ = new_cubemap;
+
+        spdlog::info("IBL: stripped skybox mips ({} -> 1, freed {:.1f} MB)",
+                     old_mips,
+                     static_cast<double>(stripped_bytes) / (1024.0 * 1024.0));
     }
 
     // -----------------------------------------------------------------------

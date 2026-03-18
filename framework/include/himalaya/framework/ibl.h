@@ -186,6 +186,21 @@ namespace himalaya::framework {
                                  DeferredCleanup &deferred);
 
         /**
+         * @brief Replace the skybox cubemap with a mip-0-only copy.
+         *
+         * The full mip chain is only needed during compute_prefiltered() for
+         * filtered importance sampling. After prefiltering completes, only mip 0
+         * is used for skybox rendering. This replaces cubemap_ with a 1-mip copy,
+         * freeing ~25% of its memory (e.g. 64 MB for a 2048² cubemap).
+         * No-op if cubemap_ already has a single mip level.
+         * Must be called within an active immediate scope.
+         *
+         * @param ctx      RHI context (device, immediate command buffer).
+         * @param deferred Cleanup functions executed after GPU completion.
+         */
+        void strip_skybox_mips(const rhi::Context &ctx, DeferredCleanup &deferred);
+
+        /**
          * @brief Compute the BRDF integration lookup table for Split-Sum IBL.
          *
          * Creates a 256x256 R16G16_UNORM 2D image. For each (NdotV, roughness) pair,
@@ -218,7 +233,7 @@ namespace himalaya::framework {
         rhi::DescriptorManager *dm_ = nullptr;
 
         // --- GPU resources (owned) ---
-        rhi::ImageHandle cubemap_; ///< Intermediate cubemap (size derived from input, kept for Skybox)
+        rhi::ImageHandle cubemap_; ///< Skybox cubemap (mip-0-only after prefiltering)
         rhi::ImageHandle irradiance_cubemap_; ///< Irradiance map (32×32 per face)
         rhi::ImageHandle prefiltered_cubemap_; ///< Prefiltered env map (512×512, multi-mip)
         rhi::ImageHandle brdf_lut_; ///< BRDF integration LUT (256×256)
