@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 1a 第七项：Application 新增 RenderFeatures 和 ShadowConfig 成员，构造 RenderInput 时传入
+Step 1a 第八项：SceneLoader 计算并暴露场景 AABB（scene_bounds()）
 
 ---
 
