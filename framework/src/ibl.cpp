@@ -303,8 +303,6 @@ namespace himalaya::framework {
             irr_ktx2.reset();
             pref_ktx2.reset();
             spdlog::info("IBL: 3 cubemaps loaded from cache");
-            // Old caches may store full mip chains; strip if present.
-            strip_skybox_mips(ctx, deferred);
         } else {
             auto [eq, eq_width] = load_equirect(hdr_path);
             equirect = eq;
@@ -1214,11 +1212,11 @@ namespace himalaya::framework {
         VkDescriptorSetLayout push_layout = VK_NULL_HANDLE;
         VK_CHECK(vkCreateDescriptorSetLayout(ctx.device, &layout_ci, nullptr, &push_layout));
 
-        // Push constant range: vec2 texel_size_rcp + uint blocks_per_row = 12 bytes
+        // Push constant range: vec2 texel_size_rcp + uint blocks_per_row + uint blocks_per_col = 16 bytes
         constexpr VkPushConstantRange pc_range{
             .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
             .offset = 0,
-            .size = 12,
+            .size = 16,
         };
 
         const rhi::ComputePipelineDesc pipeline_desc{
@@ -1296,7 +1294,6 @@ namespace himalaya::framework {
         cmd.bind_compute_pipeline(pipeline);
 
         // --- Per face × per mip: create view, dispatch, barrier, copy ---
-        constexpr uint32_t kGroupSize = 8;
 
         for (uint32_t mip = 0; mip < mip_count; ++mip) {
             const uint32_t mip_w = std::max(1u, face_w >> mip);
@@ -1306,6 +1303,7 @@ namespace himalaya::framework {
             const VkDeviceSize mip_buf_size = static_cast<VkDeviceSize>(blocks_w) * blocks_h * 16;
 
             for (uint32_t face = 0; face < 6; ++face) {
+                constexpr uint32_t kGroupSize = 8;
                 // Create per-face 2D view of source cubemap at this mip
                 VkImageViewCreateInfo view_ci{};
                 view_ci.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
@@ -1355,10 +1353,12 @@ namespace himalaya::framework {
                 struct {
                     float texel_size_rcp[2];
                     uint32_t blocks_per_row;
+                    uint32_t blocks_per_col;
                 } pc{};
                 pc.texel_size_rcp[0] = 1.0f / static_cast<float>(mip_w);
                 pc.texel_size_rcp[1] = 1.0f / static_cast<float>(mip_h);
                 pc.blocks_per_row = blocks_w;
+                pc.blocks_per_col = blocks_h;
                 cmd.push_constants(pipeline.layout, VK_SHADER_STAGE_COMPUTE_BIT,
                                    &pc, sizeof(pc));
 

@@ -28,7 +28,8 @@ layout(set = 0, binding = 1) writeonly buffer DstBuffer {
 
 layout(push_constant) uniform PushConstants {
     vec2 texel_size_rcp;
-    uint blocks_per_row;  // ceil(src_width / 4)
+    uint blocks_per_row;   // ceil(src_width / 4)
+    uint blocks_per_col;   // ceil(src_height / 4)
 };
 
 // --- Half-float conversion helpers ---
@@ -438,6 +439,10 @@ void EncodeP2Pattern(inout uvec4 block, inout float blockMSLE, uint pattern, vec
 // --- Main ---
 
 void main() {
+    // Early exit for out-of-bounds threads (workgroup may exceed actual block count).
+    if (gl_GlobalInvocationID.x >= blocks_per_row || gl_GlobalInvocationID.y >= blocks_per_col)
+        return;
+
     vec2 uv       = gl_GlobalInvocationID.xy * texel_size_rcp * 4.0 - texel_size_rcp;
     vec2 block0UV = uv;
     vec2 block1UV = uv + vec2(2.0 * texel_size_rcp.x, 0.0);
