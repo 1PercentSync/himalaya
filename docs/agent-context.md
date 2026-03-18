@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 1a 全部完成。下一个任务：Step 1b 第一项
+Step 1b 第一项完成（rebuild_pipelines + 清理空 on_resize）。下一个任务：Step 1b 第二项（DebugUI Reload Shaders 按钮 + Renderer 触发逻辑）
 
 ---
 
