@@ -108,4 +108,10 @@ layout(set = 0, binding = 3) readonly buffer InstanceBuffer {
 layout(set = 1, binding = 0) uniform sampler2D textures[];
 layout(set = 1, binding = 1) uniform samplerCube cubemaps[];
 
+// ---- Set 2: Render target intermediate products ----
+// PARTIALLY_BOUND — bindings are written as their producing passes are added.
+// Accessing an unwritten binding is guarded by feature_flags in the shader.
+
+layout(set = 2, binding = 0) uniform sampler2D rt_hdr_color;
+
 #endif // BINDINGS_GLSL

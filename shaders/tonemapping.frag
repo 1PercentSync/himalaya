@@ -13,8 +13,6 @@
 
 #include "common/bindings.glsl"
 
-layout(set = 2, binding = 0) uniform sampler2D rt_hdr_color;
-
 layout(location = 0) in vec2 in_uv;
 
 layout(location = 0) out vec4 out_color;
