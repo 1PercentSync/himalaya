@@ -7,6 +7,7 @@
 
 #include <himalaya/framework/cache.h>
 #include <himalaya/framework/camera.h>
+#include <himalaya/framework/scene_data.h>
 #include <himalaya/rhi/context.h>
 #include <himalaya/rhi/swapchain.h>
 
