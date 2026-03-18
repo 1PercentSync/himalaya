@@ -48,7 +48,11 @@ namespace himalaya::framework {
         }
 
         const float radius = diagonal * 0.5f;
-        const float distance = radius / std::sin(fov * 0.5f);
+        // Use the tighter of vertical and horizontal FOV so the bounding
+        // sphere fits in both dimensions (matters for narrow viewports).
+        const float half_v = fov * 0.5f;
+        const float half_h = std::atan(std::tan(half_v) * aspect);
+        const float distance = radius / std::sin(std::min(half_v, half_h));
         return center - forward() * distance;
     }
 
