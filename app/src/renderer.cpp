@@ -471,7 +471,8 @@ namespace himalaya::app {
                     const auto &mat_e = input.materials[inst_e.material_id];
                     if (inst_e.mesh_id != mesh_id ||
                         mat_e.alpha_mode != material.alpha_mode ||
-                        mat_e.double_sided != material.double_sided) break;
+                        mat_e.double_sided != material.double_sided)
+                        break;
                     ++group_end;
                 }
 
@@ -518,8 +519,8 @@ namespace himalaya::app {
         // draw groups. Update this sum when adding new scene passes (e.g. ShadowPass).
         const auto groups = static_cast<uint32_t>(
             opaque_draw_groups_.size() + mask_draw_groups_.size());
-        draw_call_count_ = groups   // DepthPrePass
-                         + groups;  // ForwardPass
+        draw_call_count_ = groups // DepthPrePass
+                           + groups; // ForwardPass
 
         // --- Build render graph ---
         render_graph_.clear();
