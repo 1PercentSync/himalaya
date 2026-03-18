@@ -26,7 +26,7 @@ namespace himalaya::app {
     /**
      * @brief Maximum instances the InstanceBuffer can hold.
      *
-     * 65536 × 80 bytes = 5 MB per frame — trivial for modern GPUs.
+     * 65536 × 128 bytes = 8 MB per frame — trivial for modern GPUs.
      * Covers any realistic scene complexity for CPU-driven draw submission.
      * Scenes exceeding this should use GPU-driven indirect rendering (M3+).
      */
@@ -491,8 +491,12 @@ namespace himalaya::app {
                 // Fill InstanceBuffer entries for this group
                 for (uint32_t i = group_start; i < group_end; ++i) {
                     const auto &inst = input.mesh_instances[sorted_opaque_indices_[i]];
+                    const glm::mat3 normal_mat = glm::transpose(glm::inverse(glm::mat3(inst.transform)));
                     gpu_instances[instance_offset++] = {
                         .model = inst.transform,
+                        .normal_col0 = glm::vec4(normal_mat[0], 0.0f),
+                        .normal_col1 = glm::vec4(normal_mat[1], 0.0f),
+                        .normal_col2 = glm::vec4(normal_mat[2], 0.0f),
                         .material_index = input.materials[inst.material_id].buffer_offset,
                     };
                 }

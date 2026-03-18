@@ -24,11 +24,12 @@ struct GPUDirectionalLight {
     vec4 color_and_shadow;          // xyz = color, w = cast_shadows (0.0 / 1.0)
 };
 
-/** Per-instance data (std430, 80 bytes). */
+/** Per-instance data (std430, 128 bytes). */
 struct GPUInstanceData {
     mat4 model;                     // 64 bytes — world-space transform
+    mat3 normal_matrix;             // 48 bytes — transpose(inverse(mat3(model))), precomputed
     uint material_index;            //  4 bytes — index into MaterialBuffer SSBO
-    uint _padding[3];               // 12 bytes — align to 80 (multiple of 16)
+    uint _padding[3];               // 12 bytes — align to 128 (multiple of 16)
 };
 
 /** PBR material data (std430, 80 bytes). */

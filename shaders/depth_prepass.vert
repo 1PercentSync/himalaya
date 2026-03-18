@@ -34,13 +34,14 @@ layout(location = 3) flat out uint frag_material_index;
 invariant gl_Position;
 
 void main() {
-    mat4 model = instances[gl_InstanceIndex].model;
+    GPUInstanceData inst = instances[gl_InstanceIndex];
 
-    vec4 world_pos = model * vec4(in_position, 1.0);
+    vec4 world_pos = inst.model * vec4(in_position, 1.0);
     gl_Position = global.view_projection * world_pos;
 
-    // Inverse-transpose handles non-uniform scale correctly.
-    mat3 normal_matrix = transpose(inverse(mat3(model)));
+    // Normal matrix precomputed on CPU (transpose(inverse(mat3(model)))),
+    // handles non-uniform scale correctly without per-vertex mat3 inverse.
+    mat3 normal_matrix = inst.normal_matrix;
     frag_normal = normalize(normal_matrix * in_normal);
 
     frag_uv0 = in_uv0;
@@ -48,5 +49,5 @@ void main() {
     // Tangent uses the same normal matrix; preserve handedness in w
     frag_tangent = vec4(normalize(normal_matrix * in_tangent.xyz), in_tangent.w);
 
-    frag_material_index = instances[gl_InstanceIndex].material_index;
+    frag_material_index = inst.material_index;
 }

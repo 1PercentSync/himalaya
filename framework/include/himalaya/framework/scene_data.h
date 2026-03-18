@@ -200,14 +200,23 @@ namespace himalaya::framework {
     /**
      * @brief Per-instance GPU data (Set 0, Binding 3 SSBO element).
      *
-     * std430 layout, 80 bytes per element, aligned to 16.
+     * std430 layout, 128 bytes per element, aligned to 16.
      * Shader reads via instances[gl_InstanceIndex]. The vkCmdDrawIndexed
      * firstInstance parameter sets the SSBO base offset for each draw group.
+     *
+     * The normal matrix (transpose(inverse(mat3(model)))) is precomputed on
+     * CPU per-instance rather than per-vertex in the shader, handling
+     * non-uniform scale correctly without per-vertex mat3 inverse.
+     * Stored as 3 vec4 columns to match std430 mat3 layout (vec3 + 4-byte
+     * pad per column = 16 bytes each).
      */
     struct GPUInstanceData {
-        glm::mat4 model; ///< 64 bytes — world-space transform
+        glm::mat4 model;         ///< 64 bytes — world-space transform
+        glm::vec4 normal_col0;   ///< 16 bytes — normal matrix column 0 (xyz, w unused)
+        glm::vec4 normal_col1;   ///< 16 bytes — normal matrix column 1 (xyz, w unused)
+        glm::vec4 normal_col2;   ///< 16 bytes — normal matrix column 2 (xyz, w unused)
         uint32_t material_index; ///<  4 bytes — index into MaterialBuffer SSBO
-        uint32_t _padding[3]{}; ///< 12 bytes — align to 80 (multiple of 16)
+        uint32_t _padding[3]{};  ///< 12 bytes — align to 128 (multiple of 16)
     };
 
     /**
@@ -253,7 +262,8 @@ namespace himalaya::framework {
     static_assert(offsetof(GlobalUniformData, debug_render_mode) == 320);
     static_assert(offsetof(GlobalUniformData, feature_flags) == 324);
     static_assert(sizeof(GPUDirectionalLight) == 32, "GPUDirectionalLight must be 32 bytes (std430)");
-    static_assert(sizeof(GPUInstanceData) == 80, "GPUInstanceData must be 80 bytes (std430)");
-    static_assert(offsetof(GPUInstanceData, material_index) == 64);
+    static_assert(sizeof(GPUInstanceData) == 128, "GPUInstanceData must be 128 bytes (std430)");
+    static_assert(offsetof(GPUInstanceData, normal_col0) == 64);
+    static_assert(offsetof(GPUInstanceData, material_index) == 112);
     static_assert(sizeof(PushConstantData) == 4, "PushConstantData must be 4 bytes");
 } // namespace himalaya::framework
