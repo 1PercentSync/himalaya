@@ -457,6 +457,12 @@ namespace himalaya::framework {
     std::filesystem::path cache_path(std::string_view category,
                                      std::string_view hash,
                                      std::string_view extension);
+
+    /// 删除指定 category 子目录下的所有缓存文件
+    void clear_cache(std::string_view category);
+
+    /// 删除 cache_root() 下的所有缓存文件（所有 category）
+    void clear_all_cache();
 }
 ```
 
