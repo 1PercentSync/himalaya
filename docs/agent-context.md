@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 1a 第一项：`framework/scene_data.h` 新增 `RenderFeatures` 结构体
+Step 1a 第二项：`framework/scene_data.h` 新增 `ShadowConfig` 结构体
 
 ---
 
