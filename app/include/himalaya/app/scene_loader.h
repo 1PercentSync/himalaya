@@ -85,6 +85,15 @@ namespace himalaya::app {
         /** @brief Returns the number of GPU texture images loaded from the scene. */
         [[nodiscard]] uint32_t texture_count() const;
 
+        /**
+         * @brief Scene AABB (union of all mesh instance world_bounds).
+         *
+         * Available after load() completes. Empty scene returns a degenerate
+         * AABB (min = max = 0). Used by Application to initialize
+         * ShadowConfig.max_distance and camera position.
+         */
+        [[nodiscard]] const framework::AABB &scene_bounds() const;
+
     private:
         // ---- Subsystem references (set during load) ----
 
@@ -107,6 +116,9 @@ namespace himalaya::app {
 
         /** @brief Directional lights extracted from glTF KHR_lights_punctual. */
         std::vector<framework::DirectionalLight> directional_lights_;
+
+        /** @brief Union AABB of all mesh instance world_bounds, computed at load time. */
+        framework::AABB scene_bounds_{};
 
         // ---- Resource handles for cleanup ----
 

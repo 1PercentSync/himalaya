@@ -653,6 +653,17 @@ namespace himalaya::app {
 
         spdlog::info("Created {} mesh instances, {} directional lights from {} nodes",
                      mesh_instances_.size(), directional_lights_.size(), gltf.nodes.size());
+
+        // Compute scene AABB (union of all instance world_bounds)
+        if (!mesh_instances_.empty()) {
+            scene_bounds_ = mesh_instances_[0].world_bounds;
+            for (size_t i = 1; i < mesh_instances_.size(); ++i) {
+                scene_bounds_.min = glm::min(scene_bounds_.min, mesh_instances_[i].world_bounds.min);
+                scene_bounds_.max = glm::max(scene_bounds_.max, mesh_instances_[i].world_bounds.max);
+            }
+        } else {
+            scene_bounds_ = {glm::vec3(0.0f), glm::vec3(0.0f)};
+        }
     }
 
     void SceneLoader::destroy() {
@@ -687,6 +698,7 @@ namespace himalaya::app {
         material_instances_.clear();
         mesh_instances_.clear();
         directional_lights_.clear();
+        scene_bounds_ = {glm::vec3(0.0f), glm::vec3(0.0f)};
 
         resource_manager_ = nullptr;
         descriptor_manager_ = nullptr;
@@ -710,5 +722,9 @@ namespace himalaya::app {
 
     uint32_t SceneLoader::texture_count() const {
         return static_cast<uint32_t>(images_.size());
+    }
+
+    const framework::AABB &SceneLoader::scene_bounds() const {
+        return scene_bounds_;
     }
 } // namespace himalaya::app
