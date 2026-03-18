@@ -84,6 +84,12 @@ namespace himalaya::app {
 
         /** @brief Debug render mode (0=Full PBR, 1-7=debug visualizations). */
         uint32_t debug_render_mode;
+
+        /** @brief Runtime feature toggles (skybox, shadows, etc.). */
+        const framework::RenderFeatures &features;
+
+        /** @brief Shadow system parameters. */
+        const framework::ShadowConfig &shadow_config;
     };
 
     /**
