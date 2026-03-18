@@ -77,7 +77,7 @@
 - [x] RenderInput 新增 `const RenderFeatures& features` + `const ShadowConfig& shadow_config`
 - [x] Renderer 根据 `features.skybox` 条件调用 `skybox_pass_.record()`
 - [x] Application 新增 `RenderFeatures` 和 `ShadowConfig` 成员，构造 RenderInput 时传入
-- [ ] SceneLoader 计算并暴露场景 AABB（`scene_bounds()`：所有 mesh instance 的 `world_bounds` 求并集）
+- [x] SceneLoader 计算并暴露场景 AABB（`scene_bounds()`：所有 mesh instance 的 `world_bounds` 求并集）
 - [ ] Application 在场景加载后根据 scene AABB 初始化 `shadow_config.max_distance`（`diagonal × 1.5`，退化时保持默认 100m）
 - [ ] `framework/camera.h/cpp` 新增 `Camera::compute_focus_position(const AABB&)` 纯计算方法（包围球半径 + FOV → 距离 → 位置，退化 AABB 返回当前 position）
 - [ ] Application 在场景加载后自动定位相机（yaw=0, pitch=-45°, position 由 `compute_focus_position()` 计算，退化时 fallback 默认位置）

@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 1a 第八项：SceneLoader 计算并暴露场景 AABB（scene_bounds()）
+Step 1a 第九项：Application 场景加载后初始化 shadow_config.max_distance
 
 ---
 
