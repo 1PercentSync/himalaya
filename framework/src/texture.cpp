@@ -433,6 +433,8 @@ namespace himalaya::framework {
         DefaultTextures defaults{};
         defaults.white = create_solid_texture(resource_manager, descriptor_manager, sampler,
                                               255, 255, 255, 255, "Default White");
+        // R8G8B8A8_UNORM, not BC5: 1x1 textures don't need block compression,
+        // and the shader only samples .rg (RG=128 → XY≈0, Z reconstructed ≈1).
         defaults.flat_normal = create_solid_texture(resource_manager, descriptor_manager, sampler,
                                                     128, 128, 255, 255, "Default Flat Normal");
         defaults.black = create_solid_texture(resource_manager, descriptor_manager, sampler,
