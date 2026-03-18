@@ -8,6 +8,7 @@
 struct GLFWwindow;
 
 namespace himalaya::framework {
+    struct AABB;
     struct Camera;
 } // namespace himalaya::framework
 
@@ -35,6 +36,14 @@ namespace himalaya::app {
          */
         void update(float delta_time);
 
+        /**
+         * @brief Sets the AABB used by F-key focus (nullptr = focus disabled).
+         *
+         * The pointer must remain valid for the lifetime of the controller.
+         * Typically points to SceneLoader::scene_bounds().
+         */
+        void set_focus_target(const framework::AABB *bounds);
+
         /** @brief Movement speed in world units per second. */
         float move_speed = 5.0f;
 
@@ -56,5 +65,8 @@ namespace himalaya::app {
 
         /** @brief Whether the right mouse button was held last frame. */
         bool right_button_held_ = false;
+
+        /** @brief Focus target AABB for F-key (nullptr = disabled). */
+        const framework::AABB *focus_target_ = nullptr;
     };
 } // namespace himalaya::app

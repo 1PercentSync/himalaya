@@ -1,5 +1,6 @@
 #include <himalaya/app/camera_controller.h>
 #include <himalaya/framework/camera.h>
+#include <himalaya/framework/scene_data.h>
 
 #include <glm/glm.hpp>
 
@@ -15,6 +16,10 @@ namespace himalaya::app {
     void CameraController::init(GLFWwindow *window, framework::Camera *camera) {
         window_ = window;
         camera_ = camera;
+    }
+
+    void CameraController::set_focus_target(const framework::AABB *bounds) {
+        focus_target_ = bounds;
     }
 
     void CameraController::update(const float delta_time) {
@@ -78,6 +83,11 @@ namespace himalaya::app {
                                         ? move_speed * kSprintMultiplier
                                         : move_speed;
                 camera_->position += glm::normalize(move) * speed * delta_time;
+            }
+
+            // F-key focus: move to frame the scene AABB, keep current orientation
+            if (focus_target_ && ImGui::IsKeyPressed(ImGuiKey_F, false)) {
+                camera_->position = camera_->compute_focus_position(*focus_target_);
             }
         }
 
