@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 1a 第六项：Renderer 根据 features.skybox 条件调用 skybox_pass_.record()
+Step 1a 第七项：Application 新增 RenderFeatures 和 ShadowConfig 成员，构造 RenderInput 时传入
 
 ---
 

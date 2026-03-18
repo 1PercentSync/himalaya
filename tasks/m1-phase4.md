@@ -75,7 +75,7 @@
 - [x] GlobalUBO 新增 `feature_flags`（uint32_t，offset 324），`bindings.glsl` 新增 `#define FEATURE_SHADOWS (1u << 0)`
 - [x] FrameContext 新增 `RGResourceId shadow_map`（invalid if shadows disabled）+ `const RenderFeatures* features` + `const ShadowConfig* shadow_config`
 - [x] RenderInput 新增 `const RenderFeatures& features` + `const ShadowConfig& shadow_config`
-- [ ] Renderer 根据 `features.skybox` 条件调用 `skybox_pass_.record()`
+- [x] Renderer 根据 `features.skybox` 条件调用 `skybox_pass_.record()`
 - [ ] Application 新增 `RenderFeatures` 和 `ShadowConfig` 成员，构造 RenderInput 时传入
 - [ ] SceneLoader 计算并暴露场景 AABB（`scene_bounds()`：所有 mesh instance 的 `world_bounds` 求并集）
 - [ ] Application 在场景加载后根据 scene AABB 初始化 `shadow_config.max_distance`（`diagonal × 1.5`，退化时保持默认 100m）
