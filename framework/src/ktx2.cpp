@@ -264,15 +264,28 @@ namespace himalaya::framework {
                         levels[i].size);
         }
 
-        // 4. Write to disk
-        std::ofstream ofs(path, std::ios::binary | std::ios::trunc);
+        // 4. Write to disk (write-to-temp + rename for crash safety)
+        auto tmp_path = path;
+        tmp_path += ".tmp";
+
+        std::ofstream ofs(tmp_path, std::ios::binary | std::ios::trunc);
         if (!ofs) {
-            spdlog::error("ktx2: cannot open file for writing: {}", path.string());
+            spdlog::error("ktx2: cannot open file for writing: {}", tmp_path.string());
             return false;
         }
         ofs.write(reinterpret_cast<const char *>(file_buf.data()),
                   static_cast<std::streamsize>(file_buf.size()));
-        return ofs.good();
+        ofs.close();
+        if (!ofs.good()) return false;
+
+        std::error_code ec;
+        std::filesystem::rename(tmp_path, path, ec);
+        if (ec) {
+            spdlog::error("ktx2: rename failed: {}", ec.message());
+            std::filesystem::remove(tmp_path, ec);
+            return false;
+        }
+        return true;
     }
 
     // ---- read_ktx2 ----
