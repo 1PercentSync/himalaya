@@ -5,13 +5,20 @@
  * Ported from Betsy GPU compressor (MIT license), which is a GLSL port of
  * GPURealTimeBC6H (public domain) by Krzysztof Narkowicz.
  *
+ * Extended with least-squares endpoint refinement (3 iterations) for improved
+ * quality: after initial min/max endpoint selection, LS fitting recomputes
+ * optimal endpoints by minimizing interpolation error across all 16 texels,
+ * then recomputes indices. This significantly reduces error for blocks where
+ * the bounding box endpoints are suboptimal (e.g. one outlier texel pulling
+ * an endpoint to an extreme value).
+ *
  * Each invocation compresses one 4x4 texel block into a 128-bit BC6H block.
  * Quality mode: tries mode 11 (10-bit endpoints) + all 32 two-subset
- * partition patterns (modes 7.6 and 9.5), picks lowest MSLE.
+ * partition patterns (modes 2 and 6), picks lowest MSLE.
  *
  * Input:  sampler2D  — HDR source texture (per cubemap face view)
  * Output: SSBO       — uvec4 per block, linear layout (row-major)
- * Push constant: vec2 texel_size_rcp, uint blocks_per_row
+ * Push constant: vec2 texel_size_rcp, uint blocks_per_row, uint blocks_per_col
  *
  * Dispatch: ceil(width/4 / 8) x ceil(height/4 / 8) x 1
  */
@@ -57,6 +64,20 @@ float f16tof32_s(uint value) {
 // --- Constants ---
 
 const float HALF_MAX = 65504.0;
+const uint  kLSIterations = 3u;
+
+// BC6H interpolation weights (from spec, divided by 64 for normalized [0,1])
+const float aWeight4[16] = float[16](
+     0.0 / 64.0,  4.0 / 64.0,  9.0 / 64.0, 13.0 / 64.0,
+    17.0 / 64.0, 21.0 / 64.0, 26.0 / 64.0, 30.0 / 64.0,
+    34.0 / 64.0, 38.0 / 64.0, 43.0 / 64.0, 47.0 / 64.0,
+    51.0 / 64.0, 55.0 / 64.0, 60.0 / 64.0, 64.0 / 64.0
+);
+
+const float aWeight3[8] = float[8](
+     0.0 / 64.0,  9.0 / 64.0, 18.0 / 64.0, 27.0 / 64.0,
+    37.0 / 64.0, 46.0 / 64.0, 55.0 / 64.0, 64.0 / 64.0
+);
 
 // --- Quantization (unsigned float) ---
 
@@ -79,6 +100,63 @@ float CalcMSLE(vec3 a, vec3 b) {
     vec3 err = log2((b + 1.0) / (a + 1.0));
     err = err * err;
     return err.x + err.y + err.z;
+}
+
+// --- Least-squares endpoint refinement ---
+
+// Solve 2x2 normal equations to find optimal float endpoints for given indices.
+// Works in linear RGB space; caller quantizes after.
+// 4-bit indices version (one-subset modes, 16 interpolation levels).
+void RefineEndpointsLS4(inout vec3 blockMin, inout vec3 blockMax,
+                        vec3 texels[16], uint indices[16]) {
+    // Normal equations: [a00 a01; a01 a11] * [e0; e1] = [b0; b1]
+    float a00 = 0.0, a01 = 0.0, a11 = 0.0;
+    vec3 b0 = vec3(0.0), b1 = vec3(0.0);
+
+    for (uint i = 0u; i < 16u; ++i) {
+        float w  = aWeight4[indices[i]];
+        float w0 = 1.0 - w;
+        a00 += w0 * w0;
+        a01 += w0 * w;
+        a11 += w  * w;
+        b0  += texels[i] * w0;
+        b1  += texels[i] * w;
+    }
+
+    float det = a00 * a11 - a01 * a01;
+    if (det > 1e-10) {
+        vec3 e0 = (a11 * b0 - a01 * b1) / det;
+        vec3 e1 = (a00 * b1 - a01 * b0) / det;
+        blockMin = clamp(e0, vec3(0.0), vec3(HALF_MAX));
+        blockMax = clamp(e1, vec3(0.0), vec3(HALF_MAX));
+    }
+}
+
+// 3-bit indices version (two-subset modes, 8 interpolation levels).
+// Refines one subset at a time; caller passes only the subset's texels/indices.
+void RefineEndpointsLS3(inout vec3 subsetMin, inout vec3 subsetMax,
+                        vec3 subsetTexels[16], uint subsetIndices[16],
+                        uint count) {
+    float a00 = 0.0, a01 = 0.0, a11 = 0.0;
+    vec3 b0 = vec3(0.0), b1 = vec3(0.0);
+
+    for (uint i = 0u; i < count; ++i) {
+        float w  = aWeight3[subsetIndices[i]];
+        float w0 = 1.0 - w;
+        a00 += w0 * w0;
+        a01 += w0 * w;
+        a11 += w  * w;
+        b0  += subsetTexels[i] * w0;
+        b1  += subsetTexels[i] * w;
+    }
+
+    float det = a00 * a11 - a01 * a01;
+    if (det > 1e-10) {
+        vec3 e0 = (a11 * b0 - a01 * b1) / det;
+        vec3 e1 = (a00 * b1 - a01 * b0) / det;
+        subsetMin = clamp(e0, vec3(0.0), vec3(HALF_MAX));
+        subsetMax = clamp(e1, vec3(0.0), vec3(HALF_MAX));
+    }
 }
 
 // --- Partition tables ---
@@ -138,6 +216,37 @@ void SignExtend(inout vec3 v1, uint mask, uint signFlag) {
     v1 = v;
 }
 
+// --- Helper: recompute direction, quantized endpoints, fixup swap, and indices (P1) ---
+
+void RecomputeP1(vec3 blockMin, vec3 blockMax, vec3 texels[16],
+                 out vec3 endpoint0, out vec3 endpoint1,
+                 out float endPoint0Pos, out float endPoint1Pos,
+                 out vec3 blockDir, out uint indices[16]) {
+    blockDir = blockMax - blockMin;
+    float dirSum = blockDir.x + blockDir.y + blockDir.z;
+    // Degenerate block: all texels identical. Use arbitrary direction.
+    if (dirSum < 1e-10) blockDir = vec3(1.0, 0.0, 0.0);
+    else                blockDir /= dirSum;
+
+    endpoint0    = Quantize10(blockMin);
+    endpoint1    = Quantize10(blockMax);
+    endPoint0Pos = f32tof16_s(dot(blockMin, blockDir));
+    endPoint1Pos = f32tof16_s(dot(blockMax, blockDir));
+
+    // Fixup index swap
+    float fixupTexelPos = f32tof16_s(dot(texels[0], blockDir));
+    uint fixupIndex = ComputeIndex4(fixupTexelPos, endPoint0Pos, endPoint1Pos);
+    if (fixupIndex > 7u) {
+        float tmp_f = endPoint0Pos; endPoint0Pos = endPoint1Pos; endPoint1Pos = tmp_f;
+        vec3  tmp_v = endpoint0;    endpoint0 = endpoint1;       endpoint1 = tmp_v;
+    }
+
+    for (uint i = 0u; i < 16u; ++i) {
+        float texelPos = f32tof16_s(dot(texels[i], blockDir));
+        indices[i] = ComputeIndex4(texelPos, endPoint0Pos, endPoint1Pos);
+    }
+}
+
 // --- Mode 11: one subset, 10-bit endpoints, 4-bit indices ---
 
 void EncodeP1(inout uvec4 block, inout float blockMSLE, vec3 texels[16]) {
@@ -148,7 +257,7 @@ void EncodeP1(inout uvec4 block, inout float blockMSLE, vec3 texels[16]) {
         blockMax = max(blockMax, texels[i]);
     }
 
-    // Refine endpoints in log2 RGB space
+    // Refine endpoints in log2 RGB space (original Betsy heuristic)
     vec3 refinedBlockMin = blockMax;
     vec3 refinedBlockMax = blockMin;
     for (uint i = 0u; i < 16u; ++i) {
@@ -166,27 +275,18 @@ void EncodeP1(inout uvec4 block, inout float blockMSLE, vec3 texels[16]) {
     blockMin = exp2(logBlockMin) - 1.0;
     blockMax = exp2(logBlockMax) - 1.0;
 
-    vec3 blockDir = blockMax - blockMin;
-    blockDir = blockDir / (blockDir.x + blockDir.y + blockDir.z);
+    // Initial endpoint/index computation
+    vec3  endpoint0, endpoint1, blockDir;
+    float endPoint0Pos, endPoint1Pos;
+    uint  indices[16];
+    RecomputeP1(blockMin, blockMax, texels,
+                endpoint0, endpoint1, endPoint0Pos, endPoint1Pos, blockDir, indices);
 
-    vec3  endpoint0    = Quantize10(blockMin);
-    vec3  endpoint1    = Quantize10(blockMax);
-    float endPoint0Pos = f32tof16_s(dot(blockMin, blockDir));
-    float endPoint1Pos = f32tof16_s(dot(blockMax, blockDir));
-
-    // Check if endpoint swap is required
-    float fixupTexelPos = f32tof16_s(dot(texels[0], blockDir));
-    uint fixupIndex = ComputeIndex4(fixupTexelPos, endPoint0Pos, endPoint1Pos);
-    if (fixupIndex > 7) {
-        float tmp_f = endPoint0Pos; endPoint0Pos = endPoint1Pos; endPoint1Pos = tmp_f;
-        vec3  tmp_v = endpoint0;    endpoint0 = endpoint1;       endpoint1 = tmp_v;
-    }
-
-    // Compute indices
-    uint indices[16] = uint[16](0u,0u,0u,0u, 0u,0u,0u,0u, 0u,0u,0u,0u, 0u,0u,0u,0u);
-    for (uint i = 0u; i < 16u; ++i) {
-        float texelPos = f32tof16_s(dot(texels[i], blockDir));
-        indices[i] = ComputeIndex4(texelPos, endPoint0Pos, endPoint1Pos);
+    // Least-squares refinement iterations
+    for (uint iter = 0u; iter < kLSIterations; ++iter) {
+        RefineEndpointsLS4(blockMin, blockMax, texels, indices);
+        RecomputeP1(blockMin, blockMax, texels,
+                    endpoint0, endpoint1, endPoint0Pos, endPoint1Pos, blockDir, indices);
     }
 
     // Compute compression error (MSLE)
@@ -229,7 +329,7 @@ void EncodeP1(inout uvec4 block, inout float blockMSLE, vec3 texels[16]) {
     block.w |= indices[15] << 28u;
 }
 
-// --- Two-subset modes: 7.6 (7-bit base, 6-bit delta) and 9.5 (9-bit base, 5-bit delta) ---
+// --- Two-subset modes: mode 2 (7-bit base, 6-bit delta) and mode 6 (9-bit base, 5-bit delta) ---
 
 void EncodeP2Pattern(inout uvec4 block, inout float blockMSLE, uint pattern, vec3 texels[16]) {
     vec3 p0BlockMin = vec3(HALF_MAX);
@@ -248,39 +348,81 @@ void EncodeP2Pattern(inout uvec4 block, inout float blockMSLE, uint pattern, vec
         }
     }
 
-    vec3 p0BlockDir = p0BlockMax - p0BlockMin;
-    vec3 p1BlockDir = p1BlockMax - p1BlockMin;
-    p0BlockDir = p0BlockDir / (p0BlockDir.x + p0BlockDir.y + p0BlockDir.z);
-    p1BlockDir = p1BlockDir / (p1BlockDir.x + p1BlockDir.y + p1BlockDir.z);
+    // --- LS refinement for two-subset modes ---
+    // Separate texels into two subsets for independent LS fitting.
+    vec3 p0Texels[16], p1Texels[16];
+    uint p0Indices[16], p1Indices[16];
+    uint p0Count = 0u, p1Count = 0u;
 
-    float p0Endpoint0Pos = f32tof16_s(dot(p0BlockMin, p0BlockDir));
-    float p0Endpoint1Pos = f32tof16_s(dot(p0BlockMax, p0BlockDir));
-    float p1Endpoint0Pos = f32tof16_s(dot(p1BlockMin, p1BlockDir));
-    float p1Endpoint1Pos = f32tof16_s(dot(p1BlockMax, p1BlockDir));
+    // Initial index computation (before first LS pass, using min/max endpoints)
+    for (uint lsIter = 0u; lsIter <= kLSIterations; ++lsIter) {
+        // Compute directions (with degenerate guard)
+        vec3 p0BlockDir = p0BlockMax - p0BlockMin;
+        vec3 p1BlockDir = p1BlockMax - p1BlockMin;
+        float p0DirSum = p0BlockDir.x + p0BlockDir.y + p0BlockDir.z;
+        float p1DirSum = p1BlockDir.x + p1BlockDir.y + p1BlockDir.z;
+        if (p0DirSum < 1e-10) p0BlockDir = vec3(1.0, 0.0, 0.0);
+        else                  p0BlockDir /= p0DirSum;
+        if (p1DirSum < 1e-10) p1BlockDir = vec3(1.0, 0.0, 0.0);
+        else                  p1BlockDir /= p1DirSum;
 
-    uint fixupID = PatternFixupID(pattern);
-    float p0FixupTexelPos = f32tof16_s(dot(texels[0], p0BlockDir));
-    float p1FixupTexelPos = f32tof16_s(dot(texels[fixupID], p1BlockDir));
-    uint p0FixupIndex = ComputeIndex3(p0FixupTexelPos, p0Endpoint0Pos, p0Endpoint1Pos);
-    uint p1FixupIndex = ComputeIndex3(p1FixupTexelPos, p1Endpoint0Pos, p1Endpoint1Pos);
-    if (p0FixupIndex > 3u) {
-        float tmp = p0Endpoint0Pos; p0Endpoint0Pos = p0Endpoint1Pos; p0Endpoint1Pos = tmp;
-        vec3  tv  = p0BlockMin;     p0BlockMin = p0BlockMax;         p0BlockMax = tv;
+        float p0Endpoint0Pos = f32tof16_s(dot(p0BlockMin, p0BlockDir));
+        float p0Endpoint1Pos = f32tof16_s(dot(p0BlockMax, p0BlockDir));
+        float p1Endpoint0Pos = f32tof16_s(dot(p1BlockMin, p1BlockDir));
+        float p1Endpoint1Pos = f32tof16_s(dot(p1BlockMax, p1BlockDir));
+
+        // Fixup swap
+        uint fixupID = PatternFixupID(pattern);
+        float p0FixupTexelPos = f32tof16_s(dot(texels[0], p0BlockDir));
+        float p1FixupTexelPos = f32tof16_s(dot(texels[fixupID], p1BlockDir));
+        uint p0FixupIndex = ComputeIndex3(p0FixupTexelPos, p0Endpoint0Pos, p0Endpoint1Pos);
+        uint p1FixupIndex = ComputeIndex3(p1FixupTexelPos, p1Endpoint0Pos, p1Endpoint1Pos);
+        if (p0FixupIndex > 3u) {
+            float tmp = p0Endpoint0Pos; p0Endpoint0Pos = p0Endpoint1Pos; p0Endpoint1Pos = tmp;
+            vec3  tv  = p0BlockMin;     p0BlockMin = p0BlockMax;         p0BlockMax = tv;
+        }
+        if (p1FixupIndex > 3u) {
+            float tmp = p1Endpoint0Pos; p1Endpoint0Pos = p1Endpoint1Pos; p1Endpoint1Pos = tmp;
+            vec3  tv  = p1BlockMin;     p1BlockMin = p1BlockMax;         p1BlockMax = tv;
+        }
+
+        // Compute indices and separate texels per subset
+        p0Count = 0u;
+        p1Count = 0u;
+        for (uint i = 0u; i < 16u; ++i) {
+            float p0TexelPos = f32tof16_s(dot(texels[i], p0BlockDir));
+            float p1TexelPos = f32tof16_s(dot(texels[i], p1BlockDir));
+            uint p0Index = ComputeIndex3(p0TexelPos, p0Endpoint0Pos, p0Endpoint1Pos);
+            uint p1Index = ComputeIndex3(p1TexelPos, p1Endpoint0Pos, p1Endpoint1Pos);
+
+            uint paletteID = Pattern(pattern, i);
+            if (paletteID == 0u) {
+                p0Texels[p0Count] = texels[i];
+                p0Indices[p0Count] = p0Index;
+                p0Count++;
+            } else {
+                p1Texels[p1Count] = texels[i];
+                p1Indices[p1Count] = p1Index;
+                p1Count++;
+            }
+        }
+
+        // LS refinement (skip on last iteration — we only need final indices)
+        if (lsIter < kLSIterations) {
+            RefineEndpointsLS3(p0BlockMin, p0BlockMax, p0Texels, p0Indices, p0Count);
+            RefineEndpointsLS3(p1BlockMin, p1BlockMax, p1Texels, p1Indices, p1Count);
+        }
     }
-    if (p1FixupIndex > 3u) {
-        float tmp = p1Endpoint0Pos; p1Endpoint0Pos = p1Endpoint1Pos; p1Endpoint1Pos = tmp;
-        vec3  tv  = p1BlockMin;     p1BlockMin = p1BlockMax;         p1BlockMax = tv;
-    }
 
+    // Reconstruct final per-block indices in original texel order
     uint indices[16] = uint[16](0u,0u,0u,0u, 0u,0u,0u,0u, 0u,0u,0u,0u, 0u,0u,0u,0u);
-    for (uint i = 0u; i < 16u; ++i) {
-        float p0TexelPos = f32tof16_s(dot(texels[i], p0BlockDir));
-        float p1TexelPos = f32tof16_s(dot(texels[i], p1BlockDir));
-        uint p0Index = ComputeIndex3(p0TexelPos, p0Endpoint0Pos, p0Endpoint1Pos);
-        uint p1Index = ComputeIndex3(p1TexelPos, p1Endpoint0Pos, p1Endpoint1Pos);
-
-        uint paletteID = Pattern(pattern, i);
-        indices[i] = paletteID == 0u ? p0Index : p1Index;
+    {
+        uint c0 = 0u, c1 = 0u;
+        for (uint i = 0u; i < 16u; ++i) {
+            uint paletteID = Pattern(pattern, i);
+            if (paletteID == 0u) { indices[i] = p0Indices[c0]; c0++; }
+            else                 { indices[i] = p1Indices[c1]; c1++; }
+        }
     }
 
     vec3 endpoint760 = floor(Quantize7(p0BlockMin));
@@ -479,6 +621,11 @@ void main() {
     texels[13] = vec3(block2X.y, block2Y.y, block2Z.y);
     texels[14] = vec3(block3X.x, block3Y.x, block3Z.x);
     texels[15] = vec3(block3X.y, block3Y.y, block3Z.y);
+
+    // Clamp to valid BC6H unsigned range
+    for (uint i = 0u; i < 16u; ++i) {
+        texels[i] = clamp(texels[i], vec3(0.0), vec3(HALF_MAX));
+    }
 
     uvec4 block  = uvec4(0u);
     float blockMSLE = 0.0;
