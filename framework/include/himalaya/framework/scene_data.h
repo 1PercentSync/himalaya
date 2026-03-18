@@ -109,6 +109,22 @@ namespace himalaya::framework {
         std::vector<uint32_t> visible_transparent_indices;
     };
 
+    // ---- Render Configuration ----
+
+    /**
+     * @brief Runtime toggles for optional rendering effects.
+     *
+     * Application holds the instance, DebugUI modifies fields directly,
+     * Renderer checks flags to conditionally record passes.
+     */
+    struct RenderFeatures {
+        /** @brief Enable skybox rendering (SkyboxPass). */
+        bool skybox = true;
+
+        /** @brief Enable shadow mapping (ShadowPass + forward sampling). */
+        bool shadows = true;
+    };
+
     // ---- GPU Data Structures ----
     // Must match shader layouts in shaders/common/bindings.glsl exactly.
 
