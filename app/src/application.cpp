@@ -90,6 +90,18 @@ namespace himalaya::app {
                 error_message_ = "Failed to load scene: " + config_.scene_path;
             }
         }
+
+        update_shadow_config_from_scene();
+    }
+
+    void Application::update_shadow_config_from_scene() {
+        const auto &bounds = scene_loader_.scene_bounds();
+        const float diagonal = glm::length(bounds.max - bounds.min);
+        constexpr float kEpsilon = 1e-4f;
+        if (diagonal > kEpsilon) {
+            shadow_config_.max_distance = diagonal * 1.5f;
+        }
+        // else: keep the initialized 100m fallback
     }
 
     // ---- Runtime scene/environment switching ----
@@ -113,6 +125,8 @@ namespace himalaya::app {
                 error_message_.clear();
             }
         }
+
+        update_shadow_config_from_scene();
 
         config_.scene_path = path;
         save_config(config_);

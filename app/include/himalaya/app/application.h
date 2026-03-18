@@ -193,6 +193,14 @@ namespace himalaya::app {
          */
         void update_ibl_input();
 
+        /**
+         * @brief Updates shadow_config_.max_distance from current scene AABB.
+         *
+         * Called after scene load/switch. If the scene AABB diagonal is valid,
+         * sets max_distance = diagonal * 1.5; otherwise keeps the 100m fallback.
+         */
+        void update_shadow_config_from_scene();
+
         // --- Runtime scene/environment switching ---
 
         /**
