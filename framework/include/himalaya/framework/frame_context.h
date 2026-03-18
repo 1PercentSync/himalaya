@@ -52,6 +52,9 @@ namespace himalaya::framework {
         /** @brief Resolved normal buffer (R10G10B10A2_UNORM). */
         RGResourceId normal;
 
+        /** @brief Shadow map (2D Array, D32Sfloat); invalid when shadows disabled. */
+        RGResourceId shadow_map;
+
         // ---- Scene data (non-owning references) ----
 
         /** @brief Loaded mesh resources. */
@@ -73,6 +76,14 @@ namespace himalaya::framework {
 
         /** @brief Alpha-mask draw groups (AlphaMode::Mask, sorted by mesh_id). */
         std::span<const MeshDrawGroup> mask_draw_groups;
+
+        // ---- Render configuration (non-owning references) ----
+
+        /** @brief Runtime feature toggles (skybox, shadows, etc.). */
+        const RenderFeatures *features = nullptr;
+
+        /** @brief Shadow system parameters. */
+        const ShadowConfig *shadow_config = nullptr;
 
         // ---- Frame parameters ----
 
