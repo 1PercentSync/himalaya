@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 1a 第十四项：DebugUI 新增 Features 面板（Skybox checkbox）
+Step 1a 最后一项：验证（用户在 CLion 中操作）
 
 ---
 

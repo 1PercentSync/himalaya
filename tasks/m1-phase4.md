@@ -83,7 +83,7 @@
 - [x] Application 在场景加载后自动定位相机（yaw=0, pitch=-45°, position 由 `compute_focus_position()` 计算，退化时 fallback 默认位置）
 - [x] `app/camera_controller.h/cpp` 新增 `set_focus_target(const AABB*)` + F 键 focus（`ImGui::IsKeyPressed(ImGuiKey_F, false)`，保持朝向，调用 `compute_focus_position()` 更新 position）
 - [x] Application 场景加载后调用 `camera_controller_.set_focus_target(&scene_loader_.scene_bounds())`
-- [ ] DebugUI 新增 Features 面板（Skybox checkbox）
+- [x] DebugUI 新增 Features 面板（Skybox checkbox）
 - [ ] 验证：Skybox 可通过 DebugUI 切换开/关，F 键 focus 正确定位，无 validation 报错
 
 ## Step 1b：Shader 热重载
