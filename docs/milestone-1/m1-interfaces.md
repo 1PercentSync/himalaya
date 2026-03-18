@@ -165,16 +165,15 @@ Pipeline 不使用 handle 体系——所有权单一明确（pass 直接持有 
 // 所有字段必须显式初始化，无默认值。
 // create_image() 通过 assert 拦截 depth/mip_levels/sample_count 为 0 的情况。
 // array_layers == 6 自动推断 cubemap（VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT + CUBE view type）。
-// force_array_view == true 时默认 view 使用 VK_IMAGE_VIEW_TYPE_2D_ARRAY（shadow map 等需要 array 采样的场景）。
+// array_layers > 1 && != 6 自动推断 2D Array（VK_IMAGE_VIEW_TYPE_2D_ARRAY）。
 struct ImageDesc {
     uint32_t width, height;
     uint32_t depth;             // 2D images: must be 1
     uint32_t mip_levels;        // single level: must be 1
-    uint32_t array_layers;      // cubemap: 6, regular 2D: 1, shadow map array: cascade count
+    uint32_t array_layers;      // cubemap: 6, regular 2D: 1, shadow map: 4 (MAX_SHADOW_CASCADES)
     uint32_t sample_count;      // no MSAA: must be 1
     Format format;              // 自定义枚举，映射到 VkFormat
     ImageUsage usage;           // 自定义 flags，映射到 VkImageUsageFlags
-    bool force_array_view;      // true: 默认 view 使用 2D_ARRAY（即使 array_layers=1）
 };
 
 struct BufferDesc {
@@ -192,7 +191,7 @@ struct SamplerDesc {
     float max_anisotropy;       // 0 表示不启用各向异性
     float max_lod;              // 0 = 仅基础级别（禁用 mip），VK_LOD_CLAMP_NONE = 不限制
     bool compare_enable;        // true: 启用深度比较（shadow map 用），默认 false
-    VkCompareOp compare_op;     // 比较操作（compare_enable=true 时有效），默认 VK_COMPARE_OP_NEVER
+    CompareOp compare_op;       // 比较操作（compare_enable=true 时有效），默认 Never
 };
 ```
 
@@ -762,6 +761,10 @@ struct FrameContext {
     const CullResult* cull_result = nullptr;
     std::span<const MeshInstance> mesh_instances;
 
+    // --- Shadow draw groups（阶段四新增，Renderer 从全部 mesh_instances 构建） ---
+    std::span<const MeshDrawGroup> shadow_opaque_groups;
+    std::span<const MeshDrawGroup> shadow_mask_groups;
+
     // --- 渲染配置（非拥有引用，阶段四新增） ---
     const RenderFeatures* features = nullptr;
     const ShadowConfig* shadow_config = nullptr;
@@ -836,9 +839,10 @@ public:
 
     void destroy();
 
-    /// 运行时 cascade 数量/分辨率变更：销毁旧资源 + 创建新资源 + 重建 per-layer views
-    /// 调用者保证 GPU 空闲（Renderer::handle_shadow_config_changed 的 vkQueueWaitIdle 保障）
-    void on_shadow_config_changed(uint32_t cascade_count, uint32_t resolution);
+    /// 运行时分辨率变更：销毁旧资源 + 创建新资源（固定 4 层）+ 重建 per-layer views
+    /// cascade 数量为纯渲染参数，不触发资源重建
+    /// 调用者保证 GPU 空闲（Renderer::handle_shadow_resolution_changed 的 vkQueueWaitIdle 保障）
+    void on_resolution_changed(uint32_t resolution);
 
     /// 获取 shadow map 的 backing image（Renderer 更新 Set 2 binding 5 用）
     rhi::ImageHandle shadow_map_image() const;
@@ -925,8 +929,9 @@ public:
     /// 当前 MSAA 采样数（1 = 无 MSAA）。
     uint32_t current_sample_count() const;
 
-    /// Shadow 运行时配置变更：等待 GPU 空闲，ShadowPass 重建资源，更新 Set 2。（阶段四新增）
-    void handle_shadow_config_changed(uint32_t new_cascade_count, uint32_t new_resolution);
+    /// Shadow 分辨率运行时变更：等待 GPU 空闲，ShadowPass 重建资源，更新 Set 2。（阶段四新增）
+    /// Cascade 数量为纯渲染参数，通过 ShadowConfig 读取，不需要专门 handler。
+    void handle_shadow_resolution_changed(uint32_t new_resolution);
 
     // --- 场景加载用 accessor ---
     rhi::SamplerHandle default_sampler() const;

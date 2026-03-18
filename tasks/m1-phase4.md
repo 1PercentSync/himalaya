@@ -102,16 +102,15 @@
 
 ## Step 2 前置：RHI 基础设施扩展
 
-- [ ] `SamplerDesc` 新增 `compare_enable` (bool, 默认 false) 和 `compare_op` (VkCompareOp, 默认 `VK_COMPARE_OP_NEVER`) 字段；`create_sampler()` 据此设置 `VkSamplerCreateInfo::compareEnable` / `compareOp`
-- [ ] `ImageDesc` 新增 `force_array_view` (bool, 默认 false) 字段；`create_image()` 当 `force_array_view == true` 时创建 `VK_IMAGE_VIEW_TYPE_2D_ARRAY` 替代 `VK_IMAGE_VIEW_TYPE_2D`
+- [ ] `types.h` 新增 `CompareOp` 自定义枚举（Never / Less / Equal / LessOrEqual / Greater / GreaterOrEqual）+ `to_vk_compare_op()` 转换函数
+- [ ] `SamplerDesc` 新增 `compare_enable` (bool, 默认 false) 和 `compare_op` (CompareOp, 默认 Never) 字段；`create_sampler()` 据此设置 `VkSamplerCreateInfo::compareEnable` / `compareOp`
+- [ ] `create_image()` 自动推断 2D Array view type：`array_layers > 1 && != 6` 时创建 `VK_IMAGE_VIEW_TYPE_2D_ARRAY`
 - [ ] `GraphicsPipelineDesc` 支持无 FS：`fragment_shader == VK_NULL_HANDLE` 时 `stageCount = 1`（仅 VS）
-- [ ] `GraphicsPipelineDesc` 新增 `depth_bias_enable` (bool, 默认 false)；`create_graphics_pipeline()` 据此设置 `rasterization.depthBiasEnable`；动态状态新增 `VK_DYNAMIC_STATE_DEPTH_BIAS`
-- [ ] `CommandBuffer` 新增 `set_depth_bias(float constant_factor, float clamp, float slope_factor)` 方法
 - [ ] `passes/CMakeLists.txt` 新增 `shadow_pass.cpp` 构建条目（需用户在 CLion 中确认构建配置）
 
 ## Step 2：Shadow 资源 + ShadowPass + 单 cascade 深度渲染
 
-- [ ] Shadow map 2D Array 资源创建（D32Sfloat，2048²，1 layer，`DEPTH_STENCIL_ATTACHMENT | SAMPLED`），ShadowPass 通过 ResourceManager 创建并持有
+- [ ] Shadow map 2D Array 资源创建（D32Sfloat，2048²，4 layers 固定，`DEPTH_STENCIL_ATTACHMENT | SAMPLED`），ShadowPass 通过 ResourceManager 创建并持有
 - [ ] Shadow comparison sampler 创建（`GREATER_OR_EQUAL` compare op、`LINEAR` mag/min filter、`CLAMP_TO_EDGE`），Renderer 持有
 - [ ] Per-layer VkImageView 创建（ShadowPass 持有，每 layer 一个 view，`DEPTH` aspect）
 - [ ] Set 2 binding 5 descriptor 写入（shadow map image view + comparison sampler）
@@ -121,12 +120,17 @@
 - [ ] 创建 `shaders/shadow_masked.frag`（采样 `base_color_tex` alpha test + discard，无颜色输出）
 - [ ] Opaque pipeline（仅 VS，无 FS）+ Mask pipeline（VS + masked FS）创建
 - [ ] 光空间正交投影矩阵计算（fit 整个相机 frustum，cascade=1）
-- [ ] ShadowPass `record()` 实现：`import_image()` 到 RG → `add_pass()` → lambda 内循环 cascade（=1）→ begin rendering(layer view) → set depth bias → draw opaque → draw mask → end rendering
-- [ ] 绘制全部场景物体（暴力，iterate `mesh_instances`），先 opaque 后 mask
+- [ ] Renderer `render()` 新增 shadow draw group 构建：全部 `mesh_instances` 按 (mesh_id, alpha_mode, double_sided) 排序分组 → 填充 InstanceBuffer 第二段 → 构建 `shadow_opaque_groups_` / `shadow_mask_groups_`；FrameContext 新增 `shadow_opaque_groups` / `shadow_mask_groups` span 字段
+- [ ] ShadowPass `record()` 实现：`import_image()` 到 RG → `add_pass()` → lambda 内循环 cascade（=1）→ begin rendering(layer view) → draw opaque groups → draw mask groups → end rendering
 - [ ] GlobalUBO 新增 shadow 字段：`shadow_cascade_count`、`shadow_normal_offset`、`shadow_texel_size`、`shadow_max_distance`、`shadow_blend_width`、`shadow_pcf_radius`、`cascade_view_proj[4]`、`cascade_splits`；`bindings.glsl` GlobalUBO 同步更新
 - [ ] ShadowPass pipeline layout 声明 push constant range（4 bytes `cascade_index`，shadow pass 专用）
 - [ ] Renderer 在 `render()` 中填充 GlobalUBO shadow 字段（cascade VP、cascade splits、shadow params）
 - [ ] 验证：RenderDoc 检查 shadow map 内容正确（从光源视角的场景深度图）
+
+## Step 3 前置：Depth Bias 基础设施
+
+- [ ] `GraphicsPipelineDesc` 新增 `depth_bias_enable` (bool, 默认 false)；`create_graphics_pipeline()` 据此设置 `rasterization.depthBiasEnable`；动态状态新增 `VK_DYNAMIC_STATE_DEPTH_BIAS`
+- [ ] `CommandBuffer` 新增 `set_depth_bias(float constant_factor, float clamp, float slope_factor)` 方法
 
 ## Step 3：Forward 集成 + common/shadow.glsl + 硬阴影
 
@@ -139,7 +143,7 @@
 
 ## Step 4：多 cascade + PSSM 分割策略
 
-- [ ] Cascade 数量从 1 提升到 4，shadow map array 重建为 4 layers
+- [ ] Cascade 渲染数量从 1 提升到 4（shadow map 资源不变，始终 4 层）
 - [ ] PSSM 分割实现：`C_i = λ × C_log + (1 - λ) × C_lin`，lambda 从 ShadowConfig 读取（默认 0.75）
 - [ ] Per-cascade 光空间 frustum tight fitting（正交投影紧密包围 cascade sub-frustum 的 8 个角点）
 - [ ] `shadow.glsl` `select_cascade()` 更新：view-space depth 与 `cascade_splits` 比较，返回正确 cascade index
@@ -152,9 +156,9 @@
 - [ ] Texel snapping：per-cascade 正交投影边界 snap 到 texel 对齐位置
 - [ ] Debug render mode 追加 `DEBUG_MODE_SHADOW_CASCADES`（passthrough 模式末尾，每 cascade 不同颜色），forward.frag 新增对应分支
 - [ ] DebugUI 渲染模式下拉列表追加 "Shadow Cascades"
-- [ ] `Renderer::handle_shadow_config_changed(uint32_t new_cascade_count, uint32_t new_resolution)`：`vkQueueWaitIdle` → `shadow_pass_.on_shadow_config_changed()` 重建 image + views → 更新 Set 2 binding 5
-- [ ] ShadowPass `on_shadow_config_changed()` 实现：销毁旧 image + views → 创建新 image（new layers / new resolution）+ 新 views
-- [ ] DebugUI Shadow 面板扩展：cascade count 下拉（1/2/3/4）+ resolution 下拉（512/1024/2048/4096）
+- [ ] `Renderer::handle_shadow_resolution_changed(uint32_t new_resolution)`：`vkQueueWaitIdle` → `shadow_pass_.on_resolution_changed()` 重建 image + views → 更新 Set 2 binding 5
+- [ ] ShadowPass `on_resolution_changed(uint32_t new_resolution)` 实现：销毁旧 image + views → 创建新 image（固定 4 层，new resolution）+ 新 views
+- [ ] DebugUI Shadow 面板扩展：cascade count 下拉（1/2/3/4，纯渲染参数）+ resolution 下拉（512/1024/2048/4096，触发资源重建）
 - [ ] DebugUI Shadow 面板底部新增 cascade 统计信息：每个 cascade 的覆盖范围（近/远边界 m）和 texel density（px/m）
 - [ ] 验证：相机移动/旋转时阴影边缘无闪烁，cascade 可视化显示正确分层，cascade 数量和分辨率可运行时切换
 

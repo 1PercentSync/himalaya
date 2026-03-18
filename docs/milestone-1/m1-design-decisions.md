@@ -1903,13 +1903,16 @@ Atlas 相比 Array 的唯一优势是支持 per-cascade 不同分辨率。但 pe
 
 | 参数 | 值 | 可调性 |
 |------|-----|-------|
-| Cascade 数量 | 4（默认） | 运行时可调（1/2/3/4），沿用 MSAA 切换模式。1 cascade 用于调试回退 |
-| 每 cascade 分辨率 | 2048²（所有 cascade 统一） | 运行时可调（512/1024/2048/4096），与 cascade 数量共享同一变更 handler |
+| Cascade 数量 | 4（默认） | 运行时可调（1/2/3/4），纯渲染参数（控制循环次数），不触发资源重建 |
+| Shadow map 层数 | 4（固定 = MAX_SHADOW_CASCADES） | 不随 cascade 数量变化。未使用的层包含陈旧数据但不被采样 |
+| 每 cascade 分辨率 | 2048²（所有 cascade 统一） | 运行时可调（512/1024/2048/4096），触发资源重建 |
 | Depth 格式 | D32Sfloat | 固定（与主相机 depth 一致） |
 
 所有 cascade 统一分辨率：Texture 2D Array 要求每 layer 同尺寸，且 PSSM 已通过覆盖范围差异提供非均匀 texel density（见上方分析），统一分辨率不构成浪费。4 × 2048² × 4B（D32Sfloat）= 64MB，桌面 8GB+ 显存下完全可接受。
 
-运行时 config change 流程与 MSAA 切换统一模式：`vkQueueWaitIdle` → 重建资源（ShadowPass `on_shadow_config_changed()`）→ 更新 Set 2 descriptor。
+Shadow map 层数固定为 4（MAX_SHADOW_CASCADES）：cascade_count 是纯渲染参数（控制 ShadowPass 循环次数 + shader 采样范围），不影响资源。这使得 cascade 数量切换为零开销操作（改一个整数，下一帧生效），避免了按需重建 image + views + descriptor 的复杂流程。`create_image()` 对 `array_layers = 4`（> 1 且 ≠ 6）自动推断 `VK_IMAGE_VIEW_TYPE_2D_ARRAY`，无需额外 flag。
+
+运行时分辨率变更流程与 MSAA 切换统一模式：`vkQueueWaitIdle` → 重建资源（ShadowPass `on_resolution_changed()`）→ 更新 Set 2 descriptor。Cascade 数量变更不走此流程。
 
 ### Shadow Map 资源管理
 
@@ -1939,7 +1942,7 @@ Atlas 相比 Array 的唯一优势是支持 per-cascade 不同分辨率。但 pe
 
 **选择 A。** 方案 B 导致 4 个 pass 依次 Write 同一 shadow map RGResourceId，RG 在它们之间插入冗余 WAW barrier（RG 不追踪 subresource，无法区分不同 layer）。方案 A 一个 pass 一组 barrier，内部循环 cascade，per-cascade 用 `cmd.begin_debug_label("Cascade N")` 提供 RenderDoc 分组。
 
-方法集：`setup()` / `record()` / `destroy()` / `on_shadow_config_changed()`。不属于 MSAA 相关 pass（shadow map 始终 1x），无 `on_resize()`（Absolute 固定尺寸），无 `on_sample_count_changed()`。
+方法集：`setup()` / `record()` / `destroy()` / `on_resolution_changed()` / `rebuild_pipelines()`。不属于 MSAA 相关 pass（shadow map 始终 1x），无 `on_resize()`（Absolute 固定尺寸），无 `on_sample_count_changed()`。Cascade 数量为纯渲染参数，不需要专门方法。
 
 ShadowPass 持有：shadow map ImageHandle、per-layer VkImageView 数组、opaque pipeline、mask pipeline。提供 `shadow_map_image()` getter 供 Renderer 更新 Set 2 binding 5。
 
