@@ -18,7 +18,7 @@
 |---|---|
 | 操作系统 | Windows 11 |
 | IDE | CLion |
-| 编译器 | MSVC |
+| 编译器 | MSVC + ISPC 1.30 |
 | CMake | 4.1 |
 | 包管理 | vcpkg (manifest mode) |
 | Vulkan | 1.4 |
@@ -179,6 +179,8 @@ himalaya/
 | stb_image | JPEG/PNG 图像解码 |
 | nlohmann/json | 配置持久化（JSON） |
 | xxHash | 内容哈希（XXH3_128，缓存 key） |
+| bc7e.ispc | BC7 纹理压缩（ISPC SIMD，需要 ISPC 编译器） |
+| rgbcx | BC4/BC5 纹理压缩 |
 
 ---
 
