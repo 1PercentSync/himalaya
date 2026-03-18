@@ -2,7 +2,9 @@
 
 #include <fstream>
 #include <iomanip>
+#include <mutex>
 #include <sstream>
+#include <unordered_set>
 #include <vector>
 
 #include <spdlog/spdlog.h>
@@ -25,9 +27,12 @@ namespace himalaya::framework {
 
     std::filesystem::path cache_root() {
         // Windows: %TEMP%\himalaya\  (e.g. C:\Users\<user>\AppData\Local\Temp\himalaya\)
-        const auto temp = std::filesystem::temp_directory_path();
-        auto root = temp / "himalaya";
-        std::filesystem::create_directories(root);
+        // Static local: directory created once, thread-safe per C++11.
+        static const auto root = [] {
+            auto p = std::filesystem::temp_directory_path() / "himalaya";
+            std::filesystem::create_directories(p);
+            return p;
+        }();
         return root;
     }
 
@@ -58,8 +63,17 @@ namespace himalaya::framework {
     std::filesystem::path cache_path(const std::string_view category,
                                      const std::string_view hash,
                                      const std::string_view extension) {
-        auto dir = cache_root() / category;
-        std::filesystem::create_directories(dir);
+        // Ensure category subdirectory exists (once per unique category).
+        static std::mutex mtx;
+        static std::unordered_set<std::string> created;
+
+        const auto dir = cache_root() / category;
+        {
+            std::lock_guard lock(mtx);
+            if (created.insert(std::string(category)).second) {
+                std::filesystem::create_directories(dir);
+            }
+        }
         return dir / (std::string(hash) + std::string(extension));
     }
 
