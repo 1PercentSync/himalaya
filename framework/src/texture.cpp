@@ -175,7 +175,11 @@ namespace himalaya::framework {
                                           const uint32_t h,
                                           const bool perceptual) {
             ispc::bc7e_compress_block_params params{};
+#ifdef NDEBUG
             ispc::bc7e_compress_block_params_init_slowest(&params, perceptual);
+#else
+            ispc::bc7e_compress_block_params_init_slow(&params, perceptual);
+#endif
 
             const uint32_t bx_count = block_count(w);
             const uint32_t by_count = block_count(h);
