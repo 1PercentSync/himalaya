@@ -206,6 +206,25 @@ RenderFeatures + feature_flags 机制见 `milestone-1/m1-design-decisions.md`「
 
 ---
 
+### Step 2 前置：RHI 基础设施扩展
+
+> Step 2 需要 RHI 层若干基础设施扩展。这些是纯机制性变更，不改变现有行为。
+
+- `SamplerDesc` 新增 `compare_enable` (bool, 默认 false) + `compare_op` (VkCompareOp, 默认 `VK_COMPARE_OP_NEVER`)；`create_sampler()` 据此设置 Vulkan 比较采样器字段。Shadow comparison sampler 需要此支持
+- `ImageDesc` 新增 `force_array_view` (bool, 默认 false)；`create_image()` 当此字段为 true 时，默认 view 使用 `VK_IMAGE_VIEW_TYPE_2D_ARRAY` 替代 `VK_IMAGE_VIEW_TYPE_2D`。Shadow map 的 `sampler2DArrayShadow` descriptor 需要 2D Array view，即使 array_layers=1
+- `GraphicsPipelineDesc` 支持无 FS：当 `fragment_shader == VK_NULL_HANDLE` 时仅包含 VS stage（`stageCount = 1`）。Shadow opaque pipeline 为 depth-only 渲染，无需 FS
+- `GraphicsPipelineDesc` 新增 `depth_bias_enable` (bool, 默认 false)；`create_graphics_pipeline()` 据此设置 `rasterization.depthBiasEnable`。动态状态列表新增 `VK_DYNAMIC_STATE_DEPTH_BIAS`（Vulkan 1.0 核心，对 `depthBiasEnable = false` 的 pipeline 无影响）
+- `CommandBuffer` 新增 `set_depth_bias(float constant_factor, float clamp, float slope_factor)` 方法，wrap `vkCmdSetDepthBias`
+- `passes/CMakeLists.txt` 新增 `shadow_pass.cpp` 构建条目
+
+#### 设计要点
+
+- `force_array_view` 选择显式 opt-in flag 而非自动推断：`array_layers == 1` 时无法从 ImageDesc 推断是否需要 array view（普通 2D 纹理也是 1 layer），显式 flag 避免歧义。auto-detect 方案（`array_layers > 1 && != 6` → 2D_ARRAY）虽可覆盖多层场景，但仍无法解决 1 层 array 需求，引入隐式逻辑无额外收益
+- `VK_DYNAMIC_STATE_DEPTH_BIAS` 全局添加但仅在 `depthBiasEnable = true` 的 pipeline 生效，现有 pipeline 行为不变
+- 无 FS pipeline 是 Vulkan 规范允许的 depth-only 渲染优化：无 fragment shader 开销，光栅器直接写入深度
+
+---
+
 ### Step 2：Shadow 资源 + ShadowPass + 单 cascade 深度渲染
 
 - Shadow map 2D Array 资源创建（D32Sfloat，Absolute 2048²，初始 1 layer），ShadowPass 自管理（非 RG managed），每帧 `import_image()` 到 RG

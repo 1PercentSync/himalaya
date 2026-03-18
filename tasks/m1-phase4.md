@@ -100,6 +100,15 @@
 - [x] 现有相机 frustum cull 迁移到通用接口：`cull_against_frustum()` + 调用方内联分桶（opaque/transparent）+ 透明排序
 - [x] 验证：现有相机剔除行为不变（渲染输出与重构前一致），无 validation 报错
 
+## Step 2 前置：RHI 基础设施扩展
+
+- [ ] `SamplerDesc` 新增 `compare_enable` (bool, 默认 false) 和 `compare_op` (VkCompareOp, 默认 `VK_COMPARE_OP_NEVER`) 字段；`create_sampler()` 据此设置 `VkSamplerCreateInfo::compareEnable` / `compareOp`
+- [ ] `ImageDesc` 新增 `force_array_view` (bool, 默认 false) 字段；`create_image()` 当 `force_array_view == true` 时创建 `VK_IMAGE_VIEW_TYPE_2D_ARRAY` 替代 `VK_IMAGE_VIEW_TYPE_2D`
+- [ ] `GraphicsPipelineDesc` 支持无 FS：`fragment_shader == VK_NULL_HANDLE` 时 `stageCount = 1`（仅 VS）
+- [ ] `GraphicsPipelineDesc` 新增 `depth_bias_enable` (bool, 默认 false)；`create_graphics_pipeline()` 据此设置 `rasterization.depthBiasEnable`；动态状态新增 `VK_DYNAMIC_STATE_DEPTH_BIAS`
+- [ ] `CommandBuffer` 新增 `set_depth_bias(float constant_factor, float clamp, float slope_factor)` 方法
+- [ ] `passes/CMakeLists.txt` 新增 `shadow_pass.cpp` 构建条目（需用户在 CLion 中确认构建配置）
+
 ## Step 2：Shadow 资源 + ShadowPass + 单 cascade 深度渲染
 
 - [ ] Shadow map 2D Array 资源创建（D32Sfloat，2048²，1 layer，`DEPTH_STENCIL_ATTACHMENT | SAMPLED`），ShadowPass 通过 ResourceManager 创建并持有

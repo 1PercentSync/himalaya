@@ -165,14 +165,16 @@ Pipeline 不使用 handle 体系——所有权单一明确（pass 直接持有 
 // 所有字段必须显式初始化，无默认值。
 // create_image() 通过 assert 拦截 depth/mip_levels/sample_count 为 0 的情况。
 // array_layers == 6 自动推断 cubemap（VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT + CUBE view type）。
+// force_array_view == true 时默认 view 使用 VK_IMAGE_VIEW_TYPE_2D_ARRAY（shadow map 等需要 array 采样的场景）。
 struct ImageDesc {
     uint32_t width, height;
     uint32_t depth;             // 2D images: must be 1
     uint32_t mip_levels;        // single level: must be 1
-    uint32_t array_layers;      // cubemap: 6, regular 2D: 1
+    uint32_t array_layers;      // cubemap: 6, regular 2D: 1, shadow map array: cascade count
     uint32_t sample_count;      // no MSAA: must be 1
     Format format;              // 自定义枚举，映射到 VkFormat
     ImageUsage usage;           // 自定义 flags，映射到 VkImageUsageFlags
+    bool force_array_view;      // true: 默认 view 使用 2D_ARRAY（即使 array_layers=1）
 };
 
 struct BufferDesc {
@@ -189,6 +191,8 @@ struct SamplerDesc {
     SamplerWrapMode wrap_v;     // REPEAT, CLAMP_TO_EDGE, MIRRORED_REPEAT
     float max_anisotropy;       // 0 表示不启用各向异性
     float max_lod;              // 0 = 仅基础级别（禁用 mip），VK_LOD_CLAMP_NONE = 不限制
+    bool compare_enable;        // true: 启用深度比较（shadow map 用），默认 false
+    VkCompareOp compare_op;     // 比较操作（compare_enable=true 时有效），默认 VK_COMPARE_OP_NEVER
 };
 ```
 

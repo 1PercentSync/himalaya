@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 1c 全部完成（验证通过）。下一个任务：Step 2 第一项（Shadow map 2D Array 资源创建）
+Step 1c 全部完成（验证通过）。下一个任务：Step 2 前置第一项（SamplerDesc compare 支持）
 
 ---
 
