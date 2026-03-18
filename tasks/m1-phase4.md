@@ -71,7 +71,7 @@
 ## Step 1a：RenderFeatures 基础设施
 
 - [x] `framework/scene_data.h` 新增 `RenderFeatures` 结构体（`skybox` bool 默认 true + `shadows` bool 默认 true）
-- [ ] `framework/scene_data.h` 新增 `ShadowConfig` 结构体（split_lambda、max_distance、constant_bias、slope_bias、normal_offset、pcf_radius、blend_width，无默认值，调用方显式初始化）
+- [x] `framework/scene_data.h` 新增 `ShadowConfig` 结构体（split_lambda、max_distance、constant_bias、slope_bias、normal_offset、pcf_radius、blend_width，无默认值，调用方显式初始化）
 - [ ] GlobalUBO 新增 `feature_flags`（uint32_t，offset 324），`bindings.glsl` 新增 `#define FEATURE_SHADOWS (1u << 0)`
 - [ ] FrameContext 新增 `RGResourceId shadow_map`（invalid if shadows disabled）+ `const RenderFeatures* features` + `const ShadowConfig* shadow_config`
 - [ ] RenderInput 新增 `const RenderFeatures& features` + `const ShadowConfig& shadow_config`
