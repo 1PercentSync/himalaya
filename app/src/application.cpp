@@ -93,6 +93,7 @@ namespace himalaya::app {
 
         update_shadow_config_from_scene();
         auto_position_camera();
+        camera_controller_.set_focus_target(&scene_loader_.scene_bounds());
     }
 
     void Application::auto_position_camera() {
@@ -142,6 +143,7 @@ namespace himalaya::app {
 
         update_shadow_config_from_scene();
         auto_position_camera();
+        camera_controller_.set_focus_target(&scene_loader_.scene_bounds());
 
         config_.scene_path = path;
         save_config(config_);
