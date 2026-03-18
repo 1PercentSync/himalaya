@@ -624,11 +624,6 @@ namespace himalaya::app {
 
         // Update Set 2 binding 0 with the resized hdr_color backing image
         update_hdr_color_descriptor();
-
-        // Notify passes of resolution change
-        depth_prepass_.on_resize(swapchain_->extent.width, swapchain_->extent.height);
-        forward_pass_.on_resize(swapchain_->extent.width, swapchain_->extent.height);
-        tonemapping_pass_.on_resize(swapchain_->extent.width, swapchain_->extent.height);
     }
 
     // ---- Accessors ----

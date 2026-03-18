@@ -52,17 +52,6 @@ namespace himalaya::passes {
                    VkFormat swapchain_format);
 
         /**
-         * @brief Update resolution-dependent state.
-         *
-         * Updates Set 2 binding 0 with the current hdr_color backing image
-         * so the tonemapping shader samples the correct (possibly resized) target.
-         *
-         * @param width  New render width.
-         * @param height New render height.
-         */
-        void on_resize(uint32_t width, uint32_t height);
-
-        /**
          * @brief Register RG resource usage and provide the execute callback.
          *
          * @param rg  Render graph to add the pass to.

@@ -38,12 +38,6 @@ namespace himalaya::passes {
         create_pipelines(sample_count);
     }
 
-    // ReSharper disable once CppMemberFunctionMayBeStatic
-    void ForwardPass::on_resize([[maybe_unused]] const uint32_t width,
-                                [[maybe_unused]] const uint32_t height) {
-        // Step 4a: no resolution-dependent private resources.
-    }
-
     void ForwardPass::on_sample_count_changed(const uint32_t sample_count) {
         current_sample_count_ = sample_count;
         create_pipelines(sample_count);

@@ -32,13 +32,6 @@ namespace himalaya::passes {
         create_pipelines();
     }
 
-    // ReSharper disable once CppMemberFunctionMayBeStatic
-    void TonemappingPass::on_resize([[maybe_unused]] const uint32_t width,
-                                    [[maybe_unused]] const uint32_t height) {
-        // Set 2 binding 0 (hdr_color) is updated by Renderer::on_swapchain_recreated(),
-        // not by TonemappingPass. Nothing to do here for now.
-    }
-
     void TonemappingPass::rebuild_pipelines() {
         create_pipelines();
     }

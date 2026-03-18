@@ -54,14 +54,6 @@ namespace himalaya::passes {
                    uint32_t sample_count);
 
         /**
-         * @brief Recreate resolution-dependent private resources.
-         *
-         * Called once after setup() and again on each swapchain resize.
-         * Currently no resolution-dependent private resources.
-         */
-        void on_resize(uint32_t width, uint32_t height);
-
-        /**
          * @brief Rebuild pipelines when MSAA sample count changes.
          *
          * Caller must guarantee GPU is idle before calling (vkQueueWaitIdle).
