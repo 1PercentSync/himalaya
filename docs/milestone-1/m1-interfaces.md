@@ -802,7 +802,7 @@ Shadow 系统的运行时可调参数。定义在 `framework/scene_data.h`（与
 /// CSM 阴影配置参数。Application 持有，DebugUI 操作，Renderer/ShadowPass 消费。
 struct ShadowConfig {
     float split_lambda    = 0.75f;   // PSSM 对数/线性混合 (0=线性, 1=对数)
-    float max_distance    = 200.0f;  // cascade 覆盖最远距离 (m)
+    float max_distance    = 100.0f;  // cascade 覆盖最远距离 (m)，兼作退化场景 fallback
     float constant_bias   = 0.002f;  // 硬件 depth bias constant factor
     float slope_bias      = 1.5f;    // 硬件 depth bias slope factor
     float normal_offset   = 1.0f;    // shader-side 法线偏移强度
@@ -939,6 +939,39 @@ public:
     /// 场景 AABB（所有 mesh instance 的 world_bounds 求并集），加载完成后可用。
     /// 用途：Application 初始化 ShadowConfig.max_distance 和相机初始位置/朝向。
     const AABB& scene_bounds() const;
+};
+```
+
+#### Camera 场景聚焦（framework/camera.h）
+
+Camera 新增纯计算方法，用于场景加载自动定位和 F 键 focus。设计决策见 `m1-design-decisions.md`「相机自动定位与 F 键 Focus」。
+
+```cpp
+struct Camera {
+    // ... 已有接口 ...
+
+    /// 计算能将给定 AABB 完整纳入视野的相机位置。
+    /// 使用当前 yaw、pitch、fov，不修改相机状态。
+    /// 退化 AABB（diagonal ≈ 0）时返回当前 position 不变。
+    [[nodiscard]] glm::vec3 compute_focus_position(const AABB& bounds) const;
+};
+```
+
+#### CameraController F 键 Focus（app/camera_controller.h）
+
+CameraController 新增 focus target 指针，检测 F 键按下时自动定位。
+
+```cpp
+class CameraController {
+public:
+    // ... 已有接口 ...
+
+    /// 设置 F 键 focus 的目标 AABB（nullptr = focus 禁用）。
+    /// Application 在场景加载后调用，指向 SceneLoader::scene_bounds() 返回值。
+    void set_focus_target(const AABB* bounds);
+
+private:
+    const AABB* focus_target_ = nullptr;
 };
 ```
 

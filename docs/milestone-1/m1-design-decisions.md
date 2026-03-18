@@ -1993,9 +1993,28 @@ ShadowPass 持有：shadow map ImageHandle、per-layer VkImageView 数组、opaq
 
 **计算方式**：`max_distance = scene_aabb.diagonal_length() × 1.5`。乘 1.5 覆盖方向光在 ~60° 入射角下的阴影投射范围（此时阴影长度约为物体高度的 1.73 倍）。倍率硬编码，不作为可调参数——这是"合理默认值"的计算系数，不是用户关注点。
 
-**退化防护**：场景为空或几何体退化时（diagonal ≈ 0），fallback 到 100m。不设人为 clamp 范围——基于实际场景几何的计算结果对该场景总是合理的。
+**退化防护**：ShadowConfig 默认值 `max_distance = 100.0f` 同时兼作退化 fallback。场景为空或几何体退化时（diagonal ≈ 0），不执行覆盖，保持默认 100m。不设人为 clamp 范围——基于实际场景几何的计算结果对该场景总是合理的。
 
-**实现位置**：SceneLoader 加载完成后计算场景 AABB（所有 mesh instance 的 `world_bounds` 求并集），暴露 `scene_bounds()` getter。Application 在场景加载后、首帧渲染前设置 `shadow_config.max_distance`。DebugUI 仍允许手动覆盖（对数滑条）。
+**实现位置**：SceneLoader 加载完成后计算场景 AABB（所有 mesh instance 的 `world_bounds` 求并集），暴露 `scene_bounds()` getter。Application 在场景加载后、首帧渲染前：`if (diagonal > epsilon) max_distance = diagonal × 1.5`，否则保持默认 100m。DebugUI 仍允许手动覆盖（对数滑条）。
+
+### 相机自动定位与 F 键 Focus
+
+**选择：Camera::compute_focus_position() 纯计算 + CameraController F 键触发**
+
+两个需求共享同一核心计算——给定 AABB + 朝向 + FOV → 计算能看到整个场景的相机位置：
+
+| 场景 | yaw/pitch | position |
+|------|-----------|----------|
+| 场景加载自动定位 | 设为 0° / -45° | 由 AABB 计算 |
+| F 键 focus | 保持当前值不变 | 由 AABB 计算 |
+
+**分层设计**：
+
+- `Camera::compute_focus_position(const AABB& bounds) const`（framework 层）：纯几何计算，AABB 包围球半径 `r` → `distance = r / sin(fov/2)` → `center - forward() * distance`。不修改相机状态。退化 AABB 时返回当前 position。
+- `CameraController::set_focus_target(const AABB* bounds)`（app 层）：持有 focus target 指针。`update()` 中检测 F 键单次按下（`ImGui::IsKeyPressed(ImGuiKey_F, false)`，在 `!io.WantTextInput` 保护下），调用 `compute_focus_position()` 更新 position。
+- Application：场景加载后设置 `camera_controller_.set_focus_target(&scene_loader_.scene_bounds())`。自动定位时先设 pitch/yaw 再调用 `compute_focus_position()`。
+
+**为什么不放在 Application 层检测 F 键**：键盘输入处理是 CameraController 的职责，Application 不应直接轮询按键。CameraController 通过指针获取 AABB 数据，不引入对 SceneLoader 的依赖。
 
 ### Cascade 混合策略
 

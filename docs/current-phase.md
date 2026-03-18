@@ -153,10 +153,12 @@ Step 6: PCF + cascade blend + per-cascade 剔除 + 最终验证
 - RenderInput 新增 `features` 和 `shadow_config` 引用
 - Renderer 根据 `features.skybox` 条件调用 `skybox_pass_.record()`
 - SceneLoader 计算并暴露场景 AABB（`scene_bounds()`：所有 mesh instance 的 `world_bounds` 求并集）
-- Application 在场景加载后根据 scene AABB 初始化 `shadow_config.max_distance`（`diagonal × 1.5`，退化时 fallback 100m）
-- Application 在场景加载后根据 scene AABB 初始化相机位置和朝向（45° 俯角俯瞰整个场景，距离由 AABB 对角线和 FOV 推算，退化时 fallback 默认位置）
+- Application 在场景加载后根据 scene AABB 初始化 `shadow_config.max_distance`（`diagonal × 1.5`，退化时保持默认 100m）
+- Camera 新增 `compute_focus_position(AABB)` 纯计算方法（包围球半径 + FOV → 距离 → 位置）
+- Application 在场景加载后自动定位相机（yaw=0, pitch=-45°, position 由 `compute_focus_position()` 计算，退化时 fallback 默认位置）
+- CameraController 新增 `set_focus_target(AABB*)` + F 键 focus（保持朝向，移动到能看到整个场景的位置）
 - DebugUI 新增 Features 面板（Skybox checkbox）
-- **验证**：Skybox 可通过 DebugUI 切换开/关，无 validation 报错
+- **验证**：Skybox 可通过 DebugUI 切换开/关，F 键 focus 正确定位，无 validation 报错
 
 #### 设计要点
 
@@ -167,7 +169,8 @@ RenderFeatures + feature_flags 机制见 `milestone-1/m1-design-decisions.md`「
 - Skybox 不需要 feature_flags（独立 RG pass，不调用 `record()` 即跳过，forward.frag 不采样 skybox 数据）
 - Shadow 需要 feature_flags（forward.frag 采样 Set 2 binding 5，PARTIALLY_BOUND 未绑定 binding 为未定义行为）
 - ShadowConfig 在此 Step 定义但部分字段在后续 Step 才使用（DebugUI 控件随 Step 逐步添加）
-- Shadow max_distance 自动初始化见 `milestone-1/m1-design-decisions.md`「Shadow Max Distance 初始化」：SceneLoader 暴露 `scene_bounds()`，Application 设置 `max_distance = diagonal × 1.5`
+- Shadow max_distance 自动初始化见 `milestone-1/m1-design-decisions.md`「Shadow Max Distance 初始化」：ShadowConfig 默认值 100m 兼作退化 fallback，正常场景覆盖为 `diagonal × 1.5`
+- 相机自动定位和 F 键 focus 共享 `Camera::compute_focus_position()` 纯计算，见 `milestone-1/m1-design-decisions.md`「相机自动定位与 F 键 Focus」
 
 ---
 
@@ -370,13 +373,17 @@ framework/
 ├── include/himalaya/framework/
 │   ├── scene_data.h             # [Step 1a] RenderFeatures + ShadowConfig
 │   ├── frame_context.h          # [Step 1a] shadow_map + features + shadow_config
+│   ├── camera.h                 # [Step 1a] compute_focus_position()
 │   └── culling.h                # [Step 1c] 通用 frustum 剔除
 app/
 ├── include/himalaya/app/
-│   └── renderer.h               # [Step 1a-2] RenderInput 扩展 + handle_shadow_config_changed
+│   ├── renderer.h               # [Step 1a-2] RenderInput 扩展 + handle_shadow_config_changed
+│   ├── camera_controller.h      # [Step 1a] set_focus_target() + F 键 focus
+│   └── debug_ui.h               # [Step 1a] DebugUIContext + RenderFeatures
 ├── src/
 │   ├── renderer.cpp             # [Step 2-6]
-│   ├── application.cpp          # [Step 1a-5] ShadowConfig + RenderFeatures
+│   ├── application.cpp          # [Step 1a-5] ShadowConfig + RenderFeatures + 相机自动定位
+│   ├── camera_controller.cpp    # [Step 1a] F 键 focus 处理
 │   └── debug_ui.cpp             # [Step 1a-6] Features 面板 + Shadow 面板
 shaders/
 ├── common/bindings.glsl         # [Step 1a-2] feature_flags + shadow UBO 字段
@@ -401,7 +408,8 @@ shaders/
 | RenderFeatures | Step 1a 引入骨架（skybox + shadows），阶段五扩展 ssao + contact_shadows |
 | feature_flags | GlobalUBO uint bitmask，shader 动态分支守护采样。Skybox 不需要（独立 pass 跳过即可），Shadow 需要（forward.frag 采样 Set 2） |
 | ShadowConfig 位置 | `framework/scene_data.h`，与 RenderFeatures 同位。Application 持有实例，DebugUI 直接操作 |
-| Shadow max_distance 初始化 | SceneLoader 暴露 `scene_bounds()`，Application 加载后设 `max_distance = diagonal × 1.5`（退化时 fallback 100m）。DebugUI 对数滑条可覆盖 |
+| Shadow max_distance 初始化 | ShadowConfig 默认值 100m 兼作退化 fallback，正常场景覆盖为 `diagonal × 1.5`。DebugUI 对数滑条可覆盖 |
+| 相机自动定位 + F 键 Focus | `Camera::compute_focus_position(AABB)` 纯计算共享。场景加载设 pitch=-45° 后调用；F 键保持朝向直接调用。CameraController 持有 focus target 指针 |
 | Cascade 统计信息 | DebugUI Shadow 面板底部显示每个 cascade 的范围（近/远 m）和 texel density（px/m），辅助理解 max_distance / cascade count / resolution 的交互 |
 | Runtime config change | Cascade 数量和分辨率可运行时调整，沿用 MSAA 切换模式（`vkQueueWaitIdle` → 重建资源 → 更新 descriptor） |
 | Cascade 可视化 | `DEBUG_MODE_SHADOW_CASCADES` 追加到 passthrough 模式末尾，`>= DEBUG_MODE_PASSTHROUGH_START` 自动跳过 ACES |
