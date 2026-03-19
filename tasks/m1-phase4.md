@@ -102,7 +102,7 @@
 
 ## Step 2 前置：RHI 基础设施扩展
 
-- [ ] `types.h` 新增 `CompareOp` 自定义枚举（Never / Less / Equal / LessOrEqual / Greater / GreaterOrEqual）+ `to_vk_compare_op()` 转换函数
+- [x] `types.h` 新增 `CompareOp` 自定义枚举（Never / Less / Equal / LessOrEqual / Greater / GreaterOrEqual）+ `to_vk_compare_op()` 转换函数
 - [ ] `SamplerDesc` 新增 `compare_enable` (bool, 默认 false) 和 `compare_op` (CompareOp, 默认 Never) 字段；`create_sampler()` 据此设置 `VkSamplerCreateInfo::compareEnable` / `compareOp`
 - [ ] `create_image()` 自动推断 2D Array view type：`array_layers > 1 && != 6` 时创建 `VK_IMAGE_VIEW_TYPE_2D_ARRAY`
 - [ ] `GraphicsPipelineDesc` 支持无 FS：`fragment_shader == VK_NULL_HANDLE` 时 `stageCount = 1`（仅 VS）

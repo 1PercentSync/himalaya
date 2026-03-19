@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 1c 全部完成（验证通过）。下一个任务：Step 2 前置第一项（SamplerDesc compare 支持）
+Step 2 前置第一项完成（CompareOp 枚举）。下一个任务：Step 2 前置第二项（SamplerDesc compare 支持）
 
 ---
 
