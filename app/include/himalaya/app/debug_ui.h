@@ -20,6 +20,18 @@ namespace himalaya::framework {
 } // namespace himalaya::framework
 
 namespace himalaya::app {
+    /**
+     * @brief Which directional light source is active.
+     *
+     * Scene and Fallback are mutually exclusive. None disables all
+     * directional lights (IBL only). Application auto-selects on
+     * scene load: Scene if glTF has lights, otherwise Fallback.
+     */
+    enum class LightSourceMode : uint8_t {
+        Scene,    ///< Use scene's glTF directional lights.
+        Fallback, ///< Use the user-controllable fallback light.
+        None,     ///< No directional lights (IBL only).
+    };
 
     /**
      * @brief Data passed to DebugUI each frame.
@@ -45,17 +57,31 @@ namespace himalaya::app {
 
         // --- Lighting (display + controls) ---
 
-        /** @brief Number of directional lights active this frame (0 when disabled or scene has none). */
+        /** @brief Current light source mode (mutable — combo box changes it). */
+        LightSourceMode &light_source_mode;
+
+        /** @brief Whether the scene provides directional lights (to gray out Scene option). */
+        bool scene_has_lights;
+
+        /** @brief Number of directional lights active this frame. */
         uint32_t active_light_count;
 
-        /** @brief True if the scene provides directional lights (false = checkbox grayed out). */
-        bool has_scene_lights;
+        /** @brief Current light direction yaw in degrees (display only, any mode). */
+        float light_yaw_deg;
 
-        /** @brief Checkbox state: disable scene directional lights (IBL only). */
-        bool& disable_scene_lights;
+        /** @brief Current light direction pitch in degrees (display only, any mode). */
+        float light_pitch_deg;
 
         /** @brief IBL horizontal rotation angle in degrees (display only). */
         float ibl_rotation_deg;
+
+        // --- Fallback light controls (mutable, shown only in Fallback mode) ---
+
+        /** @brief Fallback light intensity multiplier. */
+        float &fallback_intensity;
+
+        /** @brief Whether the fallback light casts shadows. */
+        bool &fallback_cast_shadows;
 
         // --- Render params (controls) ---
 

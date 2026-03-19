@@ -11,6 +11,7 @@
 #include <himalaya/rhi/shader.h>
 
 #include <array>
+#include <cstddef>
 #include <string>
 
 #include <spdlog/spdlog.h>
@@ -195,9 +196,12 @@ namespace himalaya::passes {
         // ReSharper disable once CppLocalVariableMayBeConst
         VkShaderModule vert_module = rhi::create_shader_module(ctx_->device, vert_spirv);
 
-        // Shared pipeline descriptor
+        // Shared pipeline descriptor — only position (loc 0) and uv0 (loc 2) consumed
         const auto binding = framework::Vertex::binding_description();
-        const auto attributes = framework::Vertex::attribute_descriptions();
+        const std::array shadow_attributes = {
+            VkVertexInputAttributeDescription{0, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(framework::Vertex, position)},
+            VkVertexInputAttributeDescription{2, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(framework::Vertex, uv0)},
+        };
         const auto set_layouts = dm_->get_global_set_layouts();
 
         // Push constant range: 4 bytes cascade_index, vertex stage only
@@ -215,7 +219,7 @@ namespace himalaya::passes {
             desc.depth_format = kShadowDepthFormat;
             desc.sample_count = 1;
             desc.vertex_bindings = {binding};
-            desc.vertex_attributes = {attributes.begin(), attributes.end()};
+            desc.vertex_attributes = {shadow_attributes.begin(), shadow_attributes.end()};
             desc.descriptor_set_layouts = {set_layouts.begin(), set_layouts.end()};
             desc.push_constant_ranges = {push_range};
 
@@ -233,7 +237,7 @@ namespace himalaya::passes {
             desc.depth_format = kShadowDepthFormat;
             desc.sample_count = 1;
             desc.vertex_bindings = {binding};
-            desc.vertex_attributes = {attributes.begin(), attributes.end()};
+            desc.vertex_attributes = {shadow_attributes.begin(), shadow_attributes.end()};
             desc.descriptor_set_layouts = {set_layouts.begin(), set_layouts.end()};
             desc.push_constant_ranges = {push_range};
 

@@ -95,6 +95,11 @@ namespace himalaya::app {
         update_shadow_config_from_scene();
         auto_position_camera();
         camera_controller_.set_focus_target(&scene_loader_.scene_bounds());
+
+        // Auto-select light source: Scene if glTF has lights, Fallback otherwise
+        light_source_mode_ = scene_loader_.directional_lights().empty()
+                                 ? LightSourceMode::Fallback
+                                 : LightSourceMode::Scene;
     }
 
     void Application::auto_position_camera() {
@@ -238,16 +243,34 @@ namespace himalaya::app {
         camera_.aspect = static_cast<float>(swapchain_.extent.width) / static_cast<float>(swapchain_.extent.height);
         camera_controller_.update(delta_time);
 
-        // Determine light source (scene lights or none when disabled)
-        const auto scene_lights = scene_loader_.directional_lights();
-        // ReSharper disable once CppDFAConstantConditions
-        const auto lights = disable_scene_lights_
-                                // ReSharper disable once CppDFAUnreachableCode
-                                ? std::span<const framework::DirectionalLight>{}
-                                : scene_lights;
+        // Build fallback light from yaw/pitch each frame
+        fallback_light_ = {
+            .direction = {
+                std::sin(fallback_light_yaw_) * std::cos(fallback_light_pitch_),
+                std::sin(fallback_light_pitch_),
+                -std::cos(fallback_light_yaw_) * std::cos(fallback_light_pitch_),
+            },
+            .color = glm::vec3(1.0f),
+            .intensity = fallback_light_intensity_,
+            .cast_shadows = fallback_light_cast_shadows_,
+        };
 
-        // Left-click drag to rotate IBL environment
-        update_ibl_input();
+        // Determine active lights based on light source mode
+        const auto scene_lights = scene_loader_.directional_lights();
+        std::span<const framework::DirectionalLight> lights;
+        switch (light_source_mode_) {
+            case LightSourceMode::Scene:
+                lights = scene_lights;
+                break;
+            case LightSourceMode::Fallback:
+                lights = {&fallback_light_, 1};
+                break;
+            case LightSourceMode::None:
+                break;
+        }
+
+        // Left-click drag: IBL rotation (no modifier) or fallback light direction (Alt)
+        update_drag_input();
 
         // Fill SceneRenderData for culling and render
         scene_render_data_.mesh_instances = scene_loader_.mesh_instances();
@@ -275,16 +298,32 @@ namespace himalaya::app {
         const auto visible_transparent = static_cast<uint32_t>(cull_result_.visible_transparent_indices.size());
         const auto total_instances = static_cast<uint32_t>(instances.size());
 
+        // Compute light direction yaw/pitch for display
+        float display_light_yaw_deg = 0.0f;
+        float display_light_pitch_deg = 0.0f;
+        if (light_source_mode_ == LightSourceMode::Fallback) {
+            display_light_yaw_deg = glm::degrees(fallback_light_yaw_);
+            display_light_pitch_deg = glm::degrees(fallback_light_pitch_);
+        } else if (!lights.empty()) {
+            const auto &dir = lights[0].direction;
+            display_light_pitch_deg = glm::degrees(std::asin(dir.y));
+            display_light_yaw_deg = glm::degrees(std::atan2(dir.x, -dir.z));
+        }
+
         // Debug UI
         DebugUIContext ui_ctx{
             .delta_time = delta_time,
             .context = context_,
             .swapchain = swapchain_,
             .camera = camera_,
+            .light_source_mode = light_source_mode_,
+            .scene_has_lights = !scene_lights.empty(),
             .active_light_count = static_cast<uint32_t>(lights.size()),
-            .has_scene_lights = !scene_lights.empty(),
-            .disable_scene_lights = disable_scene_lights_,
+            .light_yaw_deg = display_light_yaw_deg,
+            .light_pitch_deg = display_light_pitch_deg,
             .ibl_rotation_deg = glm::degrees(ibl_yaw_),
+            .fallback_intensity = fallback_light_intensity_,
+            .fallback_cast_shadows = fallback_light_cast_shadows_,
             .ibl_intensity = ibl_intensity_,
             .ev = ev_,
             .debug_render_mode = debug_render_mode_,
@@ -331,11 +370,27 @@ namespace himalaya::app {
 
             // Refresh scene data after switch — the old spans and cull indices
             // are dangling because switch_scene() destroyed the previous scene.
-            const auto new_lights = scene_loader_.directional_lights();
+            const auto new_scene_lights = scene_loader_.directional_lights();
+
+            // Auto-select light source mode based on new scene
+            if (!new_scene_lights.empty()) {
+                light_source_mode_ = LightSourceMode::Scene;
+            } else {
+                light_source_mode_ = LightSourceMode::Fallback;
+            }
+
             scene_render_data_.mesh_instances = scene_loader_.mesh_instances();
-            scene_render_data_.directional_lights = disable_scene_lights_
-                                                        ? std::span<const framework::DirectionalLight>{}
-                                                        : new_lights;
+            switch (light_source_mode_) {
+                case LightSourceMode::Scene:
+                    scene_render_data_.directional_lights = new_scene_lights;
+                    break;
+                case LightSourceMode::Fallback:
+                    scene_render_data_.directional_lights = {&fallback_light_, 1};
+                    break;
+                case LightSourceMode::None:
+                    scene_render_data_.directional_lights = {};
+                    break;
+            }
             perform_camera_culling();
         }
 
@@ -434,12 +489,14 @@ namespace himalaya::app {
         renderer_.on_swapchain_recreated();
     }
 
-    // ---- IBL rotation input ----
+    // ---- Left-click drag input (IBL rotation / fallback light direction) ----
 
-    void Application::update_ibl_input() {
+    void Application::update_drag_input() {
         const ImGuiIO &io = ImGui::GetIO();
         const bool left_pressed = !io.WantCaptureMouse &&
                                   glfwGetMouseButton(window_, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS;
+        const bool alt_held = glfwGetKey(window_, GLFW_KEY_LEFT_ALT) == GLFW_PRESS ||
+                              glfwGetKey(window_, GLFW_KEY_RIGHT_ALT) == GLFW_PRESS;
 
         double cursor_x, cursor_y;
         glfwGetCursorPos(window_, &cursor_x, &cursor_y);
@@ -448,13 +505,26 @@ namespace himalaya::app {
             if (!drag_active_) {
                 drag_active_ = true;
                 drag_last_x_ = cursor_x;
+                drag_last_y_ = cursor_y;
             }
 
             const auto dx = static_cast<float>(cursor_x - drag_last_x_);
+            const auto dy = static_cast<float>(cursor_y - drag_last_y_);
             drag_last_x_ = cursor_x;
+            drag_last_y_ = cursor_y;
 
             constexpr float kSensitivity = 0.003f;
-            ibl_yaw_ += dx * kSensitivity;
+
+            if (alt_held && light_source_mode_ == LightSourceMode::Fallback) {
+                // Alt + left drag: rotate fallback light direction
+                fallback_light_yaw_ += dx * kSensitivity;
+                fallback_light_pitch_ -= dy * kSensitivity;
+                constexpr float kMaxPitch = glm::radians(89.0f);
+                fallback_light_pitch_ = std::clamp(fallback_light_pitch_, -kMaxPitch, kMaxPitch);
+            } else if (!alt_held) {
+                // Left drag without Alt: IBL rotation (horizontal only)
+                ibl_yaw_ += dx * kSensitivity;
+            }
         } else {
             drag_active_ = false;
         }

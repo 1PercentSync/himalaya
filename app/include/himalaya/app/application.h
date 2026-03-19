@@ -112,8 +112,25 @@ namespace himalaya::app {
         /** @brief IBL horizontal rotation angle in radians (left-click drag controlled). */
         float ibl_yaw_ = 0.0f;
 
-        /** @brief When true, scene directional lights are disabled (IBL only). */
-        bool disable_scene_lights_ = false;
+        // --- Light source ---
+
+        /** @brief Active light source mode (Scene/Fallback/None). */
+        LightSourceMode light_source_mode_ = LightSourceMode::Scene;
+
+        /** @brief Fallback light direction yaw in radians. */
+        float fallback_light_yaw_ = 0.0f;
+
+        /** @brief Fallback light direction pitch in radians (negative = from above). */
+        float fallback_light_pitch_ = glm::radians(-45.0f);
+
+        /** @brief Fallback light intensity multiplier. */
+        float fallback_light_intensity_ = 3.0f;
+
+        /** @brief Whether the fallback light casts shadows. */
+        bool fallback_light_cast_shadows_ = true;
+
+        /** @brief Constructed fallback DirectionalLight (rebuilt each frame from yaw/pitch). */
+        framework::DirectionalLight fallback_light_{};
 
         /** @brief Debug render mode (0=Full PBR, 1-7=debug visualizations). */
         uint32_t debug_render_mode_ = 0;
@@ -135,12 +152,15 @@ namespace himalaya::app {
             .blend_width = 0.1f,
         };
 
-        // --- IBL rotation viewport drag state ---
+        // --- Left-click drag state (IBL rotation or fallback light direction) ---
 
-        /** @brief Previous cursor X for left-click IBL drag delta. */
+        /** @brief Previous cursor X for left-click drag delta. */
         double drag_last_x_ = 0.0;
 
-        /** @brief Whether the left mouse button is being held for IBL dragging. */
+        /** @brief Previous cursor Y for left-click drag delta (fallback light pitch). */
+        double drag_last_y_ = 0.0;
+
+        /** @brief Whether the left mouse button is being held for dragging. */
         bool drag_active_ = false;
 
         // --- Rendering ---
@@ -189,12 +209,13 @@ namespace himalaya::app {
         void handle_resize();
 
         /**
-         * @brief Processes left-click drag to rotate the IBL environment horizontally.
+         * @brief Processes left-click drag input.
          *
-         * Updates ibl_yaw_ based on horizontal cursor delta. Does not hide
-         * the cursor (unlike right-click camera rotation).
+         * Without Alt: rotates IBL environment horizontally (ibl_yaw_).
+         * With Alt: rotates fallback light direction (yaw + pitch), only
+         * when light_source_mode_ is Fallback. Does not hide the cursor.
          */
-        void update_ibl_input();
+        void update_drag_input();
 
         /**
          * @brief Positions the camera to overlook the current scene.

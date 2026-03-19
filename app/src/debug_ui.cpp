@@ -289,11 +289,34 @@ namespace himalaya::app {
         // Lighting section
         ImGui::Separator();
         if (ImGui::CollapsingHeader("Lighting", ImGuiTreeNodeFlags_DefaultOpen)) {
+            // Light source mode combo
+            constexpr const char *kModeLabels[] = {"Scene", "Fallback", "None"};
+            auto mode_index = static_cast<int>(ctx.light_source_mode);
+            if (ImGui::Combo("Light Source", &mode_index, kModeLabels, 3)) {
+                // Prevent selecting Scene when scene has no lights
+                if (mode_index == 0 && !ctx.scene_has_lights) {
+                    mode_index = static_cast<int>(ctx.light_source_mode);
+                }
+                ctx.light_source_mode = static_cast<LightSourceMode>(mode_index);
+            }
+            if (!ctx.scene_has_lights && ctx.light_source_mode == LightSourceMode::Scene) {
+                ctx.light_source_mode = LightSourceMode::Fallback;
+            }
+
+            // Direction display (always visible)
+            ImGui::Text("Direction: Yaw %.1f%s  Pitch %.1f%s",
+                        ctx.light_yaw_deg, "\xC2\xB0",
+                        ctx.light_pitch_deg, "\xC2\xB0");
+
             ImGui::Text("Active Lights: %u", ctx.active_light_count);
             ImGui::Text("IBL Rotation: %.1f%s", ctx.ibl_rotation_deg, "\xC2\xB0");
-            ImGui::BeginDisabled(!ctx.has_scene_lights);
-            ImGui::Checkbox("Disable Scene Lights", &ctx.disable_scene_lights);
-            ImGui::EndDisabled();
+
+            // Fallback light controls (only in Fallback mode)
+            if (ctx.light_source_mode == LightSourceMode::Fallback) {
+                ImGui::SliderFloat("Intensity", &ctx.fallback_intensity, 0.0f, 20.0f, "%.1f");
+                ImGui::Checkbox("Cast Shadows", &ctx.fallback_cast_shadows);
+                ImGui::TextDisabled("Alt + Left Drag to rotate");
+            }
         }
 
         // Features section

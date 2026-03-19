@@ -451,9 +451,19 @@ namespace himalaya::app {
         ubo_data.ibl_rotation_cos = input.ibl_rotation_cos;
         ubo_data.debug_render_mode = input.debug_render_mode;
 
+        // Find the first shadow-casting directional light (used by UBO fill + draw group + pass recording)
+        const framework::DirectionalLight *shadow_light = nullptr;
+        for (const auto &light : input.lights) {
+            if (light.cast_shadows) {
+                shadow_light = &light;
+                break;
+            }
+        }
+        const bool shadows_active = input.features.shadows && shadow_light;
+
         // --- Feature flags ---
         ubo_data.feature_flags = 0;
-        if (input.features.shadows) {
+        if (shadows_active) {
             ubo_data.feature_flags |= 1u; // FEATURE_SHADOWS
         }
 
@@ -464,16 +474,7 @@ namespace himalaya::app {
         ubo_data.shadow_blend_width = input.shadow_config.blend_width;
         ubo_data.shadow_pcf_radius = input.shadow_config.pcf_radius;
 
-        // Find the first shadow-casting directional light
-        const framework::DirectionalLight *shadow_light = nullptr;
-        for (const auto &light: input.lights) {
-            if (light.cast_shadows) {
-                shadow_light = &light;
-                break;
-            }
-        }
-
-        if (input.features.shadows && shadow_light) {
+        if (shadows_active) {
             ubo_data.shadow_cascade_count = 1; // Step 2: single cascade
 
             const auto &cam = input.camera;
@@ -651,7 +652,7 @@ namespace himalaya::app {
         shadow_opaque_groups_.clear();
         shadow_mask_groups_.clear();
 
-        if (input.features.shadows && !input.mesh_instances.empty()) {
+        if (shadows_active && !input.mesh_instances.empty()) {
             // Build sorted index list of all non-Blend instances
             sorted_shadow_indices_.clear();
             for (uint32_t i = 0; i < static_cast<uint32_t>(input.mesh_instances.size()); ++i) {
@@ -786,7 +787,7 @@ namespace himalaya::app {
         frame_ctx.sample_count = current_sample_count_;
 
         // --- CSM Shadow Pass (before depth prepass — shadow map needed by forward) ---
-        if (input.features.shadows) {
+        if (shadows_active) {
             shadow_pass_.record(render_graph_, frame_ctx);
         }
 
