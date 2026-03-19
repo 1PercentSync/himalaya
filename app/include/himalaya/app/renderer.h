@@ -288,6 +288,17 @@ namespace himalaya::app {
         /** @brief Mask draw groups built from sorted indices (AlphaMode::Mask). */
         std::vector<framework::MeshDrawGroup> mask_draw_groups_;
 
+        // ---- Shadow draw group working buffers ----
+
+        /** @brief Sorted indices of all mesh instances for shadow grouping. */
+        std::vector<uint32_t> sorted_shadow_indices_;
+
+        /** @brief Shadow opaque draw groups (from all scene instances). */
+        std::vector<framework::MeshDrawGroup> shadow_opaque_groups_;
+
+        /** @brief Shadow mask draw groups (from all scene instances). */
+        std::vector<framework::MeshDrawGroup> shadow_mask_groups_;
+
         /** @brief Total vkCmdDrawIndexed calls from the last frame (across all scene passes). */
         uint32_t draw_call_count_ = 0;
 

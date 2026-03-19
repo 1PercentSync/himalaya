@@ -560,10 +560,12 @@ namespace himalaya::app {
         }
 
         // --- Build instancing draw groups + fill InstanceBuffer ---
+        const auto &inst_buf = resource_manager_->get_buffer(instance_buffers_[input.frame_index]);
+        auto *gpu_instances = static_cast<framework::GPUInstanceData *>(inst_buf.allocation_info.pMappedData);
+        uint32_t instance_offset = 0;
+
+        // Camera draw groups: sort visible opaque indices by (mesh_id, alpha_mode, double_sided)
         {
-            // Sort visible opaque indices by (mesh_id, alpha_mode, double_sided)
-            // so that instances sharing the same mesh AND material properties
-            // are adjacent — each group has consistent cull mode and pipeline.
             sorted_opaque_indices_.assign(
                 input.cull_result.visible_opaque_indices.begin(),
                 input.cull_result.visible_opaque_indices.end());
@@ -580,11 +582,6 @@ namespace himalaya::app {
 
             opaque_draw_groups_.clear();
             mask_draw_groups_.clear();
-
-            const auto &inst_buf = resource_manager_->get_buffer(instance_buffers_[input.frame_index]);
-            auto *gpu_instances = static_cast<framework::GPUInstanceData *>(
-                inst_buf.allocation_info.pMappedData);
-            uint32_t instance_offset = 0;
 
             // Group consecutive entries sharing (mesh_id, alpha_mode, double_sided)
             const auto count = static_cast<uint32_t>(sorted_opaque_indices_.size());
@@ -649,12 +646,97 @@ namespace himalaya::app {
             }
         }
 
-        // Total scene draw calls — explicitly counted per pass that iterates
-        // draw groups. Update this sum when adding new scene passes (e.g. ShadowPass).
-        const auto groups = static_cast<uint32_t>(
+        // --- Build shadow draw groups from ALL mesh_instances (not camera-culled) ---
+        // Objects outside the camera frustum may still cast shadows onto visible surfaces.
+        shadow_opaque_groups_.clear();
+        shadow_mask_groups_.clear();
+
+        if (input.features.shadows && !input.mesh_instances.empty()) {
+            // Build sorted index list of all non-Blend instances
+            sorted_shadow_indices_.clear();
+            for (uint32_t i = 0; i < static_cast<uint32_t>(input.mesh_instances.size()); ++i) {
+                const auto &mat = input.materials[input.mesh_instances[i].material_id];
+                if (mat.alpha_mode != framework::AlphaMode::Blend) {
+                    sorted_shadow_indices_.push_back(i);
+                }
+            }
+
+            std::ranges::sort(sorted_shadow_indices_,
+                              [&](const uint32_t a, const uint32_t b) {
+                                  const auto &ia = input.mesh_instances[a];
+                                  const auto &ib = input.mesh_instances[b];
+                                  if (ia.mesh_id != ib.mesh_id) return ia.mesh_id < ib.mesh_id;
+                                  const auto &ma = input.materials[ia.material_id];
+                                  const auto &mb = input.materials[ib.material_id];
+                                  if (ma.alpha_mode != mb.alpha_mode) return ma.alpha_mode < mb.alpha_mode;
+                                  return ma.double_sided < mb.double_sided;
+                              });
+
+            // Fill InstanceBuffer second segment (after camera instances)
+            const auto shadow_count = static_cast<uint32_t>(sorted_shadow_indices_.size());
+            uint32_t shadow_group_start = 0;
+            while (shadow_group_start < shadow_count) {
+                const uint32_t first_idx = sorted_shadow_indices_[shadow_group_start];
+                const uint32_t mesh_id = input.mesh_instances[first_idx].mesh_id;
+                const auto &material = input.materials[input.mesh_instances[first_idx].material_id];
+
+                uint32_t shadow_group_end = shadow_group_start + 1;
+                while (shadow_group_end < shadow_count) {
+                    const auto &inst_e = input.mesh_instances[sorted_shadow_indices_[shadow_group_end]];
+                    const auto &mat_e = input.materials[inst_e.material_id];
+                    if (inst_e.mesh_id != mesh_id ||
+                        mat_e.alpha_mode != material.alpha_mode ||
+                        mat_e.double_sided != material.double_sided)
+                        break;
+                    ++shadow_group_end;
+                }
+
+                const uint32_t group_count = shadow_group_end - shadow_group_start;
+
+                if (instance_offset + group_count > kMaxInstances) {
+                    spdlog::warn("InstanceBuffer overflow (shadow): {} instances exceed limit {}",
+                                 instance_offset + group_count, kMaxInstances);
+                    break;
+                }
+
+                const uint32_t group_first = instance_offset;
+
+                for (uint32_t i = shadow_group_start; i < shadow_group_end; ++i) {
+                    const auto &inst = input.mesh_instances[sorted_shadow_indices_[i]];
+                    const glm::mat3 normal_mat = glm::transpose(glm::inverse(glm::mat3(inst.transform)));
+                    gpu_instances[instance_offset++] = {
+                        .model = inst.transform,
+                        .normal_col0 = glm::vec4(normal_mat[0], 0.0f),
+                        .normal_col1 = glm::vec4(normal_mat[1], 0.0f),
+                        .normal_col2 = glm::vec4(normal_mat[2], 0.0f),
+                        .material_index = input.materials[inst.material_id].buffer_offset,
+                    };
+                }
+
+                const framework::MeshDrawGroup group{
+                    .mesh_id = mesh_id,
+                    .first_instance = group_first,
+                    .instance_count = group_count,
+                    .double_sided = material.double_sided,
+                };
+
+                if (material.alpha_mode == framework::AlphaMode::Mask) {
+                    shadow_mask_groups_.push_back(group);
+                } else {
+                    shadow_opaque_groups_.push_back(group);
+                }
+
+                shadow_group_start = shadow_group_end;
+            }
+        }
+
+        // Total scene draw calls
+        const auto camera_groups = static_cast<uint32_t>(
             opaque_draw_groups_.size() + mask_draw_groups_.size());
-        draw_call_count_ = groups // DepthPrePass
-                           + groups; // ForwardPass
+        const auto shadow_groups = static_cast<uint32_t>(
+            shadow_opaque_groups_.size() + shadow_mask_groups_.size());
+        draw_call_count_ = camera_groups * 2 // DepthPrePass + ForwardPass
+                           + shadow_groups; // ShadowPass
 
         // --- Build render graph ---
         render_graph_.clear();
@@ -696,6 +778,8 @@ namespace himalaya::app {
         frame_ctx.mesh_instances = input.mesh_instances;
         frame_ctx.opaque_draw_groups = opaque_draw_groups_;
         frame_ctx.mask_draw_groups = mask_draw_groups_;
+        frame_ctx.shadow_opaque_groups = shadow_opaque_groups_;
+        frame_ctx.shadow_mask_groups = shadow_mask_groups_;
         frame_ctx.features = &input.features;
         frame_ctx.shadow_config = &input.shadow_config;
         frame_ctx.frame_index = input.frame_index;

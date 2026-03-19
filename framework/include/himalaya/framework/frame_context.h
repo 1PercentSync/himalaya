@@ -77,6 +77,14 @@ namespace himalaya::framework {
         /** @brief Alpha-mask draw groups (AlphaMode::Mask, sorted by mesh_id). */
         std::span<const MeshDrawGroup> mask_draw_groups;
 
+        // ---- Shadow draw groups (Renderer fills from all mesh_instances) ----
+
+        /** @brief Shadow opaque draw groups (all scene opaque instances, not camera-culled). */
+        std::span<const MeshDrawGroup> shadow_opaque_groups;
+
+        /** @brief Shadow mask draw groups (all scene mask instances, not camera-culled). */
+        std::span<const MeshDrawGroup> shadow_mask_groups;
+
         // ---- Render configuration (non-owning references) ----
 
         /** @brief Runtime feature toggles (skybox, shadows, etc.). */
