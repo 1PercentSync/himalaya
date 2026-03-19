@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 2 进行中（5/9，task 6 已提前完成）。下一个任务：Step 2 第五项（ShadowPass pipelines + push constant）
+Step 2 进行中（6/9）。下一个任务：Step 2 第七项（Shadow draw group 构建 + FrameContext 扩展）
 
 ---
 
