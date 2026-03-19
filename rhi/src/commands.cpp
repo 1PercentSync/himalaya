@@ -189,4 +189,10 @@ namespace himalaya::rhi {
     void CommandBuffer::set_depth_compare_op(const VkCompareOp compare_op) const {
         vkCmdSetDepthCompareOp(cmd_, compare_op);
     }
+
+    void CommandBuffer::set_depth_bias(const float constant_factor,
+                                       const float clamp,
+                                       const float slope_factor) const {
+        vkCmdSetDepthBias(cmd_, constant_factor, clamp, slope_factor);
+    }
 } // namespace himalaya::rhi

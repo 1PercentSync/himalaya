@@ -231,6 +231,17 @@ namespace himalaya::rhi {
         /** @brief Sets the depth comparison operator. */
         void set_depth_compare_op(VkCompareOp compare_op) const;
 
+        /**
+         * @brief Sets the dynamic depth bias parameters.
+         *
+         * Only takes effect on pipelines created with depth_bias_enable = true.
+         *
+         * @param constant_factor Constant depth value added to each fragment.
+         * @param clamp           Maximum (or minimum) depth bias of a fragment (0 = no clamp).
+         * @param slope_factor    Scalar factor applied to fragment's slope in depth bias calculation.
+         */
+        void set_depth_bias(float constant_factor, float clamp, float slope_factor) const;
+
         /** @brief Returns the underlying Vulkan command buffer handle. */
         [[nodiscard]] VkCommandBuffer handle() const { return cmd_; }
 
