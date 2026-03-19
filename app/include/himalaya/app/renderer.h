@@ -13,6 +13,7 @@
 #include <himalaya/passes/depth_prepass.h>
 #include <himalaya/passes/forward_pass.h>
 #include <himalaya/passes/skybox_pass.h>
+#include <himalaya/passes/shadow_pass.h>
 #include <himalaya/passes/tonemapping_pass.h>
 #include <himalaya/rhi/context.h>
 #include <himalaya/rhi/shader.h>
@@ -225,6 +226,9 @@ namespace himalaya::app {
         /** @brief Forward lighting pass (renders to HDR color + depth). */
         passes::ForwardPass forward_pass_{};
 
+        /** @brief CSM shadow pass (depth rendering from light space). */
+        passes::ShadowPass shadow_pass_{};
+
         /** @brief Skybox pass (cubemap sky rendering into hdr_color). */
         passes::SkyboxPass skybox_pass_{};
 
@@ -254,6 +258,9 @@ namespace himalaya::app {
 
         /** @brief Default sampler (linear filter, repeat wrap, linear mip). */
         rhi::SamplerHandle default_sampler_;
+
+        /** @brief Shadow comparison sampler (GREATER_OR_EQUAL, linear filter, clamp to edge). */
+        rhi::SamplerHandle shadow_comparison_sampler_;
 
         /** @brief Default 1x1 textures (white, flat normal, black). */
         framework::DefaultTextures default_textures_{};
@@ -288,6 +295,9 @@ namespace himalaya::app {
 
         /** @brief Updates Set 2 binding 0 with the current hdr_color backing image. */
         void update_hdr_color_descriptor() const;
+
+        /** @brief Updates Set 2 binding 5 with the current shadow map image. */
+        void update_shadow_map_descriptor() const;
 
         /** @brief Registers all swapchain images as external images in ResourceManager. */
         void register_swapchain_images();

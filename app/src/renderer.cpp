@@ -211,6 +211,25 @@ namespace himalaya::app {
         // --- IBL precomputation (equirect → cubemap → irradiance/prefiltered/BRDF LUT) ---
         ibl_.init(*ctx_, *resource_manager_, *descriptor_manager_, shader_compiler_, hdr_path);
 
+        // --- Shadow comparison sampler (Reverse-Z: fragment depth >= shadow depth → lit) ---
+        shadow_comparison_sampler_ = resource_manager_->create_sampler({
+                                                                           .mag_filter = rhi::Filter::Linear,
+                                                                           .min_filter = rhi::Filter::Linear,
+                                                                           .mip_mode = rhi::SamplerMipMode::Nearest,
+                                                                           .wrap_u = rhi::SamplerWrapMode::ClampToEdge,
+                                                                           .wrap_v = rhi::SamplerWrapMode::ClampToEdge,
+                                                                           .max_anisotropy = 0.0f,
+                                                                           .max_lod = 0.0f,
+                                                                           .compare_enable = true,
+                                                                           .compare_op = rhi::CompareOp::GreaterOrEqual,
+                                                                       }, "Shadow Comparison Sampler");
+
+        // --- Shadow pass ---
+        shadow_pass_.setup(*ctx_,
+                           *resource_manager_,
+                           *descriptor_manager_,
+                           shader_compiler_);
+
         // --- Depth + Normal PrePass ---
         depth_prepass_.setup(*ctx_,
                              *resource_manager_,
@@ -240,11 +259,15 @@ namespace himalaya::app {
 
         // --- Set 2 binding 0: hdr_color for TonemappingPass sampling ---
         update_hdr_color_descriptor();
+
+        // --- Set 2 binding 5: shadow map for forward pass shadow sampling ---
+        update_shadow_map_descriptor();
     }
 
     void Renderer::destroy() {
         ibl_.destroy();
         material_system_.destroy();
+        shadow_pass_.destroy();
         depth_prepass_.destroy();
         forward_pass_.destroy();
         skybox_pass_.destroy();
@@ -268,6 +291,7 @@ namespace himalaya::app {
         resource_manager_->destroy_image(default_textures_.flat_normal.image);
         resource_manager_->destroy_image(default_textures_.black.image);
         resource_manager_->destroy_sampler(default_sampler_);
+        resource_manager_->destroy_sampler(shadow_comparison_sampler_);
 
         if (managed_msaa_color_.valid())
             render_graph_.destroy_managed_image(managed_msaa_color_);
@@ -385,6 +409,7 @@ namespace himalaya::app {
     void Renderer::reload_shaders() {
         vkQueueWaitIdle(ctx_->graphics_queue);
 
+        shadow_pass_.rebuild_pipelines();
         depth_prepass_.rebuild_pipelines();
         forward_pass_.rebuild_pipelines();
         skybox_pass_.rebuild_pipelines();
@@ -670,6 +695,10 @@ namespace himalaya::app {
     void Renderer::update_hdr_color_descriptor() const {
         const auto hdr_backing = render_graph_.get_managed_backing_image(managed_hdr_color_);
         descriptor_manager_->update_render_target(0, hdr_backing, default_sampler_);
+    }
+
+    void Renderer::update_shadow_map_descriptor() const {
+        descriptor_manager_->update_render_target(5, shadow_pass_.shadow_map_image(), shadow_comparison_sampler_);
     }
 
     // ---- Swapchain image registration ----
