@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 2 进行中（6/9）。下一个任务：Step 2 第七项（Shadow draw group 构建 + FrameContext 扩展）
+Step 2 进行中（7/9）。下一个任务：Step 2 第八项（ShadowPass record() 实现）
 
 ---
 
