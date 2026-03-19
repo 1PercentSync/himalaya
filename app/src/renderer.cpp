@@ -23,8 +23,14 @@
 #include <spdlog/spdlog.h>
 
 namespace himalaya::app {
-    /** @brief Maximum directional lights the LightBuffer can hold. */
-    constexpr uint32_t kMaxDirectionalLights = 4;
+    /**
+     * @brief Maximum directional lights the LightBuffer can hold.
+     *
+     * M1 limits to 1 directional light — CSM shadow infrastructure supports
+     * only a single shadow-casting light. Multi-directional-light CSM is
+     * planned for M2 (multiple shadow maps, per-light cascade arrays).
+     */
+    constexpr uint32_t kMaxDirectionalLights = 1;
 
     /**
      * @brief Maximum instances the InstanceBuffer can hold.
