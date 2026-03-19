@@ -71,7 +71,7 @@
 ## Step 1a：RenderFeatures 基础设施
 
 - [x] `framework/scene_data.h` 新增 `RenderFeatures` 结构体（`skybox` bool 默认 true + `shadows` bool 默认 true）
-- [x] `framework/scene_data.h` 新增 `ShadowConfig` 结构体（split_lambda、max_distance、constant_bias、slope_bias、normal_offset、pcf_radius、blend_width，无默认值，调用方显式初始化）
+- [x] `framework/scene_data.h` 新增 `ShadowConfig` 结构体（split_lambda、max_distance、constant_bias、slope_bias、normal_offset、pcf_radius、blend_width、distance_fade_width，无默认值，调用方显式初始化）
 - [x] GlobalUBO 新增 `feature_flags`（uint32_t，offset 324），`bindings.glsl` 新增 `#define FEATURE_SHADOWS (1u << 0)`
 - [x] FrameContext 新增 `RGResourceId shadow_map`（invalid if shadows disabled）+ `const RenderFeatures* features` + `const ShadowConfig* shadow_config`
 - [x] RenderInput 新增 `const RenderFeatures& features` + `const ShadowConfig& shadow_config`
@@ -124,11 +124,12 @@
 
 - [ ] `GraphicsPipelineDesc` 新增 `depth_bias_enable` (bool, 默认 false)；`create_graphics_pipeline()` 据此设置 `rasterization.depthBiasEnable`；动态状态新增 `VK_DYNAMIC_STATE_DEPTH_BIAS`
 - [ ] `CommandBuffer` 新增 `set_depth_bias(float constant_factor, float clamp, float slope_factor)` 方法
+- [ ] `ShadowConfig` 新增 `distance_fade_width` (float)，Application 初始化为 `0.1f`（当前与 `blend_width` 同值，语义独立）；`GlobalUniformData` 新增 `shadow_distance_fade_width` (offset 624)，总大小 624→640；`bindings.glsl` GlobalUBO 同步新增
 
 ## Step 3：Forward 集成 + common/shadow.glsl + 硬阴影
 
-- [ ] 创建 `shaders/common/shadow.glsl`：`select_cascade(float view_depth, out float blend_factor)` 暂返回 cascade 0 + `sample_shadow(vec3 world_pos, vec3 world_normal, int cascade)` 单次硬件比较 + `shadow_distance_fade(float view_depth)`
-- [ ] `forward.frag` 集成 shadow 采样：`#include "common/shadow.glsl"` + `feature_flags & FEATURE_SHADOWS` 条件分支 + `Lo_direct *= shadow`
+- [ ] 创建 `shaders/common/shadow.glsl`：`select_cascade(float view_depth, out float blend_factor)` 暂返回 cascade 0 + `sample_shadow(vec3 world_pos, vec3 world_normal, int cascade)` 单次硬件比较 + `shadow_distance_fade(float view_depth)`（使用独立的 `shadow_distance_fade_width` UBO 字段）
+- [ ] `forward.frag` 集成 shadow 采样：`#include "common/shadow.glsl"` + `feature_flags & FEATURE_SHADOWS` 条件分支 + shadow 乘到唯一方向光的直接光照贡献（M1 `kMaxDirectionalLights = 1`）
 - [ ] Normal offset bias 实现：`shadow.glsl` 的 `sample_shadow()` 内部沿法线偏移采样位置，从 `cascade_view_proj` 矩阵提取 texel world size
 - [ ] ShadowPass `record()` lambda 中调用 `cmd.set_depth_bias(constant_factor, 0.0f, slope_factor)` 设置硬件 bias
 - [ ] DebugUI Shadow 面板：constant bias / slope bias / normal offset 滑条 + Shadows checkbox（操作 `features.shadows`）

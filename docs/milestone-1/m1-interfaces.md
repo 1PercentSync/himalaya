@@ -421,7 +421,9 @@ struct GlobalUniformData {
     uint32_t shadow_pcf_radius;                 // offset 348 — PCF kernel 半径 (1=3×3, 2=5×5)
     glm::mat4 cascade_view_proj[4];             // offset 352 — per-cascade 光空间 VP 矩阵
     glm::vec4 cascade_splits;                   // offset 608 — 4 个 cascade 远边界 (view-space depth)
-};  // total: 624 bytes (39 × 16)
+    float shadow_distance_fade_width;           // offset 624 — 阴影远端衰减区间占 max_distance 的比例
+    float _shadow_pad[3];                       // offset 628 — pad to 640 (16-byte aligned)
+};  // total: 640 bytes (40 × 16)
 
 // GPU 方向光 — std430 layout, 32 bytes per element
 // 对应 shader: Set 0, Binding 1 (LightBuffer SSBO)
@@ -831,6 +833,7 @@ struct ShadowConfig {
     float normal_offset;   // shader-side 法线偏移强度
     uint32_t pcf_radius;   // PCF kernel 半径 (0=off, 1=3×3, 2=5×5, ..., 5=11×11)
     float blend_width;     // cascade blend region 占 cascade 范围的比例
+    float distance_fade_width; // 阴影远端衰减区间占 max_distance 的比例（独立于 blend_width）
 };
 ```
 
@@ -1121,6 +1124,7 @@ layout(set = 0, binding = 0) uniform GlobalUBO {
     uint shadow_pcf_radius;                 // PCF kernel 半径 (0=off, 1=3×3, ..., 5=11×11)
     mat4 cascade_view_proj[MAX_SHADOW_CASCADES]; // per-cascade 光空间 VP 矩阵
     vec4 cascade_splits;                    // 4 个 cascade 远边界 (view-space depth)
+    float shadow_distance_fade_width;       // 阴影远端衰减区间占 max_distance 的比例
 } global;
 
 layout(set = 0, binding = 1) readonly buffer LightBuffer {
