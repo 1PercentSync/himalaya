@@ -43,7 +43,7 @@ namespace himalaya::framework {
      * Application layer is responsible for computing world_bounds from
      * the mesh's local AABB and the transform matrix.
      */
-    struct MeshInstance {
+    struct MeshInstance { // NOLINT(*-pro-type-member-init)
         /** @brief Index into the loaded mesh array. */
         uint32_t mesh_id;
 
@@ -155,6 +155,16 @@ namespace himalaya::framework {
 
         /** @brief Cascade blend region as fraction of cascade range. */
         float blend_width;
+
+        /**
+         * @brief Shadow distance fade region as fraction of max_distance.
+         *
+         * Independent from blend_width — blend_width controls cascade-to-cascade
+         * transitions, distance_fade_width controls the far-edge fadeout to
+         * unshadowed. Currently defaults to the same value as blend_width (0.1),
+         * but can be tuned independently.
+         */
+        float distance_fade_width;
     };
 
     // ---- GPU Data Structures ----
@@ -193,6 +203,8 @@ namespace himalaya::framework {
         uint32_t shadow_pcf_radius = 0; ///< offset 348 — PCF kernel radius (0=off)
         glm::mat4 cascade_view_proj[4]{}; ///< offset 352 — per-cascade light-space VP (16-aligned)
         glm::vec4 cascade_splits{}; ///< offset 608 — cascade far boundaries (view-space depth)
+        float shadow_distance_fade_width = 0.0f; ///< offset 624 — distance fade region fraction
+        float _shadow_pad[3]{}; ///< offset 628 — pad to 640 (16-byte aligned)
     };
 
     /**
@@ -260,7 +272,7 @@ namespace himalaya::framework {
     // Size assertions catch additions/removals; offset assertions catch
     // C++ vs std140 alignment divergences (e.g. vec2 requires 8-byte
     // alignment in std140 but glm::vec2 has natural alignment of 4).
-    static_assert(sizeof(GlobalUniformData) == 624, "GlobalUniformData must be 624 bytes (std140)");
+    static_assert(sizeof(GlobalUniformData) == 640, "GlobalUniformData must be 640 bytes (std140)");
     static_assert(offsetof(GlobalUniformData, view) == 0);
     static_assert(offsetof(GlobalUniformData, camera_position_and_exposure) == 256);
     static_assert(offsetof(GlobalUniformData, screen_size) == 272);
@@ -273,6 +285,7 @@ namespace himalaya::framework {
     static_assert(offsetof(GlobalUniformData, shadow_texel_size) == 336);
     static_assert(offsetof(GlobalUniformData, cascade_view_proj) == 352);
     static_assert(offsetof(GlobalUniformData, cascade_splits) == 608);
+    static_assert(offsetof(GlobalUniformData, shadow_distance_fade_width) == 624);
     static_assert(sizeof(GPUDirectionalLight) == 32, "GPUDirectionalLight must be 32 bytes (std430)");
     static_assert(sizeof(GPUInstanceData) == 128, "GPUInstanceData must be 128 bytes (std430)");
     static_assert(offsetof(GPUInstanceData, normal_col0) == 64);

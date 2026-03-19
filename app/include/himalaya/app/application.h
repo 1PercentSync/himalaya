@@ -150,6 +150,7 @@ namespace himalaya::app {
             .normal_offset = 1.0f,
             .pcf_radius = 1,
             .blend_width = 0.1f,
+            .distance_fade_width = 0.1f, // linked to blend_width until DebugUI exposes independent control
         };
 
         // --- Left-click drag state (IBL rotation or fallback light direction) ---

@@ -478,6 +478,7 @@ namespace himalaya::app {
         ubo_data.shadow_texel_size = 1.0f / static_cast<float>(shadow_pass_.resolution());
         ubo_data.shadow_max_distance = input.shadow_config.max_distance;
         ubo_data.shadow_blend_width = input.shadow_config.blend_width;
+        ubo_data.shadow_distance_fade_width = input.shadow_config.distance_fade_width;
         ubo_data.shadow_pcf_radius = input.shadow_config.pcf_radius;
 
         if (shadows_active) {
