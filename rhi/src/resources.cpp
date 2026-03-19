@@ -297,11 +297,15 @@ namespace himalaya::rhi {
             nullptr));
         slot.desc = desc;
 
-        // Create default image view (cube view for cubemaps, 2D otherwise)
+        // Create default image view: cubemap / 2D array / plain 2D
+        const bool is_array = !is_cubemap && desc.array_layers > 1;
+
         VkImageViewCreateInfo view_info{};
         view_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
         view_info.image = slot.image;
-        view_info.viewType = is_cubemap ? VK_IMAGE_VIEW_TYPE_CUBE : VK_IMAGE_VIEW_TYPE_2D;
+        view_info.viewType = is_cubemap  ? VK_IMAGE_VIEW_TYPE_CUBE
+                           : is_array    ? VK_IMAGE_VIEW_TYPE_2D_ARRAY
+                                         : VK_IMAGE_VIEW_TYPE_2D;
         view_info.format = image_info.format;
         view_info.subresourceRange.aspectMask = aspect_from_format(desc.format);
         view_info.subresourceRange.baseMipLevel = 0;
