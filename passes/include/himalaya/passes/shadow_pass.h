@@ -97,6 +97,11 @@ namespace himalaya::passes {
          */
         [[nodiscard]] rhi::ImageHandle shadow_map_image() const { return shadow_map_image_; }
 
+        /**
+         * @brief Returns the current shadow map resolution (width = height).
+         */
+        [[nodiscard]] uint32_t resolution() const { return resolution_; }
+
     private:
         /**
          * @brief Create shadow map image + per-layer views at the given resolution.

@@ -15,6 +15,9 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
+
+#include <glm/gtc/matrix_transform.hpp>
 
 #include <GLFW/glfw3.h>
 #include <spdlog/spdlog.h>
@@ -447,7 +450,94 @@ namespace himalaya::app {
         ubo_data.ibl_rotation_sin = input.ibl_rotation_sin;
         ubo_data.ibl_rotation_cos = input.ibl_rotation_cos;
         ubo_data.debug_render_mode = input.debug_render_mode;
-        ubo_data.feature_flags = 0; // populated in later steps as passes are added
+
+        // --- Feature flags ---
+        ubo_data.feature_flags = 0;
+        if (input.features.shadows) {
+            ubo_data.feature_flags |= 1u; // FEATURE_SHADOWS
+        }
+
+        // --- Shadow fields ---
+        ubo_data.shadow_normal_offset = input.shadow_config.normal_offset;
+        ubo_data.shadow_texel_size = 1.0f / static_cast<float>(shadow_pass_.resolution());
+        ubo_data.shadow_max_distance = input.shadow_config.max_distance;
+        ubo_data.shadow_blend_width = input.shadow_config.blend_width;
+        ubo_data.shadow_pcf_radius = input.shadow_config.pcf_radius;
+
+        // Find the first shadow-casting directional light
+        const framework::DirectionalLight *shadow_light = nullptr;
+        for (const auto &light: input.lights) {
+            if (light.cast_shadows) {
+                shadow_light = &light;
+                break;
+            }
+        }
+
+        if (input.features.shadows && shadow_light) {
+            ubo_data.shadow_cascade_count = 1; // Step 2: single cascade
+
+            const auto &cam = input.camera;
+            const glm::vec3 light_dir = glm::normalize(shadow_light->direction);
+            const float shadow_far = std::min(input.shadow_config.max_distance, cam.far_plane);
+
+            // Compute camera sub-frustum corners (near to shadow_far)
+            const glm::vec3 fwd = cam.forward();
+            const glm::vec3 rgt = cam.right();
+            const glm::vec3 up = glm::cross(rgt, fwd);
+
+            const float tan_half = std::tan(cam.fov * 0.5f);
+            const float near_h = cam.near_plane * tan_half;
+            const float near_w = near_h * cam.aspect;
+            const float far_h = shadow_far * tan_half;
+            const float far_w = far_h * cam.aspect;
+
+            const glm::vec3 near_center = cam.position + fwd * cam.near_plane;
+            const glm::vec3 far_center = cam.position + fwd * shadow_far;
+
+            const std::array<glm::vec3, 8> corners = {
+                near_center - rgt * near_w + up * near_h,
+                near_center + rgt * near_w + up * near_h,
+                near_center - rgt * near_w - up * near_h,
+                near_center + rgt * near_w - up * near_h,
+                far_center - rgt * far_w + up * far_h,
+                far_center + rgt * far_w + up * far_h,
+                far_center - rgt * far_w - up * far_h,
+                far_center + rgt * far_w - up * far_h,
+            };
+
+            // Light view matrix — center on frustum midpoint
+            const glm::vec3 frustum_center = (near_center + far_center) * 0.5f;
+            glm::vec3 light_up(0.0f, 1.0f, 0.0f);
+            if (std::abs(glm::dot(light_dir, light_up)) > 0.99f) {
+                light_up = glm::vec3(0.0f, 0.0f, 1.0f);
+            }
+            const glm::mat4 light_view = glm::lookAt(
+                frustum_center - light_dir, frustum_center, light_up);
+
+            // Find AABB of frustum corners in light space
+            glm::vec3 ls_min(std::numeric_limits<float>::max());
+            glm::vec3 ls_max(std::numeric_limits<float>::lowest());
+            for (const auto &c: corners) {
+                const auto ls = glm::vec3(light_view * glm::vec4(c, 1.0f));
+                ls_min = glm::min(ls_min, ls);
+                ls_max = glm::max(ls_max, ls);
+            }
+
+            // Build reverse-Z orthographic projection
+            // Standard RH_ZO maps near→0, far→1; reverse: near→1, far→0
+            glm::mat4 light_proj = glm::orthoRH_ZO(
+                ls_min.x,
+                ls_max.x,
+                ls_min.y,
+                ls_max.y,
+                -ls_max.z,
+                -ls_min.z);
+            light_proj[2][2] = -light_proj[2][2];
+            light_proj[3][2] = 1.0f - light_proj[3][2];
+
+            ubo_data.cascade_view_proj[0] = light_proj * light_view;
+            ubo_data.cascade_splits = glm::vec4(shadow_far, 0.0f, 0.0f, 0.0f);
+        }
 
         const auto light_count = static_cast<uint32_t>(
             std::min(input.lights.size(), static_cast<size_t>(kMaxDirectionalLights)));
@@ -698,7 +788,9 @@ namespace himalaya::app {
     }
 
     void Renderer::update_shadow_map_descriptor() const {
-        descriptor_manager_->update_render_target(5, shadow_pass_.shadow_map_image(), shadow_comparison_sampler_);
+        descriptor_manager_->update_render_target(5,
+                                                  shadow_pass_.shadow_map_image(),
+                                                  shadow_comparison_sampler_);
     }
 
     // ---- Swapchain image registration ----

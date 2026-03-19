@@ -57,6 +57,10 @@ struct GPUMaterialData {
 
 #define FEATURE_SHADOWS (1u << 0)
 
+// ---- Shadow cascade constants ----
+
+#define MAX_SHADOW_CASCADES 4
+
 // ---- Debug render mode constants ----
 
 #define DEBUG_MODE_FULL_PBR          0
@@ -90,6 +94,15 @@ layout(set = 0, binding = 0) uniform GlobalUBO {
     float ibl_rotation_cos;                 // offset 316 — cos(ibl_yaw) for environment rotation
     uint debug_render_mode;                 // offset 320 — DEBUG_MODE_* constants
     uint feature_flags;                     // offset 324 — bitmask: FEATURE_SHADOWS, etc.
+    // ---- Shadow fields (phase 4) ----
+    uint shadow_cascade_count;              // offset 328 — active cascade count
+    float shadow_normal_offset;             // offset 332 — normal offset bias strength
+    float shadow_texel_size;                // offset 336 — 1.0 / shadow_map_resolution
+    float shadow_max_distance;              // offset 340 — cascade max coverage distance
+    float shadow_blend_width;               // offset 344 — cascade blend region fraction
+    uint shadow_pcf_radius;                 // offset 348 — PCF kernel radius (0=off)
+    mat4 cascade_view_proj[MAX_SHADOW_CASCADES]; // offset 352 — per-cascade light-space VP
+    vec4 cascade_splits;                    // offset 608 — cascade far boundaries (view-space depth)
 } global;
 
 layout(set = 0, binding = 1) readonly buffer LightBuffer {
