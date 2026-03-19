@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 2 进行中（7/9）。下一个任务：Step 2 第八项（ShadowPass record() 实现）
+Step 2 进行中（8/9）。下一个任务：Step 2 第九项（验证：RenderDoc 检查 shadow map）
 
 ---
 
