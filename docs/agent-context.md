@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 2 前置第二项完成（SamplerDesc compare 支持）。下一个任务：Step 2 前置第三项（create_image 2D Array view type 自动推断）
+Step 2 前置第三项完成（2D Array view type）。下一个任务：Step 2 前置第四项（GraphicsPipelineDesc 无 FS 支持）
 
 ---
 
