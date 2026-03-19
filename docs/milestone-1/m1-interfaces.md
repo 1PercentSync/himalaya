@@ -252,6 +252,16 @@ public:
 
     // GPU 端 mip 生成（逐级 vkCmdBlitImage，在 immediate scope 内调用）
     void generate_mips(ImageHandle handle);
+
+    // --- Sub-resource view 创建（阶段四引入） ---
+
+    // 创建 array image 的单层 2D view（shadow map per-cascade 渲染用）
+    // 从 ImageHandle 获取底层 VkImage、format、aspect，创建 baseArrayLayer=layer, layerCount=1 的 2D view
+    // 调用方持有返回的 VkImageView，通过 destroy_layer_view() 销毁
+    VkImageView create_layer_view(ImageHandle handle, uint32_t layer);
+
+    // 销毁 create_layer_view() 创建的 view
+    void destroy_layer_view(VkImageView view);
 };
 ```
 
