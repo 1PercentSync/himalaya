@@ -110,8 +110,8 @@
 
 ## Step 2：Shadow 资源 + ShadowPass + 单 cascade 深度渲染
 
-- [ ] ResourceManager per-layer view API：新增 `create_layer_view(ImageHandle, uint32_t layer)` 返回单层 2D `VkImageView` + `destroy_layer_view(VkImageView)` 销毁
-- [ ] ShadowPass 类骨架 + shadow map 资源创建：`shadow_pass.h/cpp` 类定义（`setup()` / `record()` / `destroy()` / `on_resolution_changed()` / `rebuild_pipelines()` + `shadow_map_image()` getter）；`setup()` 中创建 shadow map 2D Array（D32Sfloat，2048²，4 layers，`DEPTH_STENCIL_ATTACHMENT | SAMPLED`）+ 通过 `create_layer_view()` 创建 4 个 per-layer view
+- [x] ResourceManager per-layer view API：新增 `create_layer_view(ImageHandle, uint32_t layer)` 返回单层 2D `VkImageView` + `destroy_layer_view(VkImageView)` 销毁
+- [x] ShadowPass 类骨架 + shadow map 资源创建：`shadow_pass.h/cpp` 类定义（`setup()` / `record()` / `destroy()` / `on_resolution_changed()` / `rebuild_pipelines()` + `shadow_map_image()` getter）；`setup()` 中创建 shadow map 2D Array（D32Sfloat，2048²，4 layers，`DEPTH_STENCIL_ATTACHMENT | SAMPLED`）+ 通过 `create_layer_view()` 创建 4 个 per-layer view
 - [ ] Shadow comparison sampler + Set 2 descriptor + bindings.glsl：Renderer 创建 comparison sampler（`GREATER_OR_EQUAL`、`LINEAR`、`CLAMP_TO_EDGE`）；`init()` 中 ShadowPass setup 后写入 Set 2 binding 5；`bindings.glsl` 新增 `layout(set = 2, binding = 5) uniform sampler2DArrayShadow rt_shadow_map`
 - [ ] Shadow shaders：创建 `shadow.vert`（`gl_Position` = `cascade_vp[cascade_index] * model * pos` + `uv0` 输出）+ `shadow_masked.frag`（采样 `base_color_tex` alpha test + discard，无颜色输出）
 - [ ] ShadowPass pipelines + push constant：Opaque pipeline（仅 VS，无 FS）+ Mask pipeline（VS + masked FS）；pipeline layout 声明 push constant range（4 bytes `cascade_index`，shadow pass 专用）
