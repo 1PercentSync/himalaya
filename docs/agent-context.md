@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 2 完成（9/9 验证通过）。下一个任务：Step 3 前置（Depth Bias 基础设施）
+Step 3 前置进行中（1/3 完成）。下一个任务：`CommandBuffer` 新增 `set_depth_bias()` 方法
 
 ---
 
