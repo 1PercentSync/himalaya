@@ -371,6 +371,28 @@ namespace himalaya::rhi {
         /** @brief Returns the device-supported maximum sampler anisotropy. */
         [[nodiscard]] float max_sampler_anisotropy() const;
 
+        // ---- Sub-resource views ----
+
+        /**
+         * @brief Creates a single-layer 2D view of an array image.
+         *
+         * Used for rendering to individual layers (e.g. shadow map per-cascade).
+         * The caller owns the returned VkImageView and must destroy it via
+         * destroy_layer_view() before the parent image is destroyed.
+         *
+         * @param handle     Parent array image (must have array_layers > 1).
+         * @param layer      Array layer index to create a view for.
+         * @param debug_name Human-readable name for validation/RenderDoc (must not be null).
+         * @return VkImageView targeting the specified layer.
+         */
+        [[nodiscard]] VkImageView create_layer_view(ImageHandle handle, uint32_t layer, const char *debug_name);
+
+        /**
+         * @brief Destroys a layer view created by create_layer_view().
+         * @param view View to destroy (VK_NULL_HANDLE is safely ignored).
+         */
+        void destroy_layer_view(VkImageView view);
+
         // ---- Upload ----
 
         /**

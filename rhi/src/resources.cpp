@@ -442,6 +442,41 @@ namespace himalaya::rhi {
         return samplers_[handle.index];
     }
 
+    // ---- Sub-resource views ----
+
+    VkImageView ResourceManager::create_layer_view(const ImageHandle handle,
+                                                    const uint32_t layer,
+                                                    const char *debug_name) {
+        assert(debug_name && "debug_name must not be null");
+        const auto &img = get_image(handle);
+        assert(img.desc.array_layers > 1 && "create_layer_view requires an array image");
+        assert(layer < img.desc.array_layers && "Layer index out of range");
+
+        VkImageViewCreateInfo view_info{};
+        view_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+        view_info.image = img.image;
+        view_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+        view_info.format = to_vk_format(img.desc.format);
+        view_info.subresourceRange.aspectMask = aspect_from_format(img.desc.format);
+        view_info.subresourceRange.baseMipLevel = 0;
+        view_info.subresourceRange.levelCount = 1;
+        view_info.subresourceRange.baseArrayLayer = layer;
+        view_info.subresourceRange.layerCount = 1;
+
+        VkImageView view = VK_NULL_HANDLE;
+        VK_CHECK(vkCreateImageView(context_->device, &view_info, nullptr, &view));
+
+        set_debug_name(VK_OBJECT_TYPE_IMAGE_VIEW, reinterpret_cast<uint64_t>(view), debug_name);
+
+        return view;
+    }
+
+    void ResourceManager::destroy_layer_view(const VkImageView view) {
+        if (view != VK_NULL_HANDLE) {
+            vkDestroyImageView(context_->device, view, nullptr);
+        }
+    }
+
     // ---- Upload ----
 
     void ResourceManager::upload_buffer(const BufferHandle handle,
