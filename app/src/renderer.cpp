@@ -785,6 +785,11 @@ namespace himalaya::app {
         frame_ctx.frame_index = input.frame_index;
         frame_ctx.sample_count = current_sample_count_;
 
+        // --- CSM Shadow Pass (before depth prepass — shadow map needed by forward) ---
+        if (input.features.shadows) {
+            shadow_pass_.record(render_graph_, frame_ctx);
+        }
+
         // --- Depth + Normal PrePass ---
         depth_prepass_.record(render_graph_, frame_ctx);
 

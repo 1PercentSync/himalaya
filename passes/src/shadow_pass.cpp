@@ -1,14 +1,19 @@
 #include <himalaya/passes/shadow_pass.h>
 
+#include <himalaya/framework/frame_context.h>
 #include <himalaya/framework/mesh.h>
+#include <himalaya/framework/render_graph.h>
+#include <himalaya/framework/scene_data.h>
+#include <himalaya/rhi/commands.h>
 #include <himalaya/rhi/context.h>
 #include <himalaya/rhi/descriptors.h>
 #include <himalaya/rhi/resources.h>
 #include <himalaya/rhi/shader.h>
 
-#include <spdlog/spdlog.h>
-
+#include <array>
 #include <string>
+
+#include <spdlog/spdlog.h>
 
 namespace himalaya::passes {
     // ---- Attachment format ----
@@ -29,9 +34,120 @@ namespace himalaya::passes {
         create_pipelines();
     }
 
-    void ShadowPass::record(framework::RenderGraph & /*rg*/,
-                            const framework::FrameContext & /*ctx*/) const {
-        // TODO: implemented in the ShadowPass record() task
+    void ShadowPass::record(framework::RenderGraph &rg,
+                            const framework::FrameContext &ctx) const {
+        // Import shadow map into RG: starts UNDEFINED (cleared each cascade),
+        // ends SHADER_READ_ONLY for forward pass sampling.
+        const auto shadow_resource = rg.import_image(
+            "Shadow Map", shadow_map_image_,
+            VK_IMAGE_LAYOUT_UNDEFINED,
+            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+        const std::array resources = {
+            framework::RGResourceUsage{
+                shadow_resource,
+                framework::RGAccessType::Write,
+                framework::RGStage::DepthAttachment,
+            },
+        };
+
+        auto execute = [this, &rg, &ctx, shadow_resource](const rhi::CommandBuffer &cmd) {
+            const uint32_t cascade_count = ctx.shadow_config
+                ? 1 // Step 2: single cascade
+                : 0;
+
+            const VkExtent2D extent{resolution_, resolution_};
+
+            // Draw helper: bind buffers, instanced draw
+            auto draw_group = [&](const framework::MeshDrawGroup &group) {
+                const auto &mesh = ctx.meshes[group.mesh_id];
+
+                cmd.set_cull_mode(
+                    group.double_sided
+                        ? VK_CULL_MODE_NONE
+                        : VK_CULL_MODE_BACK_BIT);
+
+                cmd.bind_vertex_buffer(
+                    0,
+                    rm_->get_buffer(mesh.vertex_buffer).buffer);
+                cmd.bind_index_buffer(
+                    rm_->get_buffer(mesh.index_buffer).buffer,
+                    VK_INDEX_TYPE_UINT32);
+                cmd.draw_indexed(mesh.index_count,
+                    group.instance_count,
+                    0,
+                    0,
+                    group.first_instance);
+            };
+
+            // Bind descriptor sets once (shared across all cascades)
+            const VkDescriptorSet sets[] = {
+                dm_->get_set0(ctx.frame_index),
+                dm_->get_set1(),
+            };
+
+            for (uint32_t cascade = 0; cascade < cascade_count; ++cascade) {
+                const std::string label = "Cascade " + std::to_string(cascade);
+                cmd.begin_debug_label(label.c_str(), {0.4f, 0.4f, 0.8f, 1.0f});
+
+                // Depth attachment: per-layer view, clear 0.0 (reverse-Z far)
+                VkRenderingAttachmentInfo depth_attachment{};
+                depth_attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+                depth_attachment.imageView = layer_views_[cascade];
+                depth_attachment.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
+                depth_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+                depth_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+                depth_attachment.clearValue.depthStencil = {0.0f, 0};
+
+                VkRenderingInfo rendering_info{};
+                rendering_info.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
+                rendering_info.renderArea = {{0, 0}, extent};
+                rendering_info.layerCount = 1;
+                rendering_info.pDepthAttachment = &depth_attachment;
+
+                cmd.begin_rendering(rendering_info);
+
+                // Dynamic state
+                VkViewport viewport{};
+                viewport.x = 0.0f;
+                viewport.y = 0.0f;
+                viewport.width = static_cast<float>(resolution_);
+                viewport.height = static_cast<float>(resolution_);
+                viewport.minDepth = 0.0f;
+                viewport.maxDepth = 1.0f;
+                cmd.set_viewport(viewport);
+                cmd.set_scissor({{0, 0}, extent});
+
+                cmd.set_front_face(VK_FRONT_FACE_COUNTER_CLOCKWISE);
+                cmd.set_depth_test_enable(true);
+                cmd.set_depth_write_enable(true);
+                cmd.set_depth_compare_op(VK_COMPARE_OP_GREATER); // Reverse-Z
+
+                // Push cascade index
+                const framework::PushConstantData pc{.cascade_index = cascade};
+                cmd.push_constants(opaque_pipeline_.layout, VK_SHADER_STAGE_VERTEX_BIT,
+                                   &pc, sizeof(pc));
+
+                // --- Opaque batch (depth-only, no FS) ---
+                cmd.bind_pipeline(opaque_pipeline_);
+                cmd.bind_descriptor_sets(opaque_pipeline_.layout, 0, sets, 2);
+
+                for (const auto &group : ctx.shadow_opaque_groups)
+                    draw_group(group);
+
+                // --- Mask batch (alpha test + discard) ---
+                cmd.bind_pipeline(mask_pipeline_);
+                cmd.bind_descriptor_sets(mask_pipeline_.layout, 0, sets, 2);
+
+                for (const auto &group : ctx.shadow_mask_groups)
+                    draw_group(group);
+
+                cmd.end_rendering();
+                cmd.end_debug_label();
+            }
+        };
+
+        rg.add_pass("CSM Shadow", resources, execute);
     }
 
     void ShadowPass::destroy() {
