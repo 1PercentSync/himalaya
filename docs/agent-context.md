@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 3 前置进行中（1/3 完成）。下一个任务：`CommandBuffer` 新增 `set_depth_bias()` 方法
+Step 3 前置进行中（2/3 完成）。下一个任务：`ShadowConfig` + `GlobalUniformData` + `bindings.glsl` 新增 `distance_fade_width`
 
 ---
 
