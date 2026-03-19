@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 2 进行中（2/9）。下一个任务：Step 2 第三项（Shadow comparison sampler + Set 2 descriptor + bindings.glsl）
+Step 2 进行中（3/9）。下一个任务：Step 2 第四项（Shadow shaders）
 
 ---
 
