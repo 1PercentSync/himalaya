@@ -170,6 +170,8 @@ namespace himalaya::app {
             desc.wrap_u = convert_wrap(sampler.wrapS);
             desc.wrap_v = convert_wrap(sampler.wrapT);
             desc.max_anisotropy = max_anisotropy;
+            desc.compare_enable = false;
+            desc.compare_op = rhi::CompareOp::Never;
 
             return desc;
         }

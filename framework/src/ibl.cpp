@@ -467,6 +467,8 @@ namespace himalaya::framework {
             .wrap_v = rhi::SamplerWrapMode::ClampToEdge,
             .max_anisotropy = 0.0f,
             .max_lod = 0.0f,
+            .compare_enable = false,
+            .compare_op = rhi::CompareOp::Never,
         };
         const auto temp_sampler = rm_->create_sampler(sampler_desc, "IBL Equirect Sampler");
         deferred.emplace_back([temp_sampler, rm = rm_] { rm->destroy_sampler(temp_sampler); });
@@ -667,6 +669,8 @@ namespace himalaya::framework {
             .wrap_v = rhi::SamplerWrapMode::ClampToEdge,
             .max_anisotropy = 0.0f,
             .max_lod = 0.0f,
+            .compare_enable = false,
+            .compare_op = rhi::CompareOp::Never,
         };
         const auto temp_sampler = rm_->create_sampler(sampler_desc, "IBL Irradiance Sampler");
         deferred.emplace_back([temp_sampler, rm = rm_] { rm->destroy_sampler(temp_sampler); });
@@ -861,6 +865,8 @@ namespace himalaya::framework {
             .wrap_v = rhi::SamplerWrapMode::ClampToEdge,
             .max_anisotropy = 0.0f,
             .max_lod = VK_LOD_CLAMP_NONE,
+            .compare_enable = false,
+            .compare_op = rhi::CompareOp::Never,
         };
         const auto temp_sampler = rm_->create_sampler(sampler_desc, "IBL Prefilter Sampler");
         deferred.emplace_back([temp_sampler, rm = rm_] { rm->destroy_sampler(temp_sampler); });
@@ -1221,6 +1227,8 @@ namespace himalaya::framework {
             .wrap_v = rhi::SamplerWrapMode::ClampToEdge,
             .max_anisotropy = 0.0f,
             .max_lod = 0.0f,
+            .compare_enable = false,
+            .compare_op = rhi::CompareOp::Never,
         };
         const auto temp_sampler = rm_->create_sampler(sampler_desc, "BC6H Src Sampler");
         deferred.emplace_back([temp_sampler, rm = rm_] { rm->destroy_sampler(temp_sampler); });
@@ -1727,6 +1735,8 @@ namespace himalaya::framework {
             .wrap_v = rhi::SamplerWrapMode::ClampToEdge,
             .max_anisotropy = 0.0f,
             .max_lod = VK_LOD_CLAMP_NONE,
+            .compare_enable = false,
+            .compare_op = rhi::CompareOp::Never,
         };
         sampler_ = rm_->create_sampler(sampler_desc, "IBL Sampler");
 

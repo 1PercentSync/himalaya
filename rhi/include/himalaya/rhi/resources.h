@@ -175,6 +175,12 @@ namespace himalaya::rhi {
 
         /** @brief Maximum mip level accessible (0 = base level only, VK_LOD_CLAMP_NONE = no clamping). */
         float max_lod;
+
+        /** @brief Enable depth comparison for shadow sampling. */
+        bool compare_enable;
+
+        /** @brief Comparison operation when compare_enable is true. */
+        CompareOp compare_op;
     };
 
     // ---- Internal Resource Storage ----

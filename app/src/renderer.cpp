@@ -196,6 +196,8 @@ namespace himalaya::app {
                                                                  .max_anisotropy =
                                                                  resource_manager_->max_sampler_anisotropy(),
                                                                  .max_lod = VK_LOD_CLAMP_NONE,
+                                                                 .compare_enable = false,
+                                                                 .compare_op = rhi::CompareOp::Never,
                                                              }, "Default Sampler");
 
         material_system_.init(resource_manager_, descriptor_manager_);

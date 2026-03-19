@@ -396,6 +396,11 @@ namespace himalaya::rhi {
             sampler_info.maxAnisotropy = desc.max_anisotropy;
         }
 
+        if (desc.compare_enable) {
+            sampler_info.compareEnable = VK_TRUE;
+            sampler_info.compareOp = to_vk_compare_op(desc.compare_op);
+        }
+
         const uint32_t index = allocate_sampler_slot();
         // ReSharper disable once CppUseStructuredBinding
         auto &slot = samplers_[index];
