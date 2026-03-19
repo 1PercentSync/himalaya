@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 3 前置进行中（2/3 完成）。下一个任务：`ShadowConfig` + `GlobalUniformData` + `bindings.glsl` 新增 `distance_fade_width`
+Step 3 前置完成（3/3）。下一个任务：Step 3 第 1 项（创建 `shaders/common/shadow.glsl`）
 
 ---
 

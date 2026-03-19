@@ -124,7 +124,7 @@
 
 - [x] `GraphicsPipelineDesc` 新增 `depth_bias_enable` (bool, 默认 false)；`create_graphics_pipeline()` 据此设置 `rasterization.depthBiasEnable`；动态状态新增 `VK_DYNAMIC_STATE_DEPTH_BIAS`
 - [x] `CommandBuffer` 新增 `set_depth_bias(float constant_factor, float clamp, float slope_factor)` 方法
-- [ ] `ShadowConfig` 新增 `distance_fade_width` (float)，Application 初始化为 `0.1f`（当前与 `blend_width` 同值，语义独立）；`GlobalUniformData` 新增 `shadow_distance_fade_width` (offset 624)，总大小 624→640；`bindings.glsl` GlobalUBO 同步新增
+- [x] `ShadowConfig` 新增 `distance_fade_width` (float)，Application 初始化为 `0.1f`（当前与 `blend_width` 同值，语义独立）；`GlobalUniformData` 新增 `shadow_distance_fade_width` (offset 624)，总大小 624→640；`bindings.glsl` GlobalUBO 同步新增
 
 ## Step 3：Forward 集成 + common/shadow.glsl + 硬阴影
 
