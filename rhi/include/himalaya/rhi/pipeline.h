@@ -46,6 +46,15 @@ namespace himalaya::rhi {
         /** @brief Enable alpha blending on the first color attachment. */
         bool blend_enable = false;
 
+        /**
+         * @brief Enable hardware depth bias (depthBiasEnable).
+         *
+         * When true, depth bias values must be set dynamically via
+         * CommandBuffer::set_depth_bias() before drawing.
+         * Has no effect on pipelines where this is false.
+         */
+        bool depth_bias_enable = false;
+
         /** @brief Descriptor set layouts for the pipeline layout. */
         std::vector<VkDescriptorSetLayout> descriptor_set_layouts;
 
@@ -80,6 +89,7 @@ namespace himalaya::rhi {
      * - Viewport and scissor
      * - Cull mode and front face
      * - Depth test enable, write enable, and compare op
+     * - Depth bias (values ignored when depth_bias_enable is false)
      *
      * @param device Logical device.
      * @param desc   Pipeline configuration.

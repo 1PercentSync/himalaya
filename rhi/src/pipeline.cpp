@@ -63,6 +63,7 @@ namespace himalaya::rhi {
         rasterization.depthClampEnable = VK_FALSE;
         rasterization.rasterizerDiscardEnable = VK_FALSE;
         rasterization.polygonMode = VK_POLYGON_MODE_FILL;
+        rasterization.depthBiasEnable = desc.depth_bias_enable ? VK_TRUE : VK_FALSE;
         rasterization.lineWidth = 1.0f;
 
         // --- Multisample ---
@@ -106,6 +107,7 @@ namespace himalaya::rhi {
             VK_DYNAMIC_STATE_DEPTH_TEST_ENABLE,
             VK_DYNAMIC_STATE_DEPTH_WRITE_ENABLE,
             VK_DYNAMIC_STATE_DEPTH_COMPARE_OP,
+            VK_DYNAMIC_STATE_DEPTH_BIAS,
         };
 
         VkPipelineDynamicStateCreateInfo dynamic_state{};
