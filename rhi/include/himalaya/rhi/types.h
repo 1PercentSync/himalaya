@@ -142,6 +142,21 @@ namespace himalaya::rhi {
         GpuToCpu,
     };
 
+    /**
+     * @brief Depth/stencil comparison operation.
+     *
+     * Used by comparison samplers (e.g. shadow map sampling) and depth test
+     * configuration. Wraps VkCompareOp without exposing Vulkan types.
+     */
+    enum class CompareOp : uint32_t {
+        Never,
+        Less,
+        Equal,
+        LessOrEqual,
+        Greater,
+        GreaterOrEqual,
+    };
+
     // ---- Format conversion utilities ----
 
     /**
@@ -226,6 +241,25 @@ namespace himalaya::rhi {
             case VK_FORMAT_D24_UNORM_S8_UINT: return Format::D24UnormS8Uint;
             default: return Format::Undefined;
         }
+    }
+
+    // ---- CompareOp conversion ----
+
+    /**
+     * @brief Converts a CompareOp enum value to the corresponding VkCompareOp.
+     *
+     * Used by sampler creation for comparison samplers (e.g. shadow mapping).
+     */
+    inline VkCompareOp to_vk_compare_op(const CompareOp op) {
+        switch (op) {
+            case CompareOp::Never: return VK_COMPARE_OP_NEVER;
+            case CompareOp::Less: return VK_COMPARE_OP_LESS;
+            case CompareOp::Equal: return VK_COMPARE_OP_EQUAL;
+            case CompareOp::LessOrEqual: return VK_COMPARE_OP_LESS_OR_EQUAL;
+            case CompareOp::Greater: return VK_COMPARE_OP_GREATER;
+            case CompareOp::GreaterOrEqual: return VK_COMPARE_OP_GREATER_OR_EQUAL;
+        }
+        return VK_COMPARE_OP_NEVER;
     }
 
     // ---- Format property utilities ----
