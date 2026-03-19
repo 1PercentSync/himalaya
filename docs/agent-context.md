@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 2 进行中（3/9）。下一个任务：Step 2 第四项（Shadow shaders）
+Step 2 进行中（4/9）。下一个任务：Step 2 第五项（ShadowPass pipelines + push constant）
 
 ---
 
