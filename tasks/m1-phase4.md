@@ -106,7 +106,7 @@
 - [x] `SamplerDesc` 新增 `compare_enable` (bool) 和 `compare_op` (CompareOp) 字段（无默认值，调用方显式初始化）；`create_sampler()` 据此设置 `VkSamplerCreateInfo::compareEnable` / `compareOp`
 - [x] `create_image()` 自动推断 2D Array view type：`array_layers > 1 && != 6` 时创建 `VK_IMAGE_VIEW_TYPE_2D_ARRAY`
 - [x] `GraphicsPipelineDesc` 支持无 FS：`fragment_shader == VK_NULL_HANDLE` 时 `stageCount = 1`（仅 VS）
-- [ ] `passes/CMakeLists.txt` 新增 `shadow_pass.cpp` 构建条目（需用户在 CLion 中确认构建配置）
+- [x] `passes/CMakeLists.txt` 新增 `shadow_pass.cpp` 构建条目（需用户在 CLion 中确认构建配置）
 
 ## Step 2：Shadow 资源 + ShadowPass + 单 cascade 深度渲染
 

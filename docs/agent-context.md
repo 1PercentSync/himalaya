@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 2 前置第四项完成（无 FS pipeline）。下一个任务：Step 2 前置第五项（passes/CMakeLists.txt 新增 shadow_pass.cpp 构建条目）
+Step 2 前置全部完成。下一个任务：Step 2 第一项（Shadow map 2D Array 资源创建）
 
 ---
 
