@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 2 进行中（8/9）。下一个任务：Step 2 第九项（验证：RenderDoc 检查 shadow map）
+Step 2 完成（9/9 验证通过）。下一个任务：Step 3 前置（Depth Bias 基础设施）
 
 ---
 

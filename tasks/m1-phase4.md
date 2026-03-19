@@ -118,7 +118,7 @@
 - [x] GlobalUBO shadow 字段 + 光空间投影 + Renderer 填充：GlobalUBO 新增 `shadow_cascade_count`、`shadow_normal_offset`、`shadow_texel_size`、`shadow_max_distance`、`shadow_blend_width`、`shadow_pcf_radius`、`cascade_view_proj[4]`、`cascade_splits`；`bindings.glsl` GlobalUBO 同步更新；光空间正交投影矩阵计算（fit 整个相机 frustum，cascade=1）；Renderer `render()` 填充 shadow 字段
 - [x] Shadow draw group 构建 + FrameContext 扩展：Renderer `render()` 新增全部 `mesh_instances` 按 (mesh_id, alpha_mode, double_sided) 排序分组 → 填充 InstanceBuffer 第二段 → 构建 `shadow_opaque_groups_` / `shadow_mask_groups_`；FrameContext 新增 `shadow_opaque_groups` / `shadow_mask_groups` span 字段
 - [x] ShadowPass `record()` 实现：`import_image()` 到 RG → `add_pass()` → lambda 内循环 cascade（=1）→ begin rendering(layer view) → set viewport/scissor → draw opaque groups → draw mask groups → end rendering
-- [ ] 验证：RenderDoc 检查 shadow map 内容正确（从光源视角的场景深度图）
+- [x] 验证：RenderDoc 检查 shadow map 内容正确（从光源视角的场景深度图）
 
 ## Step 3 前置：Depth Bias 基础设施
 
