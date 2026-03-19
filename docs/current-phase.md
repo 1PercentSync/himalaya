@@ -211,7 +211,7 @@ RenderFeatures + feature_flags 机制见 `milestone-1/m1-design-decisions.md`「
 > Step 2 需要 RHI 层若干基础设施扩展。这些是纯机制性变更，不改变现有行为。
 
 - `types.h` 新增 `CompareOp` 自定义枚举（Never / Less / Equal / LessOrEqual / Greater / GreaterOrEqual）+ `to_vk_compare_op()` 转换函数，保持 RHI 层不暴露 Vulkan 类型的抽象一致性
-- `SamplerDesc` 新增 `compare_enable` (bool, 默认 false) + `compare_op` (CompareOp, 默认 Never)；`create_sampler()` 据此设置 Vulkan 比较采样器字段。Shadow comparison sampler 需要此支持
+- `SamplerDesc` 新增 `compare_enable` (bool) + `compare_op` (CompareOp)（无默认值，调用方显式初始化）；`create_sampler()` 据此设置 Vulkan 比较采样器字段。Shadow comparison sampler 需要此支持
 - `create_image()` 自动推断 2D Array view type：当 `array_layers > 1 && != 6` 时创建 `VK_IMAGE_VIEW_TYPE_2D_ARRAY`（shadow map 始终 4 层，自然命中此条件）
 - `GraphicsPipelineDesc` 支持无 FS：当 `fragment_shader == VK_NULL_HANDLE` 时仅包含 VS stage（`stageCount = 1`）。Shadow opaque pipeline 为 depth-only 渲染，无需 FS
 - `passes/CMakeLists.txt` 新增 `shadow_pass.cpp` 构建条目

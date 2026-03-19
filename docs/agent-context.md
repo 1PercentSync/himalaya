@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 2 前置第一项完成（CompareOp 枚举）。下一个任务：Step 2 前置第二项（SamplerDesc compare 支持）
+Step 2 前置第二项完成（SamplerDesc compare 支持）。下一个任务：Step 2 前置第三项（create_image 2D Array view type 自动推断）
 
 ---
 
