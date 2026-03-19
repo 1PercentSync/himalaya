@@ -19,17 +19,23 @@ namespace himalaya::rhi {
 
         VK_CHECK(vkCreatePipelineLayout(device, &layout_info, nullptr, &out.layout));
 
-        // --- Shader stages ---
+        // --- Shader stages (VS only for depth-only, VS+FS otherwise) ---
         std::array<VkPipelineShaderStageCreateInfo, 2> shader_stages{};
-        shader_stages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-        shader_stages[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
-        shader_stages[0].module = desc.vertex_shader;
-        shader_stages[0].pName = "main";
+        uint32_t stage_count = 0;
 
-        shader_stages[1].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-        shader_stages[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-        shader_stages[1].module = desc.fragment_shader;
-        shader_stages[1].pName = "main";
+        shader_stages[stage_count].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+        shader_stages[stage_count].stage = VK_SHADER_STAGE_VERTEX_BIT;
+        shader_stages[stage_count].module = desc.vertex_shader;
+        shader_stages[stage_count].pName = "main";
+        ++stage_count;
+
+        if (desc.fragment_shader != VK_NULL_HANDLE) {
+            shader_stages[stage_count].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+            shader_stages[stage_count].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+            shader_stages[stage_count].module = desc.fragment_shader;
+            shader_stages[stage_count].pName = "main";
+            ++stage_count;
+        }
 
         // --- Vertex input ---
         VkPipelineVertexInputStateCreateInfo vertex_input{};
@@ -118,7 +124,7 @@ namespace himalaya::rhi {
         VkGraphicsPipelineCreateInfo pipeline_info{};
         pipeline_info.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
         pipeline_info.pNext = &rendering_info;
-        pipeline_info.stageCount = static_cast<uint32_t>(shader_stages.size());
+        pipeline_info.stageCount = stage_count;
         pipeline_info.pStages = shader_stages.data();
         pipeline_info.pVertexInputState = &vertex_input;
         pipeline_info.pInputAssemblyState = &input_assembly;

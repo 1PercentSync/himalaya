@@ -22,7 +22,7 @@ namespace himalaya::rhi {
         /** @brief Vertex shader module (must be valid). */
         VkShaderModule vertex_shader = VK_NULL_HANDLE;
 
-        /** @brief Fragment shader module (must be valid). */
+        /** @brief Fragment shader module (VK_NULL_HANDLE = depth-only, no FS). */
         VkShaderModule fragment_shader = VK_NULL_HANDLE;
 
         /** @brief Color attachment formats for Dynamic Rendering. */
