@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 2 前置第三项完成（2D Array view type）。下一个任务：Step 2 前置第四项（GraphicsPipelineDesc 无 FS 支持）
+Step 2 前置第四项完成（无 FS pipeline）。下一个任务：Step 2 前置第五项（passes/CMakeLists.txt 新增 shadow_pass.cpp 构建条目）
 
 ---
 
