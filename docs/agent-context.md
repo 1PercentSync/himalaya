@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段四 — 阴影
-- **进度**：Step 7 进行中（15/17 小项完成）
+- **进度**：Step 7 进行中（16/17 小项完成）
 
 ### 下一个任务
 
-Step 7：PCSS — 下一小项：`blend_cascade_shadow()` PCSS 路径适配
+Step 7：PCSS — 下一小项：DebugUI Shadow 面板 PCSS 控件
 
 ---
 
