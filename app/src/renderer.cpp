@@ -688,6 +688,17 @@ namespace himalaya::app {
 
             ubo_data.cascade_view_proj[0] = light_proj * light_view;
             ubo_data.cascade_splits = glm::vec4(shadow_far, 0.0f, 0.0f, 0.0f);
+
+            // Precompute per-cascade texel world size (avoids per-fragment
+            // mat4 fetch + sqrt in shader). Derivation: clip range [-1,1] = 2
+            // units covers (2 / ||row0||) world units; divided by resolution
+            // (= 1/shadow_texel_size) gives per-texel size.
+            {
+                const glm::mat4 &vp = ubo_data.cascade_view_proj[0];
+                const glm::vec3 row0(vp[0][0], vp[1][0], vp[2][0]);
+                ubo_data.cascade_texel_world_size[0] =
+                    2.0f * ubo_data.shadow_texel_size / glm::length(row0);
+            }
         }
 
         const auto light_count = static_cast<uint32_t>(

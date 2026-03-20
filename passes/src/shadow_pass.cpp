@@ -12,7 +12,7 @@
 
 #include <array>
 #include <cstddef>
-#include <string>
+#include <cstdio>
 
 #include <spdlog/spdlog.h>
 
@@ -88,8 +88,9 @@ namespace himalaya::passes {
             };
 
             for (uint32_t cascade = 0; cascade < cascade_count; ++cascade) {
-                const std::string label = "Cascade " + std::to_string(cascade);
-                cmd.begin_debug_label(label.c_str(), {0.4f, 0.4f, 0.8f, 1.0f});
+                char label[16];
+                std::snprintf(label, sizeof(label), "Cascade %u", cascade);
+                cmd.begin_debug_label(label, {0.4f, 0.4f, 0.8f, 1.0f});
 
                 // Depth attachment: per-layer view, clear 0.0 (reverse-Z far)
                 VkRenderingAttachmentInfo depth_attachment{};

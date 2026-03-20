@@ -173,7 +173,7 @@ namespace himalaya::framework {
     /**
      * @brief Per-frame global uniform data (Set 0, Binding 0).
      *
-     * std140 layout, 640 bytes (40 × 16) aligned to 16.
+     * std140 layout, 656 bytes (41 × 16) aligned to 16.
      */
     struct GlobalUniformData {
         glm::mat4 view; ///< offset   0
@@ -204,7 +204,8 @@ namespace himalaya::framework {
         glm::mat4 cascade_view_proj[4]{}; ///< offset 352 — per-cascade light-space VP (16-aligned)
         glm::vec4 cascade_splits{}; ///< offset 608 — cascade far boundaries (view-space depth)
         float shadow_distance_fade_width = 0.0f; ///< offset 624 — distance fade region fraction
-        float _shadow_pad[3]{}; ///< offset 628 — pad to 640 (16-byte aligned)
+        float _shadow_pad[3]{}; ///< offset 628 — pad to 640 (vec4 alignment)
+        glm::vec4 cascade_texel_world_size{}; ///< offset 640 — precomputed world-space size per shadow texel
     };
 
     /**
@@ -272,7 +273,7 @@ namespace himalaya::framework {
     // Size assertions catch additions/removals; offset assertions catch
     // C++ vs std140 alignment divergences (e.g. vec2 requires 8-byte
     // alignment in std140 but glm::vec2 has natural alignment of 4).
-    static_assert(sizeof(GlobalUniformData) == 640, "GlobalUniformData must be 640 bytes (std140)");
+    static_assert(sizeof(GlobalUniformData) == 656, "GlobalUniformData must be 656 bytes (std140)");
     static_assert(offsetof(GlobalUniformData, view) == 0);
     static_assert(offsetof(GlobalUniformData, camera_position_and_exposure) == 256);
     static_assert(offsetof(GlobalUniformData, screen_size) == 272);
@@ -286,6 +287,7 @@ namespace himalaya::framework {
     static_assert(offsetof(GlobalUniformData, cascade_view_proj) == 352);
     static_assert(offsetof(GlobalUniformData, cascade_splits) == 608);
     static_assert(offsetof(GlobalUniformData, shadow_distance_fade_width) == 624);
+    static_assert(offsetof(GlobalUniformData, cascade_texel_world_size) == 640);
     static_assert(sizeof(GPUDirectionalLight) == 32, "GPUDirectionalLight must be 32 bytes (std430)");
     static_assert(sizeof(GPUInstanceData) == 128, "GPUInstanceData must be 128 bytes (std430)");
     static_assert(offsetof(GPUInstanceData, normal_col0) == 64);

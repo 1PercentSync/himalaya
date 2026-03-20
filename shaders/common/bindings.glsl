@@ -104,6 +104,8 @@ layout(set = 0, binding = 0) uniform GlobalUBO {
     mat4 cascade_view_proj[MAX_SHADOW_CASCADES]; // offset 352 — per-cascade light-space VP
     vec4 cascade_splits;                    // offset 608 — cascade far boundaries (view-space depth)
     float shadow_distance_fade_width;       // offset 624 — distance fade region fraction of max_distance
+    // 12 bytes implicit pad (vec4 alignment)
+    vec4 cascade_texel_world_size;          // offset 640 — precomputed world-space size per shadow texel
 } global;
 
 layout(set = 0, binding = 1) readonly buffer LightBuffer {

@@ -28,32 +28,13 @@ int select_cascade(float view_depth, out float blend_factor) {
 }
 
 /**
- * Compute the world-space size of one shadow map texel for a given cascade.
- *
- * Extracts the orthographic projection scale from the cascade VP matrix.
- * Row 0 of the VP matrix encodes the clip-X-per-world-unit gradient; its
- * length gives the rate of change, inverted and scaled by texel_size
- * (1 / resolution) to yield world units per texel.
- *
- * @param cascade Cascade index.
- * @return World-space extent of one shadow texel.
- */
-float cascade_texel_world_size(int cascade) {
-    mat4 vp = global.cascade_view_proj[cascade];
-    // Row 0: (col0_row0, col1_row0, col2_row0) = gradient of clip_x w.r.t. world xyz
-    vec3 row0 = vec3(vp[0][0], vp[1][0], vp[2][0]);
-    // clip range [-1,1] = 2 units covers (2 / ||row0||) world units,
-    // divided by resolution (= 1/shadow_texel_size) gives per-texel size
-    return 2.0 * global.shadow_texel_size / length(row0);
-}
-
-/**
  * Sample the shadow map with a single hardware comparison (hard shadow).
  *
  * Applies normal offset bias before projecting to light space: the sampling
  * position is pushed along the surface normal by an amount proportional to
- * the cascade's texel world size.  This complements the hardware depth bias
- * (constant + slope) set during shadow map rendering.
+ * the cascade's texel world size (precomputed on CPU, stored in GlobalUBO).
+ * This complements the hardware depth bias (slope) set during shadow map
+ * rendering.
  *
  * @param world_pos    Fragment world-space position.
  * @param world_normal Fragment world-space shading normal (normalized).
@@ -63,7 +44,7 @@ float cascade_texel_world_size(int cascade) {
 float sample_shadow(vec3 world_pos, vec3 world_normal, int cascade) {
     // Normal offset: push along normal to reduce acne on surfaces
     // nearly parallel to the light direction
-    float texel_ws = cascade_texel_world_size(cascade);
+    float texel_ws = global.cascade_texel_world_size[cascade];
     vec3 offset_pos = world_pos + world_normal * global.shadow_normal_offset * texel_ws;
 
     // Project to light clip space (w = 1 for orthographic, divide is a no-op)
