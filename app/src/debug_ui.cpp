@@ -379,7 +379,7 @@ namespace himalaya::app {
             // Debug render mode
             constexpr const char *kModeLabels[] = {
                 "Full PBR", "Diffuse Only", "Specular Only", "IBL Only",
-                "Normal", "Metallic", "Roughness", "AO",
+                "Normal", "Metallic", "Roughness", "AO", "Shadow Cascades",
             };
             auto mode = static_cast<int>(ctx.debug_render_mode);
             if (ImGui::Combo("Debug View", &mode, kModeLabels, IM_ARRAYSIZE(kModeLabels))) {
