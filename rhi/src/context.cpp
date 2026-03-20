@@ -318,6 +318,7 @@ namespace himalaya::rhi {
         // Vulkan 1.0 core features
         VkPhysicalDeviceFeatures features_10{};
         features_10.samplerAnisotropy = VK_TRUE;
+        features_10.depthBiasClamp = VK_TRUE;
 
         features_13.pNext = &features_14;
         features_12.pNext = &features_13;
