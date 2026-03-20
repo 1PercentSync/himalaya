@@ -230,8 +230,13 @@ void blocker_search(ShadowProjData proj, int cascade,
     avg_blocker = 0.0;
     num_blockers = 0.0;
 
-    // Elliptical search radius: U from cascade_light_size_uv, V scaled by anisotropy
-    float search_u = global.cascade_light_size_uv[cascade];
+    // Search radius: must cover the max possible penumbra width to prevent
+    // hard cutoff at the blocker search boundary.  For directional lights,
+    // penumbra width = delta_depth * cascade_pcss_scale can far exceed
+    // LIGHT_SIZE_UV, so we expand to at least kMaxPenumbraTexels.
+    float light_uv = global.cascade_light_size_uv[cascade];
+    float max_penumbra_uv = kMaxPenumbraTexels * global.shadow_texel_size;
+    float search_u = max(light_uv, max_penumbra_uv);
     float search_v = search_u * global.cascade_uv_scale_y[cascade];
 
     // Per-pixel rotation angle from interleaved gradient noise
@@ -325,7 +330,13 @@ float sample_shadow_pcss(ShadowProjData proj, int cascade) {
         shadow_sum += texture(rt_shadow_map, vec4(sample_uv, float(cascade), adjusted_depth));
     }
 
-    return shadow_sum / float(sample_count);
+    float pcf_result = shadow_sum / float(sample_count);
+
+    // Blocker confidence fade: when few blockers are found (search boundary),
+    // blend toward 1.0 to smooth the hard edge.  With expanded search radius
+    // this only activates at the outermost penumbra fringe.
+    float confidence = smoothstep(0.0, 4.0, num_blockers);
+    return mix(1.0, pcf_result, confidence);
 }
 
 /**
