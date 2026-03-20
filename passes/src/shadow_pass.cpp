@@ -218,6 +218,7 @@ namespace himalaya::passes {
             desc.fragment_shader = VK_NULL_HANDLE; // no FS — depth written by rasterizer
             desc.depth_format = kShadowDepthFormat;
             desc.sample_count = 1;
+            desc.depth_bias_enable = true;
             desc.vertex_bindings = {binding};
             desc.vertex_attributes = {shadow_attributes.begin(), shadow_attributes.end()};
             desc.descriptor_set_layouts = {set_layouts.begin(), set_layouts.end()};
@@ -236,6 +237,7 @@ namespace himalaya::passes {
             desc.fragment_shader = frag_module;
             desc.depth_format = kShadowDepthFormat;
             desc.sample_count = 1;
+            desc.depth_bias_enable = true;
             desc.vertex_bindings = {binding};
             desc.vertex_attributes = {shadow_attributes.begin(), shadow_attributes.end()};
             desc.descriptor_set_layouts = {set_layouts.begin(), set_layouts.end()};
