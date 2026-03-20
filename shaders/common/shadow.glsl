@@ -210,6 +210,59 @@ ShadowProjData prepare_shadow_proj(vec3 world_pos, vec3 world_normal, int cascad
 }
 
 /**
+ * Search for blockers in the shadow map around the projected position.
+ *
+ * Samples raw depth values (via rt_shadow_map_depth, binding 6) in an
+ * elliptical region scaled by cascade_light_size_uv (U) and
+ * cascade_uv_scale_y (V).  Each sample applies per-pixel Poisson Disk
+ * rotation and receiver plane depth bias.
+ *
+ * Reverse-Z blocker test: sampled_depth > adjusted_depth means the
+ * texel is closer to the light (a blocker).
+ *
+ * @param proj          Precomputed projection data from prepare_shadow_proj().
+ * @param cascade       Cascade index.
+ * @param avg_blocker   Output: average blocker depth (NDC).
+ * @param num_blockers  Output: number of blocker samples found.
+ */
+void blocker_search(ShadowProjData proj, int cascade,
+                    out float avg_blocker, out float num_blockers) {
+    avg_blocker = 0.0;
+    num_blockers = 0.0;
+
+    // Elliptical search radius: U from cascade_light_size_uv, V scaled by anisotropy
+    float search_u = global.cascade_light_size_uv[cascade];
+    float search_v = search_u * global.cascade_uv_scale_y[cascade];
+
+    // Per-pixel rotation angle from interleaved gradient noise
+    float rotation = interleaved_gradient_noise(gl_FragCoord.xy) * 6.2831853;
+
+    float blocker_sum = 0.0;
+    uint sample_count = global.pcss_blocker_samples;
+    for (uint i = 0u; i < sample_count; ++i) {
+        vec2 offset = rotate_sample(kBlockerSearchSamples[i], rotation)
+                      * vec2(search_u, search_v);
+        vec2 sample_uv = proj.shadow_uv + offset;
+
+        // Receiver plane depth bias: adjust comparison depth per sample offset
+        float adjusted_depth = proj.ref_depth + proj.dz_du * offset.x + proj.dz_dv * offset.y;
+
+        // Read raw depth from shadow map (no comparison)
+        float sampled_depth = texture(rt_shadow_map_depth, vec3(sample_uv, float(cascade))).r;
+
+        // Reverse-Z: blocker is closer to light → larger depth value
+        if (sampled_depth > adjusted_depth) {
+            blocker_sum += sampled_depth;
+            num_blockers += 1.0;
+        }
+    }
+
+    if (num_blockers > 0.0) {
+        avg_blocker = blocker_sum / num_blockers;
+    }
+}
+
+/**
  * Select the cascade index for a given view-space depth.
  *
  * Compares view_depth against cascade_splits boundaries (PSSM-distributed).
