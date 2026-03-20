@@ -135,6 +135,9 @@ namespace himalaya::framework {
      * the loaded scene has a valid AABB (diagonal × 1.5).
      */
     struct ShadowConfig {
+        /** @brief Number of active shadow cascades (1-4). Pure rendering parameter — does not affect resources. */
+        uint32_t cascade_count;
+
         /** @brief PSSM log/linear blend factor (0 = linear, 1 = logarithmic). */
         float split_lambda;
 
@@ -170,7 +173,7 @@ namespace himalaya::framework {
     /**
      * @brief Per-frame global uniform data (Set 0, Binding 0).
      *
-     * std140 layout, 624 bytes (39 × 16) aligned to 16.
+     * std140 layout, 640 bytes (40 × 16) aligned to 16.
      */
     struct GlobalUniformData {
         glm::mat4 view; ///< offset   0

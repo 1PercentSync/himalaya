@@ -588,7 +588,7 @@ namespace himalaya::app {
         ubo_data.shadow_pcf_radius = input.shadow_config.pcf_radius;
 
         if (shadows_active) {
-            ubo_data.shadow_cascade_count = 1; // Step 2: single cascade
+            ubo_data.shadow_cascade_count = input.shadow_config.cascade_count;
 
             const auto &cam = input.camera;
             const glm::vec3 light_dir = glm::normalize(shadow_light->direction);

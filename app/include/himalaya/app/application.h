@@ -143,6 +143,7 @@ namespace himalaya::app {
 
         /** @brief CSM shadow configuration parameters. */
         framework::ShadowConfig shadow_config_{
+            .cascade_count = 1,
             .split_lambda = 0.75f,
             .max_distance = 100.0f,
             .slope_bias = 1.5f,

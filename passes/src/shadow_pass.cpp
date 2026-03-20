@@ -54,7 +54,7 @@ namespace himalaya::passes {
 
         auto execute = [this, &rg, &ctx, shadow_resource](const rhi::CommandBuffer &cmd) {
             const uint32_t cascade_count = ctx.shadow_config
-                                               ? 1 // Step 2: single cascade
+                                               ? ctx.shadow_config->cascade_count
                                                : 0;
 
             const VkExtent2D extent{resolution_, resolution_};
