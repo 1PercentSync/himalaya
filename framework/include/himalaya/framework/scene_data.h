@@ -170,6 +170,31 @@ namespace himalaya::framework {
          * but can be tuned independently.
          */
         float distance_fade_width;
+
+        // ---- PCSS fields (Step 7) ----
+
+        /** @brief Shadow filtering mode: 0 = PCF (fixed kernel), 1 = PCSS (contact-hardening). */
+        uint32_t shadow_mode;
+
+        /**
+         * @brief Angular diameter of the light source in radians.
+         *
+         * Controls PCSS blocker search radius and penumbra width.
+         * Default 0.00925 rad ~ 0.53 deg (solar angular diameter).
+         * Larger values produce softer shadows.
+         */
+        float light_angular_diameter;
+
+        /**
+         * @brief PCSS behavior flags (bitmask).
+         *
+         * Bit 0: blocker early-out — when all blocker search samples find
+         * occluders, return 0.0 immediately (mitigates multi-layer light leak).
+         */
+        uint32_t pcss_flags;
+
+        /** @brief PCSS quality preset: 0 = Low (16+16), 1 = Medium (16+25), 2 = High (32+49). */
+        uint32_t pcss_quality;
     };
 
     // ---- GPU Data Structures ----

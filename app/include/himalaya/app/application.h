@@ -150,7 +150,11 @@ namespace himalaya::app {
             .normal_offset = 1.0f,
             .pcf_radius = 1,
             .blend_width = 0.1f,
-            .distance_fade_width = 0.1f, // tracks blend_width for now; Step 6 DebugUI exposes linked control
+            .distance_fade_width = 0.1f,
+            .shadow_mode = 0,                    // PCF
+            .light_angular_diameter = 0.00925f,  // ~0.53 deg (sun)
+            .pcss_flags = 1,                     // blocker early-out enabled
+            .pcss_quality = 1,                   // Medium (16 blocker + 25 PCF)
         };
 
         // --- Left-click drag state (IBL rotation or fallback light direction) ---
