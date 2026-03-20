@@ -764,7 +764,8 @@ namespace himalaya::app {
                               shadow_opaque_groups_, shadow_mask_groups_, false);
         }
 
-        // Total scene draw calls
+        // Total scene draw calls — Blend objects are not drawn until Phase 7
+        // (Transparent Pass), so only opaque + mask groups are counted here.
         const auto camera_groups = static_cast<uint32_t>(
             opaque_draw_groups_.size() + mask_draw_groups_.size());
         const auto shadow_groups = static_cast<uint32_t>(
