@@ -165,3 +165,21 @@
 - [x] ShadowPass per-cascade 调用 `cull_against_frustum()`（Step 1c 已就绪，输入全部场景物体）替代暴力全画，cull 结果按 alpha_mode 分桶为 opaque/mask 列表
 - [x] DebugUI Shadow 面板扩展：PCF radius 下拉（Off/3×3/5×5/7×7/9×9/11×11）+ blend width 滑条
 - [x] 最终验证：阴影边缘柔和（PCF），cascade 过渡平滑（blend），per-cascade 剔除生效（RenderDoc 对比 draw call 数减少）
+
+## Step 7：PCSS（Percentage-Closer Soft Shadows）
+
+- [ ] Renderer 新增 shadow depth sampler（`NEAREST`，无 compare，`CLAMP_TO_EDGE`）+ Set 2 binding 6 descriptor 写入（同一 shadow map image + depth sampler）
+- [ ] `rhi/descriptors.h/cpp` Set 2 layout 新增 binding 6（`sampler2DArray`，`PARTIALLY_BOUND`）
+- [ ] `bindings.glsl` 新增 `layout(set = 2, binding = 6) uniform sampler2DArray rt_shadow_map_depth`
+- [ ] `handle_shadow_resolution_changed()` 同步更新 binding 6
+- [ ] `ShadowConfig` 新增 `shadow_mode`（uint32_t, 0=PCF, 1=PCSS）+ `light_angular_diameter`（float, 弧度, 默认 0.00925f）
+- [ ] `GlobalUniformData` 新增 `shadow_mode` / `light_angular_diameter` / `cascade_light_size_uv`（vec4）/ `cascade_ortho_width`（vec4），656 → 704 bytes
+- [ ] `bindings.glsl` GlobalUBO 同步新增上述字段
+- [ ] Renderer 每帧计算 per-cascade `LIGHT_SIZE_UV` 和 `ortho_width`，写入 GlobalUBO
+- [ ] `shadow.glsl` 新增 Poisson Disk 常量数组（16 blocker + 25 PCF `vec2`）+ `interleaved_gradient_noise()` + `rotate_sample()`
+- [ ] `shadow.glsl` 新增 `blocker_search()`：通过 `rt_shadow_map_depth` 读取原始深度，Reverse-Z blocker 判定，16 样本 Poisson Disk + per-pixel 旋转
+- [ ] `shadow.glsl` 新增世界空间半影估算：NDC depth 通过 `cascade_ortho_width` 转换为世界空间距离，方向光简化公式（去掉 `1/dBlocker` 除法）
+- [ ] `shadow.glsl` 新增 `sample_shadow_pcss()`：调用 `blocker_search()` → 半影估算 → 25 样本 variable-width PCF（Poisson Disk + per-pixel 旋转 + 硬件比较采样）
+- [ ] `shadow.glsl` `blend_cascade_shadow()` 根据 `shadow_mode` 分支调用 `sample_shadow_pcf()` 或 `sample_shadow_pcss()`
+- [ ] DebugUI Shadow 面板新增 Shadow Mode 下拉（PCF/PCSS），PCSS 模式隐藏 PCF Radius、显示 Angular Diameter 滑条（度数，0.1°~5.0°，默认 0.53°）
+- [ ] 验证：PCSS 接触硬化效果、PCF/PCSS 切换正确、cascade 边界平滑、Angular Diameter 调节有效、无 validation 报错

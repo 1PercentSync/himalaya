@@ -21,9 +21,9 @@
 | Burley Diffuse | 替换 Lambert，粗糙表面掠射角观感更好 |
 | Film Grain | 增加画面质感，掩盖 banding |
 | Chromatic Aberration | 增加镜头感 |
-| PCSS | 在 PCF 基础上加 Blocker Search，半影随遮挡距离变化（替换 PCF，Contact Shadows 保留）|
+| ~~PCSS~~ | ~~在 PCF 基础上加 Blocker Search，半影随遮挡距离变化~~ — **已提前到 M1 阶段四 Step 7** |
 | 多方向光 CSM | M1 限制 1 盏方向光，M2 扩展为 N 盏（每盏独立 shadow map + cascade 数据，GlobalUBO per-light cascade_view_proj）|
-| Cascade blend 评估 | PCSS 实现后实测 lerp vs dithering + FSR/DLSS 的观感和性能，决定是否从 lerp 切换为 dithering。Lerp 在 PCSS 下 blend region 采样成本翻倍；M1 的 `blend_cascade_shadow()` 已隔离 blend 策略，切换成本低 |
+| Cascade blend 评估 | M1 Step 7 PCSS 实现后，M2 实测 lerp vs dithering + FSR/DLSS 的观感和性能，决定是否从 lerp 切换为 dithering。Lerp 在 PCSS 下 blend region 采样成本翻倍；M1 的 `blend_cascade_shadow()` 已隔离 blend 策略，切换成本低 |
 | GTAO | 替换 SSAO 的遮挡计算公式，temporal filtering 复用 |
 
 ### 低工作量
