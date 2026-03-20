@@ -156,8 +156,9 @@ namespace himalaya::passes {
             const VkDescriptorSet sets[] = {
                 dm_->get_set0(ctx.frame_index),
                 dm_->get_set1(),
+                dm_->get_set2(),
             };
-            cmd.bind_descriptor_sets(pipeline_.layout, 0, sets, 2);
+            cmd.bind_descriptor_sets(pipeline_.layout, 0, sets, 3);
 
             VkViewport viewport{};
             viewport.x = 0.0f;

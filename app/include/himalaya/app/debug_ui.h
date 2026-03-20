@@ -17,6 +17,7 @@ namespace himalaya::rhi {
 namespace himalaya::framework {
     struct Camera;
     struct RenderFeatures;
+    struct ShadowConfig;
 } // namespace himalaya::framework
 
 namespace himalaya::app {
@@ -96,6 +97,9 @@ namespace himalaya::app {
 
         /** @brief Runtime feature toggles (skybox, shadows, etc.). */
         framework::RenderFeatures& features;
+
+        /** @brief Shadow bias and sampling parameters (mutable for slider controls). */
+        framework::ShadowConfig& shadow_config;
 
         // --- MSAA (display + action) ---
 

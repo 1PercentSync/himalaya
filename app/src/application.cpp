@@ -328,6 +328,7 @@ namespace himalaya::app {
             .ev = ev_,
             .debug_render_mode = debug_render_mode_,
             .features = features_,
+            .shadow_config = shadow_config_,
             .current_sample_count = renderer_.current_sample_count(),
             .supported_sample_counts = context_.msaa_sample_counts,
             .scene_path = config_.scene_path,

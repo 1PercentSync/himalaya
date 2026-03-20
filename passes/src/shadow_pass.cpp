@@ -123,9 +123,12 @@ namespace himalaya::passes {
                 cmd.set_depth_test_enable(true);
                 cmd.set_depth_write_enable(true);
                 cmd.set_depth_compare_op(VK_COMPARE_OP_GREATER); // Reverse-Z
-                cmd.set_depth_bias(ctx.shadow_config->constant_bias,
-                                   0.0f, // no clamp
-                                   ctx.shadow_config->slope_bias);
+                // Negate slope for Reverse-Z: positive config value pushes depth
+                // toward far plane (lower values), reducing self-shadowing.
+                // Constant factor is 0 — ineffective with D32Sfloat (r ≈ 1e-7).
+                cmd.set_depth_bias(0.0f,
+                                   0.0f,
+                                   -ctx.shadow_config->slope_bias);
 
                 // Push cascade index
                 const framework::PushConstantData pc{.cascade_index = cascade};

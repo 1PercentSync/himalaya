@@ -145,7 +145,6 @@ namespace himalaya::app {
         framework::ShadowConfig shadow_config_{
             .split_lambda = 0.75f,
             .max_distance = 100.0f,
-            .constant_bias = 0.002f,
             .slope_bias = 1.5f,
             .normal_offset = 1.0f,
             .pcf_radius = 1,

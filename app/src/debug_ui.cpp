@@ -323,6 +323,16 @@ namespace himalaya::app {
         ImGui::Separator();
         if (ImGui::CollapsingHeader("Features", ImGuiTreeNodeFlags_DefaultOpen)) {
             ImGui::Checkbox("Skybox", &ctx.features.skybox);
+            ImGui::Checkbox("Shadows", &ctx.features.shadows);
+        }
+
+        // Shadow section
+        if (ctx.features.shadows) {
+            ImGui::Separator();
+            if (ImGui::CollapsingHeader("Shadow")) {
+                ImGui::SliderFloat("Slope Bias", &ctx.shadow_config.slope_bias, 0.0f, 10.0f, "%.1f");
+                ImGui::SliderFloat("Normal Offset", &ctx.shadow_config.normal_offset, 0.0f, 5.0f, "%.2f");
+            }
         }
 
         // Rendering section

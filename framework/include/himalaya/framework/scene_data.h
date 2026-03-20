@@ -141,9 +141,6 @@ namespace himalaya::framework {
         /** @brief Maximum shadow coverage distance in meters. */
         float max_distance;
 
-        /** @brief Hardware depth bias constant factor. */
-        float constant_bias;
-
         /** @brief Hardware depth bias slope factor. */
         float slope_bias;
 
