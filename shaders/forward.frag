@@ -120,11 +120,7 @@ void main() {
         // Shadow attenuation (guarded by feature flag and per-light cast_shadows)
         if ((global.feature_flags & FEATURE_SHADOWS) != 0u
             && directional_lights[i].color_and_shadow.w > 0.5) {
-            float blend_factor;
-            int cascade = select_cascade(view_depth, blend_factor);
-            float shadow = sample_shadow_pcf(frag_world_pos, N, cascade);
-            shadow = mix(1.0, shadow, shadow_distance_fade(view_depth));
-            radiance *= shadow;
+            radiance *= blend_cascade_shadow(frag_world_pos, N, view_depth);
         }
 
         direct_diffuse  += (1.0 - F) * diffuse_color * INV_PI * radiance;

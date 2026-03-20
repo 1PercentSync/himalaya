@@ -18,20 +18,36 @@
  * Compares view_depth against cascade_splits boundaries (PSSM-distributed).
  * Falls through to the last cascade if beyond all splits.
  *
+ * When the fragment lies in the blend region near a cascade's far boundary,
+ * blend_factor is non-zero (0..1) indicating how much to blend with the
+ * next cascade.  For the last cascade, blend_factor is always 0 (distance
+ * fade handles the far edge instead).
+ *
  * @param view_depth   Positive linear distance from camera.
- * @param blend_factor Output: 0.0 = no blending needed (Step 6 implements blend).
+ * @param blend_factor Output: 0.0 = no blend, 1.0 = fully next cascade.
  * @return Cascade index [0, shadow_cascade_count).
  */
 int select_cascade(float view_depth, out float blend_factor) {
-    blend_factor = 0.0; // Step 6 implements cascade blend
+    blend_factor = 0.0;
+
+    int count = int(global.shadow_cascade_count);
 
     // cascade_splits holds far boundaries; pick the first cascade
     // whose far boundary exceeds the fragment's view-space depth.
-    for (int i = 0; i < int(global.shadow_cascade_count) - 1; ++i) {
-        if (view_depth < global.cascade_splits[i])
+    for (int i = 0; i < count - 1; ++i) {
+        if (view_depth < global.cascade_splits[i]) {
+            // Blend region: last (blend_width) fraction of this cascade's
+            // split distance.  Smoothly ramps blend_factor from 0 to 1.
+            float blend_start = global.cascade_splits[i]
+                                * (1.0 - global.shadow_blend_width);
+            if (view_depth > blend_start) {
+                blend_factor = (view_depth - blend_start)
+                               / (global.cascade_splits[i] - blend_start);
+            }
             return i;
+        }
     }
-    return int(global.shadow_cascade_count) - 1;
+    return count - 1;
 }
 
 /**
@@ -130,6 +146,41 @@ float shadow_distance_fade(float view_depth) {
     float fade_end = global.shadow_max_distance;
     float fade_start = fade_end * (1.0 - global.shadow_distance_fade_width);
     return 1.0 - smoothstep(fade_start, fade_end, view_depth);
+}
+
+/**
+ * Evaluate shadow with cascade blending and distance fade.
+ *
+ * Single entry point for the forward pass: selects the cascade, samples
+ * with PCF, blends adjacent cascades in the overlap region, and applies
+ * distance fade at the far edge of the last cascade.
+ *
+ * Blend strategy: linear interpolation (lerp) between the current and
+ * next cascade.  Only ~10% of shadow pixels hit the blend region, so the
+ * cost of the extra PCF sample is bounded.  The blend method is isolated
+ * here to facilitate a future switch to dithering if needed.
+ *
+ * @param world_pos    Fragment world-space position.
+ * @param world_normal Fragment world-space shading normal (normalized).
+ * @param view_depth   Positive linear distance from camera.
+ * @return Shadow factor: 1.0 = fully lit, 0.0 = fully in shadow.
+ */
+float blend_cascade_shadow(vec3 world_pos, vec3 world_normal, float view_depth) {
+    float blend_factor;
+    int cascade = select_cascade(view_depth, blend_factor);
+
+    float shadow = sample_shadow_pcf(world_pos, world_normal, cascade);
+
+    // Blend with next cascade in the overlap region
+    if (blend_factor > 0.0 && cascade < int(global.shadow_cascade_count) - 1) {
+        float next_shadow = sample_shadow_pcf(world_pos, world_normal, cascade + 1);
+        shadow = mix(shadow, next_shadow, blend_factor);
+    }
+
+    // Distance fade: last cascade far edge blends to fully lit
+    shadow = mix(1.0, shadow, shadow_distance_fade(view_depth));
+
+    return shadow;
 }
 
 #endif // SHADOW_GLSL
