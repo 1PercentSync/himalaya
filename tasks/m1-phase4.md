@@ -185,4 +185,4 @@
 - [x] `shadow.glsl` 新增 `sample_shadow_pcss(ShadowProjData, cascade)`：调用 `blocker_search()` → blocker early-out（全 blocker 且 `pcss_flags` bit 0 → 返回 0.0） → 半影估算 → variable-width PCF（椭圆 kernel + per-sample receiver plane depth bias + Poisson Disk + per-pixel 旋转 + 硬件比较采样，采样数由 UBO `pcss_pcf_samples` 控制）
 - [x] `shadow.glsl` `blend_cascade_shadow()` PCSS 路径在分支外预计算当前和下一 cascade 的 `ShadowProjData`（下一 cascade 索引 clamp 为 `min(cascade+1, shadow_cascade_count-1)` 防越界，保证 `dFdx/dFdy` 在 uniform flow 中执行），然后根据 `shadow_mode` 分支调用 `sample_shadow_pcf()` 或 `sample_shadow_pcss()`
 - [x] DebugUI Shadow 面板新增 Shadow Mode 下拉（PCF/PCSS），PCSS 模式隐藏 PCF Radius、显示 Angular Diameter 滑条（度数，0.1°~5.0°，默认 0.53°）+ hover tooltip 提示物理含义与建议值 + PCSS Quality 下拉（Low/Medium/High，默认 Medium）+ Blocker Early-Out checkbox（默认开启）
-- [ ] 验证：PCSS 接触硬化效果、PCF/PCSS 切换正确、cascade 边界平滑、Angular Diameter 调节有效、无 validation 报错
+- [x] 验证：PCSS 接触硬化效果、PCF/PCSS 切换正确、cascade 边界平滑、Angular Diameter 调节有效、无 validation 报错
