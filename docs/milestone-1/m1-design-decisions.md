@@ -2120,10 +2120,10 @@ float shadow_distance_fade(float view_depth);
 
 | 方案 | 说明 |
 |------|------|
-| A. 扩展 GlobalUBO | 336 → 624 bytes |
+| A. 扩展 GlobalUBO | 336 → 640 bytes |
 | B. 独立 Shadow UBO（新增 Set 0 binding） | 清晰分离 |
 
-**选择 A。** 624 bytes 远在 16KB 最低保证之下。新增 binding 需修改 Set 0 layout → 所有 pipeline layout 变更 → 全部 pipeline 重建，代价远超 UBO 多几百字节。
+**选择 A。** 640 bytes 远在 16KB 最低保证之下。新增 binding 需修改 Set 0 layout → 所有 pipeline layout 变更 → 全部 pipeline 重建，代价远超 UBO 多几百字节。
 
 布局详见 `m1-interfaces.md`「GlobalUniformData」。
 

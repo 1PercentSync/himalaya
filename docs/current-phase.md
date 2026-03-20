@@ -147,7 +147,7 @@ Step 6: PCF + cascade blend + per-cascade 剔除 + 最终验证
 ### Step 1a：RenderFeatures 基础设施
 
 - 在 `framework/scene_data.h` 新增 `RenderFeatures` 结构体（`skybox` + `shadows` 两个 bool，默认 true）
-- 在 `framework/scene_data.h` 新增 `ShadowConfig` 结构体（split_lambda、max_distance、bias 参数、pcf_radius、blend_width、distance_fade_width），无默认值，Application 显式初始化
+- 在 `framework/scene_data.h` 新增 `ShadowConfig` 结构体（cascade_count、split_lambda、max_distance、bias 参数、pcf_radius、blend_width、distance_fade_width），无默认值，Application 显式初始化
 - GlobalUBO 新增 `feature_flags`（uint32_t bitmask），`bindings.glsl` 新增 `#define FEATURE_SHADOWS (1u << 0)` 常量
 - FrameContext 新增 `features` 和 `shadow_config` 指针
 - RenderInput 新增 `features` 和 `shadow_config` 引用
@@ -450,5 +450,5 @@ shaders/
 | Cascade 统计信息 | DebugUI Shadow 面板底部显示每个 cascade 的范围（近/远 m）和 texel density（px/m），辅助理解 max_distance / cascade count / resolution 的交互 |
 | Runtime config change | 分辨率变更沿用 MSAA 切换模式（`vkQueueWaitIdle` → 重建资源 → 更新 descriptor）。Cascade 数量为纯渲染参数，无需重建资源 |
 | Cascade 可视化 | `DEBUG_MODE_SHADOW_CASCADES` 追加到 passthrough 模式末尾，`>= DEBUG_MODE_PASSTHROUGH_START` 自动跳过 ACES |
-| GlobalUBO 增长 | 336 → 624 bytes（+288），仍远小于 16KB 最低保证 |
+| GlobalUBO 增长 | 336 → 640 bytes（+304），仍远小于 16KB 最低保证 |
 | Pass 虚基类 | 阶段四不引入，M1 全程具体类。M2 评估 |

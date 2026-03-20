@@ -391,7 +391,7 @@ struct CullResult {
 CPU 侧数据结构的 GPU 布局镜像，必须与 shader 端一一对应。
 
 ```cpp
-// GlobalUBO — std140 layout, 624 bytes (aligned to 16)
+// GlobalUBO — std140 layout, 640 bytes (aligned to 16)
 // 对应 shader: Set 0, Binding 0
 struct GlobalUniformData {
     glm::mat4 view;                             // offset   0
