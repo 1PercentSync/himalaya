@@ -111,7 +111,7 @@ shaders/
 │   ├── constants.glsl           # 数学常量（PI、EPSILON 等）
 │   ├── brdf.glsl                # BRDF 函数（D_GGX、V_SmithGGX、F_Schlick，include constants）
 │   ├── normal.glsl              # TBN 构造、normal map 解码
-│   ├── shadow.glsl              # 阴影采样（CSM、PCF）
+│   ├── shadow.glsl              # 阴影采样（CSM、PCF、PCSS）
 │   └── bindings.glsl            # 全局绑定布局定义
 ├── depth_prepass.vert           # 共享 VS（invariant gl_Position）
 ├── depth_prepass.frag           # Opaque FS（无 discard）
@@ -428,9 +428,10 @@ struct GlobalUniformData {
     uint32_t shadow_mode;                       // offset 656 — 0=PCF, 1=PCSS
     float light_angular_diameter;               // offset 660 — 光源角直径 (弧度)
     float _pcss_pad[2];                         // offset 664 — pad to 672 (vec4 alignment)
-    glm::vec4 cascade_light_size_uv;            // offset 672 — per-cascade LIGHT_SIZE_UV (blocker search 半径)
-    glm::vec4 cascade_ortho_width;              // offset 688 — per-cascade 正交投影世界空间宽度 (NDC→世界空间)
-};  // total: 704 bytes (44 × 16)
+    glm::vec4 cascade_light_size_uv;            // offset 672 — per-cascade LIGHT_SIZE_UV (blocker search U 方向半径, 基于 width_x)
+    glm::vec4 cascade_pcss_scale;               // offset 688 — per-cascade NDC深度差→UV半影宽度缩放因子 (depth_range * 2tan(θ/2) / width_x, U 方向)
+    glm::vec4 cascade_uv_scale_y;              // offset 704 — per-cascade UV 各向异性校正 (width_x / width_y), V 方向乘此比值
+};  // total: 720 bytes (45 × 16)
 
 // GPU 方向光 — std430 layout, 32 bytes per element
 // 对应 shader: Set 0, Binding 1 (LightBuffer SSBO)
@@ -1141,8 +1142,9 @@ layout(set = 0, binding = 0) uniform GlobalUBO {
     uint shadow_mode;                       // 0=PCF, 1=PCSS
     float light_angular_diameter;           // 光源角直径 (弧度)
     // pad to vec4 alignment
-    vec4 cascade_light_size_uv;             // per-cascade LIGHT_SIZE_UV (blocker search 半径)
-    vec4 cascade_ortho_width;               // per-cascade 正交投影世界空间宽度
+    vec4 cascade_light_size_uv;             // per-cascade LIGHT_SIZE_UV (blocker search U 方向半径, 基于 width_x)
+    vec4 cascade_pcss_scale;                // per-cascade NDC深度差→UV半影宽度缩放因子 (U 方向)
+    vec4 cascade_uv_scale_y;               // per-cascade UV 各向异性校正 (width_x / width_y)
 } global;
 
 layout(set = 0, binding = 1) readonly buffer LightBuffer {
