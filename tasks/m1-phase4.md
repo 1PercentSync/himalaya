@@ -153,7 +153,7 @@
 - [x] DebugUI 渲染模式下拉列表追加 "Shadow Cascades"
 - [x] `Renderer::handle_shadow_resolution_changed(uint32_t new_resolution)`：`vkQueueWaitIdle` → `shadow_pass_.on_resolution_changed()` 重建 image + views → 更新 Set 2 binding 5
 - [x] ShadowPass `on_resolution_changed(uint32_t new_resolution)` 实现：销毁旧 image + views → 创建新 image（固定 4 层，new resolution）+ 新 views
-- [ ] DebugUI Shadow 面板扩展：cascade count 下拉（1/2/3/4，纯渲染参数）+ resolution 下拉（512/1024/2048/4096，触发资源重建）
+- [x] DebugUI Shadow 面板扩展：cascade count 下拉（1/2/3/4，纯渲染参数）+ resolution 下拉（512/1024/2048/4096，触发资源重建）
 - [ ] DebugUI Shadow 面板底部新增 cascade 统计信息：每个 cascade 的覆盖范围（近/远边界 m）和 texel density（px/m）
 - [ ] 验证：相机移动/旋转时阴影边缘无闪烁，cascade 可视化显示正确分层，cascade 数量和分辨率可运行时切换
 
