@@ -522,13 +522,37 @@ namespace himalaya::app {
             const glm::mat4 light_view = glm::lookAt(
                 frustum_center - light_dir, frustum_center, light_up);
 
-            // Find AABB of frustum corners in light space
+            // Find AABB of frustum corners in light space (XY tight fit)
             glm::vec3 ls_min(std::numeric_limits<float>::max());
             glm::vec3 ls_max(std::numeric_limits<float>::lowest());
             for (const auto &c: corners) {
                 const auto ls = glm::vec3(light_view * glm::vec4(c, 1.0f));
                 ls_min = glm::min(ls_min, ls);
                 ls_max = glm::max(ls_max, ls);
+            }
+
+            // Extend Z range to include the entire scene AABB so that shadow
+            // casters outside the camera frustum (e.g. tall objects above the
+            // view) are not clipped by the light projection near/far planes.
+            {
+                const auto &sb = input.scene_bounds;
+                const std::array<glm::vec3, 8> scene_corners = {
+                    glm::vec3{sb.min.x, sb.min.y, sb.min.z},
+                    glm::vec3{sb.max.x, sb.min.y, sb.min.z},
+                    glm::vec3{sb.min.x, sb.max.y, sb.min.z},
+                    glm::vec3{sb.max.x, sb.max.y, sb.min.z},
+                    glm::vec3{sb.min.x, sb.min.y, sb.max.z},
+                    glm::vec3{sb.max.x, sb.min.y, sb.max.z},
+                    glm::vec3{sb.min.x, sb.max.y, sb.max.z},
+                    glm::vec3{sb.max.x, sb.max.y, sb.max.z},
+                };
+                for (const auto &c : scene_corners) {
+                    const float lz = glm::dot(
+                        glm::vec3(light_view[0][2], light_view[1][2], light_view[2][2]), c)
+                        + light_view[3][2];
+                    ls_min.z = std::min(ls_min.z, lz);
+                    ls_max.z = std::max(ls_max.z, lz);
+                }
             }
 
             // Build reverse-Z orthographic projection

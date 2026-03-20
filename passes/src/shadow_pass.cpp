@@ -54,8 +54,8 @@ namespace himalaya::passes {
 
         auto execute = [this, &rg, &ctx, shadow_resource](const rhi::CommandBuffer &cmd) {
             const uint32_t cascade_count = ctx.shadow_config
-                ? 1 // Step 2: single cascade
-                : 0;
+                                               ? 1 // Step 2: single cascade
+                                               : 0;
 
             const VkExtent2D extent{resolution_, resolution_};
 
@@ -75,10 +75,10 @@ namespace himalaya::passes {
                     rm_->get_buffer(mesh.index_buffer).buffer,
                     VK_INDEX_TYPE_UINT32);
                 cmd.draw_indexed(mesh.index_count,
-                    group.instance_count,
-                    0,
-                    0,
-                    group.first_instance);
+                                 group.instance_count,
+                                 0,
+                                 0,
+                                 group.first_instance);
             };
 
             // Bind descriptor sets once (shared across all cascades)
@@ -139,14 +139,14 @@ namespace himalaya::passes {
                 cmd.bind_pipeline(opaque_pipeline_);
                 cmd.bind_descriptor_sets(opaque_pipeline_.layout, 0, sets, 2);
 
-                for (const auto &group : ctx.shadow_opaque_groups)
+                for (const auto &group: ctx.shadow_opaque_groups)
                     draw_group(group);
 
                 // --- Mask batch (alpha test + discard) ---
                 cmd.bind_pipeline(mask_pipeline_);
                 cmd.bind_descriptor_sets(mask_pipeline_.layout, 0, sets, 2);
 
-                for (const auto &group : ctx.shadow_mask_groups)
+                for (const auto &group: ctx.shadow_mask_groups)
                     draw_group(group);
 
                 cmd.end_rendering();
@@ -204,9 +204,19 @@ namespace himalaya::passes {
 
         // Shared pipeline descriptor — only position (loc 0) and uv0 (loc 2) consumed
         const auto binding = framework::Vertex::binding_description();
-        const std::array shadow_attributes = {
-            VkVertexInputAttributeDescription{0, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(framework::Vertex, position)},
-            VkVertexInputAttributeDescription{2, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(framework::Vertex, uv0)},
+        constexpr std::array shadow_attributes = {
+            VkVertexInputAttributeDescription{
+                0,
+                0,
+                VK_FORMAT_R32G32B32_SFLOAT,
+                offsetof(framework::Vertex, position)
+            },
+            VkVertexInputAttributeDescription{
+                2,
+                0,
+                VK_FORMAT_R32G32_SFLOAT,
+                offsetof(framework::Vertex, uv0)
+            },
         };
         const auto set_layouts = dm_->get_global_set_layouts();
 

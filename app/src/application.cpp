@@ -421,6 +421,7 @@ namespace himalaya::app {
             .debug_render_mode = debug_render_mode_,
             .features = features_,
             .shadow_config = shadow_config_,
+            .scene_bounds = scene_loader_.scene_bounds(),
         };
 
         renderer_.render(cmd, input);

@@ -30,6 +30,7 @@ namespace himalaya::rhi {
 }
 
 namespace himalaya::framework {
+    struct AABB;
     struct Camera;
     struct CullResult;
     struct DirectionalLight;
@@ -91,6 +92,9 @@ namespace himalaya::app {
 
         /** @brief Shadow system parameters. */
         const framework::ShadowConfig &shadow_config;
+
+        /** @brief Scene world-space AABB for shadow Z range extension. */
+        const framework::AABB &scene_bounds;
     };
 
     /**
