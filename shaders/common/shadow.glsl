@@ -468,13 +468,17 @@ float shadow_distance_fade(float view_depth) {
  * Evaluate shadow with cascade blending and distance fade.
  *
  * Single entry point for the forward pass: selects the cascade, samples
- * with PCF, blends adjacent cascades in the overlap region, and applies
- * distance fade at the far edge of the last cascade.
+ * with PCF or PCSS based on shadow_mode, blends adjacent cascades in the
+ * overlap region, and applies distance fade at the far edge.
+ *
+ * For PCSS mode, ShadowProjData for both current and next cascade is
+ * precomputed BEFORE any non-uniform branching, ensuring dFdx/dFdy
+ * execute in uniform control flow.  The extra ~25 ALU ops for the
+ * second prepare_shadow_proj() is negligible vs 41 texture fetches.
  *
  * Blend strategy: linear interpolation (lerp) between the current and
- * next cascade.  Only ~10% of shadow pixels hit the blend region, so the
- * cost of the extra PCF sample is bounded.  The blend method is isolated
- * here to facilitate a future switch to dithering if needed.
+ * next cascade.  The blend method is isolated here to facilitate a
+ * future switch to dithering if needed.
  *
  * @param world_pos    Fragment world-space position.
  * @param world_normal Fragment world-space shading normal (normalized).
@@ -485,12 +489,29 @@ float blend_cascade_shadow(vec3 world_pos, vec3 world_normal, float view_depth) 
     float blend_factor;
     int cascade = select_cascade(view_depth, blend_factor);
 
-    float shadow = sample_shadow_pcf(world_pos, world_normal, cascade);
+    float shadow;
 
-    // Blend with next cascade in the overlap region
-    if (blend_factor > 0.0 && cascade < int(global.shadow_cascade_count) - 1) {
-        float next_shadow = sample_shadow_pcf(world_pos, world_normal, cascade + 1);
-        shadow = mix(shadow, next_shadow, blend_factor);
+    if (global.shadow_mode == 1u) {
+        // PCSS path: precompute ShadowProjData in uniform flow for both cascades
+        int next_cascade = min(cascade + 1, int(global.shadow_cascade_count) - 1);
+        ShadowProjData proj = prepare_shadow_proj(world_pos, world_normal, cascade);
+        ShadowProjData next_proj = prepare_shadow_proj(world_pos, world_normal, next_cascade);
+
+        shadow = sample_shadow_pcss(proj, cascade);
+
+        // Blend with next cascade in the overlap region
+        if (blend_factor > 0.0 && cascade < int(global.shadow_cascade_count) - 1) {
+            float next_shadow = sample_shadow_pcss(next_proj, next_cascade);
+            shadow = mix(shadow, next_shadow, blend_factor);
+        }
+    } else {
+        // PCF path: existing behavior unchanged
+        shadow = sample_shadow_pcf(world_pos, world_normal, cascade);
+
+        if (blend_factor > 0.0 && cascade < int(global.shadow_cascade_count) - 1) {
+            float next_shadow = sample_shadow_pcf(world_pos, world_normal, cascade + 1);
+            shadow = mix(shadow, next_shadow, blend_factor);
+        }
     }
 
     // Distance fade: last cascade far edge blends to fully lit
