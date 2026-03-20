@@ -131,8 +131,11 @@ namespace himalaya::passes {
                 // Negate slope for Reverse-Z: positive config value pushes depth
                 // toward far plane (lower values), reducing self-shadowing.
                 // Constant factor is 0 — ineffective with D32Sfloat (r ≈ 1e-7).
+                // Clamp (negative for reverse-Z) caps extreme bias on near-
+                // parallel surfaces to prevent peter panning.
+                constexpr float kDepthBiasClamp = -0.005f;
                 cmd.set_depth_bias(0.0f,
-                                   0.0f,
+                                   kDepthBiasClamp,
                                    -ctx.shadow_config->slope_bias);
 
                 // Push cascade index
