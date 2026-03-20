@@ -134,7 +134,7 @@
 - [x] ShadowPass opaque/mask pipeline 启用 `depth_bias_enable = true`（`create_pipelines()` 中设置）
 - [x] ShadowPass `record()` lambda 中调用 `cmd.set_depth_bias(0, 0, -slope_factor)` 设置硬件 bias（constant 对 D32Sfloat 无效，hardcode 0；Reverse-Z 取反 slope）
 - [x] DebugUI Shadow 面板：slope bias / normal offset 滑条 + Shadows checkbox（操作 `features.shadows`）（constant bias 对 D32Sfloat 无效，已移除）
-- [ ] 验证：场景有可见硬阴影（锐利边缘），Shadow toggle 可开关，无明显 acne 或 peter panning
+- [x] 验证：场景有可见硬阴影（锐利边缘），Shadow toggle 可开关，无明显 acne 或 peter panning
 
 ## Step 4：多 cascade + PSSM 分割策略
 
