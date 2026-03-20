@@ -176,7 +176,7 @@
 - [x] `GlobalUniformData` 新增 `shadow_mode` / `pcss_flags` / `pcss_blocker_samples` / `pcss_pcf_samples` / `cascade_light_size_uv`（vec4）/ `cascade_pcss_scale`（vec4）/ `cascade_uv_scale_y`（vec4），656 → 720 bytes
 - [x] `bindings.glsl` GlobalUBO 同步新增上述字段
 - [x] `ShadowCascadeResult` 新增 `cascade_width_x` / `cascade_width_y` / `cascade_depth_range`（vec4），`compute_shadow_cascades` 循环中存储
-- [ ] Renderer 每帧从 `ShadowCascadeResult` 几何数据 + `angular_diameter` 计算 per-cascade `LIGHT_SIZE_UV`、`pcss_scale`、`uv_scale_y`，写入 GlobalUBO
+- [x] Renderer 每帧从 `ShadowCascadeResult` 几何数据 + `angular_diameter` 计算 per-cascade `LIGHT_SIZE_UV`、`pcss_scale`、`uv_scale_y`，写入 GlobalUBO
 - [ ] `scripts/generate_poisson_disk.py`：dart-throwing 生成 Poisson Disk 样本点（固定种子，单位圆内，输出 GLSL 格式），生成 32 + 49 两组坐标（覆盖 High 档位，Low/Medium 使用前 N 个子集）
 - [ ] `shadow.glsl` 新增由脚本生成的 Poisson Disk 常量数组（32 blocker + 49 PCF `vec2`）+ `interleaved_gradient_noise()` + `rotate_sample()`
 - [ ] `shadow.glsl` 新增 `ShadowProjData` 结构体（shadow_uv, ref_depth, dz_du, dz_dv）+ `prepare_shadow_proj()` 函数：法线偏移 + 投影 + `dFdx/dFdy` 梯度计算 + 2×2 求解 + clamp `kMaxReceiverPlaneGradient = 0.01` + cascade 边界检测归零（`dFdx/dFdy(float(cascade))` 检测 quad 内不一致时将梯度归零）（必须在 uniform control flow 中调用）
