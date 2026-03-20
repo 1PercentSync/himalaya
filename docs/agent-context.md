@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段四 — 阴影
-- **进度**：Step 5 进行中（3/8）
+- **进度**：Step 5 进行中（5/8）
 
 ### 下一个任务
 
-Step 5 第 4 项：`Renderer::handle_shadow_resolution_changed(uint32_t new_resolution)` — `vkQueueWaitIdle` → `shadow_pass_.on_resolution_changed()` 重建 image + views → 更新 Set 2 binding 5
+Step 5 第 6 项：DebugUI Shadow 面板扩展 — cascade count 下拉（1/2/3/4，纯渲染参数）+ resolution 下拉（512/1024/2048/4096，触发资源重建）
 
 ---
 
