@@ -68,6 +68,53 @@ float sample_shadow(vec3 world_pos, vec3 world_normal, int cascade) {
 }
 
 /**
+ * Sample the shadow map with PCF (Percentage-Closer Filtering).
+ *
+ * Performs a (2R+1) x (2R+1) grid of hardware 2x2 comparison samples,
+ * where R = shadow_pcf_radius from GlobalUBO.  Each texture() call on
+ * sampler2DArrayShadow returns a bilinear-interpolated comparison over
+ * a 2x2 texel footprint, so the effective filter is wider than the grid.
+ *
+ * When R = 0, falls back to a single hardware comparison (hard shadow),
+ * identical to sample_shadow().
+ *
+ * @param world_pos    Fragment world-space position.
+ * @param world_normal Fragment world-space shading normal (normalized).
+ * @param cascade      Cascade index.
+ * @return Shadow factor: 1.0 = fully lit, 0.0 = fully in shadow.
+ */
+float sample_shadow_pcf(vec3 world_pos, vec3 world_normal, int cascade) {
+    // Normal offset (same logic as sample_shadow)
+    float texel_ws = global.cascade_texel_world_size[cascade];
+    vec3 offset_pos = world_pos + world_normal * global.shadow_normal_offset * texel_ws;
+
+    // Project to light clip space (orthographic: w = 1)
+    vec4 light_clip = global.cascade_view_proj[cascade] * vec4(offset_pos, 1.0);
+    vec3 light_ndc = light_clip.xyz / light_clip.w;
+
+    // NDC [-1,1] -> UV [0,1]
+    vec2 shadow_uv = light_ndc.xy * 0.5 + 0.5;
+    float ref_depth = light_ndc.z;
+
+    int radius = int(global.shadow_pcf_radius);
+    if (radius == 0) {
+        return texture(rt_shadow_map, vec4(shadow_uv, float(cascade), ref_depth));
+    }
+
+    // (2R+1) x (2R+1) grid — each sample leverages hardware 2x2 comparison
+    float sum = 0.0;
+    float texel = global.shadow_texel_size;
+    for (int y = -radius; y <= radius; ++y) {
+        for (int x = -radius; x <= radius; ++x) {
+            vec2 uv = shadow_uv + vec2(float(x), float(y)) * texel;
+            sum += texture(rt_shadow_map, vec4(uv, float(cascade), ref_depth));
+        }
+    }
+
+    return sum / float((2 * radius + 1) * (2 * radius + 1));
+}
+
+/**
  * Compute a fade factor near the maximum shadow distance.
  *
  * Returns 1.0 well within shadow range, smoothly fading to 0.0 as

@@ -122,7 +122,7 @@ void main() {
             && directional_lights[i].color_and_shadow.w > 0.5) {
             float blend_factor;
             int cascade = select_cascade(view_depth, blend_factor);
-            float shadow = sample_shadow(frag_world_pos, N, cascade);
+            float shadow = sample_shadow_pcf(frag_world_pos, N, cascade);
             shadow = mix(1.0, shadow, shadow_distance_fade(view_depth));
             radiance *= shadow;
         }
