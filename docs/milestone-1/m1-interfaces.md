@@ -391,7 +391,7 @@ struct CullResult {
 CPU 侧数据结构的 GPU 布局镜像，必须与 shader 端一一对应。
 
 ```cpp
-// GlobalUBO — std140 layout, 640 bytes (aligned to 16)
+// GlobalUBO — std140 layout, 656 bytes (aligned to 16)
 // 对应 shader: Set 0, Binding 0
 struct GlobalUniformData {
     glm::mat4 view;                             // offset   0
@@ -422,8 +422,9 @@ struct GlobalUniformData {
     glm::mat4 cascade_view_proj[4];             // offset 352 — per-cascade 光空间 VP 矩阵
     glm::vec4 cascade_splits;                   // offset 608 — 4 个 cascade 远边界 (view-space depth)
     float shadow_distance_fade_width;           // offset 624 — 阴影远端衰减区间占 max_distance 的比例
-    float _shadow_pad[3];                       // offset 628 — pad to 640 (16-byte aligned)
-};  // total: 640 bytes (40 × 16)
+    float _shadow_pad[3];                       // offset 628 — pad to 640 (vec4 alignment)
+    glm::vec4 cascade_texel_world_size;         // offset 640 — 预计算每 cascade 的 texel 世界尺寸
+};  // total: 656 bytes (41 × 16)
 
 // GPU 方向光 — std430 layout, 32 bytes per element
 // 对应 shader: Set 0, Binding 1 (LightBuffer SSBO)

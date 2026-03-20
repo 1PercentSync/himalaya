@@ -450,5 +450,5 @@ shaders/
 | Cascade 统计信息 | DebugUI Shadow 面板底部显示每个 cascade 的范围（近/远 m）和 texel density（px/m），辅助理解 max_distance / cascade count / resolution 的交互 |
 | Runtime config change | 分辨率变更沿用 MSAA 切换模式（`vkQueueWaitIdle` → 重建资源 → 更新 descriptor）。Cascade 数量为纯渲染参数，无需重建资源 |
 | Cascade 可视化 | `DEBUG_MODE_SHADOW_CASCADES` 追加到 passthrough 模式末尾，`>= DEBUG_MODE_PASSTHROUGH_START` 自动跳过 ACES |
-| GlobalUBO 增长 | 336 → 640 bytes（+304），仍远小于 16KB 最低保证 |
+| GlobalUBO 增长 | 336 → 656 bytes（+320），仍远小于 16KB 最低保证 |
 | Pass 虚基类 | 阶段四不引入，M1 全程具体类。M2 评估 |
