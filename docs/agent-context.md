@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段四 — 阴影
-- **进度**：Step 6 进行中（4/6）
+- **进度**：Step 6 进行中（5/6）
 
 ### 下一个任务
 
-Step 6 第 5 项：DebugUI Shadow 面板扩展 — PCF radius 下拉（Off/3×3/5×5/7×7/9×9/11×11）+ blend width 滑条
+Step 6 第 6 项：最终验证 — 阴影边缘柔和（PCF），cascade 过渡平滑（blend），per-cascade 剔除生效（RenderDoc 对比 draw call 数减少）
 
 ---
 
