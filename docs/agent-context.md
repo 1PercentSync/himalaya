@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段四 — 阴影
-- **进度**：Step 6 进行中（2/6）
+- **进度**：Step 6 进行中（3/6）
 
 ### 下一个任务
 
-Step 6 第 3 项：Distance fade — 最后一级 cascade 远端 blend 到 1.0（无阴影），复用 blend 逻辑
+Step 6 第 4 项：ShadowPass per-cascade 调用 `cull_against_frustum()` 替代暴力全画，cull 结果按 alpha_mode 分桶为 opaque/mask 列表
 
 ---
 

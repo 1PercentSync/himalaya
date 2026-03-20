@@ -161,7 +161,7 @@
 
 - [x] `shadow.glsl` 新增 `sample_shadow_pcf()`：基于硬件 2×2 比较的多次偏移采样，kernel 由 `shadow_pcf_radius` 控制（0=off, 1=3×3, 2=5×5, ..., 5=11×11）
 - [x] `shadow.glsl` `select_cascade()` 输出 `blend_factor`，`shadow.glsl` 新增 `blend_cascade_shadow()` 封装 blend 逻辑（预留 dithering 切换），forward.frag 通过此函数获取最终 shadow 值
-- [ ] Distance fade：最后一级 cascade 远端 blend 到 1.0（无阴影），复用 blend 逻辑
+- [x] Distance fade：最后一级 cascade 远端 blend 到 1.0（无阴影），复用 blend 逻辑
 - [ ] ShadowPass per-cascade 调用 `cull_against_frustum()`（Step 1c 已就绪，输入全部场景物体）替代暴力全画，cull 结果按 alpha_mode 分桶为 opaque/mask 列表
 - [ ] DebugUI Shadow 面板扩展：PCF radius 下拉（Off/3×3/5×5/7×7/9×9/11×11）+ blend width 滑条
 - [ ] 最终验证：阴影边缘柔和（PCF），cascade 过渡平滑（blend），per-cascade 剔除生效（RenderDoc 对比 draw call 数减少）
