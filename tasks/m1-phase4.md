@@ -132,8 +132,8 @@
 - [x] `forward.frag` 集成 shadow 采样：`#include "common/shadow.glsl"` + `feature_flags & FEATURE_SHADOWS` 条件分支 + shadow 乘到唯一方向光的直接光照贡献（M1 `kMaxDirectionalLights = 1`）
 - [x] Normal offset bias 实现：`shadow.glsl` 的 `sample_shadow()` 内部沿法线偏移采样位置，从 `cascade_view_proj` 矩阵提取 texel world size
 - [x] ShadowPass opaque/mask pipeline 启用 `depth_bias_enable = true`（`create_pipelines()` 中设置）
-- [x] ShadowPass `record()` lambda 中调用 `cmd.set_depth_bias(constant_factor, 0.0f, slope_factor)` 设置硬件 bias
-- [ ] DebugUI Shadow 面板：constant bias / slope bias / normal offset 滑条 + Shadows checkbox（操作 `features.shadows`）
+- [x] ShadowPass `record()` lambda 中调用 `cmd.set_depth_bias(0, 0, -slope_factor)` 设置硬件 bias（constant 对 D32Sfloat 无效，hardcode 0；Reverse-Z 取反 slope）
+- [x] DebugUI Shadow 面板：slope bias / normal offset 滑条 + Shadows checkbox（操作 `features.shadows`）（constant bias 对 D32Sfloat 无效，已移除）
 - [ ] 验证：场景有可见硬阴影（锐利边缘），Shadow toggle 可开关，无明显 acne 或 peter panning
 
 ## Step 4：多 cascade + PSSM 分割策略

@@ -828,8 +828,7 @@ Shadow 系统的运行时可调参数。定义在 `framework/scene_data.h`（与
 struct ShadowConfig {
     float split_lambda;    // PSSM 对数/线性混合 (0=线性, 1=对数)
     float max_distance;    // cascade 覆盖最远距离 (m)
-    float constant_bias;   // 硬件 depth bias constant factor
-    float slope_bias;      // 硬件 depth bias slope factor
+    float slope_bias;      // 硬件 depth bias slope factor (D32Sfloat; constant bias 无效已移除)
     float normal_offset;   // shader-side 法线偏移强度
     uint32_t pcf_radius;   // PCF kernel 半径 (0=off, 1=3×3, 2=5×5, ..., 5=11×11)
     float blend_width;     // cascade blend region 占 cascade 范围的比例
