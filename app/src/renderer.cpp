@@ -851,6 +851,27 @@ namespace himalaya::app {
                         sizeof(ubo_data.cascade_view_proj));
             ubo_data.cascade_splits = cascades.cascade_splits;
             ubo_data.cascade_texel_world_size = cascades.cascade_texel_world_size;
+
+            // --- PCSS per-cascade parameters ---
+            ubo_data.shadow_mode = input.shadow_config.shadow_mode;
+            ubo_data.pcss_flags = input.shadow_config.pcss_flags;
+
+            // Quality preset → sample counts
+            constexpr uint32_t kBlockerSamples[] = {16, 16, 32}; // Low, Medium, High
+            constexpr uint32_t kPcfSamples[] = {16, 25, 49};
+            const uint32_t qi = std::min(input.shadow_config.pcss_quality, 2u);
+            ubo_data.pcss_blocker_samples = kBlockerSamples[qi];
+            ubo_data.pcss_pcf_samples = kPcfSamples[qi];
+
+            const float half_tan = std::tan(input.shadow_config.light_angular_diameter * 0.5f);
+            const float two_half_tan = 2.0f * half_tan;
+            const auto n = static_cast<int>(input.shadow_config.cascade_count);
+            for (int i = 0; i < n; ++i) {
+                const float wx = cascades.cascade_width_x[i];
+                ubo_data.cascade_light_size_uv[i] = two_half_tan / wx;
+                ubo_data.cascade_pcss_scale[i] = cascades.cascade_depth_range[i] * two_half_tan / wx;
+                ubo_data.cascade_uv_scale_y[i] = wx / cascades.cascade_width_y[i];
+            }
         }
 
         const auto light_count = static_cast<uint32_t>(
