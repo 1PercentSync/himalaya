@@ -15,6 +15,7 @@
 #include <himalaya/framework/material_system.h>
 #include <himalaya/framework/mesh.h>
 
+#include <array>
 #include <cstdint>
 #include <span>
 
@@ -77,13 +78,13 @@ namespace himalaya::framework {
         /** @brief Alpha-mask draw groups (AlphaMode::Mask, sorted by mesh_id). */
         std::span<const MeshDrawGroup> mask_draw_groups;
 
-        // ---- Shadow draw groups (Renderer fills from all mesh_instances) ----
+        // ---- Shadow draw groups (per-cascade, frustum-culled) ----
 
-        /** @brief Shadow opaque draw groups (all scene opaque instances, not camera-culled). */
-        std::span<const MeshDrawGroup> shadow_opaque_groups;
+        /** @brief Per-cascade shadow opaque draw groups (frustum-culled per cascade). */
+        std::array<std::span<const MeshDrawGroup>, kMaxShadowCascades> shadow_cascade_opaque_groups{};
 
-        /** @brief Shadow mask draw groups (all scene mask instances, not camera-culled). */
-        std::span<const MeshDrawGroup> shadow_mask_groups;
+        /** @brief Per-cascade shadow mask draw groups (frustum-culled per cascade). */
+        std::array<std::span<const MeshDrawGroup>, kMaxShadowCascades> shadow_cascade_mask_groups{};
 
         // ---- Render configuration (non-owning references) ----
 

@@ -147,14 +147,14 @@ namespace himalaya::passes {
                 cmd.bind_pipeline(opaque_pipeline_);
                 cmd.bind_descriptor_sets(opaque_pipeline_.layout, 0, sets, 2);
 
-                for (const auto &group: ctx.shadow_opaque_groups)
+                for (const auto &group: ctx.shadow_cascade_opaque_groups[cascade])
                     draw_group(group);
 
                 // --- Mask batch (alpha test + discard) ---
                 cmd.bind_pipeline(mask_pipeline_);
                 cmd.bind_descriptor_sets(mask_pipeline_.layout, 0, sets, 2);
 
-                for (const auto &group: ctx.shadow_mask_groups)
+                for (const auto &group: ctx.shadow_cascade_mask_groups[cascade])
                     draw_group(group);
 
                 cmd.end_rendering();
@@ -286,7 +286,7 @@ namespace himalaya::passes {
             .height = resolution,
             .depth = 1,
             .mip_levels = 1,
-            .array_layers = kMaxShadowCascades,
+            .array_layers = framework::kMaxShadowCascades,
             .sample_count = 1,
             .format = rhi::Format::D32Sfloat,
             .usage = rhi::ImageUsage::DepthAttachment | rhi::ImageUsage::Sampled,
@@ -294,12 +294,12 @@ namespace himalaya::passes {
         shadow_map_image_ = rm_->create_image(desc, "Shadow Map");
 
         // Create per-layer views for rendering into individual cascade layers
-        for (uint32_t i = 0; i < kMaxShadowCascades; ++i) {
+        for (uint32_t i = 0; i < framework::kMaxShadowCascades; ++i) {
             const std::string name = "Shadow Map Cascade " + std::to_string(i);
             layer_views_[i] = rm_->create_layer_view(shadow_map_image_, i, name.c_str());
         }
 
-        spdlog::info("Shadow map created: {}x{}, {} layers", resolution, resolution, kMaxShadowCascades);
+        spdlog::info("Shadow map created: {}x{}, {} layers", resolution, resolution, framework::kMaxShadowCascades);
     }
 
     void ShadowPass::destroy_shadow_map() {

@@ -19,6 +19,11 @@
 #include <vector>
 
 namespace himalaya::framework {
+    // ---- Shadow Constants ----
+
+    /** @brief Maximum number of shadow cascade layers (resource + array sizing). */
+    inline constexpr uint32_t kMaxShadowCascades = 4;
+
     // ---- Shared Types ----
 
     /**
@@ -201,7 +206,7 @@ namespace himalaya::framework {
         float shadow_max_distance = 0.0f; ///< offset 340 — cascade max coverage distance
         float shadow_blend_width = 0.0f; ///< offset 344 — cascade blend region fraction
         uint32_t shadow_pcf_radius = 0; ///< offset 348 — PCF kernel radius (0=off)
-        glm::mat4 cascade_view_proj[4]{}; ///< offset 352 — per-cascade light-space VP (16-aligned)
+        glm::mat4 cascade_view_proj[kMaxShadowCascades]{}; ///< offset 352 — per-cascade light-space VP (16-aligned)
         glm::vec4 cascade_splits{}; ///< offset 608 — cascade far boundaries (view-space depth)
         float shadow_distance_fade_width = 0.0f; ///< offset 624 — distance fade region fraction
         float _shadow_pad[3]{}; ///< offset 628 — pad to 640 (vec4 alignment)

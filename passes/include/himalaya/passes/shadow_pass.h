@@ -11,6 +11,7 @@
  * Two pipelines: Opaque (depth-only, no FS) and Mask (alpha test + discard).
  */
 
+#include <himalaya/framework/scene_data.h>
 #include <himalaya/rhi/pipeline.h>
 #include <himalaya/rhi/types.h>
 
@@ -31,9 +32,6 @@ namespace himalaya::framework {
 } // namespace himalaya::framework
 
 namespace himalaya::passes {
-    /** @brief Maximum number of shadow cascade layers (resource is always allocated for this count). */
-    inline constexpr uint32_t kMaxShadowCascades = 4;
-
     /** @brief Default shadow map resolution per cascade (pixels). */
     inline constexpr uint32_t kDefaultShadowResolution = 2048;
 
@@ -145,7 +143,7 @@ namespace himalaya::passes {
         rhi::ImageHandle shadow_map_image_;
 
         /** @brief Per-cascade layer views for rendering into individual layers. */
-        std::array<VkImageView, kMaxShadowCascades> layer_views_{};
+        std::array<VkImageView, framework::kMaxShadowCascades> layer_views_{};
 
         /** @brief Opaque geometry pipeline (depth-only, no fragment shader). */
         rhi::Pipeline opaque_pipeline_;

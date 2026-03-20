@@ -306,16 +306,19 @@ namespace himalaya::app {
         /** @brief Mask draw groups built from sorted indices (AlphaMode::Mask). */
         std::vector<framework::MeshDrawGroup> mask_draw_groups_;
 
-        // ---- Shadow draw group working buffers ----
+        // ---- Per-cascade shadow culling working buffers ----
 
-        /** @brief Sorted indices of all mesh instances for shadow grouping. */
-        std::vector<uint32_t> sorted_shadow_indices_;
+        /** @brief Temporary buffer for per-cascade frustum cull output (reused across cascades). */
+        std::vector<uint32_t> shadow_cull_buffer_;
 
-        /** @brief Shadow opaque draw groups (from all scene instances). */
-        std::vector<framework::MeshDrawGroup> shadow_opaque_groups_;
+        /** @brief Per-cascade sorted non-Blend visible indices after frustum culling. */
+        std::array<std::vector<uint32_t>, framework::kMaxShadowCascades> shadow_cascade_sorted_;
 
-        /** @brief Shadow mask draw groups (from all scene instances). */
-        std::vector<framework::MeshDrawGroup> shadow_mask_groups_;
+        /** @brief Per-cascade shadow opaque draw groups (frustum-culled). */
+        std::array<std::vector<framework::MeshDrawGroup>, framework::kMaxShadowCascades> shadow_cascade_opaque_groups_;
+
+        /** @brief Per-cascade shadow mask draw groups (frustum-culled). */
+        std::array<std::vector<framework::MeshDrawGroup>, framework::kMaxShadowCascades> shadow_cascade_mask_groups_;
 
         /** @brief Total vkCmdDrawIndexed calls from the last frame (across all scene passes). */
         uint32_t draw_call_count_ = 0;

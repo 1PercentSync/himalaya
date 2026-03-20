@@ -5,6 +5,7 @@
 
 #include <himalaya/app/renderer.h>
 
+#include <himalaya/framework/culling.h>
 #include <himalaya/framework/frame_context.h>
 #include <himalaya/framework/imgui_backend.h>
 #include <himalaya/framework/scene_data.h>
@@ -177,7 +178,7 @@ namespace himalaya::app {
      * the GlobalUniformData UBO.
      */
     struct ShadowCascadeResult {
-        glm::mat4 cascade_view_proj[4]{};
+        glm::mat4 cascade_view_proj[framework::kMaxShadowCascades]{};
         glm::vec4 cascade_splits{};
         glm::vec4 cascade_texel_world_size{};
     };
@@ -220,7 +221,7 @@ namespace himalaya::app {
         // C_log_i = near * (far/near)^(i/n)
         // C_lin_i = near + (far - near) * i/n
         // C_i = lambda * C_log + (1 - lambda) * C_lin
-        std::array<float, 5> splits{}; // max 4 cascades + near
+        std::array<float, framework::kMaxShadowCascades + 1> splits{}; // cascades + near
         splits[0] = cam.near_plane;
         for (uint32_t i = 1; i <= n; ++i) {
             const float t = static_cast<float>(i) / static_cast<float>(n);
@@ -798,10 +799,11 @@ namespace himalaya::app {
         ubo_data.shadow_distance_fade_width = input.shadow_config.distance_fade_width;
         ubo_data.shadow_pcf_radius = input.shadow_config.pcf_radius;
 
+        ShadowCascadeResult cascades{};
         if (shadows_active) {
             ubo_data.shadow_cascade_count = input.shadow_config.cascade_count;
 
-            const auto cascades = compute_shadow_cascades(
+            cascades = compute_shadow_cascades(
                 input.camera,
                 glm::normalize(shadow_light->direction),
                 input.shadow_config,
@@ -852,39 +854,62 @@ namespace himalaya::app {
                               opaque_draw_groups_, mask_draw_groups_, true);
         }
 
-        // --- Build shadow draw groups from ALL mesh_instances (not camera-culled) ---
-        // Objects outside the camera frustum may still cast shadows onto visible surfaces.
-        shadow_opaque_groups_.clear();
-        shadow_mask_groups_.clear();
+        // --- Build per-cascade shadow draw groups (frustum-culled) ---
+        // Each cascade culls ALL scene instances against its light-space frustum.
+        // Objects outside the camera frustum may still cast shadows onto visible
+        // surfaces, so the input is mesh_instances (not the camera cull result).
+        // Blend instances are excluded (they don't cast shadows in M1).
+        const uint32_t cascade_count = shadows_active
+                                           ? std::min(input.shadow_config.cascade_count,
+                                                      framework::kMaxShadowCascades)
+                                           : 0;
+
+        for (uint32_t c = 0; c < framework::kMaxShadowCascades; ++c) {
+            shadow_cascade_opaque_groups_[c].clear();
+            shadow_cascade_mask_groups_[c].clear();
+        }
 
         if (shadows_active && !input.mesh_instances.empty()) {
-            // Build sorted index list of all non-Blend instances
-            sorted_shadow_indices_.clear();
-            for (uint32_t i = 0; i < static_cast<uint32_t>(input.mesh_instances.size()); ++i) {
-                const auto &mat = input.materials[input.mesh_instances[i].material_id];
-                if (mat.alpha_mode != framework::AlphaMode::Blend) {
-                    sorted_shadow_indices_.push_back(i);
+            const auto sort_pred = instance_group_sort(input.mesh_instances, input.materials);
+
+            for (uint32_t c = 0; c < cascade_count; ++c) {
+                // Cull all instances against this cascade's light-space frustum
+                const auto frustum = framework::extract_frustum(cascades.cascade_view_proj[c]);
+                framework::cull_against_frustum(input.mesh_instances, frustum, shadow_cull_buffer_);
+
+                // Filter out Blend instances (don't cast shadows in M1)
+                auto &sorted = shadow_cascade_sorted_[c];
+                sorted.clear();
+                for (const uint32_t idx : shadow_cull_buffer_) {
+                    if (input.materials[input.mesh_instances[idx].material_id].alpha_mode
+                        != framework::AlphaMode::Blend) {
+                        sorted.push_back(idx);
+                    }
                 }
+
+                std::ranges::sort(sorted, sort_pred);
+
+                // Shadow shaders only read model + material_index from GPUInstanceData;
+                // normal matrix computation is skipped (compute_normal_matrix = false).
+                build_draw_groups(input.mesh_instances, input.materials,
+                                  sorted, gpu_instances, instance_offset,
+                                  shadow_cascade_opaque_groups_[c],
+                                  shadow_cascade_mask_groups_[c], false);
             }
-
-            std::ranges::sort(sorted_shadow_indices_,
-                              instance_group_sort(input.mesh_instances, input.materials));
-
-            // Shadow shaders only read model + material_index from GPUInstanceData;
-            // normal matrix computation is skipped (compute_normal_matrix = false).
-            build_draw_groups(input.mesh_instances, input.materials,
-                              sorted_shadow_indices_, gpu_instances, instance_offset,
-                              shadow_opaque_groups_, shadow_mask_groups_, false);
         }
 
         // Total scene draw calls — Blend objects are not drawn until Phase 7
         // (Transparent Pass), so only opaque + mask groups are counted here.
         const auto camera_groups = static_cast<uint32_t>(
             opaque_draw_groups_.size() + mask_draw_groups_.size());
-        const auto shadow_groups = static_cast<uint32_t>(
-            shadow_opaque_groups_.size() + shadow_mask_groups_.size());
+        uint32_t shadow_group_count = 0;
+        for (uint32_t c = 0; c < cascade_count; ++c) {
+            shadow_group_count += static_cast<uint32_t>(
+                shadow_cascade_opaque_groups_[c].size()
+                + shadow_cascade_mask_groups_[c].size());
+        }
         draw_call_count_ = camera_groups * 2 // DepthPrePass + ForwardPass
-                           + shadow_groups * input.shadow_config.cascade_count; // ShadowPass x cascades
+                           + shadow_group_count; // ShadowPass (already per-cascade)
 
         // --- Build render graph ---
         render_graph_.clear();
@@ -926,8 +951,10 @@ namespace himalaya::app {
         frame_ctx.mesh_instances = input.mesh_instances;
         frame_ctx.opaque_draw_groups = opaque_draw_groups_;
         frame_ctx.mask_draw_groups = mask_draw_groups_;
-        frame_ctx.shadow_opaque_groups = shadow_opaque_groups_;
-        frame_ctx.shadow_mask_groups = shadow_mask_groups_;
+        for (uint32_t c = 0; c < cascade_count; ++c) {
+            frame_ctx.shadow_cascade_opaque_groups[c] = shadow_cascade_opaque_groups_[c];
+            frame_ctx.shadow_cascade_mask_groups[c] = shadow_cascade_mask_groups_[c];
+        }
         frame_ctx.features = &input.features;
         frame_ctx.shadow_config = &input.shadow_config;
         frame_ctx.frame_index = input.frame_index;
