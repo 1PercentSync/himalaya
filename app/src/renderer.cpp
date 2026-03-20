@@ -315,6 +315,23 @@ namespace himalaya::app {
 
             result.cascade_view_proj[c] = light_proj * light_view;
 
+            // Texel snapping: align the VP offset to shadow map texel
+            // boundaries, preventing shadow edge shimmer when the camera
+            // translates.  Standard technique: project world origin through
+            // the combined VP, round to the nearest texel center, and apply
+            // the resulting sub-texel correction to the VP translation.
+            {
+                const float resolution = 1.0f / shadow_texel_size;
+                const float half_res = resolution * 0.5f;
+                auto &vp = result.cascade_view_proj[c];
+
+                // VP * (0,0,0,1) = translation column; ortho => w=1
+                const float sx = vp[3][0] * half_res;
+                const float sy = vp[3][1] * half_res;
+                vp[3][0] += (std::round(sx) - sx) / half_res;
+                vp[3][1] += (std::round(sy) - sy) / half_res;
+            }
+
             // Per-cascade texel world size: clip [-1,1] covers
             // (2 / ||row0||) world units; divided by resolution = per-texel size.
             const glm::vec3 row0(result.cascade_view_proj[c][0][0],
