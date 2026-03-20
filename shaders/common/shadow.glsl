@@ -15,16 +15,23 @@
 /**
  * Select the cascade index for a given view-space depth.
  *
- * Step 3: always returns cascade 0 (single cascade).
- * Step 4 will implement PSSM-based selection with cascade_splits comparison.
+ * Compares view_depth against cascade_splits boundaries (PSSM-distributed).
+ * Falls through to the last cascade if beyond all splits.
  *
  * @param view_depth   Positive linear distance from camera.
  * @param blend_factor Output: 0.0 = no blending needed (Step 6 implements blend).
  * @return Cascade index [0, shadow_cascade_count).
  */
 int select_cascade(float view_depth, out float blend_factor) {
-    blend_factor = 0.0;
-    return 0;
+    blend_factor = 0.0; // Step 6 implements cascade blend
+
+    // cascade_splits holds far boundaries; pick the first cascade
+    // whose far boundary exceeds the fragment's view-space depth.
+    for (int i = 0; i < int(global.shadow_cascade_count) - 1; ++i) {
+        if (view_depth < global.cascade_splits[i])
+            return i;
+    }
+    return int(global.shadow_cascade_count) - 1;
 }
 
 /**
