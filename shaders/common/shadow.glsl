@@ -263,6 +263,72 @@ void blocker_search(ShadowProjData proj, int cascade,
 }
 
 /**
+ * PCSS shadow sampling: blocker search → penumbra estimation → variable-width PCF.
+ *
+ * Produces contact-hardening shadows: hard at caster contact, softening with
+ * distance.  Uses precomputed ShadowProjData (no dFdx/dFdy internally).
+ *
+ * Early-outs:
+ *  - No blockers found → return 1.0 (fully lit).
+ *  - All samples are blockers AND PCSS_FLAG_BLOCKER_EARLY_OUT set → return 0.0
+ *    (mitigates multi-layer occlusion light leak).
+ *
+ * Penumbra estimation (directional light simplified formula):
+ *  - penumbra_u = |blocker_ndc - receiver_ndc| * cascade_pcss_scale
+ *  - penumbra_v = penumbra_u * cascade_uv_scale_y
+ *  - Clamped to [shadow_texel_size, kMaxPenumbraTexels * shadow_texel_size]
+ *
+ * @param proj    Precomputed projection data from prepare_shadow_proj().
+ * @param cascade Cascade index.
+ * @return Shadow factor: 1.0 = fully lit, 0.0 = fully in shadow.
+ */
+float sample_shadow_pcss(ShadowProjData proj, int cascade) {
+    // Step 1: Blocker search
+    float avg_blocker, num_blockers;
+    blocker_search(proj, cascade, avg_blocker, num_blockers);
+
+    // No blockers → fully lit
+    if (num_blockers < 1.0) {
+        return 1.0;
+    }
+
+    // All blockers → early-out as fully shadowed (reduces multi-layer light leak)
+    if (num_blockers >= float(global.pcss_blocker_samples)
+        && (global.pcss_flags & PCSS_FLAG_BLOCKER_EARLY_OUT) != 0u) {
+        return 0.0;
+    }
+
+    // Step 2: Penumbra estimation (directional light — no 1/dBlocker division)
+    float delta_ndc = abs(avg_blocker - proj.ref_depth);
+    float penumbra_u = delta_ndc * global.cascade_pcss_scale[cascade];
+    float penumbra_v = penumbra_u * global.cascade_uv_scale_y[cascade];
+
+    // Clamp: lower = 1 texel (prevents noise), upper = kMaxPenumbraTexels (prevents kernel explosion)
+    float min_penumbra = global.shadow_texel_size;
+    float max_penumbra = kMaxPenumbraTexels * global.shadow_texel_size;
+    penumbra_u = clamp(penumbra_u, min_penumbra, max_penumbra);
+    penumbra_v = clamp(penumbra_v, min_penumbra, max_penumbra);
+
+    // Step 3: Variable-width PCF with elliptical Poisson Disk kernel
+    float rotation = interleaved_gradient_noise(gl_FragCoord.xy) * 6.2831853;
+    float shadow_sum = 0.0;
+    uint sample_count = global.pcss_pcf_samples;
+    for (uint i = 0u; i < sample_count; ++i) {
+        vec2 offset = rotate_sample(kPCFSamples[i], rotation)
+                      * vec2(penumbra_u, penumbra_v);
+        vec2 sample_uv = proj.shadow_uv + offset;
+
+        // Per-sample receiver plane depth bias
+        float adjusted_depth = proj.ref_depth + proj.dz_du * offset.x + proj.dz_dv * offset.y;
+
+        // Hardware comparison sampling (binding 5, GREATER_OR_EQUAL with Reverse-Z)
+        shadow_sum += texture(rt_shadow_map, vec4(sample_uv, float(cascade), adjusted_depth));
+    }
+
+    return shadow_sum / float(sample_count);
+}
+
+/**
  * Select the cascade index for a given view-space depth.
  *
  * Compares view_depth against cascade_splits boundaries (PSSM-distributed).
