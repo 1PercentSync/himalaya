@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段四 — 阴影
-- **进度**：Step 4 进行中（4/7，1-3 + 5 已完成）
+- **进度**：Step 4 进行中（5/7，1-5 已完成）
 
 ### 下一个任务
 
-Step 4 第 4 项：`shadow.glsl` `select_cascade()` 更新为基于 view-space depth 与 `cascade_splits` 比较
+Step 4 第 6 项：DebugUI Shadow 面板扩展（split lambda 滑条 + max distance 对数滑条）
 
 ---
 
