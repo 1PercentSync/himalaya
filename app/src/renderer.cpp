@@ -716,6 +716,16 @@ namespace himalaya::app {
         forward_pass_.on_sample_count_changed(new_sample_count);
     }
 
+    // ---- Shadow resolution change ----
+
+    void Renderer::handle_shadow_resolution_changed(const uint32_t new_resolution) {
+        if (new_resolution == shadow_pass_.resolution()) return;
+
+        vkQueueWaitIdle(ctx_->graphics_queue);
+        shadow_pass_.on_resolution_changed(new_resolution);
+        update_shadow_map_descriptor();
+    }
+
     // ---- Shader hot-reload ----
 
     void Renderer::reload_shaders() {

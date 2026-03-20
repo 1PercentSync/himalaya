@@ -157,6 +157,17 @@ namespace himalaya::app {
         void handle_msaa_change(uint32_t new_sample_count);
 
         /**
+         * @brief Handles shadow map resolution change: waits for GPU idle, then
+         *        destroys and recreates shadow map resources at the new resolution
+         *        and updates the Set 2 shadow map descriptor.
+         *
+         * No-op if new_resolution equals the current shadow map resolution.
+         *
+         * @param new_resolution New shadow map resolution (512/1024/2048/4096).
+         */
+        void handle_shadow_resolution_changed(uint32_t new_resolution);
+
+        /**
          * @brief Recompiles all shaders from disk and rebuilds every pipeline.
          *
          * Waits for GPU idle, then calls rebuild_pipelines() on each pass.
