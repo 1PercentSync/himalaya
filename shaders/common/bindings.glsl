@@ -107,6 +107,14 @@ layout(set = 0, binding = 0) uniform GlobalUBO {
     float shadow_distance_fade_width;       // offset 624 — distance fade region fraction of max_distance
     // 12 bytes implicit pad (vec4 alignment)
     vec4 cascade_texel_world_size;          // offset 640 — precomputed world-space size per shadow texel
+    // ---- PCSS fields (Step 7) ----
+    uint shadow_mode;                       // offset 656 — 0 = PCF, 1 = PCSS
+    uint pcss_flags;                        // offset 660 — bit 0: blocker early-out
+    uint pcss_blocker_samples;              // offset 664 — blocker search sample count
+    uint pcss_pcf_samples;                  // offset 668 — PCSS PCF sample count
+    vec4 cascade_light_size_uv;             // offset 672 — per-cascade blocker search radius (U direction)
+    vec4 cascade_pcss_scale;                // offset 688 — per-cascade NDC depth diff → UV penumbra scale
+    vec4 cascade_uv_scale_y;                // offset 704 — per-cascade UV anisotropy correction
 } global;
 
 layout(set = 0, binding = 1) readonly buffer LightBuffer {
