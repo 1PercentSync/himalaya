@@ -17,6 +17,7 @@
 #include "common/bindings.glsl"
 #include "common/normal.glsl"
 #include "common/brdf.glsl"
+#include "common/shadow.glsl"
 
 layout(location = 0) in vec3 frag_world_pos;
 layout(location = 1) in vec3 frag_normal;
@@ -76,6 +77,9 @@ void main() {
     vec3 R = reflect(-V, N);
     float NdotV = max(dot(N, V), 0.0);
 
+    // View-space depth for shadow cascade selection and distance fade
+    float view_depth = -(global.view * vec4(frag_world_pos, 1.0)).z;
+
     // ---- Direct lighting: Cook-Torrance + Lambert (split for debug modes) ----
     vec3 direct_diffuse = vec3(0.0);
     vec3 direct_specular = vec3(0.0);
@@ -96,6 +100,17 @@ void main() {
         vec3  F   = F_Schlick(VdotH, F0);
 
         vec3 radiance = light_color * intensity * NdotL;
+
+        // Shadow attenuation (guarded by feature flag and per-light cast_shadows)
+        if ((global.feature_flags & FEATURE_SHADOWS) != 0u
+            && directional_lights[i].color_and_shadow.w > 0.5) {
+            float blend_factor;
+            int cascade = select_cascade(view_depth, blend_factor);
+            float shadow = sample_shadow(frag_world_pos, N, cascade);
+            shadow = mix(1.0, shadow, shadow_distance_fade(view_depth));
+            radiance *= shadow;
+        }
+
         direct_diffuse  += (1.0 - F) * diffuse_color * INV_PI * radiance;
         direct_specular += D * Vis * F * radiance;
     }
