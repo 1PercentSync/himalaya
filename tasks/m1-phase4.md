@@ -131,8 +131,8 @@
 - [x] 创建 `shaders/common/shadow.glsl`：`select_cascade(float view_depth, out float blend_factor)` 暂返回 cascade 0 + `sample_shadow(vec3 world_pos, vec3 world_normal, int cascade)` 单次硬件比较 + `shadow_distance_fade(float view_depth)`（使用独立的 `shadow_distance_fade_width` UBO 字段）
 - [x] `forward.frag` 集成 shadow 采样：`#include "common/shadow.glsl"` + `feature_flags & FEATURE_SHADOWS` 条件分支 + shadow 乘到唯一方向光的直接光照贡献（M1 `kMaxDirectionalLights = 1`）
 - [x] Normal offset bias 实现：`shadow.glsl` 的 `sample_shadow()` 内部沿法线偏移采样位置，从 `cascade_view_proj` 矩阵提取 texel world size
-- [ ] ShadowPass opaque/mask pipeline 启用 `depth_bias_enable = true`（`create_pipelines()` 中设置）
-- [ ] ShadowPass `record()` lambda 中调用 `cmd.set_depth_bias(constant_factor, 0.0f, slope_factor)` 设置硬件 bias
+- [x] ShadowPass opaque/mask pipeline 启用 `depth_bias_enable = true`（`create_pipelines()` 中设置）
+- [x] ShadowPass `record()` lambda 中调用 `cmd.set_depth_bias(constant_factor, 0.0f, slope_factor)` 设置硬件 bias
 - [ ] DebugUI Shadow 面板：constant bias / slope bias / normal offset 滑条 + Shadows checkbox（操作 `features.shadows`）
 - [ ] 验证：场景有可见硬阴影（锐利边缘），Shadow toggle 可开关，无明显 acne 或 peter panning
 
