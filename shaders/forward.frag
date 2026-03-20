@@ -62,6 +62,22 @@ void main() {
             case DEBUG_MODE_METALLIC:  vis = vec3(metallic); break;
             case DEBUG_MODE_ROUGHNESS: vis = vec3(roughness); break;
             case DEBUG_MODE_AO:        vis = vec3(texture(textures[nonuniformEXT(mat.occlusion_tex)], frag_uv0).r); break;
+            case DEBUG_MODE_SHADOW_CASCADES: {
+                if ((global.feature_flags & FEATURE_SHADOWS) != 0u) {
+                    float vd = -(global.view * vec4(frag_world_pos, 1.0)).z;
+                    float bf;
+                    int ci = select_cascade(vd, bf);
+                    const vec3 colors[4] = vec3[4](
+                        vec3(1.0, 0.2, 0.2),   // cascade 0: red
+                        vec3(0.2, 1.0, 0.2),   // cascade 1: green
+                        vec3(0.2, 0.2, 1.0),   // cascade 2: blue
+                        vec3(1.0, 1.0, 0.2));  // cascade 3: yellow
+                    vis = colors[ci];
+                } else {
+                    vis = vec3(0.5);
+                }
+                break;
+            }
             default: vis = vec3(1.0, 0.0, 1.0); break;
         }
         out_color = vec4(vis, 1.0);
