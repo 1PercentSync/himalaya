@@ -1592,7 +1592,7 @@ IBL 有两层 descriptor 需求：
 
 **选择：Push Descriptors。** IBL 预计算是一次性操作（`begin_immediate()` / `end_immediate()` scope 内），使用 Push Descriptors 零分配、代码简洁。
 
-> **项目例外**：常规渲染管线不使用 Push Descriptors（见「Descriptor Set 管理方式」章节评估），但 IBL 预计算完全隔离在 `ibl.cpp` 内部，不参与常规帧循环，不影响全局 descriptor 管理一致性。此例外仅适用于一次性 init 阶段的 compute dispatch。
+> **项目例外**：常规渲染管线不使用 Push Descriptors（见「Descriptor Set 管理方式」章节评估），但 IBL 预计算完全隔离在 `ibl*.cpp` 内部，不参与常规帧循环，不影响全局 descriptor 管理一致性。此例外仅适用于一次性 init 阶段的 compute dispatch。
 
 衍生需求：`create_compute_pipeline()` 的 pipeline layout 需要支持传入自定义 descriptor set layout 数组，其中 set 0 标记为 push descriptor set（`VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT`）。`ComputePipelineDesc` 需要 `descriptor_set_layouts` 字段。
 
