@@ -133,6 +133,82 @@ vec2 rotate_sample(vec2 s, float angle) {
     return vec2(s.x * c - s.y * sn, s.x * sn + s.y * c);
 }
 
+// ---- ShadowProjData + prepare_shadow_proj ----
+
+/**
+ * Pre-computed shadow projection data for a single cascade.
+ *
+ * Encapsulates light-space UV, reference depth, and receiver plane
+ * depth gradients.  Computed once in uniform control flow via
+ * prepare_shadow_proj(), then consumed by blocker_search() and
+ * sample_shadow_pcss() without further dFdx/dFdy calls.
+ */
+struct ShadowProjData {
+    vec2  shadow_uv;   ///< Shadow map UV [0,1].
+    float ref_depth;   ///< Light-space NDC depth (Reverse-Z).
+    float dz_du;       ///< Depth gradient w.r.t. shadow U.
+    float dz_dv;       ///< Depth gradient w.r.t. shadow V.
+};
+
+/**
+ * Project a world-space point into shadow UV space and compute
+ * receiver plane depth gradients via screen-space derivatives.
+ *
+ * MUST be called in uniform control flow — dFdx/dFdy require all
+ * invocations in a quad to execute the same instruction.
+ *
+ * At cascade boundaries where the quad uses mixed cascade indices,
+ * the gradients are zeroed (detected via dFdx/dFdy of cascade index)
+ * to avoid cross-projection garbage.  Those pixels fall back to
+ * normal offset + slope bias quality (1-2 pixel band, invisible).
+ *
+ * @param world_pos    Fragment world position.
+ * @param world_normal Fragment world shading normal (normalized).
+ * @param cascade      Cascade index.
+ * @return Precomputed projection data for PCSS sampling.
+ */
+ShadowProjData prepare_shadow_proj(vec3 world_pos, vec3 world_normal, int cascade) {
+    ShadowProjData proj;
+
+    // Normal offset (same logic as sample_shadow / sample_shadow_pcf)
+    float texel_ws = global.cascade_texel_world_size[cascade];
+    vec3 offset_pos = world_pos + world_normal * global.shadow_normal_offset * texel_ws;
+
+    // Project to light clip space (orthographic: w = 1)
+    vec4 light_clip = global.cascade_view_proj[cascade] * vec4(offset_pos, 1.0);
+    vec3 light_ndc = light_clip.xyz / light_clip.w;
+
+    // NDC [-1,1] -> UV [0,1]
+    proj.shadow_uv = light_ndc.xy * 0.5 + 0.5;
+    proj.ref_depth = light_ndc.z;
+
+    // Screen-space derivatives of shadow UV and depth
+    vec2 duv_dx = dFdx(proj.shadow_uv);
+    vec2 duv_dy = dFdy(proj.shadow_uv);
+    float dz_dx = dFdx(proj.ref_depth);
+    float dz_dy = dFdy(proj.ref_depth);
+
+    // Solve 2x2 linear system for (dz_du, dz_dv):
+    //   dz_dx = dz_du * duv_dx.x + dz_dv * duv_dx.y
+    //   dz_dy = dz_du * duv_dy.x + dz_dv * duv_dy.y
+    float det = duv_dx.x * duv_dy.y - duv_dx.y * duv_dy.x;
+    float inv_det = (abs(det) > 1e-10) ? (1.0 / det) : 0.0;
+    proj.dz_du = ( duv_dy.y * dz_dx - duv_dx.y * dz_dy) * inv_det;
+    proj.dz_dv = (-duv_dy.x * dz_dx + duv_dx.x * dz_dy) * inv_det;
+
+    // Clamp to prevent extreme gradients at grazing angles
+    proj.dz_du = clamp(proj.dz_du, -kMaxReceiverPlaneGradient, kMaxReceiverPlaneGradient);
+    proj.dz_dv = clamp(proj.dz_dv, -kMaxReceiverPlaneGradient, kMaxReceiverPlaneGradient);
+
+    // Cascade boundary detection: zero gradients when the quad spans
+    // different cascades (cross-projection derivatives are garbage)
+    float cascade_uniform = step(abs(dFdx(float(cascade))) + abs(dFdy(float(cascade))), 0.0);
+    proj.dz_du *= cascade_uniform;
+    proj.dz_dv *= cascade_uniform;
+
+    return proj;
+}
+
 /**
  * Select the cascade index for a given view-space depth.
  *
