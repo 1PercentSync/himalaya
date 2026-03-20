@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段四 — 阴影
-- **进度**：Step 5 进行中（7/8）
+- **进度**：Step 5 完成（8/8）
 
 ### 下一个任务
 
-Step 5 第 8 项：验证 — 相机移动/旋转时阴影边缘无闪烁，cascade 可视化显示正确分层，cascade 数量和分辨率可运行时切换
+Step 6 第 1 项：`shadow.glsl` 新增 `sample_shadow_pcf()` — 基于硬件 2×2 比较的多次偏移采样，kernel 由 `shadow_pcf_radius` 控制
 
 ---
 
