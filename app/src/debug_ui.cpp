@@ -330,6 +330,9 @@ namespace himalaya::app {
         if (ctx.features.shadows) {
             ImGui::Separator();
             if (ImGui::CollapsingHeader("Shadow")) {
+                ImGui::SliderFloat("Split Lambda", &ctx.shadow_config.split_lambda, 0.0f, 1.0f, "%.2f");
+                ImGui::SliderFloat("Max Distance", &ctx.shadow_config.max_distance, 1.0f, 2000.0f, "%.0f m",
+                                   ImGuiSliderFlags_Logarithmic);
                 ImGui::SliderFloat("Slope Bias", &ctx.shadow_config.slope_bias, 0.0f, 10.0f, "%.1f");
                 ImGui::SliderFloat("Normal Offset", &ctx.shadow_config.normal_offset, 0.0f, 5.0f, "%.2f");
             }
