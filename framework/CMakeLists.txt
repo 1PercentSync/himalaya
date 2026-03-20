@@ -6,6 +6,8 @@ target_sources(himalaya_framework PRIVATE
         src/ktx2.cpp
         src/culling.cpp
         src/ibl.cpp
+        src/ibl_compute.cpp
+        src/ibl_compress.cpp
         src/imgui_backend.cpp
         src/material_system.cpp
         src/mesh.cpp
