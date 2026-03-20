@@ -168,6 +168,136 @@ namespace himalaya::app {
         return m;
     }
 
+    // ---- Shadow cascade computation ----
+
+    /**
+     * Per-cascade shadow data computed each frame.
+     *
+     * Returned by compute_shadow_cascades(); caller writes fields into
+     * the GlobalUniformData UBO.
+     */
+    struct ShadowCascadeResult {
+        glm::mat4 cascade_view_proj[4]{};
+        glm::vec4 cascade_splits{};
+        glm::vec4 cascade_texel_world_size{};
+    };
+
+    /**
+     * Computes light-space VP matrices, cascade split distances, and
+     * per-cascade texel world sizes for CSM shadow mapping.
+     *
+     * Currently single cascade (Step 3); Step 4 will add PSSM split
+     * loop inside this function without changing the interface.
+     *
+     * @param cam              Camera state (position, orientation, FOV, planes).
+     * @param light_dir        Normalized light direction (toward scene).
+     * @param config           Shadow configuration (max_distance, cascade_count).
+     * @param scene_bounds     World-space scene AABB for Z range extension.
+     * @param shadow_texel_size  1.0 / shadow_map_resolution.
+     */
+    static ShadowCascadeResult compute_shadow_cascades(
+        const framework::Camera &cam,
+        const glm::vec3 &light_dir,
+        const framework::ShadowConfig &config,
+        const framework::AABB &scene_bounds,
+        const float shadow_texel_size) {
+
+        ShadowCascadeResult result;
+        const float shadow_far = std::min(config.max_distance, cam.far_plane);
+
+        // Camera sub-frustum corners (near to shadow_far)
+        const glm::vec3 fwd = cam.forward();
+        const glm::vec3 rgt = cam.right();
+        const glm::vec3 up = glm::cross(rgt, fwd);
+
+        const float tan_half = std::tan(cam.fov * 0.5f);
+        const float near_h = cam.near_plane * tan_half;
+        const float near_w = near_h * cam.aspect;
+        const float far_h = shadow_far * tan_half;
+        const float far_w = far_h * cam.aspect;
+
+        const glm::vec3 near_center = cam.position + fwd * cam.near_plane;
+        const glm::vec3 far_center = cam.position + fwd * shadow_far;
+
+        const std::array<glm::vec3, 8> corners = {
+            near_center - rgt * near_w + up * near_h,
+            near_center + rgt * near_w + up * near_h,
+            near_center - rgt * near_w - up * near_h,
+            near_center + rgt * near_w - up * near_h,
+            far_center - rgt * far_w + up * far_h,
+            far_center + rgt * far_w + up * far_h,
+            far_center - rgt * far_w - up * far_h,
+            far_center + rgt * far_w - up * far_h,
+        };
+
+        // Light-space coordinate frame built directly from light direction.
+        const glm::vec3 frustum_center = (near_center + far_center) * 0.5f;
+        const glm::vec3 ref = std::abs(light_dir.y) < 0.999f
+                                  ? glm::vec3(0.0f, 1.0f, 0.0f)
+                                  : glm::vec3(1.0f, 0.0f, 0.0f);
+        const glm::vec3 light_right = glm::normalize(glm::cross(light_dir, ref));
+        const glm::vec3 light_up = glm::cross(light_right, light_dir);
+
+        // View matrix (column-major): basis as rows + translation centered
+        // on frustum midpoint to keep light-space coordinates small.
+        const glm::mat4 light_view(
+            glm::vec4(light_right.x, light_up.x, -light_dir.x, 0.0f),
+            glm::vec4(light_right.y, light_up.y, -light_dir.y, 0.0f),
+            glm::vec4(light_right.z, light_up.z, -light_dir.z, 0.0f),
+            glm::vec4(-glm::dot(light_right, frustum_center),
+                      -glm::dot(light_up, frustum_center),
+                      glm::dot(light_dir, frustum_center), 1.0f));
+
+        // AABB of frustum corners in light space (XY tight fit)
+        glm::vec3 ls_min(std::numeric_limits<float>::max());
+        glm::vec3 ls_max(std::numeric_limits<float>::lowest());
+        for (const auto &c : corners) {
+            const auto ls = glm::vec3(light_view * glm::vec4(c, 1.0f));
+            ls_min = glm::min(ls_min, ls);
+            ls_max = glm::max(ls_max, ls);
+        }
+
+        // Extend Z range to include the entire scene AABB so that shadow
+        // casters outside the camera frustum are not clipped.
+        {
+            const std::array<glm::vec3, 8> scene_corners = {
+                glm::vec3{scene_bounds.min.x, scene_bounds.min.y, scene_bounds.min.z},
+                glm::vec3{scene_bounds.max.x, scene_bounds.min.y, scene_bounds.min.z},
+                glm::vec3{scene_bounds.min.x, scene_bounds.max.y, scene_bounds.min.z},
+                glm::vec3{scene_bounds.max.x, scene_bounds.max.y, scene_bounds.min.z},
+                glm::vec3{scene_bounds.min.x, scene_bounds.min.y, scene_bounds.max.z},
+                glm::vec3{scene_bounds.max.x, scene_bounds.min.y, scene_bounds.max.z},
+                glm::vec3{scene_bounds.min.x, scene_bounds.max.y, scene_bounds.max.z},
+                glm::vec3{scene_bounds.max.x, scene_bounds.max.y, scene_bounds.max.z},
+            };
+            for (const auto &c : scene_corners) {
+                const float lz = glm::vec3(light_view * glm::vec4(c, 1.0f)).z;
+                ls_min.z = std::min(ls_min.z, lz);
+                ls_max.z = std::max(ls_max.z, lz);
+            }
+        }
+
+        // Orthographic projection: XY from frustum AABB, Z from scene AABB
+        const glm::mat4 light_proj = ortho_reverse_z(
+            ls_min.x, ls_max.x,
+            ls_min.y, ls_max.y,
+            -ls_max.z, -ls_min.z);
+
+        result.cascade_view_proj[0] = light_proj * light_view;
+        result.cascade_splits = glm::vec4(shadow_far, 0.0f, 0.0f, 0.0f);
+
+        // Per-cascade texel world size: clip [-1,1] = 2 units covers
+        // (2 / ||row0||) world units; divided by resolution gives per-texel size.
+        {
+            const glm::mat4 &vp = result.cascade_view_proj[0];
+            const glm::vec3 row0(vp[0][0], vp[1][0], vp[2][0]);
+            result.cascade_texel_world_size[0] =
+                2.0f * shadow_texel_size / glm::length(row0);
+        }
+
+        return result;
+    }
+
     // ---- Init / Destroy ----
 
     void Renderer::init(rhi::Context &ctx,
@@ -611,94 +741,17 @@ namespace himalaya::app {
         if (shadows_active) {
             ubo_data.shadow_cascade_count = input.shadow_config.cascade_count;
 
-            const auto &cam = input.camera;
-            const glm::vec3 light_dir = glm::normalize(shadow_light->direction);
-            const float shadow_far = std::min(input.shadow_config.max_distance, cam.far_plane);
+            const auto cascades = compute_shadow_cascades(
+                input.camera,
+                glm::normalize(shadow_light->direction),
+                input.shadow_config,
+                input.scene_bounds,
+                ubo_data.shadow_texel_size);
 
-            // Compute camera sub-frustum corners (near to shadow_far)
-            const glm::vec3 fwd = cam.forward();
-            const glm::vec3 rgt = cam.right();
-            const glm::vec3 up = glm::cross(rgt, fwd);
-
-            const float tan_half = std::tan(cam.fov * 0.5f);
-            const float near_h = cam.near_plane * tan_half;
-            const float near_w = near_h * cam.aspect;
-            const float far_h = shadow_far * tan_half;
-            const float far_w = far_h * cam.aspect;
-
-            const glm::vec3 near_center = cam.position + fwd * cam.near_plane;
-            const glm::vec3 far_center = cam.position + fwd * shadow_far;
-
-            const std::array<glm::vec3, 8> corners = {
-                near_center - rgt * near_w + up * near_h,
-                near_center + rgt * near_w + up * near_h,
-                near_center - rgt * near_w - up * near_h,
-                near_center + rgt * near_w - up * near_h,
-                far_center - rgt * far_w + up * far_h,
-                far_center + rgt * far_w + up * far_h,
-                far_center - rgt * far_w - up * far_h,
-                far_center + rgt * far_w - up * far_h,
-            };
-
-            // Light view matrix — center on frustum midpoint
-            const glm::vec3 frustum_center = (near_center + far_center) * 0.5f;
-            glm::vec3 light_up(0.0f, 1.0f, 0.0f);
-            if (std::abs(glm::dot(light_dir, light_up)) > 0.99f) {
-                light_up = glm::vec3(0.0f, 0.0f, 1.0f);
-            }
-            const glm::mat4 light_view = glm::lookAt(
-                frustum_center - light_dir, frustum_center, light_up);
-
-            // Find AABB of frustum corners in light space (XY tight fit)
-            glm::vec3 ls_min(std::numeric_limits<float>::max());
-            glm::vec3 ls_max(std::numeric_limits<float>::lowest());
-            for (const auto &c: corners) {
-                const auto ls = glm::vec3(light_view * glm::vec4(c, 1.0f));
-                ls_min = glm::min(ls_min, ls);
-                ls_max = glm::max(ls_max, ls);
-            }
-
-            // Extend Z range to include the entire scene AABB so that shadow
-            // casters outside the camera frustum (e.g. tall objects above the
-            // view) are not clipped by the light projection near/far planes.
-            {
-                const auto &sb = input.scene_bounds;
-                const std::array<glm::vec3, 8> scene_corners = {
-                    glm::vec3{sb.min.x, sb.min.y, sb.min.z},
-                    glm::vec3{sb.max.x, sb.min.y, sb.min.z},
-                    glm::vec3{sb.min.x, sb.max.y, sb.min.z},
-                    glm::vec3{sb.max.x, sb.max.y, sb.min.z},
-                    glm::vec3{sb.min.x, sb.min.y, sb.max.z},
-                    glm::vec3{sb.max.x, sb.min.y, sb.max.z},
-                    glm::vec3{sb.min.x, sb.max.y, sb.max.z},
-                    glm::vec3{sb.max.x, sb.max.y, sb.max.z},
-                };
-                for (const auto &c : scene_corners) {
-                    const float lz = glm::vec3(light_view * glm::vec4(c, 1.0f)).z;
-                    ls_min.z = std::min(ls_min.z, lz);
-                    ls_max.z = std::max(ls_max.z, lz);
-                }
-            }
-
-            // Orthographic projection: XY from frustum AABB, Z from scene AABB
-            const glm::mat4 light_proj = ortho_reverse_z(
-                ls_min.x, ls_max.x,
-                ls_min.y, ls_max.y,
-                -ls_max.z, -ls_min.z);
-
-            ubo_data.cascade_view_proj[0] = light_proj * light_view;
-            ubo_data.cascade_splits = glm::vec4(shadow_far, 0.0f, 0.0f, 0.0f);
-
-            // Precompute per-cascade texel world size (avoids per-fragment
-            // mat4 fetch + sqrt in shader). Derivation: clip range [-1,1] = 2
-            // units covers (2 / ||row0||) world units; divided by resolution
-            // (= 1/shadow_texel_size) gives per-texel size.
-            {
-                const glm::mat4 &vp = ubo_data.cascade_view_proj[0];
-                const glm::vec3 row0(vp[0][0], vp[1][0], vp[2][0]);
-                ubo_data.cascade_texel_world_size[0] =
-                    2.0f * ubo_data.shadow_texel_size / glm::length(row0);
-            }
+            std::memcpy(ubo_data.cascade_view_proj, cascades.cascade_view_proj,
+                        sizeof(ubo_data.cascade_view_proj));
+            ubo_data.cascade_splits = cascades.cascade_splits;
+            ubo_data.cascade_texel_world_size = cascades.cascade_texel_world_size;
         }
 
         const auto light_count = static_cast<uint32_t>(
