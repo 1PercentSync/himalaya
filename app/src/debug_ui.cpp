@@ -331,6 +331,13 @@ namespace himalaya::app {
         if (ctx.features.shadows) {
             ImGui::Separator();
             if (ImGui::CollapsingHeader("Shadow", ImGuiTreeNodeFlags_DefaultOpen)) {
+                // Shadow Mode (PCF / PCSS)
+                constexpr const char *kModeLabels[] = {"PCF", "PCSS"};
+                auto mode_idx = static_cast<int>(ctx.shadow_config.shadow_mode);
+                if (ImGui::Combo("Shadow Mode", &mode_idx, kModeLabels, IM_ARRAYSIZE(kModeLabels))) {
+                    ctx.shadow_config.shadow_mode = static_cast<uint32_t>(mode_idx);
+                }
+
                 // Cascade count (pure rendering parameter, no resource rebuild)
                 constexpr uint32_t kCascadeCounts[] = {1, 2, 3, 4};
                 constexpr const char *kCascadeLabels[] = {"1", "2", "3", "4"};
@@ -366,18 +373,43 @@ namespace himalaya::app {
                 ImGui::SliderFloat("Slope Bias", &ctx.shadow_config.slope_bias, 0.0f, 10.0f, "%.1f");
                 ImGui::SliderFloat("Normal Offset", &ctx.shadow_config.normal_offset, 0.0f, 5.0f, "%.2f");
 
-                // PCF radius (0=Off, 1=3x3, ..., 5=11x11)
-                constexpr uint32_t kPcfRadii[] = {0, 1, 2, 3, 4, 5};
-                constexpr const char *kPcfLabels[] = {"Off", "3x3", "5x5", "7x7", "9x9", "11x11"};
-                int pcf_idx = 0;
-                for (int i = 0; i < IM_ARRAYSIZE(kPcfRadii); ++i) {
-                    if (kPcfRadii[i] == ctx.shadow_config.pcf_radius) {
-                        pcf_idx = i;
-                        break;
+                if (ctx.shadow_config.shadow_mode == 0) {
+                    // PCF mode: show PCF radius
+                    constexpr uint32_t kPcfRadii[] = {0, 1, 2, 3, 4, 5};
+                    constexpr const char *kPcfLabels[] = {"Off", "3x3", "5x5", "7x7", "9x9", "11x11"};
+                    int pcf_idx = 0;
+                    for (int i = 0; i < IM_ARRAYSIZE(kPcfRadii); ++i) {
+                        if (kPcfRadii[i] == ctx.shadow_config.pcf_radius) {
+                            pcf_idx = i;
+                            break;
+                        }
                     }
-                }
-                if (ImGui::Combo("PCF Radius", &pcf_idx, kPcfLabels, IM_ARRAYSIZE(kPcfLabels))) {
-                    ctx.shadow_config.pcf_radius = kPcfRadii[pcf_idx];
+                    if (ImGui::Combo("PCF Radius", &pcf_idx, kPcfLabels, IM_ARRAYSIZE(kPcfLabels))) {
+                        ctx.shadow_config.pcf_radius = kPcfRadii[pcf_idx];
+                    }
+                } else {
+                    // PCSS mode: show angular diameter, quality, blocker early-out
+                    constexpr float kDegToRad = 3.14159265f / 180.0f;
+                    constexpr float kRadToDeg = 180.0f / 3.14159265f;
+                    float angular_deg = ctx.shadow_config.light_angular_diameter * kRadToDeg;
+                    if (ImGui::SliderFloat("Angular Diameter", &angular_deg, 0.1f, 5.0f, "%.2f deg")) {
+                        ctx.shadow_config.light_angular_diameter = angular_deg * kDegToRad;
+                    }
+                    if (ImGui::IsItemHovered()) {
+                        ImGui::SetTooltip("Sun ~0.53 deg (subtle). Use 2-5 deg for visible soft shadows.");
+                    }
+
+                    constexpr const char *kQualityLabels[] = {"Low", "Medium", "High"};
+                    auto quality_idx = static_cast<int>(ctx.shadow_config.pcss_quality);
+                    if (ImGui::Combo("PCSS Quality", &quality_idx, kQualityLabels, IM_ARRAYSIZE(kQualityLabels))) {
+                        ctx.shadow_config.pcss_quality = static_cast<uint32_t>(quality_idx);
+                    }
+
+                    bool early_out = (ctx.shadow_config.pcss_flags & 1u) != 0;
+                    if (ImGui::Checkbox("Blocker Early-Out", &early_out)) {
+                        ctx.shadow_config.pcss_flags = early_out ? (ctx.shadow_config.pcss_flags | 1u)
+                                                                 : (ctx.shadow_config.pcss_flags & ~1u);
+                    }
                 }
 
                 ImGui::SliderFloat("Blend Width", &ctx.shadow_config.blend_width, 0.0f, 0.5f, "%.2f");
