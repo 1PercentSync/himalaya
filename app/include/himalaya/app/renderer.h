@@ -280,6 +280,9 @@ namespace himalaya::app {
         /** @brief Shadow comparison sampler (GREATER_OR_EQUAL, linear filter, clamp to edge). */
         rhi::SamplerHandle shadow_comparison_sampler_;
 
+        /** @brief Shadow depth sampler (NEAREST, no compare, clamp to edge) for PCSS blocker search. */
+        rhi::SamplerHandle shadow_depth_sampler_;
+
         /** @brief Default 1x1 textures (white, flat normal, black). */
         framework::DefaultTextures default_textures_{};
 
@@ -328,8 +331,11 @@ namespace himalaya::app {
         /** @brief Updates Set 2 binding 0 with the current hdr_color backing image. */
         void update_hdr_color_descriptor() const;
 
-        /** @brief Updates Set 2 binding 5 with the current shadow map image. */
+        /** @brief Updates Set 2 binding 5 with the current shadow map image (comparison sampler). */
         void update_shadow_map_descriptor() const;
+
+        /** @brief Updates Set 2 binding 6 with the current shadow map image (depth sampler for PCSS). */
+        void update_shadow_depth_descriptor() const;
 
         /** @brief Registers all swapchain images as external images in ResourceManager. */
         void register_swapchain_images();

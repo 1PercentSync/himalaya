@@ -69,7 +69,14 @@ namespace himalaya::app {
      * fills GPU instance data into the mapped InstanceBuffer, and routes
      * groups to opaque or mask output vectors.
      *
-     * @param compute_normal_matrix  If false, skips the per-instance
+     * @param mesh_instances        Scene mesh instances (indexed by sorted_indices).
+     * @param materials             Material table for alpha_mode/double_sided grouping.
+     * @param sorted_indices        Visible instance indices, pre-sorted by group key.
+     * @param gpu_instances         Mapped InstanceBuffer base pointer.
+     * @param instance_offset       Current write offset into InstanceBuffer (updated in place).
+     * @param out_opaque            Output: opaque draw groups (cleared then filled).
+     * @param out_mask              Output: alpha-mask draw groups (cleared then filled).
+     * @param compute_normal_matrix If false, skips the per-instance
      *     mat3 inverse+transpose (shadow shaders don't read normal data).
      */
     static void build_draw_groups(
@@ -160,9 +167,12 @@ namespace himalaya::app {
      * Derivation: applying depth_new = 1 - depth_old to the standard
      * mapping yields M[2][2] = -M[2][2] and M[3][2] = 1 - M[3][2].
      */
-    static glm::mat4 ortho_reverse_z(const float left, const float right,
-                                      const float bottom, const float top,
-                                      const float z_near, const float z_far) {
+    static glm::mat4 ortho_reverse_z(const float left,
+                                     const float right,
+                                     const float bottom,
+                                     const float top,
+                                     const float z_near,
+                                     const float z_far) {
         glm::mat4 m = glm::orthoRH_ZO(left, right, bottom, top, z_near, z_far);
         m[2][2] = -m[2][2];
         m[3][2] = 1.0f - m[3][2];
@@ -205,7 +215,6 @@ namespace himalaya::app {
         const framework::ShadowConfig &config,
         const framework::AABB &scene_bounds,
         const float shadow_texel_size) {
-
         ShadowCascadeResult result;
         const float shadow_far = std::min(config.max_distance, cam.far_plane);
         const uint32_t n = config.cascade_count;
@@ -231,7 +240,7 @@ namespace himalaya::app {
         }
 
         for (uint32_t i = 0; i < n; ++i)
-            result.cascade_splits[i] = splits[i + 1];
+            result.cascade_splits[static_cast<int>(i)] = splits[i + 1];
 
         // --- Light-space basis (shared across all cascades) ---
         const glm::vec3 ref = std::abs(light_dir.y) < 0.999f
@@ -279,7 +288,7 @@ namespace himalaya::app {
 
             // Sub-frustum center — light-view origin for numerical precision
             glm::vec3 center(0.0f);
-            for (const auto &corner : corners)
+            for (const auto &corner: corners)
                 center += corner;
             center *= (1.0f / 8.0f);
 
@@ -295,14 +304,14 @@ namespace himalaya::app {
             // Tight AABB of sub-frustum corners in light space (XY fit)
             glm::vec3 ls_min(std::numeric_limits<float>::max());
             glm::vec3 ls_max(std::numeric_limits<float>::lowest());
-            for (const auto &corner : corners) {
+            for (const auto &corner: corners) {
                 const auto ls = glm::vec3(light_view * glm::vec4(corner, 1.0f));
                 ls_min = glm::min(ls_min, ls);
                 ls_max = glm::max(ls_max, ls);
             }
 
             // Extend Z to scene AABB (shadow casters outside this frustum slice)
-            for (const auto &sc : scene_corners) {
+            for (const auto &sc: scene_corners) {
                 const float lz = glm::vec3(light_view * glm::vec4(sc, 1.0f)).z;
                 ls_min.z = std::min(ls_min.z, lz);
                 ls_max.z = std::max(ls_max.z, lz);
@@ -338,8 +347,8 @@ namespace himalaya::app {
             const glm::vec3 row0(result.cascade_view_proj[c][0][0],
                                  result.cascade_view_proj[c][1][0],
                                  result.cascade_view_proj[c][2][0]);
-            result.cascade_texel_world_size[c] =
-                2.0f * shadow_texel_size / glm::length(row0);
+            result.cascade_texel_world_size[static_cast<int>(c)] =
+                    2.0f * shadow_texel_size / glm::length(row0);
         }
 
         return result;
@@ -537,6 +546,19 @@ namespace himalaya::app {
                                                                            .compare_op = rhi::CompareOp::GreaterOrEqual,
                                                                        }, "Shadow Comparison Sampler");
 
+        // --- Shadow depth sampler for PCSS blocker search (raw depth reads) ---
+        shadow_depth_sampler_ = resource_manager_->create_sampler({
+                                                                      .mag_filter = rhi::Filter::Nearest,
+                                                                      .min_filter = rhi::Filter::Nearest,
+                                                                      .mip_mode = rhi::SamplerMipMode::Nearest,
+                                                                      .wrap_u = rhi::SamplerWrapMode::ClampToEdge,
+                                                                      .wrap_v = rhi::SamplerWrapMode::ClampToEdge,
+                                                                      .max_anisotropy = 0.0f,
+                                                                      .max_lod = 0.0f,
+                                                                      .compare_enable = false,
+                                                                      .compare_op = rhi::CompareOp::Never,
+                                                                  }, "Shadow Depth Sampler");
+
         // --- Shadow pass ---
         shadow_pass_.setup(*ctx_,
                            *resource_manager_,
@@ -573,8 +595,11 @@ namespace himalaya::app {
         // --- Set 2 binding 0: hdr_color for TonemappingPass sampling ---
         update_hdr_color_descriptor();
 
-        // --- Set 2 binding 5: shadow map for forward pass shadow sampling ---
+        // --- Set 2 binding 5: shadow map comparison sampler (PCF) ---
         update_shadow_map_descriptor();
+
+        // --- Set 2 binding 6: shadow map depth sampler (PCSS blocker search) ---
+        update_shadow_depth_descriptor();
     }
 
     void Renderer::destroy() {
@@ -605,6 +630,7 @@ namespace himalaya::app {
         resource_manager_->destroy_image(default_textures_.black.image);
         resource_manager_->destroy_sampler(default_sampler_);
         resource_manager_->destroy_sampler(shadow_comparison_sampler_);
+        resource_manager_->destroy_sampler(shadow_depth_sampler_);
 
         if (managed_msaa_color_.valid())
             render_graph_.destroy_managed_image(managed_msaa_color_);
@@ -725,6 +751,7 @@ namespace himalaya::app {
         vkQueueWaitIdle(ctx_->graphics_queue);
         shadow_pass_.on_resolution_changed(new_resolution);
         update_shadow_map_descriptor();
+        update_shadow_depth_descriptor();
     }
 
     // ---- Shader hot-reload ----
@@ -777,7 +804,7 @@ namespace himalaya::app {
 
         // Find the first shadow-casting directional light (used by UBO fill + draw group + pass recording)
         const framework::DirectionalLight *shadow_light = nullptr;
-        for (const auto &light : input.lights) {
+        for (const auto &light: input.lights) {
             if (light.cast_shadows) {
                 shadow_light = &light;
                 break;
@@ -805,6 +832,7 @@ namespace himalaya::app {
 
             cascades = compute_shadow_cascades(
                 input.camera,
+                // ReSharper disable once CppDFANullDereference
                 glm::normalize(shadow_light->direction),
                 input.shadow_config,
                 input.scene_bounds,
@@ -880,7 +908,7 @@ namespace himalaya::app {
                 // Filter out Blend instances (don't cast shadows in M1)
                 auto &sorted = shadow_cascade_sorted_[c];
                 sorted.clear();
-                for (const uint32_t idx : shadow_cull_buffer_) {
+                for (const uint32_t idx: shadow_cull_buffer_) {
                     if (input.materials[input.mesh_instances[idx].material_id].alpha_mode
                         != framework::AlphaMode::Blend) {
                         sorted.push_back(idx);
@@ -1055,6 +1083,12 @@ namespace himalaya::app {
         descriptor_manager_->update_render_target(5,
                                                   shadow_pass_.shadow_map_image(),
                                                   shadow_comparison_sampler_);
+    }
+
+    void Renderer::update_shadow_depth_descriptor() const {
+        descriptor_manager_->update_render_target(6,
+                                                  shadow_pass_.shadow_map_image(),
+                                                  shadow_depth_sampler_);
     }
 
     // ---- Swapchain image registration ----
