@@ -108,7 +108,11 @@ namespace himalaya::passes {
 
                 cmd.begin_rendering(rendering_info);
 
-                // Dynamic state
+                // Dynamic state — standard (non-flipped) viewport.
+                // Camera passes flip the viewport (negative height) for GLM
+                // compatibility, but the shadow pass doesn't need this: both
+                // rendering and sampling use the same VP matrix, so the Y
+                // convention is self-consistent regardless of flip direction.
                 VkViewport viewport{};
                 viewport.x = 0.0f;
                 viewport.y = 0.0f;

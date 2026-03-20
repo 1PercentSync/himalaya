@@ -147,6 +147,27 @@ namespace himalaya::app {
         }
     }
 
+    // ---- Light projection helpers ----
+
+    /**
+     * Builds a reverse-Z orthographic projection matrix.
+     *
+     * Standard glm::orthoRH_ZO maps [near, far] → [0, 1]. This function
+     * flips the mapping to [1, 0] (near → 1, far → 0) to match the
+     * project-wide reverse-Z convention (clear 0.0, compare GREATER).
+     *
+     * Derivation: applying depth_new = 1 - depth_old to the standard
+     * mapping yields M[2][2] = -M[2][2] and M[3][2] = 1 - M[3][2].
+     */
+    static glm::mat4 ortho_reverse_z(const float left, const float right,
+                                      const float bottom, const float top,
+                                      const float z_near, const float z_far) {
+        glm::mat4 m = glm::orthoRH_ZO(left, right, bottom, top, z_near, z_far);
+        m[2][2] = -m[2][2];
+        m[3][2] = 1.0f - m[3][2];
+        return m;
+    }
+
     // ---- Init / Destroy ----
 
     void Renderer::init(rhi::Context &ctx,
@@ -653,25 +674,17 @@ namespace himalaya::app {
                     glm::vec3{sb.max.x, sb.max.y, sb.max.z},
                 };
                 for (const auto &c : scene_corners) {
-                    const float lz = glm::dot(
-                        glm::vec3(light_view[0][2], light_view[1][2], light_view[2][2]), c)
-                        + light_view[3][2];
+                    const float lz = glm::vec3(light_view * glm::vec4(c, 1.0f)).z;
                     ls_min.z = std::min(ls_min.z, lz);
                     ls_max.z = std::max(ls_max.z, lz);
                 }
             }
 
-            // Build reverse-Z orthographic projection
-            // Standard RH_ZO maps near→0, far→1; reverse: near→1, far→0
-            glm::mat4 light_proj = glm::orthoRH_ZO(
-                ls_min.x,
-                ls_max.x,
-                ls_min.y,
-                ls_max.y,
-                -ls_max.z,
-                -ls_min.z);
-            light_proj[2][2] = -light_proj[2][2];
-            light_proj[3][2] = 1.0f - light_proj[3][2];
+            // Orthographic projection: XY from frustum AABB, Z from scene AABB
+            const glm::mat4 light_proj = ortho_reverse_z(
+                ls_min.x, ls_max.x,
+                ls_min.y, ls_max.y,
+                -ls_max.z, -ls_min.z);
 
             ubo_data.cascade_view_proj[0] = light_proj * light_view;
             ubo_data.cascade_splits = glm::vec4(shadow_far, 0.0f, 0.0f, 0.0f);
