@@ -172,7 +172,7 @@
 - [x] `rhi/descriptors.h/cpp` Set 2 layout 新增 binding 6（`sampler2DArray`，`PARTIALLY_BOUND`）— 已由 kRenderTargetBindingCount=8 预留
 - [x] `bindings.glsl` 新增 `layout(set = 2, binding = 6) uniform sampler2DArray rt_shadow_map_depth`
 - [x] `handle_shadow_resolution_changed()` 同步更新 binding 6 — 已在第一小项中一并实现
-- [ ] `ShadowConfig` 新增 `shadow_mode`（uint32_t, 0=PCF, 1=PCSS）+ `light_angular_diameter`（float, 弧度, 默认 0.00925f）+ `pcss_flags`（uint32_t, bit 0: blocker early-out, 默认开启）+ `pcss_quality`（uint32_t, 0=Low, 1=Medium, 2=High, 默认 1）
+- [x] `ShadowConfig` 新增 `shadow_mode`（uint32_t, 0=PCF, 1=PCSS）+ `light_angular_diameter`（float, 弧度, 默认 0.00925f）+ `pcss_flags`（uint32_t, bit 0: blocker early-out, 默认开启）+ `pcss_quality`（uint32_t, 0=Low, 1=Medium, 2=High, 默认 1）
 - [ ] `GlobalUniformData` 新增 `shadow_mode` / `pcss_flags` / `pcss_blocker_samples` / `pcss_pcf_samples` / `cascade_light_size_uv`（vec4）/ `cascade_pcss_scale`（vec4）/ `cascade_uv_scale_y`（vec4），656 → 720 bytes
 - [ ] `bindings.glsl` GlobalUBO 同步新增上述字段
 - [ ] `ShadowCascadeResult` 新增 `cascade_width_x` / `cascade_width_y` / `cascade_depth_range`（vec4），`compute_shadow_cascades` 循环中存储
