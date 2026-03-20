@@ -106,6 +106,9 @@ namespace himalaya::app {
         /** @brief Current MSAA sample count (display only; changes via DebugUIActions). */
         uint32_t current_sample_count;
 
+        /** @brief Current shadow map resolution (display only; changes via DebugUIActions). */
+        uint32_t shadow_resolution;
+
         /** @brief Bitmask of GPU-supported MSAA sample counts (VkSampleCountFlags). */
         uint32_t supported_sample_counts;
 
@@ -165,6 +168,12 @@ namespace himalaya::app {
 
         /** @brief True if the user clicked the Reload Shaders button. */
         bool reload_shaders = false;
+
+        /** @brief True if the shadow map resolution was changed this frame. */
+        bool shadow_resolution_changed = false;
+
+        /** @brief New shadow map resolution (valid only when shadow_resolution_changed is true). */
+        uint32_t new_shadow_resolution = 0;
 
         /** @brief True if the user requested loading a new HDR environment. */
         bool env_load_requested = false;

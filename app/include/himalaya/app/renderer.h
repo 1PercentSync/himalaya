@@ -203,6 +203,9 @@ namespace himalaya::app {
         /** @brief Returns the total GPU draw calls (vkCmdDrawIndexed) from the last frame. */
         [[nodiscard]] uint32_t last_draw_call_count() const;
 
+        /** @brief Returns the current shadow map resolution (width = height). */
+        [[nodiscard]] uint32_t shadow_resolution() const;
+
     private:
         // --- Subsystem references (non-owning, set during init) ---
 

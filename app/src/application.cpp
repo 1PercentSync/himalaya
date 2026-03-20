@@ -330,6 +330,7 @@ namespace himalaya::app {
             .features = features_,
             .shadow_config = shadow_config_,
             .current_sample_count = renderer_.current_sample_count(),
+            .shadow_resolution = renderer_.shadow_resolution(),
             .supported_sample_counts = context_.msaa_sample_counts,
             .scene_path = config_.scene_path,
             .env_path = config_.env_path,
@@ -364,6 +365,10 @@ namespace himalaya::app {
 
         if (actions.msaa_changed) {
             renderer_.handle_msaa_change(actions.new_sample_count);
+        }
+
+        if (actions.shadow_resolution_changed) {
+            renderer_.handle_shadow_resolution_changed(actions.new_shadow_resolution);
         }
 
         if (actions.scene_load_requested) {

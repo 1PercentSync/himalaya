@@ -330,6 +330,35 @@ namespace himalaya::app {
         if (ctx.features.shadows) {
             ImGui::Separator();
             if (ImGui::CollapsingHeader("Shadow")) {
+                // Cascade count (pure rendering parameter, no resource rebuild)
+                constexpr uint32_t kCascadeCounts[] = {1, 2, 3, 4};
+                constexpr const char *kCascadeLabels[] = {"1", "2", "3", "4"};
+                int cascade_idx = 0;
+                for (int i = 0; i < IM_ARRAYSIZE(kCascadeCounts); ++i) {
+                    if (kCascadeCounts[i] == ctx.shadow_config.cascade_count) {
+                        cascade_idx = i;
+                        break;
+                    }
+                }
+                if (ImGui::Combo("Cascades", &cascade_idx, kCascadeLabels, IM_ARRAYSIZE(kCascadeLabels))) {
+                    ctx.shadow_config.cascade_count = kCascadeCounts[cascade_idx];
+                }
+
+                // Resolution (triggers resource rebuild via DebugUIActions)
+                constexpr uint32_t kResolutions[] = {512, 1024, 2048, 4096};
+                constexpr const char *kResLabels[] = {"512", "1024", "2048", "4096"};
+                int res_idx = 0;
+                for (int i = 0; i < IM_ARRAYSIZE(kResolutions); ++i) {
+                    if (kResolutions[i] == ctx.shadow_resolution) {
+                        res_idx = i;
+                        break;
+                    }
+                }
+                if (ImGui::Combo("Resolution", &res_idx, kResLabels, IM_ARRAYSIZE(kResLabels))) {
+                    actions.shadow_resolution_changed = true;
+                    actions.new_shadow_resolution = kResolutions[res_idx];
+                }
+
                 ImGui::SliderFloat("Split Lambda", &ctx.shadow_config.split_lambda, 0.0f, 1.0f, "%.2f");
                 ImGui::SliderFloat("Max Distance", &ctx.shadow_config.max_distance, 1.0f, 2000.0f, "%.0f m",
                                    ImGuiSliderFlags_Logarithmic);

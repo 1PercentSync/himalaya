@@ -744,6 +744,10 @@ namespace himalaya::app {
         return current_sample_count_;
     }
 
+    uint32_t Renderer::shadow_resolution() const {
+        return shadow_pass_.resolution();
+    }
+
     // ---- Render ----
 
     void Renderer::render(rhi::CommandBuffer &cmd, const RenderInput &input) {
