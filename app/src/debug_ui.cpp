@@ -12,6 +12,7 @@
 #include <himalaya/rhi/swapchain.h>
 
 #include <algorithm>
+#include <cmath>
 #include <filesystem>
 
 #include <glm/trigonometric.hpp>
@@ -329,7 +330,7 @@ namespace himalaya::app {
         // Shadow section
         if (ctx.features.shadows) {
             ImGui::Separator();
-            if (ImGui::CollapsingHeader("Shadow")) {
+            if (ImGui::CollapsingHeader("Shadow", ImGuiTreeNodeFlags_DefaultOpen)) {
                 // Cascade count (pure rendering parameter, no resource rebuild)
                 constexpr uint32_t kCascadeCounts[] = {1, 2, 3, 4};
                 constexpr const char *kCascadeLabels[] = {"1", "2", "3", "4"};
@@ -364,6 +365,36 @@ namespace himalaya::app {
                                    ImGuiSliderFlags_Logarithmic);
                 ImGui::SliderFloat("Slope Bias", &ctx.shadow_config.slope_bias, 0.0f, 10.0f, "%.1f");
                 ImGui::SliderFloat("Normal Offset", &ctx.shadow_config.normal_offset, 0.0f, 5.0f, "%.2f");
+
+                // Cascade statistics: coverage range and texel density
+                ImGui::Separator();
+                ImGui::TextDisabled("Cascade Statistics");
+                const auto &sc = ctx.shadow_config;
+                const float shadow_far = (std::min)(sc.max_distance, ctx.camera.far_plane);
+                const float tan_half = std::tan(ctx.camera.fov * 0.5f);
+                // Frustum diagonal factor at unit depth
+                const float diag_factor = 2.0f * tan_half
+                    * std::sqrt(ctx.camera.aspect * ctx.camera.aspect + 1.0f);
+                const float res_f = static_cast<float>(ctx.shadow_resolution);
+
+                float prev_split = ctx.camera.near_plane;
+                for (uint32_t i = 0; i < sc.cascade_count; ++i) {
+                    const float t = static_cast<float>(i + 1)
+                        / static_cast<float>(sc.cascade_count);
+                    const float c_log = ctx.camera.near_plane
+                        * std::pow(shadow_far / ctx.camera.near_plane, t);
+                    const float c_lin = ctx.camera.near_plane
+                        + (shadow_far - ctx.camera.near_plane) * t;
+                    const float split = sc.split_lambda * c_log
+                        + (1.0f - sc.split_lambda) * c_lin;
+
+                    const float diagonal = diag_factor * split;
+                    const float density = res_f / diagonal;
+
+                    ImGui::Text("  C%u: %.1f - %.1f m  (%.1f px/m)",
+                                i, prev_split, split, density);
+                    prev_split = split;
+                }
             }
         }
 
