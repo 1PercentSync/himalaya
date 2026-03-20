@@ -366,6 +366,22 @@ namespace himalaya::app {
                 ImGui::SliderFloat("Slope Bias", &ctx.shadow_config.slope_bias, 0.0f, 10.0f, "%.1f");
                 ImGui::SliderFloat("Normal Offset", &ctx.shadow_config.normal_offset, 0.0f, 5.0f, "%.2f");
 
+                // PCF radius (0=Off, 1=3x3, ..., 5=11x11)
+                constexpr uint32_t kPcfRadii[] = {0, 1, 2, 3, 4, 5};
+                constexpr const char *kPcfLabels[] = {"Off", "3x3", "5x5", "7x7", "9x9", "11x11"};
+                int pcf_idx = 0;
+                for (int i = 0; i < IM_ARRAYSIZE(kPcfRadii); ++i) {
+                    if (kPcfRadii[i] == ctx.shadow_config.pcf_radius) {
+                        pcf_idx = i;
+                        break;
+                    }
+                }
+                if (ImGui::Combo("PCF Radius", &pcf_idx, kPcfLabels, IM_ARRAYSIZE(kPcfLabels))) {
+                    ctx.shadow_config.pcf_radius = kPcfRadii[pcf_idx];
+                }
+
+                ImGui::SliderFloat("Blend Width", &ctx.shadow_config.blend_width, 0.0f, 0.5f, "%.2f");
+
                 // Cascade statistics: coverage range and texel density
                 ImGui::Separator();
                 ImGui::TextDisabled("Cascade Statistics");
