@@ -138,11 +138,11 @@
 
 ## Step 4：多 cascade + PSSM 分割策略
 
-- [ ] Cascade 渲染数量从 1 提升到 4（shadow map 资源不变，始终 4 层）
-- [ ] PSSM 分割实现：`C_i = λ × C_log + (1 - λ) × C_lin`，lambda 从 ShadowConfig 读取（默认 0.75）
-- [ ] Per-cascade 光空间 frustum tight fitting（正交投影紧密包围 cascade sub-frustum 的 8 个角点）
+- [x] Cascade 渲染数量从 1 提升到 4（shadow map 资源不变，始终 4 层）
+- [x] PSSM 分割实现：`C_i = λ × C_log + (1 - λ) × C_lin`，lambda 从 ShadowConfig 读取（默认 0.75）
+- [x] Per-cascade 光空间 frustum tight fitting（正交投影紧密包围 cascade sub-frustum 的 8 个角点）
 - [ ] `shadow.glsl` `select_cascade()` 更新：view-space depth 与 `cascade_splits` 比较，返回正确 cascade index
-- [ ] ShadowPass `record()` 循环 4 次，per-cascade `cmd.begin_debug_label("Cascade N")`
+- [x] ShadowPass `record()` 循环 4 次，per-cascade `cmd.begin_debug_label("Cascade N")`
 - [ ] DebugUI Shadow 面板扩展：split lambda 滑条 + max distance 对数滑条
 - [ ] 验证：近中远距离均有合理阴影覆盖，各 cascade 范围无明显间隙
 
