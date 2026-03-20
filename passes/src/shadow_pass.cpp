@@ -123,6 +123,9 @@ namespace himalaya::passes {
                 cmd.set_depth_test_enable(true);
                 cmd.set_depth_write_enable(true);
                 cmd.set_depth_compare_op(VK_COMPARE_OP_GREATER); // Reverse-Z
+                cmd.set_depth_bias(ctx.shadow_config->constant_bias,
+                                   0.0f, // no clamp
+                                   ctx.shadow_config->slope_bias);
 
                 // Push cascade index
                 const framework::PushConstantData pc{.cascade_index = cascade};
