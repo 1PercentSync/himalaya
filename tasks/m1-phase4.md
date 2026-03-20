@@ -172,17 +172,17 @@
 - [ ] `rhi/descriptors.h/cpp` Set 2 layout 新增 binding 6（`sampler2DArray`，`PARTIALLY_BOUND`）
 - [ ] `bindings.glsl` 新增 `layout(set = 2, binding = 6) uniform sampler2DArray rt_shadow_map_depth`
 - [ ] `handle_shadow_resolution_changed()` 同步更新 binding 6
-- [ ] `ShadowConfig` 新增 `shadow_mode`（uint32_t, 0=PCF, 1=PCSS）+ `light_angular_diameter`（float, 弧度, 默认 0.00925f）
-- [ ] `GlobalUniformData` 新增 `shadow_mode` / `cascade_light_size_uv`（vec4）/ `cascade_pcss_scale`（vec4）/ `cascade_uv_scale_y`（vec4），656 → 720 bytes
+- [ ] `ShadowConfig` 新增 `shadow_mode`（uint32_t, 0=PCF, 1=PCSS）+ `light_angular_diameter`（float, 弧度, 默认 0.00925f）+ `pcss_flags`（uint32_t, bit 0: blocker early-out, 默认开启）+ `pcss_quality`（uint32_t, 0=Low, 1=Medium, 2=High, 默认 1）
+- [ ] `GlobalUniformData` 新增 `shadow_mode` / `pcss_flags` / `pcss_blocker_samples` / `pcss_pcf_samples` / `cascade_light_size_uv`（vec4）/ `cascade_pcss_scale`（vec4）/ `cascade_uv_scale_y`（vec4），656 → 720 bytes
 - [ ] `bindings.glsl` GlobalUBO 同步新增上述字段
 - [ ] `ShadowCascadeResult` 新增 `cascade_width_x` / `cascade_width_y` / `cascade_depth_range`（vec4），`compute_shadow_cascades` 循环中存储
 - [ ] Renderer 每帧从 `ShadowCascadeResult` 几何数据 + `angular_diameter` 计算 per-cascade `LIGHT_SIZE_UV`、`pcss_scale`、`uv_scale_y`，写入 GlobalUBO
-- [ ] `scripts/generate_poisson_disk.py`：dart-throwing 生成 Poisson Disk 样本点（固定种子，单位圆内，输出 GLSL 格式），生成 16 + 25 两组坐标
-- [ ] `shadow.glsl` 新增由脚本生成的 Poisson Disk 常量数组（16 blocker + 25 PCF `vec2`）+ `interleaved_gradient_noise()` + `rotate_sample()`
+- [ ] `scripts/generate_poisson_disk.py`：dart-throwing 生成 Poisson Disk 样本点（固定种子，单位圆内，输出 GLSL 格式），生成 32 + 49 两组坐标（覆盖 High 档位，Low/Medium 使用前 N 个子集）
+- [ ] `shadow.glsl` 新增由脚本生成的 Poisson Disk 常量数组（32 blocker + 49 PCF `vec2`）+ `interleaved_gradient_noise()` + `rotate_sample()`
 - [ ] `shadow.glsl` 新增 `ShadowProjData` 结构体（shadow_uv, ref_depth, dz_du, dz_dv）+ `prepare_shadow_proj()` 函数：法线偏移 + 投影 + `dFdx/dFdy` 梯度计算 + 2×2 求解 + clamp `kMaxReceiverPlaneGradient = 0.01` + cascade 边界检测归零（`dFdx/dFdy(float(cascade))` 检测 quad 内不一致时将梯度归零）（必须在 uniform control flow 中调用）
 - [ ] `shadow.glsl` 新增 `blocker_search(ShadowProjData, cascade, ...)`：从预计算数据读取 UV/深度/梯度（不再内部调 `dFdx/dFdy`）+ 椭圆搜索（`cascade_uv_scale_y` 校正 V 方向）+ 通过 `rt_shadow_map_depth` 读取原始深度 + Reverse-Z blocker 判定 + 16 样本 Poisson Disk + per-pixel 旋转
 - [ ] `shadow.glsl` 新增半影估算：NDC depth 差值通过 `cascade_pcss_scale` × `cascade_uv_scale_y` 转换为 UV 空间椭圆半影宽度 `vec2(penumbra_u, penumbra_v)`，clamp 到 `[shadow_texel_size, kMaxPenumbraTexels * shadow_texel_size]`（下限 1 texel 防噪点，上限 64 texels 防多层遮挡导致的 kernel 爆炸），方向光简化公式（去掉 `1/dBlocker` 除法）
-- [ ] `shadow.glsl` 新增 `sample_shadow_pcss(ShadowProjData, cascade)`：调用 `blocker_search()` → 半影估算 → 25 样本 variable-width PCF（椭圆 kernel + per-sample receiver plane depth bias + Poisson Disk + per-pixel 旋转 + 硬件比较采样）
+- [ ] `shadow.glsl` 新增 `sample_shadow_pcss(ShadowProjData, cascade)`：调用 `blocker_search()` → blocker early-out（全 blocker 且 `pcss_flags` bit 0 → 返回 0.0） → 半影估算 → variable-width PCF（椭圆 kernel + per-sample receiver plane depth bias + Poisson Disk + per-pixel 旋转 + 硬件比较采样，采样数由 UBO `pcss_pcf_samples` 控制）
 - [ ] `shadow.glsl` `blend_cascade_shadow()` PCSS 路径在分支外预计算当前和下一 cascade 的 `ShadowProjData`（下一 cascade 索引 clamp 为 `min(cascade+1, shadow_cascade_count-1)` 防越界，保证 `dFdx/dFdy` 在 uniform flow 中执行），然后根据 `shadow_mode` 分支调用 `sample_shadow_pcf()` 或 `sample_shadow_pcss()`
-- [ ] DebugUI Shadow 面板新增 Shadow Mode 下拉（PCF/PCSS），PCSS 模式隐藏 PCF Radius、显示 Angular Diameter 滑条（度数，0.1°~5.0°，默认 0.53°）+ hover tooltip 提示物理含义与建议值
+- [ ] DebugUI Shadow 面板新增 Shadow Mode 下拉（PCF/PCSS），PCSS 模式隐藏 PCF Radius、显示 Angular Diameter 滑条（度数，0.1°~5.0°，默认 0.53°）+ hover tooltip 提示物理含义与建议值 + PCSS Quality 下拉（Low/Medium/High，默认 Medium）+ Blocker Early-Out checkbox（默认开启）
 - [ ] 验证：PCSS 接触硬化效果、PCF/PCSS 切换正确、cascade 边界平滑、Angular Diameter 调节有效、无 validation 报错

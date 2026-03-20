@@ -426,7 +426,9 @@ struct GlobalUniformData {
     glm::vec4 cascade_texel_world_size;         // offset 640 — 预计算每 cascade 的 texel 世界尺寸
     // --- Step 7 PCSS 新增 ---
     uint32_t shadow_mode;                       // offset 656 — 0=PCF, 1=PCSS
-    float _pcss_pad[3];                         // offset 660 — pad to 672 (vec4 alignment)
+    uint32_t pcss_flags;                        // offset 660 — bit 0: PCSS_FLAG_BLOCKER_EARLY_OUT
+    uint32_t pcss_blocker_samples;              // offset 664 — blocker search 采样数 (16/32)
+    uint32_t pcss_pcf_samples;                  // offset 668 — PCF 采样数 (16/25/49)
     glm::vec4 cascade_light_size_uv;            // offset 672 — per-cascade LIGHT_SIZE_UV (blocker search U 方向半径, 基于 width_x)
     glm::vec4 cascade_pcss_scale;               // offset 688 — per-cascade NDC深度差→UV半影宽度缩放因子 (depth_range * 2tan(θ/2) / width_x, U 方向)
     glm::vec4 cascade_uv_scale_y;              // offset 704 — per-cascade UV 各向异性校正 (width_x / width_y), V 方向乘此比值
@@ -844,6 +846,8 @@ struct ShadowConfig {
     // --- Step 7 PCSS 新增 ---
     uint32_t shadow_mode;          // 0=PCF, 1=PCSS
     float light_angular_diameter;  // 光源角直径 (弧度)，默认 0.00925 ≈ 0.53° (太阳)
+    uint32_t pcss_flags;           // bit 0: blocker early-out (全 blocker 直接返回 0.0)
+    uint32_t pcss_quality;         // 0=Low(16+16), 1=Medium(16+25), 2=High(32+49)
 };
 ```
 
@@ -1139,7 +1143,9 @@ layout(set = 0, binding = 0) uniform GlobalUBO {
     vec4 cascade_texel_world_size;          // 预计算每 cascade 的 texel 世界尺寸
     // --- Step 7 PCSS 新增 ---
     uint shadow_mode;                       // 0=PCF, 1=PCSS
-    // pad to vec4 alignment
+    uint pcss_flags;                        // bit 0: PCSS_FLAG_BLOCKER_EARLY_OUT
+    uint pcss_blocker_samples;              // blocker search 采样数 (16/32)
+    uint pcss_pcf_samples;                  // PCF 采样数 (16/25/49)
     vec4 cascade_light_size_uv;             // per-cascade LIGHT_SIZE_UV (blocker search U 方向半径, 基于 width_x)
     vec4 cascade_pcss_scale;                // per-cascade NDC深度差→UV半影宽度缩放因子 (U 方向)
     vec4 cascade_uv_scale_y;               // per-cascade UV 各向异性校正 (width_x / width_y)
