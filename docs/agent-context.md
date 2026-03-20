@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段四 — 阴影
-- **进度**：Step 6 完成（6/7），Step 7 待实现
+- **进度**：Step 7 进行中（1/17 小项完成）
 
 ### 下一个任务
 
-Step 7：PCSS（Percentage-Closer Soft Shadows）— 从 M2 提前，替换 PCF 为距离相关软阴影
+Step 7：PCSS — 下一小项：`rhi/descriptors.h/cpp` Set 2 layout 新增 binding 6（`sampler2DArray`，`PARTIALLY_BOUND`）
 
 ---
 

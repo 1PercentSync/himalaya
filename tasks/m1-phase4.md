@@ -168,7 +168,7 @@
 
 ## Step 7：PCSS（Percentage-Closer Soft Shadows）
 
-- [ ] Renderer 新增 shadow depth sampler（`NEAREST`，无 compare，`CLAMP_TO_EDGE`）+ Set 2 binding 6 descriptor 写入（同一 shadow map image + depth sampler）
+- [x] Renderer 新增 shadow depth sampler（`NEAREST`，无 compare，`CLAMP_TO_EDGE`）+ Set 2 binding 6 descriptor 写入（同一 shadow map image + depth sampler）
 - [ ] `rhi/descriptors.h/cpp` Set 2 layout 新增 binding 6（`sampler2DArray`，`PARTIALLY_BOUND`）
 - [ ] `bindings.glsl` 新增 `layout(set = 2, binding = 6) uniform sampler2DArray rt_shadow_map_depth`
 - [ ] `handle_shadow_resolution_changed()` 同步更新 binding 6
