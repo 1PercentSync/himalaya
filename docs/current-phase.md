@@ -233,7 +233,7 @@ RenderFeatures + feature_flags 机制见 `milestone-1/m1-design-decisions.md`「
 - `bindings.glsl` 声明 `layout(set = 2, binding = 5) uniform sampler2DArrayShadow rt_shadow_map`
 - ShadowPass 类创建（`passes/shadow_pass.h/cpp`），方法集：`setup()` / `record()` / `destroy()` / `on_resolution_changed()` / `rebuild_pipelines()`
 - Shadow pass 使用 Reverse-Z（clear 0.0，depth compare GREATER）
-- 光空间正交投影矩阵计算：fit 相机 frustum（cascade=1 = 整个 frustum）
+- 光空间正交投影矩阵计算：XY fit 相机 frustum（cascade=1 = 整个 frustum），Z 范围扩展到场景 AABB（RenderInput 传入 scene_bounds），避免 frustum 外的 shadow caster 被裁剪
 - Opaque pipeline：仅 VS（`shadow.vert`），无 FS，depth-only 渲染
 - Mask pipeline：VS（`shadow.vert`）+ FS（`shadow_masked.frag`），alpha test + discard
 - Renderer `render()` 新增 shadow draw group 构建：全部 `mesh_instances` 排序分组 → 填充 InstanceBuffer 第二段（camera 区域之后）→ 构建 shadow opaque/mask draw groups；FrameContext 新增 `shadow_opaque_groups` / `shadow_mask_groups` span
