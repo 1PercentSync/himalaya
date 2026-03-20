@@ -132,5 +132,6 @@ layout(set = 1, binding = 1) uniform samplerCube cubemaps[];
 
 layout(set = 2, binding = 0) uniform sampler2D rt_hdr_color;
 layout(set = 2, binding = 5) uniform sampler2DArrayShadow rt_shadow_map;
+layout(set = 2, binding = 6) uniform sampler2DArray rt_shadow_map_depth;
 
 #endif // BINDINGS_GLSL
