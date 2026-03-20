@@ -41,6 +41,112 @@ namespace himalaya::app {
      */
     constexpr uint32_t kMaxInstances = 65536;
 
+    // ---- Draw group building helpers ----
+
+    /**
+     * Sort predicate for draw group building: orders instance indices by
+     * (mesh_id, alpha_mode, double_sided). Shared by camera and shadow paths.
+     */
+    static auto instance_group_sort(
+        const std::span<const framework::MeshInstance> instances,
+        const std::span<const framework::MaterialInstance> materials) {
+        return [instances, materials](const uint32_t a, const uint32_t b) {
+            const auto &ia = instances[a];
+            const auto &ib = instances[b];
+            if (ia.mesh_id != ib.mesh_id) return ia.mesh_id < ib.mesh_id;
+            const auto &ma = materials[ia.material_id];
+            const auto &mb = materials[ib.material_id];
+            if (ma.alpha_mode != mb.alpha_mode) return ma.alpha_mode < mb.alpha_mode;
+            return ma.double_sided < mb.double_sided;
+        };
+    }
+
+    /**
+     * Builds MeshDrawGroup lists from pre-sorted instance indices.
+     *
+     * Groups consecutive entries sharing (mesh_id, alpha_mode, double_sided),
+     * fills GPU instance data into the mapped InstanceBuffer, and routes
+     * groups to opaque or mask output vectors.
+     *
+     * @param compute_normal_matrix  If false, skips the per-instance
+     *     mat3 inverse+transpose (shadow shaders don't read normal data).
+     */
+    static void build_draw_groups(
+        const std::span<const framework::MeshInstance> mesh_instances,
+        const std::span<const framework::MaterialInstance> materials,
+        const std::span<const uint32_t> sorted_indices,
+        framework::GPUInstanceData *gpu_instances,
+        uint32_t &instance_offset,
+        std::vector<framework::MeshDrawGroup> &out_opaque,
+        std::vector<framework::MeshDrawGroup> &out_mask,
+        const bool compute_normal_matrix) {
+        out_opaque.clear();
+        out_mask.clear();
+
+        const auto count = static_cast<uint32_t>(sorted_indices.size());
+        uint32_t group_start = 0;
+        while (group_start < count) {
+            const uint32_t first_idx = sorted_indices[group_start];
+            const uint32_t mesh_id = mesh_instances[first_idx].mesh_id;
+            const auto &material = materials[mesh_instances[first_idx].material_id];
+
+            // Find end of group (same mesh_id + alpha_mode + double_sided)
+            uint32_t group_end = group_start + 1;
+            while (group_end < count) {
+                const auto &inst_e = mesh_instances[sorted_indices[group_end]];
+                const auto &mat_e = materials[inst_e.material_id];
+                if (inst_e.mesh_id != mesh_id ||
+                    mat_e.alpha_mode != material.alpha_mode ||
+                    mat_e.double_sided != material.double_sided)
+                    break;
+                ++group_end;
+            }
+
+            const uint32_t group_count = group_end - group_start;
+
+            // Guard against InstanceBuffer overflow
+            if (instance_offset + group_count > kMaxInstances) {
+                spdlog::warn("InstanceBuffer overflow: {} instances exceed limit {}, "
+                             "dropping remaining draw groups",
+                             instance_offset + group_count, kMaxInstances);
+                break;
+            }
+
+            const uint32_t group_first = instance_offset;
+
+            // Fill InstanceBuffer entries for this group
+            for (uint32_t i = group_start; i < group_end; ++i) {
+                const auto &inst = mesh_instances[sorted_indices[i]];
+                framework::GPUInstanceData data{};
+                data.model = inst.transform;
+                data.material_index = materials[inst.material_id].buffer_offset;
+                if (compute_normal_matrix) {
+                    const glm::mat3 nm = glm::transpose(glm::inverse(glm::mat3(inst.transform)));
+                    data.normal_col0 = glm::vec4(nm[0], 0.0f);
+                    data.normal_col1 = glm::vec4(nm[1], 0.0f);
+                    data.normal_col2 = glm::vec4(nm[2], 0.0f);
+                }
+                gpu_instances[instance_offset++] = data;
+            }
+
+            // Route to opaque or mask list based on alpha mode
+            const framework::MeshDrawGroup group{
+                .mesh_id = mesh_id,
+                .first_instance = group_first,
+                .instance_count = group_count,
+                .double_sided = material.double_sided,
+            };
+
+            if (material.alpha_mode == framework::AlphaMode::Mask) {
+                out_mask.push_back(group);
+            } else {
+                out_opaque.push_back(group);
+            }
+
+            group_start = group_end;
+        }
+    }
+
     // ---- Init / Destroy ----
 
     void Renderer::init(rhi::Context &ctx,
@@ -602,80 +708,11 @@ namespace himalaya::app {
                 input.cull_result.visible_opaque_indices.begin(),
                 input.cull_result.visible_opaque_indices.end());
             std::ranges::sort(sorted_opaque_indices_,
-                              [&](const uint32_t a, const uint32_t b) {
-                                  const auto &ia = input.mesh_instances[a];
-                                  const auto &ib = input.mesh_instances[b];
-                                  if (ia.mesh_id != ib.mesh_id) return ia.mesh_id < ib.mesh_id;
-                                  const auto &ma = input.materials[ia.material_id];
-                                  const auto &mb = input.materials[ib.material_id];
-                                  if (ma.alpha_mode != mb.alpha_mode) return ma.alpha_mode < mb.alpha_mode;
-                                  return ma.double_sided < mb.double_sided;
-                              });
+                              instance_group_sort(input.mesh_instances, input.materials));
 
-            opaque_draw_groups_.clear();
-            mask_draw_groups_.clear();
-
-            // Group consecutive entries sharing (mesh_id, alpha_mode, double_sided)
-            const auto count = static_cast<uint32_t>(sorted_opaque_indices_.size());
-            uint32_t group_start = 0;
-            while (group_start < count) {
-                const uint32_t first_idx = sorted_opaque_indices_[group_start];
-                const uint32_t mesh_id = input.mesh_instances[first_idx].mesh_id;
-                const auto &material = input.materials[input.mesh_instances[first_idx].material_id];
-
-                // Find end of group (same mesh_id + alpha_mode + double_sided)
-                uint32_t group_end = group_start + 1;
-                while (group_end < count) {
-                    const auto &inst_e = input.mesh_instances[sorted_opaque_indices_[group_end]];
-                    const auto &mat_e = input.materials[inst_e.material_id];
-                    if (inst_e.mesh_id != mesh_id ||
-                        mat_e.alpha_mode != material.alpha_mode ||
-                        mat_e.double_sided != material.double_sided)
-                        break;
-                    ++group_end;
-                }
-
-                const uint32_t group_count = group_end - group_start;
-
-                // Guard against InstanceBuffer overflow
-                if (instance_offset + group_count > kMaxInstances) {
-                    spdlog::warn("InstanceBuffer overflow: {} instances exceed limit {}, "
-                                 "dropping remaining draw groups",
-                                 instance_offset + group_count, kMaxInstances);
-                    break;
-                }
-
-                const uint32_t group_first = instance_offset;
-
-                // Fill InstanceBuffer entries for this group
-                for (uint32_t i = group_start; i < group_end; ++i) {
-                    const auto &inst = input.mesh_instances[sorted_opaque_indices_[i]];
-                    const glm::mat3 normal_mat = glm::transpose(glm::inverse(glm::mat3(inst.transform)));
-                    gpu_instances[instance_offset++] = {
-                        .model = inst.transform,
-                        .normal_col0 = glm::vec4(normal_mat[0], 0.0f),
-                        .normal_col1 = glm::vec4(normal_mat[1], 0.0f),
-                        .normal_col2 = glm::vec4(normal_mat[2], 0.0f),
-                        .material_index = input.materials[inst.material_id].buffer_offset,
-                    };
-                }
-
-                // Route to opaque or mask list based on alpha mode
-                const framework::MeshDrawGroup group{
-                    .mesh_id = mesh_id,
-                    .first_instance = group_first,
-                    .instance_count = group_count,
-                    .double_sided = material.double_sided,
-                };
-
-                if (material.alpha_mode == framework::AlphaMode::Mask) {
-                    mask_draw_groups_.push_back(group);
-                } else {
-                    opaque_draw_groups_.push_back(group);
-                }
-
-                group_start = group_end;
-            }
+            build_draw_groups(input.mesh_instances, input.materials,
+                              sorted_opaque_indices_, gpu_instances, instance_offset,
+                              opaque_draw_groups_, mask_draw_groups_, true);
         }
 
         // --- Build shadow draw groups from ALL mesh_instances (not camera-culled) ---
@@ -694,72 +731,13 @@ namespace himalaya::app {
             }
 
             std::ranges::sort(sorted_shadow_indices_,
-                              [&](const uint32_t a, const uint32_t b) {
-                                  const auto &ia = input.mesh_instances[a];
-                                  const auto &ib = input.mesh_instances[b];
-                                  if (ia.mesh_id != ib.mesh_id) return ia.mesh_id < ib.mesh_id;
-                                  const auto &ma = input.materials[ia.material_id];
-                                  const auto &mb = input.materials[ib.material_id];
-                                  if (ma.alpha_mode != mb.alpha_mode) return ma.alpha_mode < mb.alpha_mode;
-                                  return ma.double_sided < mb.double_sided;
-                              });
+                              instance_group_sort(input.mesh_instances, input.materials));
 
-            // Fill InstanceBuffer second segment (after camera instances)
-            const auto shadow_count = static_cast<uint32_t>(sorted_shadow_indices_.size());
-            uint32_t shadow_group_start = 0;
-            while (shadow_group_start < shadow_count) {
-                const uint32_t first_idx = sorted_shadow_indices_[shadow_group_start];
-                const uint32_t mesh_id = input.mesh_instances[first_idx].mesh_id;
-                const auto &material = input.materials[input.mesh_instances[first_idx].material_id];
-
-                uint32_t shadow_group_end = shadow_group_start + 1;
-                while (shadow_group_end < shadow_count) {
-                    const auto &inst_e = input.mesh_instances[sorted_shadow_indices_[shadow_group_end]];
-                    const auto &mat_e = input.materials[inst_e.material_id];
-                    if (inst_e.mesh_id != mesh_id ||
-                        mat_e.alpha_mode != material.alpha_mode ||
-                        mat_e.double_sided != material.double_sided)
-                        break;
-                    ++shadow_group_end;
-                }
-
-                const uint32_t group_count = shadow_group_end - shadow_group_start;
-
-                if (instance_offset + group_count > kMaxInstances) {
-                    spdlog::warn("InstanceBuffer overflow (shadow): {} instances exceed limit {}",
-                                 instance_offset + group_count, kMaxInstances);
-                    break;
-                }
-
-                const uint32_t group_first = instance_offset;
-
-                for (uint32_t i = shadow_group_start; i < shadow_group_end; ++i) {
-                    const auto &inst = input.mesh_instances[sorted_shadow_indices_[i]];
-                    const glm::mat3 normal_mat = glm::transpose(glm::inverse(glm::mat3(inst.transform)));
-                    gpu_instances[instance_offset++] = {
-                        .model = inst.transform,
-                        .normal_col0 = glm::vec4(normal_mat[0], 0.0f),
-                        .normal_col1 = glm::vec4(normal_mat[1], 0.0f),
-                        .normal_col2 = glm::vec4(normal_mat[2], 0.0f),
-                        .material_index = input.materials[inst.material_id].buffer_offset,
-                    };
-                }
-
-                const framework::MeshDrawGroup group{
-                    .mesh_id = mesh_id,
-                    .first_instance = group_first,
-                    .instance_count = group_count,
-                    .double_sided = material.double_sided,
-                };
-
-                if (material.alpha_mode == framework::AlphaMode::Mask) {
-                    shadow_mask_groups_.push_back(group);
-                } else {
-                    shadow_opaque_groups_.push_back(group);
-                }
-
-                shadow_group_start = shadow_group_end;
-            }
+            // Shadow shaders only read model + material_index from GPUInstanceData;
+            // normal matrix computation is skipped (compute_normal_matrix = false).
+            build_draw_groups(input.mesh_instances, input.materials,
+                              sorted_shadow_indices_, gpu_instances, instance_offset,
+                              shadow_opaque_groups_, shadow_mask_groups_, false);
         }
 
         // Total scene draw calls
