@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段四 — 阴影
-- **进度**：Step 5 进行中（1/8）
+- **进度**：Step 5 进行中（2/8）
 
 ### 下一个任务
 
-Step 5 第 2 项：Debug render mode 追加 `DEBUG_MODE_SHADOW_CASCADES`（passthrough 模式末尾，每 cascade 不同颜色），forward.frag 新增对应分支
+Step 5 第 3 项：DebugUI 渲染模式下拉列表追加 "Shadow Cascades"
 
 ---
 
