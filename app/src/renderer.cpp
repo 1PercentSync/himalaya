@@ -191,6 +191,9 @@ namespace himalaya::app {
         glm::mat4 cascade_view_proj[framework::kMaxShadowCascades]{};
         glm::vec4 cascade_splits{};
         glm::vec4 cascade_texel_world_size{};
+        glm::vec4 cascade_width_x{};      ///< Per-cascade light-space X extent (world units).
+        glm::vec4 cascade_width_y{};      ///< Per-cascade light-space Y extent (world units).
+        glm::vec4 cascade_depth_range{};  ///< Per-cascade light-space Z range (after scene AABB extension).
     };
 
     /**
@@ -316,6 +319,12 @@ namespace himalaya::app {
                 ls_min.z = std::min(ls_min.z, lz);
                 ls_max.z = std::max(ls_max.z, lz);
             }
+
+            // Store per-cascade orthographic extents for PCSS parameter computation
+            const auto ci = static_cast<int>(c);
+            result.cascade_width_x[ci] = ls_max.x - ls_min.x;
+            result.cascade_width_y[ci] = ls_max.y - ls_min.y;
+            result.cascade_depth_range[ci] = ls_max.z - ls_min.z;
 
             // Orthographic projection: XY tight fit, Z from scene AABB
             const glm::mat4 light_proj = ortho_reverse_z(
