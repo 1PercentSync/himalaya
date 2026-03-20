@@ -2305,7 +2305,18 @@ GLSL 规范要求 `dFdx/dFdy` 在 uniform control flow 中执行（2×2 quad 内
 
 额外代价：每像素多一次 `prepare_shadow_proj()`（即使不在 blend 区域），约 25 ALU ops（1 次 mat4×vec4 + 4 次 dFdx/dFdy + 2×2 solve + clamp）。相比 41 次纹理采样可忽略。方案 C 无条件执行 41 次额外纹理采样，代价过高。方案 A 虽然实践中大多数桌面 GPU 能工作，但属于 spec 层面 UB，不可移植。
 
-**已知局限**：cascade 边界处 2×2 quad 内像素可能使用不同 `cascade_view_proj` 矩阵，`dFdx(shadow_uv)` 混合不同投影空间的导数——数学上不精确。此情况仅影响 cascade 交界处 1-2 像素宽的窄带，且 receiver plane bias 是 normal offset + slope bias 之上的第三层修正，退化后等价于固定 PCF 路径的 bias 质量，视觉上不可见。
+**已知局限与缓解**：cascade 边界处 2×2 quad 内像素可能使用不同 `cascade_view_proj` 矩阵，`dFdx(shadow_uv)` 混合不同投影空间的导数——数学上不精确（正常梯度量级 ~0.0005，跨 cascade 混合后可达 ~0.5，偏差 1000×）。2×2 solve 输出的 `dz_du/dz_dv` 为垃圾值。
+
+**缓解措施：cascade 边界检测 + 梯度归零。** `prepare_shadow_proj()` 在计算梯度后，通过 `dFdx(float(cascade))` 检测 quad 内是否存在 cascade 不一致。若检测到不一致，将 `dz_du` 和 `dz_dv` 显式归零，而非依赖 `kMaxReceiverPlaneGradient` clamp 间接截断：
+
+```glsl
+float cascade_var = abs(dFdx(float(cascade))) + abs(dFdy(float(cascade)));
+float cascade_ok = step(cascade_var, 0.5);  // 1.0 = uniform, 0.0 = boundary
+dz_du *= cascade_ok;
+dz_dv *= cascade_ok;
+```
+
+归零后这些像素失去 receiver plane bias 修正，退化为仅依赖 normal offset + slope bias——等价于固定 PCF 路径的 bias 质量。此情况仅影响 cascade 交界处 1-2 像素宽的窄带，且这些像素同时处于 cascade blend 区域（两个 cascade 的阴影值会被 lerp 混合），视觉上不可见。`kMaxReceiverPlaneGradient` clamp 作为第二层防护仍然保留，防御非 cascade 边界场景下的极端掠射角。
 
 #### Cascade 边界半影连续性
 
@@ -2333,7 +2344,6 @@ GLSL 规范要求 `dFdx/dFdy` 在 uniform control flow 中执行（2×2 quad 内
 | 字段 | 类型 | 用途 |
 |------|------|------|
 | `shadow_mode` | `uint` | 0=PCF, 1=PCSS，shader 分支选择 |
-| `light_angular_diameter` | `float` | 光源角直径（弧度） |
 | `cascade_light_size_uv` | `vec4` | per-cascade `LIGHT_SIZE_UV`（Blocker Search U 方向搜索半径，基于 `width_x`） |
 | `cascade_pcss_scale` | `vec4` | per-cascade NDC 深度差→UV 半影宽度缩放因子（`depth_range × 2tan(θ/2) / width_x`，U 方向） |
 | `cascade_uv_scale_y` | `vec4` | per-cascade UV 各向异性校正（`width_x / width_y`），V 方向乘此比值 |

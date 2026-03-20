@@ -426,8 +426,7 @@ struct GlobalUniformData {
     glm::vec4 cascade_texel_world_size;         // offset 640 — 预计算每 cascade 的 texel 世界尺寸
     // --- Step 7 PCSS 新增 ---
     uint32_t shadow_mode;                       // offset 656 — 0=PCF, 1=PCSS
-    float light_angular_diameter;               // offset 660 — 光源角直径 (弧度)
-    float _pcss_pad[2];                         // offset 664 — pad to 672 (vec4 alignment)
+    float _pcss_pad[3];                         // offset 660 — pad to 672 (vec4 alignment)
     glm::vec4 cascade_light_size_uv;            // offset 672 — per-cascade LIGHT_SIZE_UV (blocker search U 方向半径, 基于 width_x)
     glm::vec4 cascade_pcss_scale;               // offset 688 — per-cascade NDC深度差→UV半影宽度缩放因子 (depth_range * 2tan(θ/2) / width_x, U 方向)
     glm::vec4 cascade_uv_scale_y;              // offset 704 — per-cascade UV 各向异性校正 (width_x / width_y), V 方向乘此比值
@@ -1140,7 +1139,6 @@ layout(set = 0, binding = 0) uniform GlobalUBO {
     vec4 cascade_texel_world_size;          // 预计算每 cascade 的 texel 世界尺寸
     // --- Step 7 PCSS 新增 ---
     uint shadow_mode;                       // 0=PCF, 1=PCSS
-    float light_angular_diameter;           // 光源角直径 (弧度)
     // pad to vec4 alignment
     vec4 cascade_light_size_uv;             // per-cascade LIGHT_SIZE_UV (blocker search U 方向半径, 基于 width_x)
     vec4 cascade_pcss_scale;                // per-cascade NDC深度差→UV半影宽度缩放因子 (U 方向)
