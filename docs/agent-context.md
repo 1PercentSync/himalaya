@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 9 第一小项：forward.frag：screen_uv 计算 + rt_ao_texture 采样（R 通道）
+Step 9 第二小项：forward.frag：diffuse AO 乘法复合 + multi-bounce 色彩补偿
 
 ---
 
