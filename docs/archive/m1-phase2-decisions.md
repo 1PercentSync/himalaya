@@ -314,7 +314,7 @@ M1 只有一种材质（标准 PBR），材质参数用固定的 `GPUMaterialDat
 | 阶段六 | + lightmap bindless index + UV scale/offset | ~84+ 字节 |
 | M2 | + prev_model(64, motion vectors) | ~148 字节 ← 超出 128 |
 
-**迁移计划（阶段六执行）**：引入 per-instance SSBO，将 `model`、`material_index`、lightmap 数据等搬入。Push constant 缩减为 `uint instance_id`（4 字节），shader 通过 `instance_data[instance_id]` 读取所有 per-instance 数据。这同时为 M2 的 `prev_model` 预留空间，不再受 push constant 大小限制。
+超出 128 字节保证后需迁移至 per-instance SSBO（已在阶段四 Instancing 中提前完成）。
 
 ---
 

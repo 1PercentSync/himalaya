@@ -685,7 +685,7 @@ struct MeshDrawGroup {
 
 **透明物体例外**：Blend 不做 instancing——数量少且需要 back-to-front 排序，排序破坏 mesh_id 分组。
 
-**提前计划的迁移**：此变更合并了原计划阶段六的 per-instance SSBO 迁移和 M3 的 Instancing，提前到阶段四准备工作解决大型场景性能痛点。
+**决策演进**：阶段二规划了 Push Constant 增长路径（阶段六 lightmap 数据 → M2 prev_model 超出 128 字节保证），原计划阶段六引入 per-instance SSBO 迁移。阶段四提前完成了此迁移并合并 M3 Instancing，解决大型场景性能痛点。阶段二的原始迁移计划不再适用。
 
 ---
 
