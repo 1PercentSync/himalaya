@@ -14,7 +14,7 @@
 | 对象生命周期 | 显式 `destroy()` | 销毁顺序可控 |
 | 帧同步 | 2 Frames in Flight | 低延迟，够用 |
 | 错误处理 | VK_CHECK + Validation Layer + Debug Utils | 开发期全面检测 |
-| ImGui 集成 | Framework 层，Dynamic Rendering，专用 Descriptor Pool | 统一由 RG 管理（阶段二迁移为 RG pass） |
+| ImGui 集成 | Framework 层，Dynamic Rendering，专用 Descriptor Pool | 与场景同 pass 渲染，后续迁移为独立 RG pass |
 
 ---
 
@@ -102,7 +102,7 @@ ImGui 的 Vulkan backend 天然需要 `VkDevice`、`VkInstance`、`VkCommandBuff
 
 ImGui Vulkan backend 配置为 Dynamic Rendering 模式，不使用 `VkRenderPass`。
 
-阶段一中 ImGui 在与场景相同的 dynamic rendering pass 中渲染。阶段二引入 Render Graph 后，ImGui 注册为 RG 中的独立 pass。
+阶段一中 ImGui 在与场景相同的 dynamic rendering pass 中渲染。
 
 ### Descriptor Pool
 
