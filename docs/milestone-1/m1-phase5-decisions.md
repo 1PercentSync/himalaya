@@ -80,6 +80,31 @@ Temporal 场景不使用 `READ_WRITE`——历史帧数据通过 `get_history_im
 
 Graphics pipeline layout 保持 `{Set 0, Set 1, Set 2}`。Per-frame compute pipeline 使用 `{Set 0, Set 1, Set 2, Set 3(push)}`，Set 0-2 与 graphics 共享，Set 3 per-pass 自定义（push descriptor flag）。
 
+### Set 2 — 阶段五扩展
+
+> 阶段三决策结果：Set 2 专用 Descriptor Set（PARTIALLY_BOUND，~8 binding 预留），binding 0 = hdr_color。阶段四新增 binding 5/6（shadow_map）。
+
+阶段五新增：
+
+| Binding | 类型 | 名称 | 产生者 | 消费者 |
+|---------|------|------|--------|--------|
+| 1 | `sampler2D` | depth_resolved | PrePass | GTAO, ContactShadows |
+| 2 | `sampler2D` | normal_resolved | PrePass | GTAO |
+| 3 | `sampler2D` | ao_texture | AOTemporalPass | ForwardPass |
+| 4 | `sampler2D` | contact_shadow_mask | ContactShadowsPass | ForwardPass |
+
+Binding 1-2 使用 nearest sampler，binding 3-4 使用 linear sampler。Binding 1（depth_resolved）和 binding 3（ao_filtered）为 temporal binding，每帧更新当前帧 Set 2 copy。
+
+### Debug 渲染模式 — 阶段五扩展
+
+> 阶段三决策结果：HDR / passthrough 二分系统。阶段四新增 DEBUG_MODE_SHADOW_CASCADES(7)。
+
+阶段五新增：
+
+```glsl
+#define DEBUG_MODE_AO                8   // passthrough，追加到 SHADOW_CASCADES 之后
+```
+
 ### RG 渐进式能力扩展
 
 > 阶段二建立了 RG 渐进式能力建设路线（Barrier 自动插入 → 资源导入）。阶段三引入 Managed 资源管理。

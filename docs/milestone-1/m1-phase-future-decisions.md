@@ -13,3 +13,14 @@
 | Reflection Probes | `samplerCube[]` (binding 1) | 阶段六 |
 
 阶段二设计 Set 1 bindless 架构时预留的容量规划。
+
+---
+
+## Set 2 — 未来阶段预留 binding（来自阶段三规划）
+
+| Binding | 类型 | 名称 | 目标阶段 |
+|---------|------|------|---------|
+| 6 | `sampler2D` | bloom_texture | 阶段八 |
+| 7 | `sampler2D` | refraction_source | 阶段七 |
+
+阶段三设计 Set 2 layout 时预留的 binding slot。具体产生者/消费者待各阶段规划时确定。

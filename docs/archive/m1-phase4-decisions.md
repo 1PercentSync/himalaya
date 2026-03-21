@@ -122,6 +122,43 @@ if ((global.feature_flags & FEATURE_AO) != 0u) {
 
 ---
 
+## Pass 虚基类评估（阶段四结论）
+
+> 阶段三决策结果：具体类（非虚基类），Renderer 持有具体类型成员。
+
+**阶段四评估**：阶段四新增 ShadowPass 后共 5 个 pass（DepthPrePass、ForwardPass、SkyboxPass、TonemappingPass、ShadowPass），4 种不同方法集。统一接口需要大量空默认实现或多个子列表，净增复杂度。M1 全程不引入虚基类，推迟到 M2 评估。
+
+---
+
+## Set 2 — 阶段四扩展
+
+> 阶段三决策结果：Set 2 专用 Descriptor Set（PARTIALLY_BOUND，~8 binding 预留），binding 0 = hdr_color。
+
+阶段四新增：
+
+| Binding | 类型 | 名称 | 产生者 | 消费者 |
+|---------|------|------|--------|--------|
+| 5 | `sampler2DArrayShadow` | shadow_map | ShadowPass | ForwardPass |
+| 6 | `sampler2DArray` | shadow_map_depth | ShadowPass | ForwardPass（PCSS blocker search） |
+
+Binding 5 使用硬件比较采样器（`GREATER_OR_EQUAL`）。Binding 6 为普通采样器，指向同一 `VkImageView`，用于 PCSS blocker search 读取原始深度值。
+
+写入时机：init + shadow resolution change（不参与 swapchain resize 和 MSAA 切换，shadow map 为 Absolute 尺寸且始终 1x）。
+
+---
+
+## Debug 渲染模式 — 阶段四扩展
+
+> 阶段三决策结果：HDR / passthrough 二分系统，新增 passthrough 模式追加到末尾。
+
+阶段四新增：
+
+```glsl
+#define DEBUG_MODE_SHADOW_CASCADES   7   // passthrough，追加到 ROUGHNESS 之后
+```
+
+---
+
 ## CSM 阴影系统
 
 阶段四引入。方向光 CSM（Cascaded Shadow Mapping）+ PCF 软阴影 + cascade blend。
