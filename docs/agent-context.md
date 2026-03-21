@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段五 — 屏幕空间效果
-- **进度**：Step 5 进行中（18/~40）
+- **进度**：Step 5 进行中（19/~40）
 
 ### 下一个任务
 
-Step 5 第三小项：Temporal binding 1（depth_resolved）每帧更新逻辑
+Step 5 第四小项：创建 managed images（ao_noisy RG8、ao_filtered RG8 temporal、contact_shadow_mask R8）+ FrameContext 新增 RGResourceId
 
 ---
 
