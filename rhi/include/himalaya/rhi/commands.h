@@ -204,6 +204,23 @@ namespace himalaya::rhi {
         void push_storage_image(const ResourceManager &rm, VkPipelineLayout layout,
                                 uint32_t set, uint32_t binding, ImageHandle image) const;
 
+        /**
+         * @brief Pushes a sampled image descriptor for compute input.
+         *
+         * Resolves ImageHandle and SamplerHandle via ResourceManager and pushes
+         * a COMBINED_IMAGE_SAMPLER descriptor with SHADER_READ_ONLY_OPTIMAL layout.
+         *
+         * @param rm      Resource manager for handle resolution.
+         * @param layout  Pipeline layout compatible with the push descriptor set.
+         * @param set     Descriptor set index to push to.
+         * @param binding Binding index within the set.
+         * @param image   Image handle for the sampled image.
+         * @param sampler Sampler handle for sampling parameters.
+         */
+        void push_sampled_image(const ResourceManager &rm, VkPipelineLayout layout,
+                                uint32_t set, uint32_t binding, ImageHandle image,
+                                SamplerHandle sampler) const;
+
         // --- Debug labels (VK_EXT_debug_utils, debug builds only) ---
 
         /**
