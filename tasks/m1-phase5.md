@@ -4,46 +4,104 @@
 
 ---
 
-## Step 1：Framework 基础设施
+## Step 1：RG Temporal 机制
 
-- [ ] RG temporal 机制（double buffer、swap、resize 重建、history 无效标记）
-- [ ] Per-frame-in-flight Set 2（DescriptorManager 2 份 Set 2、get_set2(frame_index)、所有 update/bind 路径适配）
-- [ ] CommandBuffer push descriptor helpers（push_storage_image、push_sampled_image）
-- [ ] Compute pipeline 基础设施（ComputePipelineDesc、create_compute_pipeline、Set 3 push descriptor layout）
+- [ ] create_managed_image 新增 temporal 参数 + 内部分配第二张 backing image
+- [ ] clear() swap current/history + resize 重建两张 + history 无效标记
+- [ ] get_history_image() API（首帧/resize 后返回 invalid）
+- [ ] use_managed_image() 对 temporal image 的 initial layout 处理（current UNDEFINED, history SHADER_READ_ONLY_OPTIMAL）
 
-## Step 2：Phase 5 Config + 资源装配
+## Step 2：Per-frame Set 2
 
-- [ ] RenderFeatures 扩展（ao、contact_shadows）+ feature_flags（FEATURE_AO、FEATURE_CONTACT_SHADOWS）+ bindings.glsl 同步
+- [ ] DescriptorManager：Set 2 pool 分配 2 份 set、get_set2(frame_index)
+- [ ] update_render_target 双份写入 + per-frame 重载
+- [ ] 所有现有 get_set2() 调用点适配 frame_index
+- [ ] 所有现有 update_render_target() 调用点确认走双份更新路径
+
+## Step 3：Compute Pass Helpers
+
+- [ ] CommandBuffer push_storage_image（显式传 ResourceManager&）
+- [ ] CommandBuffer push_sampled_image（显式传 ResourceManager&）
+- [ ] DescriptorManager get_compute_set_layouts(set3_push_layout)
+
+## Step 4：Phase 5 Config + GlobalUBO 扩展
+
+- [ ] RenderFeatures 新增 ao + contact_shadows + Application 初始化
+- [ ] FEATURE_AO + FEATURE_CONTACT_SHADOWS（bindings.glsl）+ feature_flags 填充逻辑
 - [ ] AOConfig + ContactShadowConfig 结构体 + Application 初始化
-- [ ] GlobalUBO 新增 inv_projection + prev_view_projection + bindings.glsl 同步
+- [ ] GlobalUBO 新增 inv_projection + prev_view_projection + bindings.glsl 同步 + Renderer 填充
+- [ ] RenderInput + FrameContext 新增 ao_config + contact_shadow_config 指针
+
+## Step 5：Depth/Normal Set 2 绑定 + AO 资源创建
+
 - [ ] Resolved depth 标记 temporal + FrameContext 新增 depth_prev
-- [ ] DepthPrePass roughness 输出（R8 managed image + MSAA resolve + shader 修改）
+- [ ] Set 2 binding 1（depth_resolved nearest）+ binding 2（normal_resolved nearest）写入双份 Set 2
+- [ ] Temporal binding 1（depth_resolved）每帧更新逻辑
 - [ ] 创建 managed images（ao_noisy RG8、ao_filtered RG8 temporal、contact_shadow_mask R8）+ FrameContext 新增 RGResourceId
-- [ ] Set 2 bindings 1-4 写入 + per-frame 更新逻辑
-- [ ] DebugUI Features 面板（AO + Contact Shadows checkbox）+ AO/CS 面板骨架
+- [ ] Set 2 binding 3（ao_texture linear）+ binding 4（contact_shadow_mask linear）写入双份 Set 2
+- [ ] Temporal binding 3（ao_filtered）每帧更新逻辑
 
-## Step 3：GTAO Pass
+## Step 6：DebugUI 骨架
 
-- [ ] gtao.comp（horizon search + cosine-weighted 积分 + specular occlusion 直接计算 + per-pixel noise 旋转）
-- [ ] GTAOPass 类（setup / record / destroy / rebuild_pipelines）
-- [ ] DebugUI AO 面板参数滑条（radius、directions、steps per direction、bias、intensity）
+- [ ] Features 面板新增 AO + Contact Shadows checkbox
+- [ ] AO 面板骨架（参数占位）
+- [ ] Contact Shadows 面板骨架（参数占位）
 
-## Step 4：AO Temporal Filter
+## Step 7：GTAO Pass（R8 diffuse AO）
 
-- [ ] Renderer prev_view_projection 追踪
-- [ ] ao_temporal.comp（reprojection + 三层 rejection + temporal blend + RG8 双通道处理）
-- [ ] AOTemporalPass 类（setup / record / destroy / rebuild_pipelines）
+- [ ] gtao.comp：view-space position 重建 + normal 转换
+- [ ] gtao.comp：horizon search + cosine-weighted 积分 + per-pixel noise 旋转
+- [ ] gtao.comp：输出 RG8（R=AO, G=0.0）+ bias/intensity 应用
+- [ ] GTAOPass 类（setup / record / destroy / rebuild_pipelines）+ Set 3 layout + pipeline
+- [ ] GTAOPass::record()：push constants + push descriptors
+- [ ] DebugUI AO 面板填充（radius、directions、steps per direction、bias、intensity）
 
-## Step 5：AO Forward 集成
+## Step 8：AO Temporal Filter（R8 单通道）
 
-- [ ] forward.frag AO 采样（Set 2 binding 3）+ diffuse AO 乘法复合 + multi-bounce + specular occlusion
-- [ ] forward.frag screen_uv 计算 + FEATURE_AO 守护
-- [ ] Debug render mode 新增 DEBUG_MODE_AO_SSAO + 现有 DEBUG_MODE_AO 改为复合结果
+- [ ] Renderer prev_view_projection 追踪（帧末缓存当前帧 VP）
+- [ ] ao_temporal.comp：reprojection（inv_view_projection → world → prev_view_projection → prev UV）
+- [ ] ao_temporal.comp：三层 rejection + R 通道处理 + G 通道 passthrough
+- [ ] ao_temporal.comp：temporal blend + history 无效处理
+- [ ] AOTemporalPass 类（setup / record / destroy / rebuild_pipelines）+ push descriptors
+
+## Step 9：AO Forward 集成（近似 SO）
+
+- [ ] forward.frag：screen_uv 计算 + rt_ao_texture 采样（R 通道）
+- [ ] forward.frag：diffuse AO 乘法复合 + multi-bounce 色彩补偿
+- [ ] forward.frag：Lagarde 近似 SO + IBL specular 调制
+- [ ] forward.frag：FEATURE_AO 守护
+- [ ] Renderer 编排：features.ao 条件调用 + FrameContext 条件资源声明
+
+## Step 10：AO Debug Modes + Temporal UI
+
+- [ ] Debug render mode 新增 DEBUG_MODE_AO_SSAO + DEBUG_MODE_AO 改为复合结果
 - [ ] DebugUI AO 面板补充 temporal blend 滑条
 
-## Step 6：Contact Shadows
+## Step 11：Roughness Buffer
 
-- [ ] contact_shadows.comp（screen-space ray march + 深度自适应 thickness + 距离衰减）
-- [ ] ContactShadowsPass 类（setup / record / destroy / rebuild_pipelines）
-- [ ] forward.frag contact shadow 采样（Set 2 binding 4）+ shadow attenuation 叠加 + FEATURE_CONTACT_SHADOWS 守护
-- [ ] DebugUI Contact Shadows 面板（step count、max distance、base thickness）
+- [ ] R8 roughness managed image 创建 + on_sample_count_changed 适配
+- [ ] depth_prepass.frag + depth_prepass_masked.frag：输出 roughness
+- [ ] DepthPrePass：roughness 额外 color attachment + MSAA AVERAGE resolve
+- [ ] FrameContext 新增 roughness RGResourceId
+
+## Step 12：GTAO SO 升级（B1）
+
+- [ ] GTAO Set 3 push descriptor 新增 roughness binding
+- [ ] gtao.comp：读 roughness + 重建 view/reflection direction
+- [ ] gtao.comp：per-direction specular cone vs horizon overlap → G 通道输出
+- [ ] ao_temporal.comp：RG8 双通道适配（SO 通道同 blend factor、不做邻域 clamp）
+- [ ] forward.frag：SO 改读 G 通道，删除 Lagarde 近似
+
+## Step 13：Contact Shadows Compute
+
+- [ ] contact_shadows.comp：screen-space ray march + UV 步进
+- [ ] contact_shadows.comp：深度比较 + 深度自适应 thickness
+- [ ] contact_shadows.comp：距离衰减 + push constants
+- [ ] ContactShadowsPass 类（setup / record / destroy / rebuild_pipelines）+ push descriptors
+
+## Step 14：Contact Shadows Forward 集成
+
+- [ ] forward.frag：contact shadow 采样 + shadow attenuation 叠加
+- [ ] FEATURE_CONTACT_SHADOWS 守护
+- [ ] Renderer 编排：features.contact_shadows 条件调用
+- [ ] DebugUI Contact Shadows 面板填充（step count、max distance、base thickness）

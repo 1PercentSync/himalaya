@@ -297,10 +297,10 @@ public:
     // Set 1: 持久 Bindless 纹理（1 个 set，加载时写入）
     VkDescriptorSet get_set1() const;
 
-    // Set 2: Render Target 中间产物（1 个 set，init/resize/MSAA 切换时更新）
-    VkDescriptorSet get_set2() const;
+    // Set 2: Render Target 中间产物（2 个 set 对应 2 frames in flight，阶段五扩展）
+    VkDescriptorSet get_set2(uint32_t frame_index) const;
 
-    // 返回三个 Set 的 layout（Set 0 + Set 1 + Set 2），用于 pipeline 创建
+    // 返回三个 Set 的 layout（Set 0 + Set 1 + Set 2），用于 graphics pipeline 创建
     std::array<VkDescriptorSetLayout, 3> get_global_set_layouts() const;
 };
 ```
@@ -1248,13 +1248,26 @@ public:
     // Set 2 getter 变为 per-frame（阶段五变更）
     VkDescriptorSet get_set2(uint32_t frame_index) const;
 
+    // 更新 Set 2 render target binding — 写入两份 copy（init/resize/MSAA 切换用）
+    void update_render_target(uint32_t binding, ImageHandle image, SamplerHandle sampler) const;
+
+    // 更新 Set 2 render target binding — 写入指定帧的 copy（temporal binding 每帧更新用）
+    void update_render_target(uint32_t frame_index, uint32_t binding,
+                              ImageHandle image, SamplerHandle sampler) const;
+
+    // 返回 per-frame compute pipeline 的 descriptor set layouts
+    // = {set0_layout, set1_layout, set2_layout, set3_push_layout}
+    // 封装 Set 0-2 全局 layout + 调用方提供的 Set 3 push descriptor layout
+    std::vector<VkDescriptorSetLayout> get_compute_set_layouts(
+        VkDescriptorSetLayout set3_push_layout) const;
+
     // ... 其余接口不变 ...
 };
 ```
 
 #### CommandBuffer Push Descriptor Helpers（阶段五引入）
 
-封装 `vkCmdPushDescriptorSet`，Pass 层不接触 Vulkan 类型。设计决策见 `m1-design-decisions.md`「Compute Pass 绑定机制」。
+封装 `vkCmdPushDescriptorSet`，Pass 层不接触 `VkWriteDescriptorSet` 等 Vulkan 类型。显式传 `ResourceManager&` 用于 `ImageHandle → VkImageView` 解析，保持 CommandBuffer 作为纯 `VkCommandBuffer` wrapper。设计决策见 `m1-design-decisions.md`「Compute Pass 绑定机制」。
 
 ```cpp
 class CommandBuffer {
@@ -1262,29 +1275,31 @@ public:
     // ... 已有接口 ...
 
     /// Push a storage image binding for compute output.
-    void push_storage_image(VkPipelineLayout layout, uint32_t set,
-                            uint32_t binding, ImageHandle image);
+    void push_storage_image(const ResourceManager& rm, VkPipelineLayout layout,
+                            uint32_t set, uint32_t binding, ImageHandle image);
 
     /// Push a sampled image binding for compute input.
-    void push_sampled_image(VkPipelineLayout layout, uint32_t set,
-                            uint32_t binding, ImageHandle image,
+    void push_sampled_image(const ResourceManager& rm, VkPipelineLayout layout,
+                            uint32_t set, uint32_t binding, ImageHandle image,
                             SamplerHandle sampler);
 };
 ```
 
-#### Compute Pipeline（阶段五引入）
+#### Compute Pipeline（阶段三 IBL 引入，阶段五 per-frame compute 复用）
 
 ```cpp
 struct ComputePipelineDesc {
     VkShaderModule compute_shader = VK_NULL_HANDLE;
-    VkPipelineLayout layout = VK_NULL_HANDLE;
+    std::vector<VkDescriptorSetLayout> descriptor_set_layouts;
+    std::vector<VkPushConstantRange> push_constant_ranges;
 };
 
-// Pipeline 创建
-Pipeline create_compute_pipeline(const ComputePipelineDesc& desc, const char* debug_name);
+Pipeline create_compute_pipeline(VkDevice device, const ComputePipelineDesc& desc);
 ```
 
-Compute pipeline layout：`{Set 0, Set 1, Set 2, Set 3(push)}`。Set 0/1/2 layout 与 graphics 一致，Set 3 per-pass 自定义（push descriptor flag）。
+两种使用模式：
+- **IBL init compute**（阶段三）：完全自定义 `descriptor_set_layouts`（push descriptor Set 0），不使用全局 Set
+- **Per-frame compute**（阶段五起）：通过 `dm.get_compute_set_layouts(set3_push)` 获取 `{Set 0, Set 1, Set 2, Set 3(push)}`，Set 0-2 与 graphics 共享，Set 3 per-pass 自定义
 
 #### AOConfig（阶段五引入）
 
