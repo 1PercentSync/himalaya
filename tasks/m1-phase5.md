@@ -20,7 +20,7 @@
 
 ## Step 3：Compute Pass Helpers
 
-- [ ] CommandBuffer push_storage_image（显式传 ResourceManager&）
+- [x] CommandBuffer push_storage_image（显式传 ResourceManager&）
 - [ ] CommandBuffer push_sampled_image（显式传 ResourceManager&）
 - [ ] DescriptorManager get_compute_set_layouts(set3_push_layout)
 
