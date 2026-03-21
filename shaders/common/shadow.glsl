@@ -174,9 +174,8 @@ ShadowProjData prepare_shadow_proj(vec3 world_pos, vec3 world_normal, int cascad
     float texel_ws = global.cascade_texel_world_size[cascade];
     vec3 offset_pos = world_pos + world_normal * global.shadow_normal_offset * texel_ws;
 
-    // Project to light clip space (orthographic: w = 1)
-    vec4 light_clip = global.cascade_view_proj[cascade] * vec4(offset_pos, 1.0);
-    vec3 light_ndc = light_clip.xyz / light_clip.w;
+    // Project to light clip space — orthographic, so w = 1 (no perspective divide)
+    vec3 light_ndc = (global.cascade_view_proj[cascade] * vec4(offset_pos, 1.0)).xyz;
 
     // NDC [-1,1] -> UV [0,1]
     proj.shadow_uv = light_ndc.xy * 0.5 + 0.5;
@@ -398,9 +397,8 @@ float sample_shadow_pcf(vec3 world_pos, vec3 world_normal, int cascade) {
     float texel_ws = global.cascade_texel_world_size[cascade];
     vec3 offset_pos = world_pos + world_normal * global.shadow_normal_offset * texel_ws;
 
-    // Project to light clip space (orthographic: w = 1)
-    vec4 light_clip = global.cascade_view_proj[cascade] * vec4(offset_pos, 1.0);
-    vec3 light_ndc = light_clip.xyz / light_clip.w;
+    // Project to light clip space — orthographic, so w = 1 (no perspective divide)
+    vec3 light_ndc = (global.cascade_view_proj[cascade] * vec4(offset_pos, 1.0)).xyz;
 
     // NDC [-1,1] -> UV [0,1]
     vec2 shadow_uv = light_ndc.xy * 0.5 + 0.5;
