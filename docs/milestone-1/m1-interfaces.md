@@ -1386,6 +1386,8 @@ struct FrameContext {
 
     const AOConfig* ao_config = nullptr;
     const ContactShadowConfig* contact_shadow_config = nullptr;
+
+    bool ao_history_valid = false;         // Renderer 查询 is_history_valid(managed_ao_filtered_)
 };
 ```
 
@@ -1435,6 +1437,17 @@ public:
     void destroy();
 };
 ```
+
+**Set 3 push descriptor layout（4 bindings）**：
+
+| Binding | 类型 | 资源 | Sampler |
+|---------|------|------|---------|
+| 0 | `image2D` (storage, rg8) | ao_filtered (output) | — |
+| 1 | `sampler2D` (sampled) | ao_noisy (input) | nearest_clamp |
+| 2 | `sampler2D` (sampled) | ao_history (input) | nearest_clamp |
+| 3 | `sampler2D` (sampled) | depth_prev (input) | nearest_clamp |
+
+Push constants: `float temporal_blend`（Renderer 根据 `ao_history_valid` 和 `ao_config->temporal_blend` 设置，无效时传 0.0）。
 
 #### ContactShadowsPass 接口（阶段五引入）
 
