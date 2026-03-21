@@ -134,7 +134,7 @@ namespace himalaya::passes {
                         const std::array sets = {
                             dm_->get_set0(ctx.frame_index),
                             dm_->get_set1(),
-                            dm_->get_set2(),
+                            dm_->get_set2(ctx.frame_index),
                         };
                         cmd.bind_descriptor_sets(pipeline_.layout, 0, sets.data(), static_cast<uint32_t>(sets.size()));
 

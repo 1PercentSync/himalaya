@@ -36,7 +36,7 @@ namespace himalaya::rhi {
      * Owns three descriptor pools:
      * - Normal pool for Set 0 (2 sets for 2 frames in flight)
      * - UPDATE_AFTER_BIND pool for Set 1 (1 set, shared across frames)
-     * - Normal pool for Set 2 (1 set, updated at init/resize/MSAA switch)
+     * - Normal pool for Set 2 (2 sets for 2 frames in flight, per-frame temporal updates)
      *
      * Lifetime is managed explicitly via init() and destroy().
      */
@@ -76,10 +76,11 @@ namespace himalaya::rhi {
         [[nodiscard]] VkDescriptorSet get_set1() const;
 
         /**
-         * @brief Returns the single Set 2 (render targets) descriptor set.
-         * @return VkDescriptorSet for the render target bindings.
+         * @brief Returns the Set 2 (render targets) descriptor set for the given frame.
+         * @param frame_index Frame in flight index (0 to kMaxFramesInFlight-1).
+         * @return VkDescriptorSet for the render target bindings of the requested frame.
          */
-        [[nodiscard]] VkDescriptorSet get_set2() const;
+        [[nodiscard]] VkDescriptorSet get_set2(uint32_t frame_index) const;
 
         /**
          * @brief Registers a texture+sampler pair into the bindless array.
@@ -153,16 +154,30 @@ namespace himalaya::rhi {
         void unregister_cubemap(BindlessIndex index);
 
         /**
-         * @brief Updates a Set 2 render target binding with the given image and sampler.
+         * @brief Updates a Set 2 render target binding across all frames in flight.
          *
          * Called at init, resize, or MSAA switch to point a named render target
-         * binding to its current backing image.
+         * binding to its current backing image. Writes to both per-frame copies.
          *
          * @param binding Binding index within Set 2 (0-7).
          * @param image   Image handle for the render target.
          * @param sampler Sampler handle for sampling the render target.
          */
         void update_render_target(uint32_t binding, ImageHandle image, SamplerHandle sampler) const;
+
+        /**
+         * @brief Updates a Set 2 render target binding for a specific frame.
+         *
+         * Used for temporal bindings that swap backing images each frame:
+         * only the current frame's Set 2 copy is updated.
+         *
+         * @param frame_index Frame in flight index (0 to kMaxFramesInFlight-1).
+         * @param binding     Binding index within Set 2 (0-7).
+         * @param image       Image handle for the render target.
+         * @param sampler     Sampler handle for sampling the render target.
+         */
+        void update_render_target(uint32_t frame_index, uint32_t binding,
+                                  ImageHandle image, SamplerHandle sampler) const;
 
     private:
         /** @brief Vulkan context (device). */
@@ -201,8 +216,8 @@ namespace himalaya::rhi {
         /** @brief Single Set 1 descriptor set (bindless textures). */
         VkDescriptorSet set1_set_ = VK_NULL_HANDLE;
 
-        /** @brief Single Set 2 descriptor set (render targets). */
-        VkDescriptorSet set2_set_ = VK_NULL_HANDLE;
+        /** @brief Per-frame Set 2 descriptor sets (one per frame in flight). */
+        std::array<VkDescriptorSet, 2> set2_sets_{};
 
         // ---- Bindless free lists ----
 

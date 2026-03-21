@@ -55,7 +55,7 @@ namespace himalaya::rhi {
             set0_layout_ = VK_NULL_HANDLE;
         }
 
-        set2_set_ = VK_NULL_HANDLE;
+        set2_sets_ = {};
         set1_set_ = VK_NULL_HANDLE;
         set0_sets_ = {};
         next_bindless_index_ = 0;
@@ -79,8 +79,9 @@ namespace himalaya::rhi {
         return set1_set_;
     }
 
-    VkDescriptorSet DescriptorManager::get_set2() const {
-        return set2_set_;
+    VkDescriptorSet DescriptorManager::get_set2(const uint32_t frame_index) const {
+        assert(frame_index < set2_sets_.size());
+        return set2_sets_[frame_index];
     }
 
     BindlessIndex DescriptorManager::register_texture(const ImageHandle image, SamplerHandle sampler) {
@@ -176,6 +177,17 @@ namespace himalaya::rhi {
     void DescriptorManager::update_render_target(const uint32_t binding,
                                                  const ImageHandle image,
                                                  const SamplerHandle sampler) const {
+        // Write to both per-frame copies (init/resize/MSAA switch path)
+        for (uint32_t i = 0; i < kMaxFramesInFlight; ++i) {
+            update_render_target(i, binding, image, sampler);
+        }
+    }
+
+    void DescriptorManager::update_render_target(const uint32_t frame_index,
+                                                 const uint32_t binding,
+                                                 const ImageHandle image,
+                                                 const SamplerHandle sampler) const {
+        assert(frame_index < kMaxFramesInFlight && "Frame index out of range");
         assert(binding < kRenderTargetBindingCount && "Set 2 binding out of range");
 
         const auto &img = resource_manager_->get_image(image);
@@ -189,7 +201,7 @@ namespace himalaya::rhi {
 
         const VkWriteDescriptorSet write{
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            .dstSet = set2_set_,
+            .dstSet = set2_sets_[frame_index],
             .dstBinding = binding,
             .descriptorCount = 1,
             .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
@@ -387,16 +399,16 @@ namespace himalaya::rhi {
 
         VK_CHECK(vkCreateDescriptorPool(context_->device, &set1_pool_info, nullptr, &set1_pool_));
 
-        // --- Normal pool for Set 2 (maxSets=1, 8 COMBINED_IMAGE_SAMPLER) ---
+        // --- Normal pool for Set 2 (maxSets=2, 16 COMBINED_IMAGE_SAMPLER for 2 frames in flight) ---
         constexpr VkDescriptorPoolSize set2_pool_size{
             .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-            .descriptorCount = kRenderTargetBindingCount,
+            .descriptorCount = kRenderTargetBindingCount * kMaxFramesInFlight,
         };
 
         // ReSharper disable once CppVariableCanBeMadeConstexpr
         const VkDescriptorPoolCreateInfo set2_pool_info{
             .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-            .maxSets = 1,
+            .maxSets = kMaxFramesInFlight,
             .poolSizeCount = 1,
             .pPoolSizes = &set2_pool_size,
         };
@@ -429,14 +441,18 @@ namespace himalaya::rhi {
 
         VK_CHECK(vkAllocateDescriptorSets(context_->device, &set1_alloc, &set1_set_));
 
-        // --- Set 2 x1 (render targets) ---
+        // --- Set 2 x2 (per-frame render targets) ---
+        const std::array set2_layouts = {
+            set2_layout_, set2_layout_,
+        };
+
         const VkDescriptorSetAllocateInfo set2_alloc{
             .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
             .descriptorPool = set2_pool_,
-            .descriptorSetCount = 1,
-            .pSetLayouts = &set2_layout_,
+            .descriptorSetCount = kMaxFramesInFlight,
+            .pSetLayouts = set2_layouts.data(),
         };
 
-        VK_CHECK(vkAllocateDescriptorSets(context_->device, &set2_alloc, &set2_set_));
+        VK_CHECK(vkAllocateDescriptorSets(context_->device, &set2_alloc, set2_sets_.data()));
     }
 } // namespace himalaya::rhi
