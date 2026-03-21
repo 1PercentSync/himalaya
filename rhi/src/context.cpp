@@ -1,4 +1,5 @@
 #include <himalaya/rhi/context.h>
+#include <himalaya/rhi/descriptors.h>
 
 #include <algorithm>
 #include <cassert>
@@ -194,6 +195,62 @@ namespace himalaya::rhi {
         return true;
     }
 
+    // Checks whether the device supports all Vulkan features required by the renderer.
+    // Keep in sync with create_device() feature requests.
+    // Only checks features that are NOT mandatory in their Vulkan version —
+    // mandatory features (1.3 dynamicRendering/synchronization2/shaderDemoteToHelperInvocation,
+    // 1.4 pushDescriptor) are guaranteed by the API version check.
+    // ReSharper disable once CppParameterMayBeConst
+    static bool has_required_features(VkPhysicalDevice dev) {
+        VkPhysicalDeviceVulkan12Features features_12{};
+        features_12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
+
+        VkPhysicalDeviceFeatures2 features2{};
+        features2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+        features2.pNext = &features_12;
+
+        vkGetPhysicalDeviceFeatures2(dev, &features2);
+
+        const auto &f = features2.features;
+
+        // Vulkan 1.0 optional features
+        if (!f.samplerAnisotropy) return false;
+        if (!f.depthBiasClamp) return false;
+        if (!f.textureCompressionBC) return false;
+        if (!f.shaderStorageImageExtendedFormats) return false;
+
+        // Vulkan 1.2 promoted features (not mandatory)
+        if (!features_12.descriptorBindingPartiallyBound) return false;
+        if (!features_12.descriptorBindingSampledImageUpdateAfterBind) return false;
+        if (!features_12.runtimeDescriptorArray) return false;
+        if (!features_12.shaderSampledImageArrayNonUniformIndexing) return false;
+
+        return true;
+    }
+
+    // Checks whether the device meets descriptor capacity requirements.
+    // Combined image samplers count against both sampled image and sampler limits.
+    // ReSharper disable once CppParameterMayBeConst
+    static bool has_required_limits(VkPhysicalDevice dev) {
+        VkPhysicalDeviceVulkan12Properties props_12{};
+        props_12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_PROPERTIES;
+
+        VkPhysicalDeviceProperties2 props2{};
+        props2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
+        props2.pNext = &props_12;
+
+        vkGetPhysicalDeviceProperties2(dev, &props2);
+
+        constexpr uint32_t required = kMaxBindlessTextures + kMaxBindlessCubemaps;
+
+        if (props_12.maxPerStageDescriptorUpdateAfterBindSampledImages < required) return false;
+        if (props_12.maxPerStageDescriptorUpdateAfterBindSamplers < required) return false;
+        if (props_12.maxDescriptorSetUpdateAfterBindSampledImages < required) return false;
+        if (props_12.maxDescriptorSetUpdateAfterBindSamplers < required) return false;
+
+        return true;
+    }
+
     /**
      * Rates a physical device's suitability. Returns 0 if unsuitable.
      * Scoring: discrete GPU +1000, then +1 per GB of device-local VRAM.
@@ -206,6 +263,10 @@ namespace himalaya::rhi {
 
         VkPhysicalDeviceProperties props;
         vkGetPhysicalDeviceProperties(dev, &props);
+        if (props.apiVersion < VK_API_VERSION_1_4) return 0;
+
+        if (!has_required_features(dev)) return 0;
+        if (!has_required_limits(dev)) return 0;
 
         int score = 1;
         if (props.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) {
@@ -245,7 +306,7 @@ namespace himalaya::rhi {
         }
 
         if (physical_device == VK_NULL_HANDLE) {
-            spdlog::error("No suitable GPU found (need graphics+present queue + required extensions)");
+            spdlog::error("No suitable GPU found (need Vulkan 1.4 + required extensions + features + limits)");
             std::abort();
         }
 
@@ -294,6 +355,9 @@ namespace himalaya::rhi {
         queue_info.queueCount = 1;
         queue_info.pQueuePriorities = &queue_priority;
 
+        // Required features — keep in sync with has_required_features().
+        // All features listed here; has_required_features() only checks non-mandatory ones.
+
         // Vulkan 1.2 core features: descriptor indexing for bindless textures
         VkPhysicalDeviceVulkan12Features features_12{};
         features_12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
@@ -319,6 +383,8 @@ namespace himalaya::rhi {
         VkPhysicalDeviceFeatures features_10{};
         features_10.samplerAnisotropy = VK_TRUE;
         features_10.depthBiasClamp = VK_TRUE;
+        features_10.textureCompressionBC = VK_TRUE;
+        features_10.shaderStorageImageExtendedFormats = VK_TRUE;
 
         features_13.pNext = &features_14;
         features_12.pNext = &features_13;
