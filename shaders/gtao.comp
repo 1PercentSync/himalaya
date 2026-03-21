@@ -162,6 +162,8 @@ void main() {
         float max_cos_pos = pc.bias;
         float max_cos_neg = pc.bias;
 
+        float radius2 = pc.radius * pc.radius;
+
         for (uint j = 1; j <= pc.steps_per_dir; j++) {
             float t = float(j);
 
@@ -171,7 +173,10 @@ void main() {
             vec3 dp = sp - view_pos;
             float len2 = dot(dp, dp);
             if (len2 > EPSILON) {
-                max_cos_pos = max(max_cos_pos, dot(dp, view_dir) * inversesqrt(len2));
+                // Distance falloff: samples beyond world-space radius decay to bias
+                float falloff = clamp(1.0 - len2 / radius2, 0.0, 1.0);
+                float cos_h = dot(dp, view_dir) * inversesqrt(len2);
+                max_cos_pos = max(max_cos_pos, mix(pc.bias, cos_h, falloff));
             }
 
             // Negative direction
@@ -180,7 +185,9 @@ void main() {
             dp = sp - view_pos;
             len2 = dot(dp, dp);
             if (len2 > EPSILON) {
-                max_cos_neg = max(max_cos_neg, dot(dp, view_dir) * inversesqrt(len2));
+                float falloff = clamp(1.0 - len2 / radius2, 0.0, 1.0);
+                float cos_h = dot(dp, view_dir) * inversesqrt(len2);
+                max_cos_neg = max(max_cos_neg, mix(pc.bias, cos_h, falloff));
             }
         }
 
