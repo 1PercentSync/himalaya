@@ -147,3 +147,104 @@ if ((global.feature_flags & FEATURE_AO) != 0u) {
 > 阶段二建立了 RG 渐进式能力建设路线（Barrier 自动插入 → 资源导入）。阶段三引入 Managed 资源管理。
 
 阶段五新增：Temporal 资源管理——首个 temporal pass（AO temporal filter）出现于阶段五，详见上方「Temporal 数据管理」。
+
+---
+
+## Compute Pass Helpers
+
+> 阶段三为 IBL 引入了 `push_descriptor_set()` 轻量封装（一次性 init scope）。阶段五 per-frame compute pass 需要更便捷的 push descriptor helpers。
+
+- `push_storage_image(ResourceManager&, layout, set, binding, ImageHandle)` — compute 输出
+- `push_sampled_image(ResourceManager&, layout, set, binding, ImageHandle, SamplerHandle)` — compute 输入
+- `get_compute_set_layouts(set3_push_layout)` → `{set0, set1, set2, set3}`
+
+显式传 `ResourceManager&` 用于 `ImageHandle → VkImageView` 解析，保持 CommandBuffer 作为纯 `VkCommandBuffer` wrapper。`get_compute_set_layouts` 封装 Set 0-2 全局 layout + Set 3 push descriptor layout，避免 10+ compute pass 手动拼 layout，架构演进时单点修改。
+
+---
+
+## GlobalUBO — 阶段五扩展
+
+> 阶段四 GlobalUBO 720 bytes。
+
+阶段五新增 `inv_projection`(64 bytes) + `prev_view_projection`(64 bytes) → ~848 bytes，仍远小于 16KB。
+
+- `inv_projection`：GTAO 从 depth 重建 view-space position（多 pass 共享，放 GlobalUBO 而非 push constants）
+- `prev_view_projection`：AO temporal reprojection（当前帧世界坐标 → 上一帧 UV）。Renderer 帧末缓存当前帧 VP，首帧 prev = current
+
+AO 特有参数（radius、directions、steps、bias、intensity 等）通过 compute pass push constants 传递，仅 GTAO compute pass 消费，不膨胀 GlobalUBO。
+
+---
+
+## AO 算法选择
+
+**选择：GTAO（直接实现，跳过 Crytek SSAO），全分辨率**
+
+直接实现 GTAO（ground-truth ambient occlusion），跳过经典 Crytek SSAO 中间步骤。GTAO 使用结构化 horizon search + 解析积分（cosine-weighted），原始噪声低于随机采样方案。与 Crytek SSAO 的 shader 差距仅 ~40 行（horizon search 替代随机 kernel sampling），避免 M2 时替换丢弃品。
+
+全分辨率运行。GTAO 采样效率高（4 方向 × 4 步 = 16 fetch），M1 无 TAA 半分辨率瑕疵更明显。
+
+---
+
+## AO 命名约定
+
+Feature 层用 `ao`（RenderFeatures、feature_flags、DebugUI、config 结构体），Implementation 层用 `gtao`（shader 文件名、pass 类名）。特性与算法解耦——未来替换算法时 feature 层接口不变。
+
+---
+
+## AO 光照集成
+
+**Diffuse indirect**：`ssao × material_ao` + Jimenez 2016 multi-bounce 色彩补偿。Multi-bounce 公式 `max(vec3(ao), ((ao * a + b) * ao + c) * ao)` 其中 a/b/c 由 albedo 决定，浅色表面（高 albedo）AO 压暗减轻，避免白墙角落过度黑暗。
+
+**Specular indirect**：仅由 SO 控制，material AO 不参与。AO 是方向无关标量，specular 是方向相关的，标量 AO 乘 specular 会错误压暗反射方向朝向开阔区域的表面。
+
+仅调制间接光（IBL diffuse + IBL specular），直接光已有 shadow map + contact shadows 覆盖。
+
+---
+
+## Specular Occlusion
+
+**选择：方案 B1 — GTAO 直接计算标量 SO**
+
+GTAO 读 roughness buffer + 重建 reflection direction，per-direction 评估 specular cone 与 horizon 重叠。精度高于 bent normal 中间表示（方案 A），且 AO 纹理仅 RG8（vs RGBA8）。
+
+分阶段实施：Step 9 先用 Lagarde 近似公式（`saturate(pow(NdotV + ao, exp) - 1 + ao)`）验证 AO 管线正确性（不需要 roughness buffer），Step 12 升级到 B1 后可直接对比精度差异。
+
+GTAO 输出 RG8_UNORM：R = diffuse AO，G = specular occlusion。Step 7 先只写 R（G=0），Step 12 升级 B1 后写 RG。
+
+---
+
+## AO Temporal Filter
+
+**选择：三层 rejection + 无 blur pass**
+
+GTAO 原始噪声低（结构化搜索 + 解析积分），temporal filter 即可得到干净结果，不需要额外空间模糊 pass。
+
+三层 rejection：
+1. **UV 有效性**：prev_uv 越界 → reject
+2. **Prev depth 深度一致性**：当前世界坐标在上一帧的预期深度 vs 实际存储深度
+3. **邻域 clamp**：AO 通道 3×3 min/max clamp（SO 通道不做邻域 clamp，使用与 AO 相同的 blend factor）
+
+Prev depth 来自 resolved depth 的 temporal history（`get_history_image(depth_handle)`），零额外 copy 开销。首帧 / resize 后 / history 无效时 blend_factor = 0（纯用当前帧）。
+
+---
+
+## Roughness Buffer
+
+DepthPrePass 新增 R8 roughness managed image 输出。DepthPrePass 已读材质数据（alpha test），roughness 从同一材质取出（`material.roughness_factor * texture(metallic_roughness_tex).g`），shader 改动很小。MSAA 时 AVERAGE resolve（与 normal 一致），roughness 是标量 [0,1]，多个子采样平均物理合理。
+
+GTAO 计算 SO 用（Step 12），M2 SSR 复用同一 buffer。
+
+---
+
+## Contact Shadows
+
+**选择：Screen-space ray march + 深度自适应 thickness + 距离衰减 + 无 temporal**
+
+- Screen-space ray march：光方向投影到屏幕空间后在 UV 上均匀步进，每步线性插值深度
+- 搜索距离使用世界空间（物理意义明确），shader 内部投影到屏幕空间确定步进范围
+- 深度自适应 thickness：`base_thickness × linear_depth`，远处更宽容（深度精度低 + 物体屏幕尺寸小）
+- 距离衰减：首次命中 → 按 ray 上的位置 smoothstep 衰减，接触点全强度，搜索极限渐淡
+- 无 temporal filter：确定性输出（无随机采样），步数不够则加步数
+- Push constant 传光方向：shader 不假设光源类型
+
+**多光源**：M1 单方向光单 dispatch 单 R8。Push constant 传光方向使 shader 不假设光源类型，M2 多光源方案待定。
