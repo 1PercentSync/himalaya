@@ -21,7 +21,7 @@
 ## Step 3：Compute Pass Helpers
 
 - [x] CommandBuffer push_storage_image（显式传 ResourceManager&）
-- [ ] CommandBuffer push_sampled_image（显式传 ResourceManager&）
+- [x] CommandBuffer push_sampled_image（显式传 ResourceManager&）
 - [ ] DescriptorManager get_compute_set_layouts(set3_push_layout)
 
 ## Step 4：Phase 5 Config + GlobalUBO 扩展
