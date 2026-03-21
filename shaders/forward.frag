@@ -50,6 +50,25 @@ vec3 multi_bounce_ao(float ao, vec3 albedo) {
     return max(vec3(ao), ((ao * a + b) * ao + c) * ao);
 }
 
+/**
+ * Lagarde specular occlusion approximation (Lagarde 2014).
+ *
+ * Estimates how much the specular reflection direction is occluded based
+ * on the diffuse AO value, view angle, and surface roughness.  Rougher
+ * surfaces have wider specular lobes, so they are less affected.
+ *
+ * This is an interim approximation — Step 12 replaces it with per-direction
+ * cone-horizon overlap computed directly by the GTAO shader.
+ *
+ * @param NdotV    Clamped dot(N, V).
+ * @param ao       Screen-space ambient occlusion [0,1].
+ * @param roughness Surface roughness [0,1].
+ * @return Specular occlusion factor [0,1].
+ */
+float lagarde_so(float NdotV, float ao, float roughness) {
+    return clamp(pow(NdotV + ao, exp2(-16.0 * roughness - 1.0)) - 1.0 + ao, 0.0, 1.0);
+}
+
 void main() {
     GPUMaterialData mat = materials[frag_material_index];
 
@@ -172,8 +191,10 @@ void main() {
     float combined_ao = ssao * material_ao;
     vec3 diffuse_ao = multi_bounce_ao(combined_ao, diffuse_color);
 
-    // Specular occlusion (placeholder: material_ao only, sub-item 3 adds Lagarde SO)
-    float specular_ao = material_ao;
+    // Specular occlusion: Lagarde approximation from SSAO (material_ao not used —
+    // AO is direction-independent, specular is direction-dependent, mixing them
+    // would incorrectly darken reflections facing open areas)
+    float specular_ao = lagarde_so(NdotV, ssao, roughness);
 
     // Emissive
     vec3 emissive = texture(textures[nonuniformEXT(mat.emissive_tex)], frag_uv0).rgb
