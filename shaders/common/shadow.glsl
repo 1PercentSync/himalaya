@@ -222,10 +222,11 @@ ShadowProjData prepare_shadow_proj(vec3 world_pos, vec3 world_normal, int cascad
  *
  * @param proj          Precomputed projection data from prepare_shadow_proj().
  * @param cascade       Cascade index.
+ * @param rotation      Per-pixel Poisson Disk rotation angle (radians).
  * @param avg_blocker   Output: average blocker depth (NDC).
  * @param num_blockers  Output: number of blocker samples found.
  */
-void blocker_search(ShadowProjData proj, int cascade,
+void blocker_search(ShadowProjData proj, int cascade, float rotation,
                     out float avg_blocker, out float num_blockers) {
     avg_blocker = 0.0;
     num_blockers = 0.0;
@@ -238,9 +239,6 @@ void blocker_search(ShadowProjData proj, int cascade,
     float max_penumbra_uv = kMaxPenumbraTexels * global.shadow_texel_size;
     float search_u = max(light_uv, max_penumbra_uv);
     float search_v = search_u * global.cascade_uv_scale_y[cascade];
-
-    // Per-pixel rotation angle from interleaved gradient noise
-    float rotation = interleaved_gradient_noise(gl_FragCoord.xy) * 6.2831853;
 
     float blocker_sum = 0.0;
     uint sample_count = global.pcss_blocker_samples;
@@ -288,9 +286,12 @@ void blocker_search(ShadowProjData proj, int cascade,
  * @return Shadow factor: 1.0 = fully lit, 0.0 = fully in shadow.
  */
 float sample_shadow_pcss(ShadowProjData proj, int cascade) {
+    // Per-pixel rotation angle — computed once, shared by blocker search and PCF
+    float rotation = interleaved_gradient_noise(gl_FragCoord.xy) * 6.2831853;
+
     // Step 1: Blocker search
     float avg_blocker, num_blockers;
-    blocker_search(proj, cascade, avg_blocker, num_blockers);
+    blocker_search(proj, cascade, rotation, avg_blocker, num_blockers);
 
     // No blockers → fully lit
     if (num_blockers < 1.0) {
@@ -315,7 +316,6 @@ float sample_shadow_pcss(ShadowProjData proj, int cascade) {
     penumbra_v = clamp(penumbra_v, min_penumbra, max_penumbra);
 
     // Step 3: Variable-width PCF with elliptical Poisson Disk kernel
-    float rotation = interleaved_gradient_noise(gl_FragCoord.xy) * 6.2831853;
     float shadow_sum = 0.0;
     uint sample_count = global.pcss_pcf_samples;
     for (uint i = 0u; i < sample_count; ++i) {
