@@ -462,6 +462,19 @@ namespace himalaya::app {
                                 shader_compiler_,
                                 swapchain_->format);
 
+        // --- GTAO compute pass ---
+        gtao_pass_.setup(*ctx_,
+                         *resource_manager_,
+                         *descriptor_manager_,
+                         shader_compiler_);
+
+        // --- AO Temporal filter compute pass ---
+        ao_temporal_pass_.setup(*ctx_,
+                                *resource_manager_,
+                                *descriptor_manager_,
+                                shader_compiler_,
+                                nearest_clamp_sampler_);
+
         // --- Set 2 binding 0: hdr_color for TonemappingPass sampling ---
         update_hdr_color_descriptor();
 
@@ -492,6 +505,8 @@ namespace himalaya::app {
         forward_pass_.destroy();
         skybox_pass_.destroy();
         tonemapping_pass_.destroy();
+        gtao_pass_.destroy();
+        ao_temporal_pass_.destroy();
 
         for (const auto ubo: global_ubo_buffers_) {
             resource_manager_->destroy_buffer(ubo);
@@ -651,6 +666,8 @@ namespace himalaya::app {
         forward_pass_.rebuild_pipelines();
         skybox_pass_.rebuild_pipelines();
         tonemapping_pass_.rebuild_pipelines();
+        gtao_pass_.rebuild_pipelines();
+        ao_temporal_pass_.rebuild_pipelines();
 
         spdlog::info("All shaders reloaded");
     }
@@ -897,6 +914,7 @@ namespace himalaya::app {
             managed_ao_noisy_, VK_IMAGE_LAYOUT_UNDEFINED);
         const auto ao_filtered_resource = render_graph_.use_managed_image(
             managed_ao_filtered_, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+        const auto ao_history_resource = render_graph_.get_history_image(managed_ao_filtered_);
         const auto contact_shadow_resource = render_graph_.use_managed_image(
             managed_contact_shadow_mask_, VK_IMAGE_LAYOUT_UNDEFINED);
 
@@ -919,6 +937,8 @@ namespace himalaya::app {
         frame_ctx.depth_prev = depth_prev_resource;
         frame_ctx.ao_noisy = ao_noisy_resource;
         frame_ctx.ao_filtered = ao_filtered_resource;
+        frame_ctx.ao_history = ao_history_resource;
+        frame_ctx.ao_history_valid = render_graph_.is_history_valid(managed_ao_filtered_);
         frame_ctx.contact_shadow_mask = contact_shadow_resource;
         frame_ctx.normal = normal_resource;
         frame_ctx.msaa_color = msaa_color_resource;
@@ -948,6 +968,12 @@ namespace himalaya::app {
 
         // --- Depth + Normal PrePass ---
         depth_prepass_.record(render_graph_, frame_ctx);
+
+        // --- AO passes (GTAO → AO Temporal, conditional on feature toggle) ---
+        if (input.features.ao) {
+            gtao_pass_.record(render_graph_, frame_ctx);
+            ao_temporal_pass_.record(render_graph_, frame_ctx);
+        }
 
         // --- Forward pass ---
         forward_pass_.record(render_graph_, frame_ctx);

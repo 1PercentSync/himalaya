@@ -10,8 +10,10 @@
 #include <himalaya/framework/render_graph.h>
 #include <himalaya/framework/scene_data.h>
 #include <himalaya/framework/texture.h>
+#include <himalaya/passes/ao_temporal_pass.h>
 #include <himalaya/passes/depth_prepass.h>
 #include <himalaya/passes/forward_pass.h>
+#include <himalaya/passes/gtao_pass.h>
 #include <himalaya/passes/skybox_pass.h>
 #include <himalaya/passes/shadow_pass.h>
 #include <himalaya/passes/tonemapping_pass.h>
@@ -258,6 +260,12 @@ namespace himalaya::app {
 
         /** @brief Tonemapping pass (reads HDR color, writes swapchain). */
         passes::TonemappingPass tonemapping_pass_{};
+
+        /** @brief GTAO compute pass (horizon search AO). */
+        passes::GTAOPass gtao_pass_{};
+
+        /** @brief AO temporal filter compute pass (reprojection + rejection + blend). */
+        passes::AOTemporalPass ao_temporal_pass_{};
 
         /** @brief HDR color buffer (R16G16B16A16F, 1x, managed, auto-rebuilt on resize). */
         framework::RGManagedHandle managed_hdr_color_;
