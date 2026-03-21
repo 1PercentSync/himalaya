@@ -289,6 +289,9 @@ namespace himalaya::app {
         /** @brief Shadow depth sampler (NEAREST, no compare, clamp to edge) for PCSS blocker search. */
         rhi::SamplerHandle shadow_depth_sampler_;
 
+        /** @brief Nearest clamp sampler (nearest filter, clamp to edge) for screen-space reads. */
+        rhi::SamplerHandle nearest_clamp_sampler_;
+
         /** @brief Default 1x1 textures (white, flat normal, black). */
         framework::DefaultTextures default_textures_{};
 
@@ -345,6 +348,12 @@ namespace himalaya::app {
 
         /** @brief Updates Set 2 binding 6 with the current shadow map image (depth sampler for PCSS). */
         void update_shadow_depth_descriptor() const;
+
+        /** @brief Updates Set 2 binding 1 with the current depth_resolved backing image (nearest). */
+        void update_depth_descriptor() const;
+
+        /** @brief Updates Set 2 binding 2 with the current normal_resolved backing image (nearest). */
+        void update_normal_descriptor() const;
 
         /** @brief Registers all swapchain images as external images in ResourceManager. */
         void register_swapchain_images();

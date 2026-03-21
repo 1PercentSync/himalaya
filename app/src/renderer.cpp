@@ -359,6 +359,19 @@ namespace himalaya::app {
                                                                       .compare_op = rhi::CompareOp::Never,
                                                                   }, "Shadow Depth Sampler");
 
+        // --- Nearest clamp sampler for screen-space depth/normal reads ---
+        nearest_clamp_sampler_ = resource_manager_->create_sampler({
+                                                                       .mag_filter = rhi::Filter::Nearest,
+                                                                       .min_filter = rhi::Filter::Nearest,
+                                                                       .mip_mode = rhi::SamplerMipMode::Nearest,
+                                                                       .wrap_u = rhi::SamplerWrapMode::ClampToEdge,
+                                                                       .wrap_v = rhi::SamplerWrapMode::ClampToEdge,
+                                                                       .max_anisotropy = 0.0f,
+                                                                       .max_lod = 0.0f,
+                                                                       .compare_enable = false,
+                                                                       .compare_op = rhi::CompareOp::Never,
+                                                                   }, "Nearest Clamp Sampler");
+
         // --- Shadow pass ---
         shadow_pass_.setup(*ctx_,
                            *resource_manager_,
@@ -394,6 +407,12 @@ namespace himalaya::app {
 
         // --- Set 2 binding 0: hdr_color for TonemappingPass sampling ---
         update_hdr_color_descriptor();
+
+        // --- Set 2 binding 1: depth_resolved (nearest, temporal — initial dual write) ---
+        update_depth_descriptor();
+
+        // --- Set 2 binding 2: normal_resolved (nearest) ---
+        update_normal_descriptor();
 
         // --- Set 2 binding 5: shadow map comparison sampler (PCF) ---
         update_shadow_map_descriptor();
@@ -431,6 +450,7 @@ namespace himalaya::app {
         resource_manager_->destroy_sampler(default_sampler_);
         resource_manager_->destroy_sampler(shadow_comparison_sampler_);
         resource_manager_->destroy_sampler(shadow_depth_sampler_);
+        resource_manager_->destroy_sampler(nearest_clamp_sampler_);
 
         if (managed_msaa_color_.valid())
             render_graph_.destroy_managed_image(managed_msaa_color_);
@@ -897,8 +917,10 @@ namespace himalaya::app {
         register_swapchain_images();
         render_graph_.set_reference_resolution(swapchain_->extent);
 
-        // Update Set 2 binding 0 with the resized hdr_color backing image
+        // Update Set 2 bindings with resized backing images
         update_hdr_color_descriptor();
+        update_depth_descriptor();
+        update_normal_descriptor();
     }
 
     // ---- Accessors ----
@@ -924,6 +946,16 @@ namespace himalaya::app {
     void Renderer::update_hdr_color_descriptor() const {
         const auto hdr_backing = render_graph_.get_managed_backing_image(managed_hdr_color_);
         descriptor_manager_->update_render_target(0, hdr_backing, default_sampler_);
+    }
+
+    void Renderer::update_depth_descriptor() const {
+        const auto depth_backing = render_graph_.get_managed_backing_image(managed_depth_);
+        descriptor_manager_->update_render_target(1, depth_backing, nearest_clamp_sampler_);
+    }
+
+    void Renderer::update_normal_descriptor() const {
+        const auto normal_backing = render_graph_.get_managed_backing_image(managed_normal_);
+        descriptor_manager_->update_render_target(2, normal_backing, nearest_clamp_sampler_);
     }
 
     void Renderer::update_shadow_map_descriptor() const {
