@@ -352,13 +352,17 @@ namespace himalaya::framework {
          *
          * Must be called every frame between clear() and compile() for each
          * managed image that will be used by passes. The image starts with
-         * UNDEFINED layout (content not preserved across frames) and no
-         * final layout transition is inserted after the last pass.
+         * UNDEFINED initial layout (content not preserved across frames).
          *
-         * @param handle Managed image handle returned by create_managed_image().
+         * @param handle       Managed image handle returned by create_managed_image().
+         * @param final_layout Layout to transition to after the last pass that uses it.
+         *                     UNDEFINED = no final transition (non-temporal images that are
+         *                     fully overwritten each frame).
+         *                     SHADER_READ_ONLY_OPTIMAL = temporal current images (ensures
+         *                     correct layout after swap to history next frame).
          * @return Per-frame resource ID for use in pass resource declarations.
          */
-        RGResourceId use_managed_image(RGManagedHandle handle);
+        RGResourceId use_managed_image(RGManagedHandle handle, VkImageLayout final_layout);
 
         /**
          * @brief Imports the history backing image of a temporal managed image.

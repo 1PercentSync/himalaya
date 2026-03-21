@@ -299,17 +299,19 @@ namespace himalaya::framework {
         return {.index = slot};
     }
 
-    RGResourceId RenderGraph::use_managed_image(const RGManagedHandle handle) {
+    RGResourceId RenderGraph::use_managed_image(const RGManagedHandle handle,
+                                                const VkImageLayout final_layout) {
         assert(handle.valid() && handle.index < managed_images_.size() && "Invalid RGManagedHandle");
         const auto &managed = managed_images_[handle.index];
         assert(managed.backing.valid() && "Managed image has been destroyed");
 
-        // Import with UNDEFINED initial layout (content not preserved) and
-        // UNDEFINED final layout (sentinel: compile() skips final transition).
+        // Import with UNDEFINED initial layout (content not preserved).
+        // final_layout: UNDEFINED = no final transition (non-temporal),
+        //               SHADER_READ_ONLY_OPTIMAL = temporal current (swap to history next frame).
         return import_image(managed.debug_name,
                             managed.backing,
                             VK_IMAGE_LAYOUT_UNDEFINED,
-                            VK_IMAGE_LAYOUT_UNDEFINED);
+                            final_layout);
     }
 
     RGResourceId RenderGraph::get_history_image(const RGManagedHandle handle) {

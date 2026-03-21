@@ -771,21 +771,27 @@ namespace himalaya::app {
             VK_IMAGE_LAYOUT_UNDEFINED,
             VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 
-        const auto hdr_color_resource = render_graph_.use_managed_image(managed_hdr_color_);
-        const auto depth_resource = render_graph_.use_managed_image(managed_depth_);
+        const auto hdr_color_resource = render_graph_.use_managed_image(
+            managed_hdr_color_, VK_IMAGE_LAYOUT_UNDEFINED);
+        const auto depth_resource = render_graph_.use_managed_image(
+            managed_depth_, VK_IMAGE_LAYOUT_UNDEFINED);
 
-        const auto normal_resource = render_graph_.use_managed_image(managed_normal_);
+        const auto normal_resource = render_graph_.use_managed_image(
+            managed_normal_, VK_IMAGE_LAYOUT_UNDEFINED);
 
         // Use MSAA managed resources when multi-sampled
         framework::RGResourceId msaa_color_resource;
         framework::RGResourceId msaa_depth_resource;
         framework::RGResourceId msaa_normal_resource;
         if (managed_msaa_color_.valid())
-            msaa_color_resource = render_graph_.use_managed_image(managed_msaa_color_);
+            msaa_color_resource = render_graph_.use_managed_image(
+                managed_msaa_color_, VK_IMAGE_LAYOUT_UNDEFINED);
         if (managed_msaa_depth_.valid())
-            msaa_depth_resource = render_graph_.use_managed_image(managed_msaa_depth_);
+            msaa_depth_resource = render_graph_.use_managed_image(
+                managed_msaa_depth_, VK_IMAGE_LAYOUT_UNDEFINED);
         if (managed_msaa_normal_.valid())
-            msaa_normal_resource = render_graph_.use_managed_image(managed_msaa_normal_);
+            msaa_normal_resource = render_graph_.use_managed_image(
+                managed_msaa_normal_, VK_IMAGE_LAYOUT_UNDEFINED);
 
         // --- Construct FrameContext ---
         framework::FrameContext frame_ctx{};
