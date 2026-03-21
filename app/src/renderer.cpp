@@ -824,6 +824,8 @@ namespace himalaya::app {
         }
         frame_ctx.features = &input.features;
         frame_ctx.shadow_config = &input.shadow_config;
+        frame_ctx.ao_config = &input.ao_config;
+        frame_ctx.contact_shadow_config = &input.contact_shadow_config;
         frame_ctx.frame_index = input.frame_index;
         frame_ctx.sample_count = current_sample_count_;
 

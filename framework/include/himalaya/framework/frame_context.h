@@ -94,6 +94,12 @@ namespace himalaya::framework {
         /** @brief Shadow system parameters. */
         const ShadowConfig *shadow_config = nullptr;
 
+        /** @brief AO configuration parameters. */
+        const AOConfig *ao_config = nullptr;
+
+        /** @brief Contact Shadows configuration parameters. */
+        const ContactShadowConfig *contact_shadow_config = nullptr;
+
         // ---- Frame parameters ----
 
         /** @brief Current frame-in-flight index (0 to kMaxFramesInFlight-1). */

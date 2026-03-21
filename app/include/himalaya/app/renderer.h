@@ -93,6 +93,12 @@ namespace himalaya::app {
         /** @brief Shadow system parameters. */
         const framework::ShadowConfig &shadow_config;
 
+        /** @brief AO configuration parameters. */
+        const framework::AOConfig &ao_config;
+
+        /** @brief Contact Shadows configuration parameters. */
+        const framework::ContactShadowConfig &contact_shadow_config;
+
         /** @brief Scene world-space AABB for shadow Z range extension. */
         const framework::AABB &scene_bounds;
     };
