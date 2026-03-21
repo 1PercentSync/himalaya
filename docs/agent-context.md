@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 9 第二小项：forward.frag：diffuse AO 乘法复合 + multi-bounce 色彩补偿
+Step 9 第三小项：forward.frag：Lagarde 近似 SO + IBL specular 调制
 
 ---
 
