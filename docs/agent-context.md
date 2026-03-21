@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 6 第一小项：Features 面板新增 AO + Contact Shadows checkbox
+Step 6 第二小项：AO 面板骨架（参数占位）
 
 ---
 
