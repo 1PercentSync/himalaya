@@ -160,6 +160,16 @@ namespace himalaya::rhi {
         void bind_descriptor_sets(VkPipelineLayout layout, uint32_t first_set,
                                   const VkDescriptorSet *sets, uint32_t count) const;
 
+        /**
+         * @brief Binds descriptor sets to the compute pipeline.
+         * @param layout     Pipeline layout that the sets are compatible with.
+         * @param first_set  Index of the first descriptor set to bind.
+         * @param sets       Pointer to an array of descriptor sets.
+         * @param count      Number of descriptor sets to bind.
+         */
+        void bind_compute_descriptor_sets(VkPipelineLayout layout, uint32_t first_set,
+                                          const VkDescriptorSet *sets, uint32_t count) const;
+
         // --- Compute ---
 
         /**

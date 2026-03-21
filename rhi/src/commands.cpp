@@ -108,6 +108,20 @@ namespace himalaya::rhi {
                                 nullptr);
     }
 
+    void CommandBuffer::bind_compute_descriptor_sets(const VkPipelineLayout layout,
+                                                      const uint32_t first_set,
+                                                      const VkDescriptorSet *sets,
+                                                      const uint32_t count) const {
+        vkCmdBindDescriptorSets(cmd_,
+                                VK_PIPELINE_BIND_POINT_COMPUTE,
+                                layout,
+                                first_set,
+                                count,
+                                sets,
+                                0,
+                                nullptr);
+    }
+
     void CommandBuffer::bind_compute_pipeline(const Pipeline &pipeline) const {
         vkCmdBindPipeline(cmd_, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline.pipeline);
     }
