@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段五 — 屏幕空间效果
-- **进度**：Step 4 进行中（15/~40）
+- **进度**：Step 4 完成（16/~40）
 
 ### 下一个任务
 
-Step 4 第五小项：RenderInput + FrameContext 新增 ao_config + contact_shadow_config 指针
+Step 5 第一小项：Resolved depth 标记 temporal + FrameContext 新增 depth_prev
 
 ---
 

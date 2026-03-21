@@ -30,7 +30,7 @@
 - [x] FEATURE_AO + FEATURE_CONTACT_SHADOWS（bindings.glsl）+ feature_flags 填充逻辑
 - [x] AOConfig + ContactShadowConfig 结构体 + Application 初始化
 - [x] GlobalUBO 新增 inv_projection + prev_view_projection + bindings.glsl 同步 + Renderer 填充 + 帧末缓存 prev_view_projection
-- [ ] RenderInput + FrameContext 新增 ao_config + contact_shadow_config 指针
+- [x] RenderInput + FrameContext 新增 ao_config + contact_shadow_config 指针
 
 ## Step 5：Depth/Normal Set 2 绑定 + AO 资源创建
 
