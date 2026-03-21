@@ -67,12 +67,7 @@ Step 14: Contact Shadows Forward 集成
 
 #### 设计要点
 
-RG temporal 见 `milestone-1/m1-design-decisions-core.md`「Temporal 基础设施」。
-
-关键设计：
-- RG temporal 内部为 managed image 分配第二张 backing image（`history_backing`），`clear()` 时 swap current/history，resize 时重建两张并标记 history 无效
-- `use_managed_image(handle, final_layout)` 由调用方显式指定 `final_layout`（无默认值）。Temporal current 传 `SHADER_READ_ONLY_OPTIMAL`（帧末 transition，确保 swap 后 history layout 正确），非 temporal 传 `UNDEFINED`（不插入帧末 barrier）。RG 内部不区分 temporal/非 temporal
-- `get_history_image()` 始终返回 valid RGResourceId（两张 backing image 总存在），`is_history_valid()` 查询 history 内容是否有效（首帧/resize 后无效，调用方据此设 blend_factor=0）
+见 `milestone-1/m1-phase5-decisions.md`「Temporal 数据管理」。
 
 ---
 
@@ -89,12 +84,7 @@ DescriptorManager 变更 + 所有调用点适配。
 
 #### 设计要点
 
-Per-frame Set 2 见 `milestone-1/m1-design-decisions-core.md`「Per-frame-in-flight Set 2」。
-
-关键设计：
-- Per-frame Set 2 与 Set 0 统一模式：2 份 descriptor set 对应 2 frames in flight，每帧绑定当前帧的 copy
-- Temporal binding 每帧更新当前帧 copy；非 temporal binding 在 init/resize/MSAA 切换时写入两份 copy
-- 解决 temporal 资源（depth_resolved、ao_filtered）backing image 帧间 swap 导致的并发冲突：单份 Set 2 在 2 frames in flight 下 update 违反 Vulkan spec
+见 `milestone-1/m1-phase5-decisions.md`「Per-frame Set 2」。
 
 ---
 
