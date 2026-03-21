@@ -49,7 +49,7 @@
 
 ## Step 7：GTAO Pass（R8 diffuse AO）
 
-- [ ] gtao.comp：view-space position 重建 + normal 转换
+- [x] gtao.comp：view-space position 重建 + normal 转换
 - [ ] gtao.comp：horizon search + cosine-weighted 积分 + per-pixel noise 旋转
 - [ ] gtao.comp：输出 RG8（R=AO, G=0.0）+ bias/intensity 应用
 - [ ] GTAOPass 类（setup / record / destroy / rebuild_pipelines）+ Set 3 layout + pipeline

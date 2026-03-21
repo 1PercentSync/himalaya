@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 7 第一小项：gtao.comp：view-space position 重建 + normal 转换
+Step 7 第二小项：gtao.comp：horizon search + cosine-weighted 积分 + per-pixel noise 旋转
 
 ---
 
