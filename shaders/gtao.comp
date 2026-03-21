@@ -214,8 +214,9 @@ void main() {
     // Average over all directions
     ao = clamp(ao / float(pc.directions), 0.0, 1.0);
 
-    // TODO: apply bias/intensity + final output (Step 7.3)
+    // Apply intensity: pow(ao, intensity) darkens occlusion when intensity > 1
+    ao = pow(ao, pc.intensity);
 
-    // Placeholder output (raw AO, no intensity adjustment)
+    // Output RG8: R = diffuse AO, G = 0.0 (specular occlusion, Step 12)
     imageStore(ao_output, pixel, vec4(ao, 0.0, 0.0, 0.0));
 }
