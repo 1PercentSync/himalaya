@@ -1096,8 +1096,8 @@ public:
 // Set 0: 全局 Buffer（每帧更新一次）
 // Feature flags 常量（阶段四引入）
 #define FEATURE_SHADOWS         (1u << 0)
-// #define FEATURE_AO           (1u << 1)   // 阶段五
-// #define FEATURE_CONTACT_SHADOWS (1u << 2) // 阶段五
+#define FEATURE_AO              (1u << 1)
+#define FEATURE_CONTACT_SHADOWS (1u << 2)
 
 // Shadow cascade 常量
 #define MAX_SHADOW_CASCADES 4
@@ -1207,8 +1207,8 @@ Graphics pipeline 共享统一 layout `{Set 0, Set 1, Set 2}`。Compute pipeline
 | 全局数据 | 每帧一次 | Set 0, Binding 0 (UBO) | 相机矩阵、屏幕尺寸、曝光值 |
 | 光源数据 | 每帧一次 | Set 0, Binding 1 (SSBO) | 方向光、点光源数组 |
 | 材质数据 | 加载时一次 | Set 0, Binding 2 (SSBO) | PBR 参数、纹理 index |
-| 2D 纹理数据 | 加载时一次 | Set 1, Binding 0 (Bindless) | 材质纹理、BRDF LUT、Lightmap |
-| Cubemap 数据 | 初始化 / 加载时 | Set 1, Binding 1 (Bindless) | IBL cubemap、Reflection Probes |
+| 2D 纹理数据 | 加载时一次 | Set 1, Binding 0 (Bindless) | 材质纹理、BRDF LUT |
+| Cubemap 数据 | 初始化 / 加载时 | Set 1, Binding 1 (Bindless) | IBL cubemap |
 | Render Target | init 时 / resize 时 + temporal 每帧 | Set 2, Binding 0-6 (Named, per-frame) | HDR color、depth、normal、AO、shadow map 等 |
 | Per-instance 数据 | 每帧一次（cull 后填充） | Set 0, Binding 3 (SSBO) | 模型矩阵、材质 index（instancing 用）|
 | Per-draw 数据 | 每次绘制（仅 shadow） | Push Constant | cascade index |
