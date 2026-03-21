@@ -825,6 +825,14 @@ namespace himalaya::app {
             msaa_normal_resource = render_graph_.use_managed_image(
                 managed_msaa_normal_, VK_IMAGE_LAYOUT_UNDEFINED);
 
+        // --- Per-frame temporal Set 2 updates ---
+        // Depth (binding 1) swaps backing image each frame; update this frame's Set 2 copy
+        {
+            const auto depth_backing = render_graph_.get_managed_backing_image(managed_depth_);
+            descriptor_manager_->update_render_target(input.frame_index, 1,
+                                                      depth_backing, nearest_clamp_sampler_);
+        }
+
         // --- Construct FrameContext ---
         framework::FrameContext frame_ctx{};
         frame_ctx.swapchain = swapchain_image;
