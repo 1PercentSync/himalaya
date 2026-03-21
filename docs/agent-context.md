@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段五 — 屏幕空间效果
-- **进度**：Step 1 进行中（1/~40）
+- **进度**：Step 1 进行中（2/~40）
 
 ### 下一个任务
 
-Step 1 第二小项：clear() swap current/history + resize 重建两张 + history 无效标记
+Step 1 第三小项：get_history_image() 始终返回 valid + is_history_valid() 查询有效性
 
 ---
 
