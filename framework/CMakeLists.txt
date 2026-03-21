@@ -12,6 +12,7 @@ target_sources(himalaya_framework PRIVATE
         src/material_system.cpp
         src/mesh.cpp
         src/render_graph.cpp
+        src/shadow.cpp
         src/stb_impl.cpp
         src/texture.cpp
 )
