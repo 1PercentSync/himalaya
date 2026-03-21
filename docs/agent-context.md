@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段五 — 屏幕空间效果
-- **进度**：Step 5 完成（22/~40）
+- **进度**：Step 6 完成（25/~40）
 
 ### 下一个任务
 
-Step 6 第三小项：Contact Shadows 面板骨架（参数占位）
+Step 7 第一小项：gtao.comp：view-space position 重建 + normal 转换
 
 ---
 

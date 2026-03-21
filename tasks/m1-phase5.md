@@ -45,7 +45,7 @@
 
 - [x] Features 面板新增 AO + Contact Shadows checkbox
 - [x] AO 面板骨架（参数占位）
-- [ ] Contact Shadows 面板骨架（参数占位）
+- [x] Contact Shadows 面板骨架（参数占位）
 
 ## Step 7：GTAO Pass（R8 diffuse AO）
 
