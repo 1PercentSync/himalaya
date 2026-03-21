@@ -1,0 +1,94 @@
+#version 460
+
+/**
+ * @file ao_temporal.comp
+ * @brief AO temporal filter compute shader.
+ *
+ * Blends current-frame GTAO output (ao_noisy) with the previous frame's
+ * filtered result (ao_history) using reprojection and multi-layer rejection.
+ *
+ * Output: RG8 where R = temporally filtered diffuse AO,
+ * G = 0.0 (specular occlusion passthrough, Step 12 adapts dual-channel).
+ *
+ * Workgroup: 8x8 (one thread per pixel, no shared memory).
+ */
+
+#include "common/bindings.glsl"
+#include "common/constants.glsl"
+
+layout(local_size_x = 8, local_size_y = 8) in;
+
+// ---- Set 3: push descriptors (per-dispatch I/O) ----
+
+layout(set = 3, binding = 0, rg8) uniform writeonly image2D ao_output;
+layout(set = 3, binding = 1) uniform sampler2D ao_noisy_tex;
+layout(set = 3, binding = 2) uniform sampler2D ao_history_tex;
+layout(set = 3, binding = 3) uniform sampler2D depth_prev_tex;
+
+// ---- Push constants ----
+
+layout(push_constant) uniform AOTemporalPushConstants {
+    float temporal_blend;   // 0.0 = current only (history invalid), else from AOConfig
+} pc;
+
+// ---- Reprojection ----
+
+/**
+ * Reproject current-frame pixel to previous-frame UV and expected depth.
+ *
+ * Pipeline: screen UV + depth → NDC → clip → world (inv_view_projection)
+ *           → prev clip (prev_view_projection) → prev NDC → prev UV.
+ *
+ * Y-flip: scene passes use negative viewport height, so screen UV y=0 is
+ * top of screen while NDC y=+1 is top.  The UV↔NDC conversion accounts
+ * for this symmetrically in both directions.
+ *
+ * @param uv    Texel-center UV in [0,1] (y=0 at top).
+ * @param depth Raw depth value (Reverse-Z: near=1, far=0).
+ * @return xyz: (prev_uv.x, prev_uv.y, expected_prev_depth).
+ */
+vec3 reproject(vec2 uv, float depth) {
+    // UV → NDC (Y-flipped viewport compensation)
+    vec2 ndc = vec2(uv.x * 2.0 - 1.0, 1.0 - uv.y * 2.0);
+
+    // Clip → world via inv_view_projection
+    vec4 world_h = global.inv_view_projection * vec4(ndc, depth, 1.0);
+    vec3 world_pos = world_h.xyz / world_h.w;
+
+    // World → previous frame clip space
+    vec4 prev_clip = global.prev_view_projection * vec4(world_pos, 1.0);
+    vec3 prev_ndc = prev_clip.xyz / prev_clip.w;
+
+    // NDC → UV (inverse of the forward Y-flip mapping)
+    vec2 prev_uv = vec2(prev_ndc.x * 0.5 + 0.5, 0.5 - prev_ndc.y * 0.5);
+
+    return vec3(prev_uv, prev_ndc.z);
+}
+
+// ---- Main ----
+
+void main() {
+    ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 size = ivec2(global.screen_size);
+
+    if (pixel.x >= size.x || pixel.y >= size.y) return;
+
+    vec2 uv = (vec2(pixel) + 0.5) / global.screen_size;
+
+    // Read current frame AO
+    float current_ao = texelFetch(ao_noisy_tex, pixel, 0).r;
+
+    // Read current depth for reprojection
+    float depth = texture(rt_depth_resolved, uv).r;
+
+    // Reproject to previous frame
+    vec3 reproj = reproject(uv, depth);
+    vec2 prev_uv = reproj.xy;
+    float expected_prev_depth = reproj.z;
+
+    // TODO: three-layer rejection (sub-item 2)
+    // TODO: temporal blend + history invalid handling (sub-item 3)
+
+    // Placeholder: output current frame value (no temporal accumulation yet)
+    imageStore(ao_output, pixel, vec4(current_ao, 0.0, 0.0, 0.0));
+}
