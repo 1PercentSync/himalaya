@@ -363,7 +363,7 @@ namespace himalaya::framework {
     // Size assertions catch additions/removals; offset assertions catch
     // C++ vs std140 alignment divergences (e.g. vec2 requires 8-byte
     // alignment in std140 but glm::vec2 has natural alignment of 4).
-    static_assert(sizeof(GlobalUniformData) == 720, "GlobalUniformData must be 720 bytes (std140)");
+    static_assert(sizeof(GlobalUniformData) == 848, "GlobalUniformData must be 848 bytes (std140)");
     static_assert(offsetof(GlobalUniformData, view) == 0);
     static_assert(offsetof(GlobalUniformData, camera_position_and_exposure) == 256);
     static_assert(offsetof(GlobalUniformData, screen_size) == 272);

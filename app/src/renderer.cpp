@@ -416,6 +416,19 @@ namespace himalaya::app {
                                                                        .compare_op = rhi::CompareOp::Never,
                                                                    }, "Nearest Clamp Sampler");
 
+        // --- Linear clamp sampler for screen-space AO/contact shadow reads ---
+        linear_clamp_sampler_ = resource_manager_->create_sampler({
+                                                                      .mag_filter = rhi::Filter::Linear,
+                                                                      .min_filter = rhi::Filter::Linear,
+                                                                      .mip_mode = rhi::SamplerMipMode::Nearest,
+                                                                      .wrap_u = rhi::SamplerWrapMode::ClampToEdge,
+                                                                      .wrap_v = rhi::SamplerWrapMode::ClampToEdge,
+                                                                      .max_anisotropy = 0.0f,
+                                                                      .max_lod = 0.0f,
+                                                                      .compare_enable = false,
+                                                                      .compare_op = rhi::CompareOp::Never,
+                                                                  }, "Linear Clamp Sampler");
+
         // --- Shadow pass ---
         shadow_pass_.setup(*ctx_,
                            *resource_manager_,
@@ -458,6 +471,12 @@ namespace himalaya::app {
         // --- Set 2 binding 2: normal_resolved (nearest) ---
         update_normal_descriptor();
 
+        // --- Set 2 binding 3: ao_filtered (linear, temporal — initial dual write) ---
+        update_ao_descriptor();
+
+        // --- Set 2 binding 4: contact_shadow_mask (linear) ---
+        update_contact_shadow_descriptor();
+
         // --- Set 2 binding 5: shadow map comparison sampler (PCF) ---
         update_shadow_map_descriptor();
 
@@ -495,6 +514,7 @@ namespace himalaya::app {
         resource_manager_->destroy_sampler(shadow_comparison_sampler_);
         resource_manager_->destroy_sampler(shadow_depth_sampler_);
         resource_manager_->destroy_sampler(nearest_clamp_sampler_);
+        resource_manager_->destroy_sampler(linear_clamp_sampler_);
 
         if (managed_msaa_color_.valid())
             render_graph_.destroy_managed_image(managed_msaa_color_);
@@ -987,6 +1007,8 @@ namespace himalaya::app {
         update_hdr_color_descriptor();
         update_depth_descriptor();
         update_normal_descriptor();
+        update_ao_descriptor();
+        update_contact_shadow_descriptor();
     }
 
     // ---- Accessors ----
@@ -1022,6 +1044,16 @@ namespace himalaya::app {
     void Renderer::update_normal_descriptor() const {
         const auto normal_backing = render_graph_.get_managed_backing_image(managed_normal_);
         descriptor_manager_->update_render_target(2, normal_backing, nearest_clamp_sampler_);
+    }
+
+    void Renderer::update_ao_descriptor() const {
+        const auto ao_backing = render_graph_.get_managed_backing_image(managed_ao_filtered_);
+        descriptor_manager_->update_render_target(3, ao_backing, linear_clamp_sampler_);
+    }
+
+    void Renderer::update_contact_shadow_descriptor() const {
+        const auto cs_backing = render_graph_.get_managed_backing_image(managed_contact_shadow_mask_);
+        descriptor_manager_->update_render_target(4, cs_backing, linear_clamp_sampler_);
     }
 
     void Renderer::update_shadow_map_descriptor() const {

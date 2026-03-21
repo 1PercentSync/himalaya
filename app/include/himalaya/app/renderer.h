@@ -301,6 +301,9 @@ namespace himalaya::app {
         /** @brief Nearest clamp sampler (nearest filter, clamp to edge) for screen-space reads. */
         rhi::SamplerHandle nearest_clamp_sampler_;
 
+        /** @brief Linear clamp sampler (linear filter, clamp to edge) for screen-space effect reads. */
+        rhi::SamplerHandle linear_clamp_sampler_;
+
         /** @brief Default 1x1 textures (white, flat normal, black). */
         framework::DefaultTextures default_textures_{};
 
@@ -363,6 +366,12 @@ namespace himalaya::app {
 
         /** @brief Updates Set 2 binding 2 with the current normal_resolved backing image (nearest). */
         void update_normal_descriptor() const;
+
+        /** @brief Updates Set 2 binding 3 with the current ao_filtered backing image (linear). */
+        void update_ao_descriptor() const;
+
+        /** @brief Updates Set 2 binding 4 with the current contact_shadow_mask backing image (linear). */
+        void update_contact_shadow_descriptor() const;
 
         /** @brief Registers all swapchain images as external images in ResourceManager. */
         void register_swapchain_images();
