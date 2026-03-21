@@ -38,7 +38,8 @@ CLAUDE.md 已自动加载，以下为额外必读：
 | `docs/project/decision-process.md` | 每项选型的推理过程、候选方案、排除理由 |
 | `docs/project/requirements-and-philosophy.md` | 项目定位、技术选型原则、画面质量目标 |
 | `docs/project/architecture.md` | 渲染器长远架构、四层结构、架构约束 |
-| `docs/milestone-1/m1-design-decisions.md` | M1 各组件的设计选择与决策理由 |
+| `docs/milestone-1/m1-design-decisions-core.md` | M1 核心设计决策参考（决策结果摘要，日后开发仍需参考） |
+| `docs/milestone-1/m1-phase5-decisions.md` | 阶段五设计决策（当前阶段，含完整决策过程） |
 | `docs/milestone-1/m1-frame-flow.md` | M1 完整帧流程（pass 执行顺序、资源生命周期） |
 | `docs/milestone-1/m1-development-order.md` | M1 的 8 个开发阶段及依赖关系 |
 | `docs/roadmap/milestone-2.md` | M2 规划（画质全面提升） |
@@ -58,6 +59,10 @@ CLAUDE.md 已自动加载，以下为额外必读：
 | `docs/archive/pcss-reference.md` | PCSS 方向光实现参考资料 |
 | `docs/archive/m1-phase4-plan.md` | M1 阶段四实现步骤（已完成） |
 | `tasks/archive/m1-phase4.md` | M1 阶段四任务清单（已完成） |
+| `docs/archive/m1-phase1-decisions.md` | M1 阶段一设计决策（已完成） |
+| `docs/archive/m1-phase2-decisions.md` | M1 阶段二设计决策（已完成） |
+| `docs/archive/m1-phase3-decisions.md` | M1 阶段三设计决策（已完成） |
+| `docs/archive/m1-phase4-decisions.md` | M1 阶段四设计决策（已完成） |
 
 ---
 
