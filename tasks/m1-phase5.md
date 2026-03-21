@@ -13,7 +13,7 @@
 
 ## Step 2：Per-frame Set 2
 
-- [ ] DescriptorManager：Set 2 pool 分配 2 份 set、get_set2(frame_index)
+- [x] DescriptorManager：Set 2 pool 分配 2 份 set、get_set2(frame_index)
 - [ ] update_render_target 双份写入 + per-frame 重载
 - [ ] 所有现有 get_set2() 调用点适配 frame_index
 - [ ] 所有现有 update_render_target() 调用点确认走双份更新路径
