@@ -139,9 +139,18 @@ void main() {
     vec3 ibl_diffuse  = irradiance * diffuse_color;
     vec3 ibl_specular = prefiltered * (F0 * brdf_lut.x + brdf_lut.y);
 
-    // Occlusion modulates IBL only (direct lights have real-time shadows in M2)
-    float ao = texture(textures[nonuniformEXT(mat.occlusion_tex)], frag_uv0).r;
-    ao = 1.0 + mat.occlusion_strength * (ao - 1.0);
+    // ---- Ambient Occlusion ----
+
+    // Material AO (baked occlusion texture)
+    float material_ao = texture(textures[nonuniformEXT(mat.occlusion_tex)], frag_uv0).r;
+    material_ao = 1.0 + mat.occlusion_strength * (material_ao - 1.0);
+
+    // Screen-space AO (GTAO temporal-filtered)
+    vec2 screen_uv = gl_FragCoord.xy / global.screen_size;
+    float ssao = texture(rt_ao_texture, screen_uv).r;
+
+    // Combined AO for IBL modulation (direct lights use shadow maps)
+    float ao = material_ao;
 
     // Emissive
     vec3 emissive = texture(textures[nonuniformEXT(mat.emissive_tex)], frag_uv0).rgb
