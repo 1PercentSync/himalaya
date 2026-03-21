@@ -311,13 +311,13 @@ GTAO Pass (compute)
   读: depth (Set 2 binding 1), normal (Set 2 binding 2), roughness (push descriptor)
   写: ao_noisy (RG8, push descriptor storage image)
     ↓
+Contact Shadows (compute)                          ← GTAO 与 Contact Shadows 无数据依赖，
+  读: depth (push descriptor), light direction (push constant)    RG 不插入 barrier，GPU 可重叠执行
+  写: contact_shadow_mask (R8, push descriptor storage image)
+    ↓
 AO Temporal (compute)
   读: ao_noisy, ao_history, depth, depth_prev (push descriptors)
   写: ao_filtered (push descriptor storage image)
-    ↓
-Contact Shadows (compute)
-  读: depth (push descriptor), light direction (push constant)
-  写: contact_shadow_mask (R8, push descriptor storage image)
     ↓
 ForwardPass (MSAA, depth EQUAL write OFF)
   读: shadow_map (Set 2 binding 5/6), ao_filtered (Set 2 binding 3),

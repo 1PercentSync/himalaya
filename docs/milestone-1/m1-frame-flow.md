@@ -60,13 +60,14 @@ GTAO Pass (compute)
   输入：Depth Buffer（单采样）、Normal Buffer（单采样）、Roughness Buffer
   输出：AO Texture（RG8：R=diffuse AO 噪声版、G=specular occlusion 噪声版）
 
-AO Temporal Filter Pass (compute)
-  输入：AO Texture（当前帧）、AO History（上一帧）、Depth Buffer、Depth History（上一帧）
-  输出：AO Texture（RG8 滤波后）、AO History（更新）
-
 Contact Shadows Pass (compute)
   输入：Depth Buffer（单采样）、光源方向
   输出：Contact Shadow Mask（R8）
+  注：与 GTAO 无数据依赖，RG 不插入 barrier，GPU 可重叠执行
+
+AO Temporal Filter Pass (compute)
+  输入：AO Texture（当前帧）、AO History（上一帧）、Depth Buffer、Depth History（上一帧）
+  输出：AO Texture（RG8 滤波后）、AO History（更新）
 ```
 
 ### 阶段五：主光照
