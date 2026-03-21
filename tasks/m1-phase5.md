@@ -44,7 +44,7 @@
 ## Step 6：DebugUI 骨架
 
 - [x] Features 面板新增 AO + Contact Shadows checkbox
-- [ ] AO 面板骨架（参数占位）
+- [x] AO 面板骨架（参数占位）
 - [ ] Contact Shadows 面板骨架（参数占位）
 
 ## Step 7：GTAO Pass（R8 diffuse AO）
