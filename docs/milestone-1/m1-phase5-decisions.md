@@ -105,6 +105,43 @@ Binding 1-2 使用 nearest sampler，binding 3-4 使用 linear sampler。Binding
 #define DEBUG_MODE_AO                8   // passthrough，追加到 SHADOW_CASCADES 之后
 ```
 
+### RenderFeatures — 阶段五扩展
+
+> 阶段四决策结果：RenderFeatures struct + feature_flags bitmask + shader 动态分支机制。阶段四包含 `skybox` + `shadows` 字段和 `FEATURE_SHADOWS` flag。
+
+阶段五扩展：
+
+```cpp
+struct RenderFeatures {
+    // ... 阶段四已有字段 ...
+    bool ao              = true;   // 阶段五新增
+    bool contact_shadows = true;   // 阶段五新增
+};
+```
+
+```glsl
+#define FEATURE_AO              (1u << 1)
+#define FEATURE_CONTACT_SHADOWS (1u << 2)
+```
+
+消费端条件资源声明扩展：
+
+```cpp
+if (ctx.ao_texture.valid())
+    resources.push_back({ctx.ao_texture, Read, Fragment});
+```
+
+Shader 端动态分支扩展：
+
+```glsl
+float ao = 1.0;
+if ((global.feature_flags & FEATURE_AO) != 0u) {
+    ao = texture(rt_ao_texture, uv).r;
+}
+```
+
+---
+
 ### RG 渐进式能力扩展
 
 > 阶段二建立了 RG 渐进式能力建设路线（Barrier 自动插入 → 资源导入）。阶段三引入 Managed 资源管理。

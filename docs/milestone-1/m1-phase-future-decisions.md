@@ -48,3 +48,9 @@
 | 阶段六 | 动态分支 | Lightmap 按 per-object 属性条件执行（warp 不发散，GPU 开销为零） |
 | M2+ | `#define` 编译变体 | POM ray march 循环显著增加 shader 体积和寄存器压力 |
 | M2+ 可选 | Specialization Constants | 从 `#define` 迁移以减少编译次数 |
+
+---
+
+## RenderFeatures 后处理扩展（阶段八构想，来自阶段四规划）
+
+阶段四设计 RenderFeatures 机制时预留了后处理 pass 的运行时开关扩展空间（阶段八 Bloom、Vignette 等后处理 pass 各自的 bool flag）。
