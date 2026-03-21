@@ -70,13 +70,14 @@ Temporal 场景不使用 `READ_WRITE`——历史帧数据通过 `get_history_im
 
 **Pipeline Layout**：Per-frame compute pipeline 使用 `{Set 0, Set 1, Set 2, Set 3(push)}`，Set 0-2 与 graphics 共享，Set 3 per-pass 自定义（push descriptor flag）。
 
-**Push Descriptor Helpers**：
+**Compute Helpers**：
 
+- `bind_compute_descriptor_sets(layout, first_set, sets, count)` — 绑定 Set 0-2 预分配 descriptor sets 到 compute pipeline（`VK_PIPELINE_BIND_POINT_COMPUTE`，与 `bind_descriptor_sets` 的 graphics 版对称）
 - `push_storage_image(ResourceManager&, layout, set, binding, ImageHandle)` — compute 输出
 - `push_sampled_image(ResourceManager&, layout, set, binding, ImageHandle, SamplerHandle)` — compute 输入
 - `get_compute_set_layouts(set3_push_layout)` → `{set0, set1, set2, set3}`
 
-显式传 `ResourceManager&` 用于 `ImageHandle → VkImageView` 解析，保持 CommandBuffer 作为纯 `VkCommandBuffer` wrapper。`get_compute_set_layouts` 封装 Set 0-2 全局 layout + Set 3 push descriptor layout，避免 10+ compute pass 手动拼 layout，架构演进时单点修改。
+`bind_compute_descriptor_sets` 在 Step 7 实现 GTAOPass 时引入——现有 `bind_descriptor_sets` 硬编码 `VK_PIPELINE_BIND_POINT_GRAPHICS`，compute pass 需要 `COMPUTE` bind point 绑定全局 Set 0-2。显式传 `ResourceManager&` 用于 `ImageHandle → VkImageView` 解析，保持 CommandBuffer 作为纯 `VkCommandBuffer` wrapper。`get_compute_set_layouts` 封装 Set 0-2 全局 layout + Set 3 push descriptor layout，避免 10+ compute pass 手动拼 layout，架构演进时单点修改。
 
 ### GlobalUBO — 阶段五扩展
 

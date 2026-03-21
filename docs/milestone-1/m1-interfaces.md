@@ -1273,14 +1273,18 @@ public:
 };
 ```
 
-#### CommandBuffer Push Descriptor Helpers（阶段五引入）
+#### CommandBuffer Compute Helpers（阶段五引入）
 
-封装 `vkCmdPushDescriptorSet`，Pass 层不接触 `VkWriteDescriptorSet` 等 Vulkan 类型。显式传 `ResourceManager&` 用于 `ImageHandle → VkImageView` 解析，保持 CommandBuffer 作为纯 `VkCommandBuffer` wrapper。设计决策见 `m1-design-decisions-core.md`「Compute Pass 绑定机制」。
+Compute pass 绑定基础设施。`bind_compute_descriptor_sets` 与 `bind_descriptor_sets` 对称，使用 `VK_PIPELINE_BIND_POINT_COMPUTE`，用于 compute pass 绑定 Set 0-2 预分配全局 descriptor sets。Push descriptor helpers 封装 `vkCmdPushDescriptorSet`，Pass 层不接触 `VkWriteDescriptorSet` 等 Vulkan 类型。显式传 `ResourceManager&` 用于 `ImageHandle → VkImageView` 解析，保持 CommandBuffer 作为纯 `VkCommandBuffer` wrapper。设计决策见 `m1-design-decisions-core.md`「Compute Pass 绑定机制」。
 
 ```cpp
 class CommandBuffer {
 public:
     // ... 已有接口 ...
+
+    /// Bind pre-allocated descriptor sets to the compute pipeline (Set 0-2).
+    void bind_compute_descriptor_sets(VkPipelineLayout layout, uint32_t first_set,
+                                      const VkDescriptorSet* sets, uint32_t count);
 
     /// Push a storage image binding for compute output.
     void push_storage_image(const ResourceManager& rm, VkPipelineLayout layout,

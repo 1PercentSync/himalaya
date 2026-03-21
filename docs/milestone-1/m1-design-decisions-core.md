@@ -170,13 +170,14 @@ layout(set = 1, binding = 1) uniform samplerCube cubemaps[];   // 上限 256
 
 Per-frame 双缓冲（2 份对应 2 frames in flight）。Temporal binding 每帧更新当前帧 copy；非 temporal binding 在 init/resize/MSAA 切换时写入两份。
 
-### Compute Set 3 — Push Descriptors
+### Compute Pass 绑定机制
 
+- `bind_compute_descriptor_sets(layout, first_set, sets, count)` — 绑定 Set 0-2 到 compute pipeline（COMPUTE bind point）
 - `push_storage_image(ResourceManager&, layout, set, binding, ImageHandle)` — compute 输出
 - `push_sampled_image(ResourceManager&, layout, set, binding, ImageHandle, SamplerHandle)` — compute 输入
 - `get_compute_set_layouts(set3_push_layout)` → `{set0, set1, set2, set3}`
 
-显式传 `ResourceManager&` 保持 CommandBuffer 作为纯 VkCommandBuffer wrapper。
+显式传 `ResourceManager&` 保持 CommandBuffer 作为纯 VkCommandBuffer wrapper。`bind_compute_descriptor_sets` 与 `bind_descriptor_sets` 对称（后者为 GRAPHICS bind point），compute pass 用于绑定全局预分配 Set 0-2。
 
 ### GlobalUBO
 
