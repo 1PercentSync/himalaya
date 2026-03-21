@@ -452,6 +452,14 @@ namespace himalaya::app {
             }
         }
 
+        // AO section (skeleton — sliders added in Step 7/10)
+        if (ctx.features.ao) {
+            ImGui::Separator();
+            if (ImGui::CollapsingHeader("Ambient Occlusion")) {
+                ImGui::TextDisabled("Parameters added in later steps");
+            }
+        }
+
         // Rendering section
         ImGui::Separator();
         if (ImGui::CollapsingHeader("Rendering", ImGuiTreeNodeFlags_DefaultOpen)) {
