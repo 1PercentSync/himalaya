@@ -312,6 +312,33 @@ namespace himalaya::framework {
                             VK_IMAGE_LAYOUT_UNDEFINED);
     }
 
+    RGResourceId RenderGraph::get_history_image(const RGManagedHandle handle) {
+        assert(handle.valid() && handle.index < managed_images_.size() && "Invalid RGManagedHandle");
+        const auto &managed = managed_images_[handle.index];
+        assert(managed.is_temporal && "get_history_image() only valid for temporal managed images");
+        assert(managed.history_backing.valid() && "Temporal history backing is invalid");
+
+        // History valid: previous frame's current was final-transitioned to SHADER_READ_ONLY_OPTIMAL.
+        // History invalid (first frame / resize): image was never written, use UNDEFINED.
+        // Final layout UNDEFINED: no end-of-frame transition needed (after swap, becomes current
+        // which is imported with UNDEFINED initial layout).
+        const auto initial_layout = managed.history_valid_
+                                        ? VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+                                        : VK_IMAGE_LAYOUT_UNDEFINED;
+
+        return import_image(managed.debug_name + "_history",
+                            managed.history_backing,
+                            initial_layout,
+                            VK_IMAGE_LAYOUT_UNDEFINED);
+    }
+
+    bool RenderGraph::is_history_valid(const RGManagedHandle handle) const {
+        assert(handle.valid() && handle.index < managed_images_.size() && "Invalid RGManagedHandle");
+        const auto &managed = managed_images_[handle.index];
+        assert(managed.is_temporal && "is_history_valid() only valid for temporal managed images");
+        return managed.history_valid_;
+    }
+
     void RenderGraph::update_managed_desc(const RGManagedHandle handle, const RGImageDesc &new_desc) {
         assert(handle.valid() && handle.index < managed_images_.size() && "Invalid RGManagedHandle");
         auto &managed = managed_images_[handle.index];

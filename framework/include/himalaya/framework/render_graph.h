@@ -360,6 +360,32 @@ namespace himalaya::framework {
          */
         RGResourceId use_managed_image(RGManagedHandle handle);
 
+        /**
+         * @brief Imports the history backing image of a temporal managed image.
+         *
+         * Always returns a valid RGResourceId (both backing images exist since creation).
+         * When history is valid, imports with SHADER_READ_ONLY_OPTIMAL initial layout;
+         * when invalid (first frame / after resize), imports with UNDEFINED.
+         * Final layout is UNDEFINED (no end-of-frame transition needed).
+         *
+         * Only callable on temporal managed images (temporal=true at creation).
+         *
+         * @param handle Managed image handle (must be temporal).
+         * @return Per-frame resource ID for the history image.
+         */
+        RGResourceId get_history_image(RGManagedHandle handle);
+
+        /**
+         * @brief Queries whether the history content is valid.
+         *
+         * Returns false on the first frame after creation or after a resize/desc update.
+         * Callers should set temporal blend factor to 0 when history is invalid.
+         *
+         * @param handle Managed image handle (must be temporal).
+         * @return True if history contains valid data from the previous frame.
+         */
+        [[nodiscard]] bool is_history_valid(RGManagedHandle handle) const;
+
     private:
         /** @brief Internal storage for an imported resource. */
         struct RGResource {
