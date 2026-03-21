@@ -46,6 +46,7 @@ framework/
 │   ├── camera.h                 # 相机、投影、jitter
 │   ├── scene_data.h             # 渲染列表、光源、探针数据结构定义（纯头文件）
 │   ├── culling.h                # 视锥剔除
+│   ├── shadow.h                 # CSM cascade 计算（PSSM 分割、正交投影、texel snapping）
 │   └── imgui_backend.h          # ImGui 集成
 └── src/
     └── ...

@@ -577,7 +577,8 @@ framework/
 │   ├── scene_data.h             # [Step 1a] RenderFeatures + ShadowConfig
 │   ├── frame_context.h          # [Step 1a] shadow_map + features + shadow_config
 │   ├── camera.h                 # [Step 1a] compute_focus_position()
-│   └── culling.h                # [Step 1c] 通用 frustum 剔除
+│   ├── culling.h                # [Step 1c] 通用 frustum 剔除
+│   └── shadow.h                 # [Phase 4 review] CSM cascade 计算（从 renderer.cpp 提取）
 app/
 ├── include/himalaya/app/
 │   ├── renderer.h               # [Step 1a-2] RenderInput 扩展 + handle_shadow_resolution_changed
