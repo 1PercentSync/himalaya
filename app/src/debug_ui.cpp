@@ -460,6 +460,14 @@ namespace himalaya::app {
             }
         }
 
+        // Contact Shadows section (skeleton — sliders added in Step 14)
+        if (ctx.features.contact_shadows) {
+            ImGui::Separator();
+            if (ImGui::CollapsingHeader("Contact Shadows")) {
+                ImGui::TextDisabled("Parameters added in later steps");
+            }
+        }
+
         // Rendering section
         ImGui::Separator();
         if (ImGui::CollapsingHeader("Rendering", ImGuiTreeNodeFlags_DefaultOpen)) {
