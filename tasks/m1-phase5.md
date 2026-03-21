@@ -34,7 +34,7 @@
 
 ## Step 5：Depth/Normal Set 2 绑定 + AO 资源创建
 
-- [ ] Resolved depth 标记 temporal + FrameContext 新增 depth_prev
+- [x] Resolved depth 标记 temporal + FrameContext 新增 depth_prev
 - [ ] Set 2 binding 1（depth_resolved nearest）+ binding 2（normal_resolved nearest）写入双份 Set 2
 - [ ] Temporal binding 1（depth_resolved）每帧更新逻辑
 - [ ] 创建 managed images（ao_noisy RG8、ao_filtered RG8 temporal、contact_shadow_mask R8）+ FrameContext 新增 RGResourceId
