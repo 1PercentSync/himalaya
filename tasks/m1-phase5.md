@@ -67,7 +67,7 @@
 
 - [x] forward.frag：screen_uv 计算 + rt_ao_texture 采样（R 通道）
 - [x] forward.frag：diffuse AO 乘法复合 + multi-bounce 色彩补偿
-- [ ] forward.frag：Lagarde 近似 SO + IBL specular 调制
+- [x] forward.frag：Lagarde 近似 SO + IBL specular 调制
 - [ ] forward.frag：FEATURE_AO 守护
 - [ ] Renderer 编排：features.ao 条件调用 + FrameContext 条件资源声明
 

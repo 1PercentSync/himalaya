@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 9 第三小项：forward.frag：Lagarde 近似 SO + IBL specular 调制
+Step 9 第四小项：forward.frag：FEATURE_AO 守护
 
 ---
 
