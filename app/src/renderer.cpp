@@ -865,12 +865,14 @@ namespace himalaya::app {
 
             const float half_tan = std::tan(input.shadow_config.light_angular_diameter * 0.5f);
             const float two_half_tan = 2.0f * half_tan;
+            constexpr float kMinExtent = 1e-6f;
             const auto n = static_cast<int>(input.shadow_config.cascade_count);
             for (int i = 0; i < n; ++i) {
-                const float wx = cascades.cascade_width_x[i];
+                const float wx = std::max(cascades.cascade_width_x[i], kMinExtent);
+                const float wy = std::max(cascades.cascade_width_y[i], kMinExtent);
                 ubo_data.cascade_light_size_uv[i] = two_half_tan / wx;
                 ubo_data.cascade_pcss_scale[i] = cascades.cascade_depth_range[i] * two_half_tan / wx;
-                ubo_data.cascade_uv_scale_y[i] = wx / cascades.cascade_width_y[i];
+                ubo_data.cascade_uv_scale_y[i] = wx / wy;
             }
         }
 
