@@ -98,7 +98,26 @@ void main() {
             case DEBUG_MODE_NORMAL:    vis = N * 0.5 + 0.5; break;
             case DEBUG_MODE_METALLIC:  vis = vec3(metallic); break;
             case DEBUG_MODE_ROUGHNESS: vis = vec3(roughness); break;
-            case DEBUG_MODE_AO:        vis = vec3(texture(textures[nonuniformEXT(mat.occlusion_tex)], frag_uv0).r); break;
+            case DEBUG_MODE_AO: {
+                // Combined AO: ssao × material_ao (material-only when AO disabled)
+                float dbg_mat_ao = texture(textures[nonuniformEXT(mat.occlusion_tex)], frag_uv0).r;
+                dbg_mat_ao = 1.0 + mat.occlusion_strength * (dbg_mat_ao - 1.0);
+                float dbg_ssao = 1.0;
+                if ((global.feature_flags & FEATURE_AO) != 0u) {
+                    dbg_ssao = texture(rt_ao_texture, gl_FragCoord.xy / global.screen_size).r;
+                }
+                vis = vec3(dbg_ssao * dbg_mat_ao);
+                break;
+            }
+            case DEBUG_MODE_AO_SSAO: {
+                // Raw GTAO output (R channel, temporal-filtered)
+                if ((global.feature_flags & FEATURE_AO) != 0u) {
+                    vis = vec3(texture(rt_ao_texture, gl_FragCoord.xy / global.screen_size).r);
+                } else {
+                    vis = vec3(1.0);
+                }
+                break;
+            }
             case DEBUG_MODE_SHADOW_CASCADES: {
                 if ((global.feature_flags & FEATURE_SHADOWS) != 0u) {
                     float vd = -(global.view * vec4(frag_world_pos, 1.0)).z;
