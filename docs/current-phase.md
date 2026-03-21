@@ -271,6 +271,8 @@ DepthPrePass 扩展，独立于 GTAO 升级可验证。
 
 ### Step 13：Contact Shadows Compute
 
+> **帧执行顺序注意**：虽然 Step 编号在 AO Temporal(Step 8) 之后，但帧内执行顺序为 GTAO → Contact Shadows → AO Temporal。Contact Shadows 与 GTAO 无数据依赖，插在两者之间允许 GPU 重叠执行。详见「阶段五帧流程」。
+
 - `contact_shadows.comp`：世界空间起点 + 光方向 × 最大距离 → 投影到屏幕空间 → UV 步进
 - `contact_shadows.comp`：每步深度比较 + 深度自适应 thickness（`base_thickness × linear_depth`）
 - `contact_shadows.comp`：距离衰减（首次命中 + smoothstep fade），push constants 传参数
