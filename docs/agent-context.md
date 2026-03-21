@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 7 第五小项：GTAOPass::record()：push constants + push descriptors
+Step 7 第六小项：DebugUI AO 面板填充（radius、directions、steps per direction、bias、intensity）
 
 ---
 

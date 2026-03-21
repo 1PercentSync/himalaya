@@ -53,7 +53,7 @@
 - [x] gtao.comp：horizon search + cosine-weighted 积分 + per-pixel noise 旋转
 - [x] gtao.comp：输出 RG8（R=AO, G=0.0）+ bias/intensity 应用
 - [x] GTAOPass 类（setup / record / destroy / rebuild_pipelines）+ Set 3 layout + pipeline
-- [ ] GTAOPass::record()：push constants + push descriptors
+- [x] GTAOPass::record()：push constants + push descriptors
 - [ ] DebugUI AO 面板填充（radius、directions、steps per direction、bias、intensity）
 
 ## Step 8：AO Temporal Filter（R8 单通道）
