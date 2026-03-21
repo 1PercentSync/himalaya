@@ -5,12 +5,15 @@
  * @brief Command buffer wrapper for Vulkan command recording.
  */
 
+#include <himalaya/rhi/types.h>
+
 #include <vulkan/vulkan.h>
 
 #include <array>
 #include <span>
 
 namespace himalaya::rhi {
+    class ResourceManager;
     struct Pipeline;
 
     /**
@@ -185,6 +188,21 @@ namespace himalaya::rhi {
          */
         void push_descriptor_set(VkPipelineLayout layout, uint32_t set,
                                  std::span<const VkWriteDescriptorSet> writes) const;
+
+        /**
+         * @brief Pushes a storage image descriptor for compute output.
+         *
+         * Resolves ImageHandle to VkImageView via ResourceManager and pushes
+         * a STORAGE_IMAGE descriptor with GENERAL layout.
+         *
+         * @param rm      Resource manager for handle resolution.
+         * @param layout  Pipeline layout compatible with the push descriptor set.
+         * @param set     Descriptor set index to push to.
+         * @param binding Binding index within the set.
+         * @param image   Image handle for the storage image.
+         */
+        void push_storage_image(const ResourceManager &rm, VkPipelineLayout layout,
+                                uint32_t set, uint32_t binding, ImageHandle image) const;
 
         // --- Debug labels (VK_EXT_debug_utils, debug builds only) ---
 

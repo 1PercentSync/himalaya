@@ -1,6 +1,7 @@
 #include <himalaya/rhi/commands.h>
 #include <himalaya/rhi/context.h>
 #include <himalaya/rhi/pipeline.h>
+#include <himalaya/rhi/resources.h>
 
 namespace himalaya::rhi {
     // ReSharper disable once CppParameterMayBeConst
@@ -127,6 +128,29 @@ namespace himalaya::rhi {
                                set,
                                static_cast<uint32_t>(writes.size()),
                                writes.data());
+    }
+
+    void CommandBuffer::push_storage_image(const ResourceManager &rm,
+                                           const VkPipelineLayout layout,
+                                           const uint32_t set,
+                                           const uint32_t binding,
+                                           const ImageHandle image) const {
+        const auto &img = rm.get_image(image);
+
+        const VkDescriptorImageInfo image_info{
+            .imageView = img.view,
+            .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
+        };
+
+        const VkWriteDescriptorSet write{
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstBinding = binding,
+            .descriptorCount = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+            .pImageInfo = &image_info,
+        };
+
+        push_descriptor_set(layout, set, {&write, 1});
     }
 
     void CommandBuffer::copy_buffer_to_image(const VkCopyBufferToImageInfo2 &copy_info) const {
