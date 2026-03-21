@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段五 — 屏幕空间效果
-- **进度**：Step 4 进行中（12/~40）
+- **进度**：Step 4 进行中（13/~40）
 
 ### 下一个任务
 
-Step 4 第二小项：FEATURE_AO + FEATURE_CONTACT_SHADOWS（bindings.glsl）+ feature_flags 填充逻辑
+Step 4 第三小项：AOConfig + ContactShadowConfig 结构体 + Application 初始化
 
 ---
 
