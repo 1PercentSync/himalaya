@@ -129,6 +129,12 @@ namespace himalaya::framework {
 
         /** @brief Enable shadow mapping (ShadowPass + forward sampling). */
         bool shadows;
+
+        /** @brief Enable ambient occlusion (GTAOPass + AOTemporalPass + forward AO/SO). */
+        bool ao;
+
+        /** @brief Enable contact shadows (ContactShadowsPass + forward shadow attenuation). */
+        bool contact_shadows;
     };
 
     /**

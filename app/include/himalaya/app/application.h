@@ -139,6 +139,8 @@ namespace himalaya::app {
         framework::RenderFeatures features_{
             .skybox = true,
             .shadows = true,
+            .ao = true,
+            .contact_shadows = true,
         };
 
         /** @brief CSM shadow configuration parameters. */
