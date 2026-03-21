@@ -1190,11 +1190,12 @@ layout(push_constant) uniform PushConstants {
 
 #### Descriptor Set 管理方式
 
-三个 Set 均使用传统 Descriptor Set（非 Push Descriptors），所有 pipeline 共享统一 layout `{Set 0, Set 1, Set 2}`。
+Graphics pipeline 共享统一 layout `{Set 0, Set 1, Set 2}`。Compute pipeline 扩展为 `{Set 0, Set 1, Set 2, Set 3(push)}`。
 
 - **Set 0**：per-frame 分配 2 个 descriptor set（对应 2 frames in flight），每帧绑定当前帧的 set
 - **Set 1**：分配 1 个 descriptor set，加载时写入，长期持有
-- **Set 2**：分配 1 个 descriptor set，init 时写入，resize / MSAA 切换时更新
+- **Set 2**：per-frame 分配 2 个 descriptor set（阶段五引入，对应 2 frames in flight），temporal binding 每帧更新当前帧的 copy
+- **Set 3**：push descriptor set（阶段五引入，仅 compute pipeline），每次 dispatch 前 push 绑定（storage image 输出 + pass-specific 输入）
 
 设计决策见 `m1-design-decisions.md`「Descriptor Set 三层架构」+「Set 2 — Render Target Descriptor Set」。
 
@@ -1207,6 +1208,232 @@ layout(push_constant) uniform PushConstants {
 | 材质数据 | 加载时一次 | Set 0, Binding 2 (SSBO) | PBR 参数、纹理 index |
 | 2D 纹理数据 | 加载时一次 | Set 1, Binding 0 (Bindless) | 材质纹理、BRDF LUT、Lightmap |
 | Cubemap 数据 | 初始化 / 加载时 | Set 1, Binding 1 (Bindless) | IBL cubemap、Reflection Probes |
-| Render Target | init 时 / resize 时 | Set 2, Binding 0-7 (Named) | HDR color、depth、normal、AO、shadow map 等 |
+| Render Target | init 时 / resize 时 + temporal 每帧 | Set 2, Binding 0-8 (Named, per-frame) | HDR color、depth、normal、AO、shadow map 等 |
 | Per-instance 数据 | 每帧一次（cull 后填充） | Set 0, Binding 3 (SSBO) | 模型矩阵、材质 index（instancing 用）|
 | Per-draw 数据 | 每次绘制（仅 shadow） | Push Constant | cascade index |
+| Compute pass 私有 I/O | 每次 dispatch | Set 3 (Push Descriptor) | storage image 输出、pass-specific 输入（阶段五引入） |
+
+---
+
+### 阶段五新增接口
+
+#### RG Temporal API（阶段五引入）
+
+RG managed image 支持 temporal 标记，内部管理 double buffer 和帧间 swap。设计决策见 `m1-design-decisions.md`「Temporal 基础设施」。
+
+```cpp
+// create_managed_image 新增 temporal 参数
+RGManagedHandle create_managed_image(const char* debug_name,
+                                      const RGImageDesc& desc,
+                                      bool temporal = false);
+
+// 获取上一帧的 resource ID（仅 temporal=true 的 managed image 可调用）
+// 首帧 / resize 后：返回 invalid RGResourceId（history 内容未定义）
+RGResourceId get_history_image(RGManagedHandle handle);
+```
+
+- `temporal=true` 时 RG 内部分配第二张 backing image（`history_backing`）
+- `clear()` 时自动 swap current/history
+- Resize 时重建两张，标记 history 无效
+- `use_managed_image()` 返回当前帧写入目标（initial_layout = UNDEFINED）
+- `get_history_image()` 返回上一帧保留内容（initial_layout = SHADER_READ_ONLY_OPTIMAL）
+
+#### Per-frame-in-flight Set 2（阶段五引入）
+
+Set 2 从 1 份扩展为 2 份（对应 2 frames in flight），解决 temporal binding 的帧间竞争。设计决策见 `m1-design-decisions.md`「Per-frame-in-flight Set 2」。
+
+```cpp
+class DescriptorManager {
+public:
+    // Set 2 getter 变为 per-frame（阶段五变更）
+    VkDescriptorSet get_set2(uint32_t frame_index) const;
+
+    // ... 其余接口不变 ...
+};
+```
+
+#### CommandBuffer Push Descriptor Helpers（阶段五引入）
+
+封装 `vkCmdPushDescriptorSet`，Pass 层不接触 Vulkan 类型。设计决策见 `m1-design-decisions.md`「Compute Pass 绑定机制」。
+
+```cpp
+class CommandBuffer {
+public:
+    // ... 已有接口 ...
+
+    /// Push a storage image binding for compute output.
+    void push_storage_image(VkPipelineLayout layout, uint32_t set,
+                            uint32_t binding, ImageHandle image);
+
+    /// Push a sampled image binding for compute input.
+    void push_sampled_image(VkPipelineLayout layout, uint32_t set,
+                            uint32_t binding, ImageHandle image,
+                            SamplerHandle sampler);
+};
+```
+
+#### Compute Pipeline（阶段五引入）
+
+```cpp
+struct ComputePipelineDesc {
+    VkShaderModule compute_shader = VK_NULL_HANDLE;
+    VkPipelineLayout layout = VK_NULL_HANDLE;
+};
+
+// Pipeline 创建
+Pipeline create_compute_pipeline(const ComputePipelineDesc& desc, const char* debug_name);
+```
+
+Compute pipeline layout：`{Set 0, Set 1, Set 2, Set 3(push)}`。Set 0/1/2 layout 与 graphics 一致，Set 3 per-pass 自定义（push descriptor flag）。
+
+#### AOConfig（阶段五引入）
+
+AO 特性的运行时配置。定义在 `framework/scene_data.h`。Application 持有实例，DebugUI 操作。
+
+```cpp
+struct AOConfig {
+    float radius;              // 采样半径 (world-space meters)
+    uint32_t directions;       // 搜索方向数 (2/4/8)
+    uint32_t steps_per_dir;    // 每方向步数 (2/4/8)
+    float bias;                // depth 比较偏移
+    float intensity;           // AO 强度乘数
+    float temporal_blend;      // history 混合因子 (0.0-1.0)
+};
+```
+
+#### ContactShadowConfig（阶段五引入）
+
+Contact Shadows 特性的运行时配置。定义在 `framework/scene_data.h`。
+
+```cpp
+struct ContactShadowConfig {
+    uint32_t step_count;       // ray march 步数 (8/16/24/32)
+    float max_distance;        // 最大搜索距离 (world-space meters)
+    float base_thickness;      // 深度自适应 thickness 的基础值
+};
+```
+
+#### RenderFeatures 扩展（阶段五）
+
+```cpp
+struct RenderFeatures {
+    bool skybox;               // 阶段四引入
+    bool shadows;              // 阶段四引入
+    bool ao;                   // 阶段五引入
+    bool contact_shadows;      // 阶段五引入
+};
+```
+
+#### feature_flags 扩展（bindings.glsl，阶段五）
+
+```glsl
+#define FEATURE_SHADOWS         (1u << 0)
+#define FEATURE_AO              (1u << 1)
+#define FEATURE_CONTACT_SHADOWS (1u << 2)
+```
+
+#### GlobalUniformData 扩展（阶段五）
+
+```cpp
+struct GlobalUniformData {
+    // ... 阶段四已有字段 (720 bytes) ...
+
+    // --- 阶段五新增 ---
+    glm::mat4 inv_projection;            // depth → view-space position 重建
+    glm::mat4 prev_view_projection;      // temporal reprojection
+};
+```
+
+#### FrameContext 扩展（阶段五）
+
+```cpp
+struct FrameContext {
+    // ... 阶段四已有字段 ...
+
+    // --- 阶段五新增 ---
+    RGResourceId depth_prev;             // 上一帧 resolved depth (temporal history)
+    RGResourceId roughness;              // DepthPrePass roughness 输出 (R8)
+    RGResourceId ao_noisy;               // GTAO 原始输出 (RG8)
+    RGResourceId ao_filtered;            // AO Temporal 滤波后 (RG8, Set 2 binding 3)
+    RGResourceId contact_shadow_mask;    // Contact Shadow mask (R8, Set 2 binding 4)
+
+    const AOConfig* ao_config = nullptr;
+    const ContactShadowConfig* contact_shadow_config = nullptr;
+};
+```
+
+#### Set 2 Layout 扩展（阶段五）
+
+| Binding | 类型 | 名称 | 引入阶段 |
+|---------|------|------|---------|
+| 0 | `sampler2D` | hdr_color | 三 |
+| 1 | `sampler2D` | depth_resolved | **五** |
+| 2 | `sampler2D` | normal_resolved | **五** |
+| 3 | `sampler2D` | ao_texture | **五** |
+| 4 | `sampler2D` | contact_shadow_mask | **五** |
+| 5 | `sampler2DArrayShadow` | shadow_map | 四 |
+| 6 | `sampler2DArray` | shadow_map_depth | 四 |
+| 7 | `sampler2D` | bloom_texture | 八 |
+| 8 | `sampler2D` | refraction_source | 七 |
+
+bindings.glsl 阶段五新增：
+
+```glsl
+layout(set = 2, binding = 1) uniform sampler2D rt_depth_resolved;
+layout(set = 2, binding = 2) uniform sampler2D rt_normal_resolved;
+layout(set = 2, binding = 3) uniform sampler2D rt_ao_texture;
+layout(set = 2, binding = 4) uniform sampler2D rt_contact_shadow_mask;
+```
+
+#### GTAOPass 接口（阶段五引入）
+
+```cpp
+class GTAOPass {
+public:
+    void setup(rhi::Context& ctx, rhi::ResourceManager& rm,
+               rhi::DescriptorManager& dm, rhi::ShaderCompiler& sc);
+    void record(RenderGraph& rg, const FrameContext& ctx);
+    void rebuild_pipelines();
+    void destroy();
+};
+```
+
+#### AOTemporalPass 接口（阶段五引入）
+
+```cpp
+class AOTemporalPass {
+public:
+    void setup(rhi::Context& ctx, rhi::ResourceManager& rm,
+               rhi::DescriptorManager& dm, rhi::ShaderCompiler& sc);
+    void record(RenderGraph& rg, const FrameContext& ctx);
+    void rebuild_pipelines();
+    void destroy();
+};
+```
+
+#### ContactShadowsPass 接口（阶段五引入）
+
+```cpp
+class ContactShadowsPass {
+public:
+    void setup(rhi::Context& ctx, rhi::ResourceManager& rm,
+               rhi::DescriptorManager& dm, rhi::ShaderCompiler& sc);
+    void record(RenderGraph& rg, const FrameContext& ctx);
+    void rebuild_pipelines();
+    void destroy();
+};
+```
+
+#### DepthPrePass 扩展（阶段五）
+
+```cpp
+class DepthPrePass {
+public:
+    // ... 已有接口不变 ...
+
+    // 阶段五新增：roughness 输出的 managed image handle
+    // setup() 内部创建 R8 roughness managed image
+    // record() 声明 roughness 为额外 color attachment 输出
+    // on_sample_count_changed() 同步更新 roughness sample count
+};
+```

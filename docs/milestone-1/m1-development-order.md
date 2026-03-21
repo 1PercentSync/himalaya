@@ -86,14 +86,16 @@
 
 ## 阶段五：屏幕空间效果
 
-- SSAO Pass
-- Temporal filtering 基础设施（历史 buffer 管理、相机 reprojection）
-- SSAO Temporal Filter Pass
-- Contact Shadows Pass
+- RG temporal 机制 + per-frame-in-flight Set 2 + compute pass push descriptors（基础设施）
+- DepthPrePass roughness 输出（GTAO specular occlusion 计算需要 per-pixel roughness）
+- GTAO Pass（AO + specular occlusion 直接计算，RG8 输出）
+- AO Temporal Filter Pass（reprojection + prev depth rejection + 邻域 clamp）
+- AO Forward 集成（乘法复合 + multi-bounce 色彩补偿 + specular occlusion 调制 IBL specular）
+- Contact Shadows Pass（screen-space ray march，距离衰减输出）
 
-**产出：** 物体之间、角落里有了自然的暗部过渡（AO），物体贴地处有了精细的接触阴影。画面层次感明显提升。
+**产出：** 物体之间、角落里有了自然的暗部过渡（AO），物体贴地处有了精细的接触阴影。光滑金属在遮蔽区 specular 适当衰减（specular occlusion），浅色表面 AO 不过度压暗（multi-bounce）。画面层次感明显提升。
 
-**战略价值：** temporal filtering 基础设施（per-effect 历史 buffer + reprojection + blend）在此搭建，M2 的 SSR、SSGI 可直接复用同一模式。注意 DLSS/FSR 的全画面 temporal accumulation 是 SDK 自带实现，依赖 Motion Vectors 而非此基础设施。
+**战略价值：** temporal filtering 基础设施（RG temporal double buffer + per-frame Set 2 + compute push descriptors）在此搭建，M2 的 SSR、SSGI 可直接复用同一机制。DepthPrePass roughness buffer 同样为 M2 SSR 所需。注意 DLSS/FSR 的全画面 temporal accumulation 是 SDK 自带实现，依赖 Motion Vectors 而非此基础设施。
 
 ---
 

@@ -58,7 +58,7 @@
 
 ### 环境光遮蔽
 
-- SSAO + temporal filtering（同时搭建 temporal filtering 基础设施）
+- AO（GTAO 算法）+ temporal filtering（同时搭建 temporal filtering 基础设施）
 
 ### 抗锯齿
 
