@@ -3,7 +3,7 @@
 > 目标：在阶段四的阴影基础上，实现 AO（GTAO 算法）+ temporal filtering + Contact Shadows，为场景增加空间层次感和接地感。
 > 同时搭建 temporal filtering 基础设施（RG temporal、per-frame Set 2、compute pass push descriptors），为 M2 的 SSR/SSGI 奠定基础。
 >
-> 关键接口定义见 `milestone-1/m1-interfaces.md`，设计决策见 `milestone-1/m1-design-decisions.md`。
+> 关键接口定义见 `milestone-1/m1-interfaces.md`，设计决策见 `milestone-1/m1-design-decisions-core.md`。
 
 ---
 
@@ -67,7 +67,7 @@ Step 14: Contact Shadows Forward 集成
 
 #### 设计要点
 
-RG temporal 见 `milestone-1/m1-design-decisions.md`「Temporal 基础设施」。
+RG temporal 见 `milestone-1/m1-design-decisions-core.md`「Temporal 基础设施」。
 
 关键设计：
 - RG temporal 内部为 managed image 分配第二张 backing image（`history_backing`），`clear()` 时 swap current/history，resize 时重建两张并标记 history 无效
@@ -89,7 +89,7 @@ DescriptorManager 变更 + 所有调用点适配。
 
 #### 设计要点
 
-Per-frame Set 2 见 `milestone-1/m1-design-decisions.md`「Per-frame-in-flight Set 2」。
+Per-frame Set 2 见 `milestone-1/m1-design-decisions-core.md`「Per-frame-in-flight Set 2」。
 
 关键设计：
 - Per-frame Set 2 与 Set 0 统一模式：2 份 descriptor set 对应 2 frames in flight，每帧绑定当前帧的 copy

@@ -1,7 +1,7 @@
 # Milestone 1：接口与目标结构
 
 > 本文档包含 M1 的目标文件结构和关键接口定义。
-> 设计决策与理由见 `m1-design-decisions.md`，长远架构目标见 `../project/architecture.md`，M1 功能范围见 `milestone-1.md`。
+> 设计决策与理由见 `m1-design-decisions-core.md`，长远架构目标见 `../project/architecture.md`，M1 功能范围见 `milestone-1.md`。
 
 ---
 
@@ -100,7 +100,7 @@ app/
     └── debug_ui.cpp
 ```
 
-App 层拥有 GLFW 窗口，传 `GLFWwindow*` 给 RHI 创建 Surface。Application 持有 RHI 基础设施和 App 模块，Renderer 持有渲染子系统，详见 `m1-design-decisions.md`「App 层设计」。
+App 层拥有 GLFW 窗口，传 `GLFWwindow*` 给 RHI 创建 Surface。Application 持有 RHI 基础设施和 App 模块，Renderer 持有渲染子系统，详见 `m1-design-decisions-core.md`「App 层设计」。
 
 ---
 
@@ -158,7 +158,7 @@ struct SamplerHandle  { uint32_t index = UINT32_MAX; uint32_t generation = 0; bo
 struct BindlessIndex { uint32_t index = UINT32_MAX; };
 ```
 
-Pipeline 不使用 handle 体系——所有权单一明确（pass 直接持有 `Pipeline` 值类型），详见 `m1-design-decisions.md`「资源句柄设计」。
+Pipeline 不使用 handle 体系——所有权单一明确（pass 直接持有 `Pipeline` 值类型），详见 `m1-design-decisions-core.md`「资源句柄设计」。
 
 #### 资源创建描述
 
@@ -214,7 +214,7 @@ std::pair<uint32_t, uint32_t> format_block_extent(Format format); // block texel
 bool format_is_block_compressed(Format format);                   // BC 格式返回 true
 ```
 
-与 `Format` 枚举定义在同一文件中。RG 的 barrier 计算、ResourceManager 的 image 创建、KTX2 读写等处统一使用。设计决策见 `m1-design-decisions.md`「KTX2 读写模块」「多级上传 API」。
+与 `Format` 枚举定义在同一文件中。RG 的 barrier 计算、ResourceManager 的 image 创建、KTX2 读写等处统一使用。设计决策见 `m1-design-decisions-core.md`「KTX2 读写模块」「多级上传 API」。
 
 #### ResourceManager 扩展接口
 
@@ -467,7 +467,7 @@ struct PushConstantData {
 
 ### Layer 1 — 缓存模块接口（framework/cache.h）
 
-纹理压缩和 IBL 缓存共用的轻量工具模块。只提供路径和哈希工具，不关心具体缓存格式。设计决策见 `m1-design-decisions.md`「缓存基础设施」。
+纹理压缩和 IBL 缓存共用的轻量工具模块。只提供路径和哈希工具，不关心具体缓存格式。设计决策见 `m1-design-decisions-core.md`「缓存基础设施」。
 
 ```cpp
 namespace himalaya::framework {
@@ -498,7 +498,7 @@ namespace himalaya::framework {
 
 ### Layer 1 — KTX2 读写模块接口（framework/ktx2.h）
 
-最小 KTX2 读写模块，纹理缓存和 IBL 缓存共用。不依赖 libktx，只支持 6 种格式的 2D/cubemap + mip chain 读写。设计决策见 `m1-design-decisions.md`「KTX2 读写模块」。
+最小 KTX2 读写模块，纹理缓存和 IBL 缓存共用。不依赖 libktx，只支持 6 种格式的 2D/cubemap + mip chain 读写。设计决策见 `m1-design-decisions-core.md`「KTX2 读写模块」。
 
 ```cpp
 namespace himalaya::framework {
@@ -544,7 +544,7 @@ std::optional<Ktx2Data> read_ktx2(const std::filesystem::path& path);
 
 ### Layer 1 — IBL 模块接口（framework/ibl.h）
 
-IBL 模块自管理全部资源——`init()` 中创建的所有 image 由模块自身持有，`destroy()` 先注销 bindless 条目再销毁底层资源。设计决策见 `m1-design-decisions.md`「IBL 资源所有权」。
+IBL 模块自管理全部资源——`init()` 中创建的所有 image 由模块自身持有，`destroy()` 先注销 bindless 条目再销毁底层资源。设计决策见 `m1-design-decisions-core.md`「IBL 资源所有权」。
 
 ```cpp
 class IBL {
@@ -712,7 +712,7 @@ void push_descriptor_set(VkPipelineLayout layout, uint32_t set,
 ### Pass 类约定
 
 > 阶段三引入。阶段二直接在 RG lambda 回调中编写渲染逻辑。
-> 阶段三所有 pass 统一放在 Layer 2（`passes/`），使用具体类（非虚基类），Renderer 持有具体类型成员。设计决策见 `m1-design-decisions.md`「Pass 类设计」。
+> 阶段三所有 pass 统一放在 Layer 2（`passes/`），使用具体类（非虚基类），Renderer 持有具体类型成员。设计决策见 `m1-design-decisions-core.md`「Pass 类设计」。
 
 每个 Pass 使用具体类（非虚函数），`setup()` 签名因 pass 而异。Attachment format 在 pass 内部硬编码。各 pass 的方法集允许不统一，只保留有实际作用的方法，但同功能的方法保持同名（如 `record()`、`destroy()`、`rebuild_pipelines()`）。
 
@@ -802,7 +802,7 @@ struct FrameContext {
 
 #### RenderFeatures（阶段四引入）
 
-Pass 运行时开关的控制结构体。定义在 `framework/scene_data.h`（与其他渲染合同一起）。DebugUI 直接操作 bool 字段，Renderer 据此决定是否调用 pass 的 `record()`。设计决策见 `m1-design-decisions.md`「Pass 运行时开关」。
+Pass 运行时开关的控制结构体。定义在 `framework/scene_data.h`（与其他渲染合同一起）。DebugUI 直接操作 bool 字段，Renderer 据此决定是否调用 pass 的 `record()`。设计决策见 `m1-design-decisions-core.md`「Pass 运行时开关」。
 
 ```cpp
 /// 可选渲染效果的运行时开关。DebugUI 操作，Renderer 消费。
@@ -857,7 +857,7 @@ struct ShadowConfig {
 
 #### ShadowPass 接口（阶段四引入）
 
-CSM 阴影 pass。自管理 shadow map 资源（非 RG managed），每帧 import 到 RG。设计决策见 `m1-design-decisions.md`「CSM 阴影系统」。
+CSM 阴影 pass。自管理 shadow map 资源（非 RG managed），每帧 import 到 RG。设计决策见 `m1-design-decisions-core.md`「CSM 阴影系统」。
 
 ```cpp
 class ShadowPass {
@@ -882,7 +882,7 @@ public:
 
 #### Culling 泛化接口（阶段四 Step 6 引入）
 
-纯几何 frustum 剔除。定义在 `framework/culling.h`。设计决策见 `m1-design-decisions.md`「Per-cascade 剔除与 Culling 模块重构」。
+纯几何 frustum 剔除。定义在 `framework/culling.h`。设计决策见 `m1-design-decisions-core.md`「Per-cascade 剔除与 Culling 模块重构」。
 
 `culling.h` 只包含几何剔除逻辑。材质分桶（opaque/transparent、opaque/mask）和透明排序不属于 culling 模块，由调用方内联——不同消费者的分桶标准不同（camera: opaque vs transparent，shadow: opaque vs mask）。
 
@@ -907,7 +907,7 @@ void cull_against_frustum(
 
 ### Layer 3 — Renderer 接口（app/renderer.h）
 
-> 阶段三引入。Application 与 Renderer 的所有权划分见 `m1-design-decisions.md`「App 层设计」。
+> 阶段三引入。Application 与 Renderer 的所有权划分见 `m1-design-decisions-core.md`「App 层设计」。
 
 #### RenderInput
 
@@ -975,7 +975,7 @@ public:
 
 #### SceneLoader 场景数据（app/scene_loader.h）
 
-SceneLoader 加载 glTF 场景后暴露场景级元数据。设计决策见 `m1-design-decisions.md`「Shadow Max Distance 初始化」。
+SceneLoader 加载 glTF 场景后暴露场景级元数据。设计决策见 `m1-design-decisions-core.md`「Shadow Max Distance 初始化」。
 
 ```cpp
 class SceneLoader {
@@ -990,7 +990,7 @@ public:
 
 #### Camera 场景聚焦（framework/camera.h）
 
-Camera 新增纯计算方法，用于场景加载自动定位和 F 键 focus。设计决策见 `m1-design-decisions.md`「相机自动定位与 F 键 Focus」。
+Camera 新增纯计算方法，用于场景加载自动定位和 F 键 focus。设计决策见 `m1-design-decisions-core.md`「相机自动定位与 F 键 Focus」。
 
 ```cpp
 struct Camera {
@@ -1198,7 +1198,7 @@ Graphics pipeline 共享统一 layout `{Set 0, Set 1, Set 2}`。Compute pipeline
 - **Set 2**：per-frame 分配 2 个 descriptor set（阶段五引入，对应 2 frames in flight），temporal binding 每帧更新当前帧的 copy
 - **Set 3**：push descriptor set（阶段五引入，仅 compute pipeline），每次 dispatch 前 push 绑定（storage image 输出 + pass-specific 输入）
 
-设计决策见 `m1-design-decisions.md`「Descriptor Set 三层架构」+「Set 2 — Render Target Descriptor Set」。
+设计决策见 `m1-design-decisions-core.md`「Descriptor Set 三层架构」+「Set 2 — Render Target Descriptor Set」。
 
 #### 数据分层对应关系
 
@@ -1220,7 +1220,7 @@ Graphics pipeline 共享统一 layout `{Set 0, Set 1, Set 2}`。Compute pipeline
 
 #### RG Temporal API（阶段五引入）
 
-RG managed image 支持 temporal 标记，内部管理 double buffer 和帧间 swap。设计决策见 `m1-design-decisions.md`「Temporal 基础设施」。
+RG managed image 支持 temporal 标记，内部管理 double buffer 和帧间 swap。设计决策见 `m1-design-decisions-core.md`「Temporal 基础设施」。
 
 ```cpp
 // create_managed_image 新增 temporal 参数
@@ -1246,7 +1246,7 @@ bool is_history_valid(RGManagedHandle handle) const;
 
 #### Per-frame-in-flight Set 2（阶段五引入）
 
-Set 2 从 1 份扩展为 2 份（对应 2 frames in flight），解决 temporal binding 的帧间竞争。设计决策见 `m1-design-decisions.md`「Per-frame-in-flight Set 2」。
+Set 2 从 1 份扩展为 2 份（对应 2 frames in flight），解决 temporal binding 的帧间竞争。设计决策见 `m1-design-decisions-core.md`「Per-frame-in-flight Set 2」。
 
 ```cpp
 class DescriptorManager {
@@ -1273,7 +1273,7 @@ public:
 
 #### CommandBuffer Push Descriptor Helpers（阶段五引入）
 
-封装 `vkCmdPushDescriptorSet`，Pass 层不接触 `VkWriteDescriptorSet` 等 Vulkan 类型。显式传 `ResourceManager&` 用于 `ImageHandle → VkImageView` 解析，保持 CommandBuffer 作为纯 `VkCommandBuffer` wrapper。设计决策见 `m1-design-decisions.md`「Compute Pass 绑定机制」。
+封装 `vkCmdPushDescriptorSet`，Pass 层不接触 `VkWriteDescriptorSet` 等 Vulkan 类型。显式传 `ResourceManager&` 用于 `ImageHandle → VkImageView` 解析，保持 CommandBuffer 作为纯 `VkCommandBuffer` wrapper。设计决策见 `m1-design-decisions-core.md`「Compute Pass 绑定机制」。
 
 ```cpp
 class CommandBuffer {
