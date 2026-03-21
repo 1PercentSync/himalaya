@@ -52,7 +52,7 @@
 - [x] gtao.comp：view-space position 重建 + normal 转换
 - [x] gtao.comp：horizon search + cosine-weighted 积分 + per-pixel noise 旋转
 - [x] gtao.comp：输出 RG8（R=AO, G=0.0）+ bias/intensity 应用
-- [ ] GTAOPass 类（setup / record / destroy / rebuild_pipelines）+ Set 3 layout + pipeline
+- [x] GTAOPass 类（setup / record / destroy / rebuild_pipelines）+ Set 3 layout + pipeline
 - [ ] GTAOPass::record()：push constants + push descriptors
 - [ ] DebugUI AO 面板填充（radius、directions、steps per direction、bias、intensity）
 

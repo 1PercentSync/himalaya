@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 7 第四小项：GTAOPass 类（setup / record / destroy / rebuild_pipelines）+ Set 3 layout + pipeline
+Step 7 第五小项：GTAOPass::record()：push constants + push descriptors
 
 ---
 
