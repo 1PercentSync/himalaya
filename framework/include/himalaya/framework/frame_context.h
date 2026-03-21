@@ -62,8 +62,11 @@ namespace himalaya::framework {
         /** @brief GTAO raw output (RG8: R=diffuse AO, G=specular occlusion). */
         RGResourceId ao_noisy;
 
-        /** @brief AO temporal-filtered output (RG8 temporal, Set 2 binding 3). */
+        /** @brief AO temporal-filtered output (RG8 temporal current, Set 2 binding 3). */
         RGResourceId ao_filtered;
+
+        /** @brief Previous frame's AO filtered result (temporal history of ao_filtered). */
+        RGResourceId ao_history;
 
         /** @brief Contact shadow mask (R8, Set 2 binding 4). */
         RGResourceId contact_shadow_mask;
@@ -111,6 +114,9 @@ namespace himalaya::framework {
 
         /** @brief Contact Shadows configuration parameters. */
         const ContactShadowConfig *contact_shadow_config = nullptr;
+
+        /** @brief Whether ao_filtered history content is valid (false on first frame / resize). */
+        bool ao_history_valid = false;
 
         // ---- Frame parameters ----
 
