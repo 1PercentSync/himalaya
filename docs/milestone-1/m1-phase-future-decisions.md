@@ -16,17 +16,6 @@
 
 ---
 
-## Set 2 — 未来阶段预留 binding（来自阶段三规划）
-
-| Binding | 类型 | 名称 | 目标阶段 |
-|---------|------|------|---------|
-| 6 | `sampler2D` | bloom_texture | 阶段八 |
-| 7 | `sampler2D` | refraction_source | 阶段七 |
-
-阶段三设计 Set 2 layout 时预留的 binding slot。具体产生者/消费者待各阶段规划时确定。
-
----
-
 ## MSAA Resolve 改造（阶段七构想，来自阶段三规划）
 
 阶段七透明 Pass 也写入 MSAA color buffer，color resolve 必须在透明 pass 之后才能做。届时 Forward Pass 的 Dynamic Rendering color resolve 移除，改为在透明 pass 结束时配置 resolve。改造成本低——只是把 `resolveImageView` 配置从 Forward Pass 的 attachment info 移到透明 Pass 的 attachment info。
