@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 8 第三小项：ao_temporal.comp：temporal blend + history 无效处理
+Step 8 第四小项：AOTemporalPass 类（setup / record / destroy / rebuild_pipelines）+ push descriptors
 
 ---
 
