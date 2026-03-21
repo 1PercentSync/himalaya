@@ -65,6 +65,72 @@ vec3 reproject(vec2 uv, float depth) {
     return vec3(prev_uv, prev_ndc.z);
 }
 
+// ---- Rejection constants ----
+
+/** @brief Relative depth threshold for disocclusion detection (5%). */
+const float DEPTH_REJECT_THRESHOLD = 0.05;
+
+// ---- Three-layer rejection ----
+
+/**
+ * Evaluate temporal rejection and return a clamped history AO value.
+ *
+ * Layer 1 — UV validity: prev_uv outside [0,1] means the pixel was
+ * off-screen last frame; reject entirely (return current_ao).
+ *
+ * Layer 2 — Depth consistency: compare the expected previous-frame depth
+ * (from reprojection) against the actually stored depth.  A relative
+ * threshold adapts to Reverse-Z precision at all distances.
+ *
+ * Layer 3 — Neighborhood clamp: gather 3×3 min/max from ao_noisy R channel
+ * via texelFetch and clamp the history value into [min, max].  Prevents
+ * stale history from drifting beyond the current local AO range.
+ *
+ * @param pixel              Current pixel coordinates.
+ * @param size               Screen dimensions in pixels.
+ * @param prev_uv            Reprojected UV in previous frame.
+ * @param expected_prev_depth Expected depth at prev_uv from reprojection.
+ * @param current_ao         Current frame AO value (R channel).
+ * @param[out] rejected      Set to true if history is fully rejected.
+ * @return History AO value (clamped if accepted, or current_ao if rejected).
+ */
+float evaluate_rejection(ivec2 pixel, ivec2 size,
+                         vec2 prev_uv, float expected_prev_depth,
+                         float current_ao, out bool rejected) {
+    rejected = false;
+
+    // ---- Layer 1: UV validity ----
+    if (prev_uv.x < 0.0 || prev_uv.x > 1.0 ||
+        prev_uv.y < 0.0 || prev_uv.y > 1.0) {
+        rejected = true;
+        return current_ao;
+    }
+
+    // ---- Layer 2: Depth consistency ----
+    float stored_prev_depth = texture(depth_prev_tex, prev_uv).r;
+    float depth_diff = abs(expected_prev_depth - stored_prev_depth);
+    if (depth_diff / max(expected_prev_depth, 1e-4) > DEPTH_REJECT_THRESHOLD) {
+        rejected = true;
+        return current_ao;
+    }
+
+    // ---- Layer 3: Neighborhood clamp (R channel only) ----
+    float ao_min = 1.0;
+    float ao_max = 0.0;
+    for (int dy = -1; dy <= 1; ++dy) {
+        for (int dx = -1; dx <= 1; ++dx) {
+            ivec2 neighbor = clamp(pixel + ivec2(dx, dy), ivec2(0), size - 1);
+            float val = texelFetch(ao_noisy_tex, neighbor, 0).r;
+            ao_min = min(ao_min, val);
+            ao_max = max(ao_max, val);
+        }
+    }
+
+    // Read history and clamp to neighborhood range
+    float history_ao = texture(ao_history_tex, prev_uv).r;
+    return clamp(history_ao, ao_min, ao_max);
+}
+
 // ---- Main ----
 
 void main() {
@@ -75,7 +141,7 @@ void main() {
 
     vec2 uv = (vec2(pixel) + 0.5) / global.screen_size;
 
-    // Read current frame AO
+    // Read current frame AO (R channel; G channel is 0.0 until Step 12)
     float current_ao = texelFetch(ao_noisy_tex, pixel, 0).r;
 
     // Read current depth for reprojection
@@ -86,9 +152,14 @@ void main() {
     vec2 prev_uv = reproj.xy;
     float expected_prev_depth = reproj.z;
 
-    // TODO: three-layer rejection (sub-item 2)
+    // Three-layer rejection (R channel)
+    bool rejected;
+    float history_ao = evaluate_rejection(pixel, size, prev_uv,
+                                          expected_prev_depth,
+                                          current_ao, rejected);
+
     // TODO: temporal blend + history invalid handling (sub-item 3)
 
-    // Placeholder: output current frame value (no temporal accumulation yet)
+    // Placeholder: output current frame value (blending not yet implemented)
     imageStore(ao_output, pixel, vec4(current_ao, 0.0, 0.0, 0.0));
 }
