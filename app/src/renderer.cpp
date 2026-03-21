@@ -186,9 +186,9 @@ namespace himalaya::app {
                                                                     .mip_levels = 1,
                                                                 }, false);
 
-        // Resolved depth buffer (1x): direct render target in 1x mode,
+        // Resolved depth buffer (1x, temporal): direct render target in 1x mode,
         // MSAA depth resolve target (MAX_BIT) in multi-sample mode.
-        // Sampled usage for future screen-space effects (SSAO, Contact Shadows).
+        // Temporal for AO reprojection (get_history_image returns previous frame depth).
         managed_depth_ = render_graph_.create_managed_image("Depth", {
                                                                 .size_mode = framework::RGSizeMode::Relative,
                                                                 .width_scale = 1.0f,
@@ -200,7 +200,7 @@ namespace himalaya::app {
                                                                          rhi::ImageUsage::Sampled,
                                                                 .sample_count = 1,
                                                                 .mip_levels = 1,
-                                                            }, false);
+                                                            }, true);
 
         // Resolved normal buffer (1x): direct render target in 1x mode,
         // MSAA normal resolve target (AVERAGE) in multi-sample mode.
@@ -783,8 +783,10 @@ namespace himalaya::app {
 
         const auto hdr_color_resource = render_graph_.use_managed_image(
             managed_hdr_color_, VK_IMAGE_LAYOUT_UNDEFINED);
+        // Temporal current: final_layout ensures correct layout after swap to history
         const auto depth_resource = render_graph_.use_managed_image(
-            managed_depth_, VK_IMAGE_LAYOUT_UNDEFINED);
+            managed_depth_, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+        const auto depth_prev_resource = render_graph_.get_history_image(managed_depth_);
 
         const auto normal_resource = render_graph_.use_managed_image(
             managed_normal_, VK_IMAGE_LAYOUT_UNDEFINED);
@@ -808,6 +810,7 @@ namespace himalaya::app {
         frame_ctx.swapchain = swapchain_image;
         frame_ctx.hdr_color = hdr_color_resource;
         frame_ctx.depth = depth_resource;
+        frame_ctx.depth_prev = depth_prev_resource;
         frame_ctx.normal = normal_resource;
         frame_ctx.msaa_color = msaa_color_resource;
         frame_ctx.msaa_depth = msaa_depth_resource;

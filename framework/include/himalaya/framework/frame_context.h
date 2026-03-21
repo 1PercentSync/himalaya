@@ -56,6 +56,9 @@ namespace himalaya::framework {
         /** @brief Shadow map (2D Array, D32Sfloat); invalid when shadows disabled. */
         RGResourceId shadow_map;
 
+        /** @brief Previous frame's resolved depth (temporal history, D32Sfloat). */
+        RGResourceId depth_prev;
+
         // ---- Scene data (non-owning references) ----
 
         /** @brief Loaded mesh resources. */
