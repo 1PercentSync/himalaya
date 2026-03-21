@@ -32,6 +32,24 @@ vec3 rotate_y(vec3 d, float s, float c) {
     return vec3(c * d.x + s * d.z, d.y, -s * d.x + c * d.z);
 }
 
+/**
+ * Multi-bounce AO color compensation (Jimenez 2016).
+ *
+ * Reduces over-darkening on light-colored surfaces: high-albedo materials
+ * scatter more light in occluded regions, so raw AO over-attenuates them.
+ * Returns a per-channel occlusion factor >= ao.
+ *
+ * @param ao     Combined ambient occlusion scalar [0,1].
+ * @param albedo Surface diffuse color (base_color * (1 - metallic)).
+ * @return Per-channel occlusion factor (always >= ao).
+ */
+vec3 multi_bounce_ao(float ao, vec3 albedo) {
+    vec3 a = 2.0404 * albedo - 0.3324;
+    vec3 b = -4.7951 * albedo + 0.6417;
+    vec3 c = 2.7552 * albedo + 0.6903;
+    return max(vec3(ao), ((ao * a + b) * ao + c) * ao);
+}
+
 void main() {
     GPUMaterialData mat = materials[frag_material_index];
 
@@ -149,8 +167,13 @@ void main() {
     vec2 screen_uv = gl_FragCoord.xy / global.screen_size;
     float ssao = texture(rt_ao_texture, screen_uv).r;
 
-    // Combined AO for IBL modulation (direct lights use shadow maps)
-    float ao = material_ao;
+    // Diffuse AO: combine SSAO with material AO + multi-bounce color compensation
+    // Jimenez 2016: prevents over-darkening on light-colored surfaces (high albedo)
+    float combined_ao = ssao * material_ao;
+    vec3 diffuse_ao = multi_bounce_ao(combined_ao, diffuse_color);
+
+    // Specular occlusion (placeholder: material_ao only, sub-item 3 adds Lagarde SO)
+    float specular_ao = material_ao;
 
     // Emissive
     vec3 emissive = texture(textures[nonuniformEXT(mat.emissive_tex)], frag_uv0).rgb
@@ -160,17 +183,17 @@ void main() {
     vec3 color;
     switch (global.debug_render_mode) {
         case DEBUG_MODE_DIFFUSE_ONLY:
-            color = direct_diffuse + global.ibl_intensity * ibl_diffuse * ao;
+            color = direct_diffuse + global.ibl_intensity * ibl_diffuse * diffuse_ao;
             break;
         case DEBUG_MODE_SPECULAR_ONLY:
-            color = direct_specular + global.ibl_intensity * ibl_specular * ao;
+            color = direct_specular + global.ibl_intensity * ibl_specular * specular_ao;
             break;
         case DEBUG_MODE_IBL_ONLY:
-            color = global.ibl_intensity * (ibl_diffuse + ibl_specular) * ao;
+            color = global.ibl_intensity * (ibl_diffuse * diffuse_ao + ibl_specular * specular_ao);
             break;
         default: // DEBUG_MODE_FULL_PBR
             color = (direct_diffuse + direct_specular)
-                  + global.ibl_intensity * (ibl_diffuse + ibl_specular) * ao
+                  + global.ibl_intensity * (ibl_diffuse * diffuse_ao + ibl_specular * specular_ao)
                   + emissive;
             break;
     }
