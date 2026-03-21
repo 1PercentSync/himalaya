@@ -52,3 +52,36 @@ ImageHandle get_history_image(RGResourceId id);
 **为什么 temporal current 需要 final_layout：** 非 temporal managed image 不做 final transition（每帧 UNDEFINED 覆写，不关心帧间 layout）。Temporal current 帧末处于 compute pass 留下的 GENERAL layout，下帧 swap 后变为 history，需要以 SHADER_READ_ONLY_OPTIMAL 导入。帧末强制 transition 确保 layout 匹配，不依赖"上帧最后一个 pass 是什么类型"的假设。`final_layout` 作为 `use_managed_image` 的显式参数而非 RG 内部推导，保持 RG 不区分 temporal/非 temporal 的统一性，与 `import_image` 接受 `final_layout` 参数的 API 风格一致。
 
 **M2 复用：** SSR、SSGI 的 temporal pass 使用同一机制——`temporal=true` + `get_history_image()` + `is_history_valid()`，零额外基础设施。
+
+---
+
+## Descriptor 架构 — 阶段五扩展
+
+> 阶段二决策结果：三层 Descriptor Set 架构（Set 0 全局 Buffer、Set 1 持久纹理、Set 2 帧内 Render Target），graphics pipeline layout `{Set 0, Set 1, Set 2}`。
+
+### Per-frame Set 2
+
+Set 2 从阶段二的 1 份扩展为 **per-frame 2 份**（对应 2 frames in flight），与 Set 0 统一模式。
+
+**为什么需要：** Temporal 资源（resolved depth、ao_filtered）每帧 swap backing image。2 frames in flight 下，帧 N 的 GPU 可能仍在读取 Set 2 中的 binding，帧 N+1 的 CPU 更新同一份 Set 2 会违反 Vulkan spec。Per-frame 双缓冲使每帧只写自己的 copy，不修改另一帧在 GPU 上使用的 copy。
+
+- 非 temporal binding 在 init/resize/MSAA 切换时写入两份 copy
+- Temporal binding 每帧更新当前帧 copy（swap 后的新 backing image）
+
+Set 2 Pool 从 maxSets=1 扩展为 maxSets=2，容纳 16 COMBINED_IMAGE_SAMPLER（8 binding × 2 frames in flight）。Set 2 不需要 `UPDATE_AFTER_BIND`——per-frame 双缓冲已解决帧间竞争。
+
+### READ_WRITE 与 Temporal 的区分
+
+> 阶段二决策结果：`READ_WRITE` 表示同一张 image 在同一帧内同时读写（如 depth attachment）。
+
+Temporal 场景不使用 `READ_WRITE`——历史帧数据通过 `get_history_image()` 获取独立的 `RGResourceId`，当前帧和历史帧是**两个不同的资源**，各自声明 `READ` 或 `WRITE`。
+
+### Compute Pipeline Layout
+
+Graphics pipeline layout 保持 `{Set 0, Set 1, Set 2}`。Per-frame compute pipeline 使用 `{Set 0, Set 1, Set 2, Set 3(push)}`，Set 0-2 与 graphics 共享，Set 3 per-pass 自定义（push descriptor flag）。
+
+### RG 渐进式能力扩展
+
+> 阶段二建立了 RG 渐进式能力建设路线（Barrier 自动插入 → 资源导入）。阶段三引入 Managed 资源管理。
+
+阶段五新增：Temporal 资源管理——首个 temporal pass（AO temporal filter）出现于阶段五，详见上方「Temporal 数据管理」。

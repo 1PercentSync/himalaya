@@ -46,10 +46,8 @@ Render Graph 的功能按需引入，不提前建设未使用的能力：
 |------|---------|------|
 | Barrier 自动插入 | 阶段二 | 核心价值，从第一天就需要 |
 | 资源导入（import） | 阶段二 | 外部创建的资源（swapchain image、vertex buffer 等）导入 RG 追踪状态 |
-| Managed 资源管理 | 阶段三 | 首批 RG 管理的资源（Depth/Normal/HDR Color Buffer）出现于阶段三 |
-| Temporal 资源管理 | 阶段五 | 首个 temporal pass（SSAO temporal filter）出现于阶段五 |
 
-阶段二的 RG 只管 barrier 和状态追踪，资源由外部创建后导入。这不影响后续扩展——pass 声明输入输出的接口从阶段二就固定下来，managed/temporal 是对 RG 内部的增量添加，已有 pass 不需要修改。
+阶段二的 RG 只管 barrier 和状态追踪，资源由外部创建后导入。这不影响后续扩展——pass 声明输入输出的接口从阶段二就固定下来，后续增量添加 managed/temporal 等能力时已有 pass 不需要修改。
 
 ### 帧间生命周期
 
@@ -100,8 +98,6 @@ Pass 声明资源使用时通过 typed handle（`RGResourceId`）而非字符串
 ### READ_WRITE 语义
 
 `READ_WRITE` 表示**同一张 image 在同一帧内同时读写**，典型场景是 depth attachment（depth test 读 + depth write 写）。RG 为此生成的 barrier 使用 `DEPTH_ATTACHMENT_OPTIMAL`（同时允许读写）。
-
-**与 temporal 的区分：** 阶段五引入 temporal 资源后，历史帧数据通过 `get_history_image()` 获取独立的 `RGResourceId`，当前帧和历史帧是**两个不同的资源**，各自声明 `READ` 或 `WRITE`。`READ_WRITE` 不用于 temporal 场景。
 
 ### Render Graph 接管范围
 
@@ -170,13 +166,11 @@ Render Graph 和 ImGui Backend 是 framework 层中允许直接使用 Vulkan 类
 |-----|------|---------|---------|
 | 0 | 全局 Buffer（GlobalUBO + LightBuffer + MaterialBuffer） | per-frame 双缓冲 | 每帧 memcpy |
 | 1 | 持久纹理资产（bindless 材质纹理 + cubemap） | 场景加载 → 卸载 | 加载时写入 |
-| 2 | 帧内 Render Target（后处理 / 屏幕空间效果的中间产物） | init → destroy | resize / MSAA 切换时更新 + temporal binding 每帧更新 |
+| 2 | 帧内 Render Target（后处理 / 屏幕空间效果的中间产物） | init → destroy | resize / MSAA 切换时更新 |
 
-均使用传统 Descriptor Set 分配（非 Push Descriptors）。Set 0 和 Set 2 per-frame 分配 2 个（2 frames in flight），Set 1 分配 1 个长期持有。共 5 个 descriptor set：Set 0 × 2 + Set 1 × 1 + Set 2 × 2。
+均使用传统 Descriptor Set 分配（非 Push Descriptors）。Set 0 per-frame 分配 2 个（2 frames in flight），Set 1 分配 1 个长期持有，Set 2 分配 1 个。共 4 个 descriptor set：Set 0 × 2 + Set 1 × 1 + Set 2 × 1。
 
-Set 2 per-frame 双缓冲（阶段五引入）：temporal 资源（resolved depth、ao_filtered）每帧 swap backing image，2 frames in flight 下帧间并发要求每帧绑定各自 copy。非 temporal binding 在 init/resize/MSAA 切换时写入两份 copy，temporal binding 每帧更新当前帧 copy。详见「Per-frame-in-flight Set 2」。
-
-所有 graphics pipeline 使用统一的 pipeline layout `{Set 0, Set 1, Set 2}`，确保切换 pipeline 时所有 set 绑定保持有效。Per-frame compute pipeline 使用 `{Set 0, Set 1, Set 2, Set 3(push)}`，Set 0-2 与 graphics 共享，Set 3 per-pass 自定义（push descriptor flag）。后处理 pass 不使用 Set 1 但 layout 中包含以保持兼容性。
+所有 graphics pipeline 使用统一的 pipeline layout `{Set 0, Set 1, Set 2}`，确保切换 pipeline 时所有 set 绑定保持有效。后处理 pass 不使用 Set 1 但 layout 中包含以保持兼容性。
 
 ### Descriptor Pool 分离
 
@@ -184,11 +178,11 @@ Set 2 per-frame 双缓冲（阶段五引入）：temporal 资源（resolved dept
 
 - **Set 0 Pool**（普通 pool）：容纳 2 UBO + 4 SSBO，maxSets = 2。分配 Set 0 × 2（per-frame）
 - **Set 1 Pool**（`VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT`）：容纳 4352 COMBINED_IMAGE_SAMPLER（2D 纹理 4096 + Cubemap 256），maxSets = 1。分配 Set 1 × 1
-- **Set 2 Pool**（普通 pool）：容纳 16 COMBINED_IMAGE_SAMPLER（M1 预留 8 个 render target binding × 2 frames in flight），maxSets = 2。分配 Set 2 × 2（per-frame）
+- **Set 2 Pool**（普通 pool）：容纳 8 COMBINED_IMAGE_SAMPLER（M1 预留 8 个 render target binding），maxSets = 1。分配 Set 2 × 1
 
 **为什么分离：** `UPDATE_AFTER_BIND_BIT` 加在 pool 上会影响从该 pool 分配的所有 set。Set 1 需要此 flag（bindless 纹理在使用时更新），Set 0 和 Set 2 不需要，分离后职责隔离更清晰。
 
-Set 2 不需要 `UPDATE_AFTER_BIND`——非 temporal binding 只在 resize/MSAA 切换时更新（有 `vkQueueWaitIdle()` 保障），temporal binding 的帧间竞争通过 per-frame 双缓冲解决（每帧只写自己的 copy，不修改另一帧在 GPU 上使用的 copy）。
+Set 2 不需要 `UPDATE_AFTER_BIND`——只在 resize/MSAA 切换时更新（有 `vkQueueWaitIdle()` 保障）。
 
 ImGui 专用 Descriptor Pool 独立于上述三个 pool（已在阶段一实现）。
 
