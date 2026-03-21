@@ -145,13 +145,12 @@ if ((global.feature_flags & FEATURE_AO) != 0u) {
 
 ### Debug 渲染模式 — 阶段五扩展
 
-> 阶段三决策结果：HDR / passthrough 二分系统。阶段四新增 DEBUG_MODE_SHADOW_CASCADES(7)。
+> 阶段三决策结果：HDR / passthrough 二分系统。阶段四新增 DEBUG_MODE_SHADOW_CASCADES(8)。
 
-阶段五新增：
+阶段五变更：
 
-```glsl
-#define DEBUG_MODE_AO                8   // passthrough，追加到 SHADOW_CASCADES 之后
-```
+- `DEBUG_MODE_AO`(7) 改为显示 `ssao × material_ao` 复合结果（原为仅 material AO）
+- 新增 `DEBUG_MODE_AO_SSAO`(9)，显示 GTAO R 通道原始输出，追加到 SHADOW_CASCADES(8) 之后
 
 ### RG 渐进式能力扩展
 
