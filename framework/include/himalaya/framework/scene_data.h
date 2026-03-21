@@ -203,6 +203,49 @@ namespace himalaya::framework {
         uint32_t pcss_quality;
     };
 
+    /**
+     * @brief AO runtime configuration parameters.
+     *
+     * Application holds the instance, DebugUI modifies fields directly,
+     * GTAOPass and AOTemporalPass consume via push constants.
+     */
+    struct AOConfig {
+        /** @brief Sampling radius in world-space meters. */
+        float radius;
+
+        /** @brief Number of search directions (2/4/8). */
+        uint32_t directions;
+
+        /** @brief Steps per search direction (2/4/8). */
+        uint32_t steps_per_dir;
+
+        /** @brief Depth comparison bias to reduce self-occlusion. */
+        float bias;
+
+        /** @brief AO intensity multiplier (higher = darker occlusion). */
+        float intensity;
+
+        /** @brief History blend factor for temporal accumulation (0.0-1.0). */
+        float temporal_blend;
+    };
+
+    /**
+     * @brief Contact Shadows runtime configuration parameters.
+     *
+     * Application holds the instance, DebugUI modifies fields directly,
+     * ContactShadowsPass consumes via push constants.
+     */
+    struct ContactShadowConfig {
+        /** @brief Ray march step count (8/16/24/32). */
+        uint32_t step_count;
+
+        /** @brief Maximum search distance in world-space meters. */
+        float max_distance;
+
+        /** @brief Base thickness for depth-adaptive comparison (scales with linear depth). */
+        float base_thickness;
+    };
+
     // ---- GPU Data Structures ----
     // Must match shader layouts in shaders/common/bindings.glsl exactly.
 

@@ -159,6 +159,23 @@ namespace himalaya::app {
             .pcss_quality = 1,                   // Medium (16 blocker + 25 PCF)
         };
 
+        /** @brief AO configuration parameters. */
+        framework::AOConfig ao_config_{
+            .radius = 0.5f,
+            .directions = 4,
+            .steps_per_dir = 4,
+            .bias = 0.01f,
+            .intensity = 1.0f,
+            .temporal_blend = 0.9f,
+        };
+
+        /** @brief Contact Shadows configuration parameters. */
+        framework::ContactShadowConfig contact_shadow_config_{
+            .step_count = 16,
+            .max_distance = 0.5f,
+            .base_thickness = 0.01f,
+        };
+
         // --- Left-click drag state (IBL rotation or fallback light direction) ---
 
         /** @brief Previous cursor X for left-click drag delta. */
