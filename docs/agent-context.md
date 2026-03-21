@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 7 第二小项：gtao.comp：horizon search + cosine-weighted 积分 + per-pixel noise 旋转
+Step 7 第三小项：gtao.comp：输出 RG8（R=AO, G=0.0）+ bias/intensity 应用
 
 ---
 
