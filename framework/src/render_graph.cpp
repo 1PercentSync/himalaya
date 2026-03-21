@@ -238,12 +238,20 @@ namespace himalaya::framework {
         };
     }
 
-    RGManagedHandle RenderGraph::create_managed_image(const char *debug_name, const RGImageDesc &desc) {
+    RGManagedHandle RenderGraph::create_managed_image(const char *debug_name, const RGImageDesc &desc,
+                                                      const bool temporal) {
         assert(resource_manager_ && "Must call init() before create_managed_image()");
 
         // Create the backing GPU image
         const auto image_desc = resolve_image_desc(desc);
         const auto backing = resource_manager_->create_image(image_desc, debug_name);
+
+        // For temporal images, allocate a second backing image for history double buffering
+        rhi::ImageHandle history_backing;
+        if (temporal) {
+            const auto history_name = std::string(debug_name) + "_history";
+            history_backing = resource_manager_->create_image(image_desc, history_name.c_str());
+        }
 
         // Allocate a managed slot (reuse freed slots if available)
         uint32_t slot;
@@ -254,6 +262,8 @@ namespace himalaya::framework {
                 .debug_name = debug_name,
                 .desc = desc,
                 .backing = backing,
+                .is_temporal = temporal,
+                .history_backing = history_backing,
             };
         } else {
             slot = static_cast<uint32_t>(managed_images_.size());
@@ -261,6 +271,8 @@ namespace himalaya::framework {
                 .debug_name = debug_name,
                 .desc = desc,
                 .backing = backing,
+                .is_temporal = temporal,
+                .history_backing = history_backing,
             });
         }
 

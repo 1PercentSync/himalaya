@@ -307,9 +307,12 @@ namespace himalaya::framework {
          *
          * @param debug_name Human-readable name (used for Vulkan debug labels and diagnostics).
          * @param desc       Image description (size mode, format, usage, etc.).
+         * @param temporal   If true, allocates a second backing image for history double buffering.
+         *                   The graph automatically swaps current/history each frame via clear().
          * @return Persistent handle for use with use_managed_image() and destroy_managed_image().
          */
-        RGManagedHandle create_managed_image(const char *debug_name, const RGImageDesc &desc);
+        RGManagedHandle create_managed_image(const char *debug_name, const RGImageDesc &desc,
+                                             bool temporal);
 
         /**
          * @brief Updates the description of a managed image.
@@ -415,6 +418,12 @@ namespace himalaya::framework {
             std::string debug_name; ///< Human-readable name for Vulkan debug labels.
             RGImageDesc desc; ///< Image description (format, size mode, usage, etc.).
             rhi::ImageHandle backing; ///< The actual GPU image (invalid when slot is free).
+
+            // ---- Temporal state ----
+            bool is_temporal = false; ///< Whether this image has a history double buffer.
+            rhi::ImageHandle history_backing; ///< Previous frame's backing (temporal only).
+            bool history_valid_ = false; ///< Whether history content is valid (false on create/resize).
+            uint32_t temporal_frame_count_ = 0; ///< Frames since create/resize (history valid when > 0).
         };
 
         /**

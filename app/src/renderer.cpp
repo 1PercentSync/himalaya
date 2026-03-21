@@ -184,7 +184,7 @@ namespace himalaya::app {
                                                                              rhi::ImageUsage::Sampled,
                                                                     .sample_count = 1,
                                                                     .mip_levels = 1,
-                                                                });
+                                                                }, false);
 
         // Resolved depth buffer (1x): direct render target in 1x mode,
         // MSAA depth resolve target (MAX_BIT) in multi-sample mode.
@@ -200,7 +200,7 @@ namespace himalaya::app {
                                                                          rhi::ImageUsage::Sampled,
                                                                 .sample_count = 1,
                                                                 .mip_levels = 1,
-                                                            });
+                                                            }, false);
 
         // Resolved normal buffer (1x): direct render target in 1x mode,
         // MSAA normal resolve target (AVERAGE) in multi-sample mode.
@@ -216,7 +216,7 @@ namespace himalaya::app {
                                                                           rhi::ImageUsage::Sampled,
                                                                  .sample_count = 1,
                                                                  .mip_levels = 1,
-                                                             });
+                                                             }, false);
 
         // Fall back to the highest supported sample count if the default isn't available
         while (current_sample_count_ > 1 &&
@@ -236,7 +236,7 @@ namespace himalaya::app {
                                                                          .usage = rhi::ImageUsage::ColorAttachment,
                                                                          .sample_count = current_sample_count_,
                                                                          .mip_levels = 1,
-                                                                     });
+                                                                     }, false);
 
             managed_msaa_depth_ = render_graph_.create_managed_image("MSAA Depth", {
                                                                          .size_mode = framework::RGSizeMode::Relative,
@@ -248,7 +248,7 @@ namespace himalaya::app {
                                                                          .usage = rhi::ImageUsage::DepthAttachment,
                                                                          .sample_count = current_sample_count_,
                                                                          .mip_levels = 1,
-                                                                     });
+                                                                     }, false);
 
             managed_msaa_normal_ = render_graph_.create_managed_image("MSAA Normal", {
                                                                           .size_mode = framework::RGSizeMode::Relative,
@@ -260,7 +260,7 @@ namespace himalaya::app {
                                                                           .usage = rhi::ImageUsage::ColorAttachment,
                                                                           .sample_count = current_sample_count_,
                                                                           .mip_levels = 1,
-                                                                      });
+                                                                      }, false);
         }
 
         shader_compiler_.set_include_path("shaders");
@@ -515,7 +515,7 @@ namespace himalaya::app {
                                                                          .usage = rhi::ImageUsage::ColorAttachment,
                                                                          .sample_count = new_sample_count,
                                                                          .mip_levels = 1,
-                                                                     });
+                                                                     }, false);
             managed_msaa_depth_ = render_graph_.create_managed_image("MSAA Depth", {
                                                                          .size_mode = framework::RGSizeMode::Relative,
                                                                          .width_scale = 1.0f,
@@ -525,7 +525,7 @@ namespace himalaya::app {
                                                                          .usage = rhi::ImageUsage::DepthAttachment,
                                                                          .sample_count = new_sample_count,
                                                                          .mip_levels = 1,
-                                                                     });
+                                                                     }, false);
             managed_msaa_normal_ = render_graph_.create_managed_image("MSAA Normal", {
                                                                           .size_mode = framework::RGSizeMode::Relative,
                                                                           .width_scale = 1.0f,
@@ -535,7 +535,7 @@ namespace himalaya::app {
                                                                           .usage = rhi::ImageUsage::ColorAttachment,
                                                                           .sample_count = new_sample_count,
                                                                           .mip_levels = 1,
-                                                                      });
+                                                                      }, false);
         }
 
         // Rebuild pipelines for MSAA-affected passes
