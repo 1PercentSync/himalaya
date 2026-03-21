@@ -664,7 +664,9 @@ public:
     void set_reference_resolution(VkExtent2D extent);
 
     // 注册 managed image（初始化时调用，返回持久 handle）
-    RGManagedHandle create_managed_image(const char* debug_name, const RGImageDesc& desc);
+    // temporal=true 时内部分配第二张 backing image，clear() 自动 swap current/history
+    RGManagedHandle create_managed_image(const char* debug_name, const RGImageDesc& desc,
+                                         bool temporal);
 
     // 每帧使用 managed image（返回当前帧的 RGResourceId）
     // initial layout 统一为 UNDEFINED（不追踪帧间状态）
@@ -1223,10 +1225,10 @@ Graphics pipeline 共享统一 layout `{Set 0, Set 1, Set 2}`。Compute pipeline
 RG managed image 支持 temporal 标记，内部管理 double buffer 和帧间 swap。设计决策见 `m1-design-decisions-core.md`「Temporal 基础设施」。
 
 ```cpp
-// create_managed_image 新增 temporal 参数
+// create_managed_image 新增 temporal 参数（无默认值，调用方显式传入）
 RGManagedHandle create_managed_image(const char* debug_name,
                                       const RGImageDesc& desc,
-                                      bool temporal = false);
+                                      bool temporal);
 
 // 获取上一帧的 resource ID（仅 temporal=true 的 managed image 可调用）
 // 始终返回 valid RGResourceId（两张 backing image 在 create 时已分配）
