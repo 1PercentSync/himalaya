@@ -615,7 +615,13 @@ namespace himalaya::app {
         // --- Feature flags ---
         ubo_data.feature_flags = 0;
         if (shadows_active) {
-            ubo_data.feature_flags |= 1u; // FEATURE_SHADOWS
+            ubo_data.feature_flags |= 1u << 0; // FEATURE_SHADOWS
+        }
+        if (input.features.ao) {
+            ubo_data.feature_flags |= 1u << 1; // FEATURE_AO
+        }
+        if (input.features.contact_shadows) {
+            ubo_data.feature_flags |= 1u << 2; // FEATURE_CONTACT_SHADOWS
         }
 
         // --- Shadow fields ---

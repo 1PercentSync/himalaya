@@ -55,7 +55,9 @@ struct GPUMaterialData {
 
 // ---- Feature flags (bitmask for GlobalUBO.feature_flags) ----
 
-#define FEATURE_SHADOWS (1u << 0)
+#define FEATURE_SHADOWS         (1u << 0)
+#define FEATURE_AO              (1u << 1)
+#define FEATURE_CONTACT_SHADOWS (1u << 2)
 
 // ---- Shadow cascade constants ----
 
