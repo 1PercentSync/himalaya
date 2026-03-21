@@ -28,7 +28,7 @@
 
 - [x] RenderFeatures 新增 ao + contact_shadows + Application 初始化
 - [x] FEATURE_AO + FEATURE_CONTACT_SHADOWS（bindings.glsl）+ feature_flags 填充逻辑
-- [ ] AOConfig + ContactShadowConfig 结构体 + Application 初始化
+- [x] AOConfig + ContactShadowConfig 结构体 + Application 初始化
 - [ ] GlobalUBO 新增 inv_projection + prev_view_projection + bindings.glsl 同步 + Renderer 填充 + 帧末缓存 prev_view_projection
 - [ ] RenderInput + FrameContext 新增 ao_config + contact_shadow_config 指针
 
