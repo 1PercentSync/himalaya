@@ -292,7 +292,7 @@ shadow.glsl 采用分步函数设计见 `milestone-1/m1-design-decisions.md`「C
 
 关键设计：
 - 分步函数（`select_cascade` / `sample_shadow` / `shadow_distance_fade`），forward.frag 自行组装调用流程，方便 debug 访问中间结果（如 cascade index）
-- `shadow_distance_fade()` 使用独立 UBO 字段 `shadow_distance_fade_width`（而非复用 `shadow_blend_width`），两者语义不同：blend_width 控制 cascade 间过渡，distance_fade_width 控制远端淡出。当前默认值相同（0.1），后续可独立调参
+- `shadow_distance_fade()` 使用独立 UBO 字段 `shadow_distance_fade_width`（而非复用 `shadow_blend_width`），两者语义不同：blend_width 控制 cascade 间过渡，distance_fade_width 控制远端淡出。ShadowConfig 和 UBO 保留独立字段以备 M2+ 分离调参，当前 DebugUI 的 Blend Width 滑条同时驱动两者
 - 不做单一 `evaluate_shadow()` 包装——cascade index 被隐藏会妨碍 debug cascade 可视化
 - 硬件 bias（slope only，constant 对 D32Sfloat 无效）在渲染端，normal offset 在采样端，两者互补覆盖所有表面角度
 - Normal offset 通过 `cascade_view_proj` 矩阵提取正交投影范围，自动计算 per-cascade texel world size，无需额外 UBO 字段
