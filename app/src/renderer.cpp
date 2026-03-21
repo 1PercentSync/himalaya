@@ -624,6 +624,10 @@ namespace himalaya::app {
             ubo_data.feature_flags |= 1u << 2; // FEATURE_CONTACT_SHADOWS
         }
 
+        // --- Phase 5 matrices ---
+        ubo_data.inv_projection = glm::inverse(input.camera.projection);
+        ubo_data.prev_view_projection = prev_view_projection_;
+
         // --- Shadow fields ---
         ubo_data.shadow_normal_offset = input.shadow_config.normal_offset;
         ubo_data.shadow_texel_size = 1.0f / static_cast<float>(shadow_pass_.resolution());
@@ -873,6 +877,9 @@ namespace himalaya::app {
 
         render_graph_.compile();
         render_graph_.execute(cmd);
+
+        // Cache current VP for next frame's temporal reprojection
+        prev_view_projection_ = input.camera.view_projection;
     }
 
     // ---- Resize handling ----

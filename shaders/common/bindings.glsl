@@ -117,6 +117,9 @@ layout(set = 0, binding = 0) uniform GlobalUBO {
     vec4 cascade_light_size_uv;             // offset 672 — per-cascade blocker search radius (U direction)
     vec4 cascade_pcss_scale;                // offset 688 — per-cascade NDC depth diff → UV penumbra scale
     vec4 cascade_uv_scale_y;                // offset 704 — per-cascade UV anisotropy correction
+    // ---- Phase 5 fields ----
+    mat4 inv_projection;                    // offset 720 — depth → view-space position (GTAO)
+    mat4 prev_view_projection;              // offset 784 — temporal reprojection (current world → prev UV)
 } global;
 
 layout(set = 0, binding = 1) readonly buffer LightBuffer {

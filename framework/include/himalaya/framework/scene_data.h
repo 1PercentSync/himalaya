@@ -252,7 +252,7 @@ namespace himalaya::framework {
     /**
      * @brief Per-frame global uniform data (Set 0, Binding 0).
      *
-     * std140 layout, 720 bytes (45 × 16) aligned to 16.
+     * std140 layout, 848 bytes (53 × 16) aligned to 16.
      */
     struct GlobalUniformData {
         glm::mat4 view; ///< offset   0
@@ -293,6 +293,9 @@ namespace himalaya::framework {
         glm::vec4 cascade_light_size_uv{}; ///< offset 672 — per-cascade blocker search radius (U direction)
         glm::vec4 cascade_pcss_scale{}; ///< offset 688 — per-cascade NDC depth diff → UV penumbra scale
         glm::vec4 cascade_uv_scale_y{}; ///< offset 704 — per-cascade UV anisotropy correction (width_x / width_y)
+        // ---- Phase 5 fields ----
+        glm::mat4 inv_projection{}; ///< offset 720 — depth → view-space position reconstruction (GTAO)
+        glm::mat4 prev_view_projection{}; ///< offset 784 — temporal reprojection (current world → prev UV)
     };
 
     /**

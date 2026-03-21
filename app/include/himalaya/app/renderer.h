@@ -326,6 +326,9 @@ namespace himalaya::app {
         /** @brief Total vkCmdDrawIndexed calls from the last frame (across all scene passes). */
         uint32_t draw_call_count_ = 0;
 
+        /** @brief Cached view-projection from the previous frame (temporal reprojection). */
+        glm::mat4 prev_view_projection_{1.0f};
+
         // --- Private helpers ---
 
         /** @brief Updates Set 2 binding 0 with the current hdr_color backing image. */
