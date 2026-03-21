@@ -482,6 +482,7 @@ namespace himalaya::app {
 
                 ImGui::SliderFloat("Bias", &ctx.ao_config.bias, 0.0f, 0.1f, "%.4f");
                 ImGui::SliderFloat("Intensity", &ctx.ao_config.intensity, 0.5f, 3.0f, "%.2f");
+                ImGui::SliderFloat("Temporal Blend", &ctx.ao_config.temporal_blend, 0.0f, 0.98f, "%.2f");
             }
         }
 
