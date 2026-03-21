@@ -412,7 +412,11 @@ namespace himalaya::app {
                     }
                 }
 
+                // Blend Width drives both cascade-to-cascade blend and distance fade —
+                // semantically both are "transition smoothness". ShadowConfig keeps
+                // them as separate fields for potential M2+ independent tuning.
                 ImGui::SliderFloat("Blend Width", &ctx.shadow_config.blend_width, 0.0f, 0.5f, "%.2f");
+                ctx.shadow_config.distance_fade_width = ctx.shadow_config.blend_width;
 
                 // Cascade statistics: coverage range and texel density
                 ImGui::Separator();
