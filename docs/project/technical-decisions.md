@@ -115,10 +115,10 @@ Irradiance Probes + SDF GI（条件性，依赖 SDF 基础设施）
 
 | 演进 | 方案 |
 |------|------|
-| Pass 1 | SSAO + per-effect temporal filtering（同时搭建 per-effect temporal 基础设施，SSGI/SSR 复用） |
-| Pass 2 | GTAO（替换遮挡计算公式） |
+| Pass 1 | GTAO + per-effect temporal filtering（同时搭建 per-effect temporal 基础设施，SSGI/SSR 复用）+ specular occlusion + multi-bounce |
+| Pass 2 | GTAO 调优（采样策略、M2 半分辨率 + upscaler 配合） |
 
-跳过 HBAO。烘焙 AO 随 Lightmap 和材质管线自然覆盖。
+跳过 HBAO 和 Crytek SSAO，直接实现 GTAO。GTAO 与简单 SSAO 的架构完全相同（输入 depth+normal，输出 AO 标量），区别仅在 shader 采样逻辑（~40 行差异），避免 M2 替换丢弃品。烘焙 AO 随 Lightmap 和材质管线自然覆盖。
 
 > **Per-effect temporal vs 全画面 temporal**：per-effect temporal 作用于独立的中间效果纹理（AO、SSR 等），不能平滑嵌在最终颜色中的噪声（如 specular aliasing）。全画面 temporal（FSR/DLSS SDK 自带）对最终颜色做时域积累，覆盖所有信号噪声，依赖 Motion Vectors。两者是独立系统，不共享基础设施。
 

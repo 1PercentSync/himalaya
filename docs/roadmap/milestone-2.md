@@ -6,7 +6,7 @@
 
 ## 预期效果
 
-完成后画面将具有：动态天空昼夜变化（Bruneton 大气散射）、物理正确的大气散射与雾效（aerial perspective 替换高度雾）、距离相关的软阴影（PCSS）、屏幕空间精确反射（SSR）和屏幕空间间接光照（SSGI）、GTAO、POM 增强的表面深度感、完整的后处理链（DOF、Motion Blur、God Rays、Lens Flare、Film Grain、Chromatic Aberration）、SDK 上采样支持（FSR + DLSS）、多套 Lightmap blend 支持昼夜变化。
+完成后画面将具有：动态天空昼夜变化（Bruneton 大气散射）、物理正确的大气散射与雾效（aerial perspective 替换高度雾）、距离相关的软阴影（PCSS，已在 M1 完成）、屏幕空间精确反射（SSR）和屏幕空间间接光照（SSGI）、POM 增强的表面深度感、完整的后处理链（DOF、Motion Blur、God Rays、Lens Flare、Film Grain、Chromatic Aberration）、SDK 上采样支持（FSR + DLSS）、多套 Lightmap blend 支持昼夜变化。
 
 写实度相比 M1 会有**质变级跳跃**。
 
@@ -24,7 +24,7 @@
 | ~~PCSS~~ | ~~在 PCF 基础上加 Blocker Search，半影随遮挡距离变化~~ — **已提前到 M1 阶段四 Step 7** |
 | 多方向光 CSM | M1 限制 1 盏方向光，M2 扩展为 N 盏（每盏独立 shadow map + cascade 数据，GlobalUBO per-light cascade_view_proj）|
 | Cascade blend 评估 | M1 Step 7 PCSS 实现后，M2 实测 lerp vs dithering + FSR/DLSS 的观感和性能，决定是否从 lerp 切换为 dithering。Lerp 在 PCSS 下 blend region 采样成本翻倍；M1 的 `blend_cascade_shadow()` 已隔离 blend 策略，切换成本低 |
-| GTAO | 替换 SSAO 的遮挡计算公式，temporal filtering 复用 |
+| ~~GTAO~~ | ~~替换 SSAO 的遮挡计算公式~~ — **已提前到 M1 阶段五直接实现** |
 
 ### 低工作量
 
