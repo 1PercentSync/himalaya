@@ -1,0 +1,93 @@
+#version 460
+
+/**
+ * @file gtao.comp
+ * @brief Ground-Truth Ambient Occlusion (GTAO) compute shader.
+ *
+ * Computes per-pixel diffuse ambient occlusion using structured horizon
+ * search with cosine-weighted analytic integration.
+ *
+ * Output: RG8 where R = diffuse AO, G = specular occlusion
+ * (G = 0.0 until Step 12 adds B1 specular occlusion).
+ *
+ * Workgroup: 8x8 (one thread per pixel, no shared memory).
+ */
+
+#include "common/bindings.glsl"
+#include "common/constants.glsl"
+#include "common/normal.glsl"
+
+layout(local_size_x = 8, local_size_y = 8) in;
+
+// ---- Set 3: push descriptor (per-dispatch I/O) ----
+
+layout(set = 3, binding = 0, rg8) uniform writeonly image2D ao_output;
+
+// ---- Push constants: GTAO parameters (from AOConfig) ----
+
+layout(push_constant) uniform GTAOPushConstants {
+    float radius;           // sampling radius (world-space meters)
+    uint  directions;       // number of search directions
+    uint  steps_per_dir;    // steps per search direction
+    float bias;             // depth comparison bias
+    float intensity;        // AO intensity multiplier
+} pc;
+
+// ---- View-space reconstruction ----
+
+/**
+ * Reconstruct view-space position from depth buffer.
+ *
+ * Uses inv_projection to map NDC back to view-space.  Accounts for the
+ * Y-flipped viewport used by scene passes (negative viewport height):
+ * screen y increases downward but NDC y increases upward.
+ *
+ * @param uv    Texel-center UV in [0,1] (y=0 at top of screen).
+ * @param depth Raw depth value (Reverse-Z: near=1, far=0).
+ * @return View-space position (camera at origin, -Z forward).
+ */
+vec3 reconstruct_view_pos(vec2 uv, float depth) {
+    vec2 ndc = vec2(uv.x * 2.0 - 1.0, 1.0 - uv.y * 2.0);
+    vec4 clip = vec4(ndc, depth, 1.0);
+    vec4 view_h = global.inv_projection * clip;
+    return view_h.xyz / view_h.w;
+}
+
+/**
+ * Read and transform the surface normal to view-space.
+ *
+ * Normal buffer stores world-space normals in R10G10B10A2 UNORM
+ * (encoded as n * 0.5 + 0.5).  Decoded via normal.glsl utility, then
+ * rotated into view-space by the upper-left 3x3 of the view matrix.
+ *
+ * @param uv Texel-center UV in [0,1].
+ * @return Normalized view-space normal.
+ */
+vec3 get_view_normal(vec2 uv) {
+    vec4 encoded = texture(rt_normal_resolved, uv);
+    vec3 world_normal = decode_normal_r10g10b10a2(encoded);
+    return normalize(mat3(global.view) * world_normal);
+}
+
+// ---- Main ----
+
+void main() {
+    ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 size = ivec2(global.screen_size);
+
+    // Out-of-bounds guard (workgroup may exceed screen dimensions)
+    if (pixel.x >= size.x || pixel.y >= size.y) return;
+
+    vec2 uv = (vec2(pixel) + 0.5) / global.screen_size;
+
+    // Reconstruct view-space geometry
+    float depth = texture(rt_depth_resolved, uv).r;
+    vec3 view_pos = reconstruct_view_pos(uv, depth);
+    vec3 view_normal = get_view_normal(uv);
+
+    // TODO: horizon search + cosine-weighted integration (Step 7.2)
+    // TODO: output with bias/intensity (Step 7.3)
+
+    // Placeholder: no occlusion (R=1.0 = fully lit, G=0.0 = no SO)
+    imageStore(ao_output, pixel, vec4(1.0, 0.0, 0.0, 0.0));
+}

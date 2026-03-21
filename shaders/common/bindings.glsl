@@ -144,6 +144,10 @@ layout(set = 1, binding = 1) uniform samplerCube cubemaps[];
 // Accessing an unwritten binding is guarded by feature_flags in the shader.
 
 layout(set = 2, binding = 0) uniform sampler2D rt_hdr_color;
+layout(set = 2, binding = 1) uniform sampler2D rt_depth_resolved;
+layout(set = 2, binding = 2) uniform sampler2D rt_normal_resolved;
+layout(set = 2, binding = 3) uniform sampler2D rt_ao_texture;
+layout(set = 2, binding = 4) uniform sampler2D rt_contact_shadow_mask;
 layout(set = 2, binding = 5) uniform sampler2DArrayShadow rt_shadow_map;
 layout(set = 2, binding = 6) uniform sampler2DArray rt_shadow_map_depth;
 
