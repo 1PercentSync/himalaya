@@ -277,6 +277,15 @@ namespace himalaya::app {
         /** @brief Resolved normal buffer (R10G10B10A2, 1x, managed, auto-rebuilt on resize). */
         framework::RGManagedHandle managed_normal_;
 
+        /** @brief GTAO raw output (RG8, non-temporal, Storage | Sampled). */
+        framework::RGManagedHandle managed_ao_noisy_;
+
+        /** @brief AO temporal-filtered output (RG8, temporal, Storage | Sampled). */
+        framework::RGManagedHandle managed_ao_filtered_;
+
+        /** @brief Contact shadow mask (R8, non-temporal, Storage | Sampled). */
+        framework::RGManagedHandle managed_contact_shadow_mask_;
+
         /** @brief Current MSAA sample count (1 = no MSAA, default 4x). */
         uint32_t current_sample_count_ = 4;
 

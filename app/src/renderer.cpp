@@ -218,6 +218,50 @@ namespace himalaya::app {
                                                                  .mip_levels = 1,
                                                              }, false);
 
+        // --- Phase 5 AO/Contact Shadow resources ---
+
+        // GTAO raw output (RG8): written by GTAO compute, read by AO Temporal
+        managed_ao_noisy_ = render_graph_.create_managed_image("AO Noisy", {
+                                                                    .size_mode = framework::RGSizeMode::Relative,
+                                                                    .width_scale = 1.0f,
+                                                                    .height_scale = 1.0f,
+                                                                    .width = 0,
+                                                                    .height = 0,
+                                                                    .format = rhi::Format::R8G8Unorm,
+                                                                    .usage = rhi::ImageUsage::Storage |
+                                                                             rhi::ImageUsage::Sampled,
+                                                                    .sample_count = 1,
+                                                                    .mip_levels = 1,
+                                                                }, false);
+
+        // AO temporal-filtered output (RG8, temporal): written by AO Temporal, sampled via Set 2
+        managed_ao_filtered_ = render_graph_.create_managed_image("AO Filtered", {
+                                                                       .size_mode = framework::RGSizeMode::Relative,
+                                                                       .width_scale = 1.0f,
+                                                                       .height_scale = 1.0f,
+                                                                       .width = 0,
+                                                                       .height = 0,
+                                                                       .format = rhi::Format::R8G8Unorm,
+                                                                       .usage = rhi::ImageUsage::Storage |
+                                                                                rhi::ImageUsage::Sampled,
+                                                                       .sample_count = 1,
+                                                                       .mip_levels = 1,
+                                                                   }, true);
+
+        // Contact shadow mask (R8): written by Contact Shadows compute, sampled via Set 2
+        managed_contact_shadow_mask_ = render_graph_.create_managed_image("Contact Shadow Mask", {
+                                                                              .size_mode = framework::RGSizeMode::Relative,
+                                                                              .width_scale = 1.0f,
+                                                                              .height_scale = 1.0f,
+                                                                              .width = 0,
+                                                                              .height = 0,
+                                                                              .format = rhi::Format::R8Unorm,
+                                                                              .usage = rhi::ImageUsage::Storage |
+                                                                                       rhi::ImageUsage::Sampled,
+                                                                              .sample_count = 1,
+                                                                              .mip_levels = 1,
+                                                                          }, false);
+
         // Fall back to the highest supported sample count if the default isn't available
         while (current_sample_count_ > 1 &&
                !(ctx_->msaa_sample_counts & current_sample_count_)) {
@@ -458,6 +502,9 @@ namespace himalaya::app {
             render_graph_.destroy_managed_image(managed_msaa_depth_);
         if (managed_msaa_normal_.valid())
             render_graph_.destroy_managed_image(managed_msaa_normal_);
+        render_graph_.destroy_managed_image(managed_ao_noisy_);
+        render_graph_.destroy_managed_image(managed_ao_filtered_);
+        render_graph_.destroy_managed_image(managed_contact_shadow_mask_);
         render_graph_.destroy_managed_image(managed_hdr_color_);
         render_graph_.destroy_managed_image(managed_depth_);
         render_graph_.destroy_managed_image(managed_normal_);
@@ -825,6 +872,14 @@ namespace himalaya::app {
             msaa_normal_resource = render_graph_.use_managed_image(
                 managed_msaa_normal_, VK_IMAGE_LAYOUT_UNDEFINED);
 
+        // Phase 5 AO/Contact Shadow resources
+        const auto ao_noisy_resource = render_graph_.use_managed_image(
+            managed_ao_noisy_, VK_IMAGE_LAYOUT_UNDEFINED);
+        const auto ao_filtered_resource = render_graph_.use_managed_image(
+            managed_ao_filtered_, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+        const auto contact_shadow_resource = render_graph_.use_managed_image(
+            managed_contact_shadow_mask_, VK_IMAGE_LAYOUT_UNDEFINED);
+
         // --- Per-frame temporal Set 2 updates ---
         // Depth (binding 1) swaps backing image each frame; update this frame's Set 2 copy
         {
@@ -839,6 +894,9 @@ namespace himalaya::app {
         frame_ctx.hdr_color = hdr_color_resource;
         frame_ctx.depth = depth_resource;
         frame_ctx.depth_prev = depth_prev_resource;
+        frame_ctx.ao_noisy = ao_noisy_resource;
+        frame_ctx.ao_filtered = ao_filtered_resource;
+        frame_ctx.contact_shadow_mask = contact_shadow_resource;
         frame_ctx.normal = normal_resource;
         frame_ctx.msaa_color = msaa_color_resource;
         frame_ctx.msaa_depth = msaa_depth_resource;

@@ -59,6 +59,15 @@ namespace himalaya::framework {
         /** @brief Previous frame's resolved depth (temporal history, D32Sfloat). */
         RGResourceId depth_prev;
 
+        /** @brief GTAO raw output (RG8: R=diffuse AO, G=specular occlusion). */
+        RGResourceId ao_noisy;
+
+        /** @brief AO temporal-filtered output (RG8 temporal, Set 2 binding 3). */
+        RGResourceId ao_filtered;
+
+        /** @brief Contact shadow mask (R8, Set 2 binding 4). */
+        RGResourceId contact_shadow_mask;
+
         // ---- Scene data (non-owning references) ----
 
         /** @brief Loaded mesh resources. */
