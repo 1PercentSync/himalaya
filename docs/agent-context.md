@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段五 — 屏幕空间效果
-- **进度**：Step 8 完成（35/~40）
+- **进度**：Step 9 完成（40/~40）
 
 ### 下一个任务
 
-Step 9 第五小项：Renderer 编排：features.ao 条件调用 + FrameContext 条件资源声明
+Step 10 第一小项：Debug render mode 新增 DEBUG_MODE_AO_SSAO + DEBUG_MODE_AO 改为复合结果
 
 ---
 
