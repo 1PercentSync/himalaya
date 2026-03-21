@@ -11,6 +11,7 @@
 #include <array>
 #include <cassert>
 #include <cmath>
+#include <utility>
 
 namespace himalaya::framework {
     // Generates a distinct RGBA color for each pass index using golden-angle hue distribution.
@@ -104,6 +105,16 @@ namespace himalaya::framework {
         compiled_passes_.clear();
         final_barriers_.clear();
         compiled_ = false;
+
+        // Swap current/history backing for temporal managed images.
+        // After swap, history holds the previous frame's current (valid once at least
+        // one frame has been rendered since create/resize).
+        for (auto &managed: managed_images_) {
+            if (!managed.is_temporal || !managed.backing.valid()) continue;
+            std::swap(managed.backing, managed.history_backing);
+            managed.history_valid_ = managed.temporal_frame_count_ > 0;
+            ++managed.temporal_frame_count_;
+        }
     }
 
     void RenderGraph::add_pass(const std::string &name,
@@ -210,6 +221,15 @@ namespace himalaya::framework {
 
             resource_manager_->destroy_image(managed.backing);
             managed.backing = resource_manager_->create_image(new_desc, managed.debug_name.c_str());
+
+            // Rebuild history backing for temporal images and invalidate history
+            if (managed.is_temporal) {
+                resource_manager_->destroy_image(managed.history_backing);
+                const auto history_name = managed.debug_name + "_history";
+                managed.history_backing = resource_manager_->create_image(new_desc, history_name.c_str());
+                managed.history_valid_ = false;
+                managed.temporal_frame_count_ = 0;
+            }
         }
     }
 
@@ -310,6 +330,15 @@ namespace himalaya::framework {
             || old_resolved.mip_levels != new_resolved.mip_levels) {
             resource_manager_->destroy_image(managed.backing);
             managed.backing = resource_manager_->create_image(new_resolved, managed.debug_name.c_str());
+
+            // Rebuild history backing for temporal images and invalidate history
+            if (managed.is_temporal) {
+                resource_manager_->destroy_image(managed.history_backing);
+                const auto history_name = managed.debug_name + "_history";
+                managed.history_backing = resource_manager_->create_image(new_resolved, history_name.c_str());
+                managed.history_valid_ = false;
+                managed.temporal_frame_count_ = 0;
+            }
         }
     }
 
@@ -326,6 +355,10 @@ namespace himalaya::framework {
         assert(managed.backing.valid() && "Managed image already destroyed");
 
         resource_manager_->destroy_image(managed.backing);
+        if (managed.is_temporal) {
+            resource_manager_->destroy_image(managed.history_backing);
+            managed.history_backing = {};
+        }
         managed.backing = {};
         free_managed_slots_.push_back(handle.index);
     }
