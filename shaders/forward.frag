@@ -182,9 +182,12 @@ void main() {
     float material_ao = texture(textures[nonuniformEXT(mat.occlusion_tex)], frag_uv0).r;
     material_ao = 1.0 + mat.occlusion_strength * (material_ao - 1.0);
 
-    // Screen-space AO (GTAO temporal-filtered)
+    // Screen-space AO (GTAO temporal-filtered, guarded by FEATURE_AO)
     vec2 screen_uv = gl_FragCoord.xy / global.screen_size;
-    float ssao = texture(rt_ao_texture, screen_uv).r;
+    float ssao = 1.0;
+    if ((global.feature_flags & FEATURE_AO) != 0u) {
+        ssao = texture(rt_ao_texture, screen_uv).r;
+    }
 
     // Diffuse AO: combine SSAO with material AO + multi-bounce color compensation
     // Jimenez 2016: prevents over-darkening on light-colored surfaces (high albedo)
@@ -193,7 +196,8 @@ void main() {
 
     // Specular occlusion: Lagarde approximation from SSAO (material_ao not used —
     // AO is direction-independent, specular is direction-dependent, mixing them
-    // would incorrectly darken reflections facing open areas)
+    // would incorrectly darken reflections facing open areas).
+    // When AO disabled, ssao=1.0 → lagarde_so returns ~1.0 (no attenuation).
     float specular_ao = lagarde_so(NdotV, ssao, roughness);
 
     // Emissive
