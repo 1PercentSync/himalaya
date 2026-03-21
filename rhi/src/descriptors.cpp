@@ -262,30 +262,34 @@ namespace himalaya::rhi {
 
     void DescriptorManager::create_layouts() {
         // --- Set 0: GlobalUBO (0) + LightBuffer (1) + MaterialBuffer (2) + InstanceBuffer (3) ---
+        constexpr auto kAllStages = VK_SHADER_STAGE_VERTEX_BIT
+                                   | VK_SHADER_STAGE_FRAGMENT_BIT
+                                   | VK_SHADER_STAGE_COMPUTE_BIT;
+
         constexpr VkDescriptorSetLayoutBinding set0_bindings[] = {
             {
                 .binding = 0,
                 .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
                 .descriptorCount = 1,
-                .stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+                .stageFlags = kAllStages,
             },
             {
                 .binding = 1,
                 .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
                 .descriptorCount = 1,
-                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT,
             },
             {
                 .binding = 2,
                 .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
                 .descriptorCount = 1,
-                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT,
             },
             {
                 .binding = 3,
                 .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
                 .descriptorCount = 1,
-                .stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+                .stageFlags = kAllStages,
             },
         };
 
@@ -305,13 +309,13 @@ namespace himalaya::rhi {
                 .binding = 0,
                 .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
                 .descriptorCount = kMaxBindlessTextures,
-                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT,
             },
             {
                 .binding = 1,
                 .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
                 .descriptorCount = kMaxBindlessCubemaps,
-                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT,
             },
         };
 
