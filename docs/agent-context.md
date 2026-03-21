@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 10 第一小项：Debug render mode 新增 DEBUG_MODE_AO_SSAO + DEBUG_MODE_AO 改为复合结果
+Step 10 第二小项：DebugUI AO 面板补充 temporal blend 滑条
 
 ---
 

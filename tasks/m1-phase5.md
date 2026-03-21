@@ -73,7 +73,7 @@
 
 ## Step 10：AO Debug Modes + Temporal UI
 
-- [ ] Debug render mode 新增 DEBUG_MODE_AO_SSAO + DEBUG_MODE_AO 改为复合结果
+- [x] Debug render mode 新增 DEBUG_MODE_AO_SSAO + DEBUG_MODE_AO 改为复合结果
 - [ ] DebugUI AO 面板补充 temporal blend 滑条
 
 ## Step 11：Roughness Buffer
