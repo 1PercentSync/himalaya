@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段五 — 屏幕空间效果
-- **进度**：Step 5 进行中（17/~40）
+- **进度**：Step 5 进行中（18/~40）
 
 ### 下一个任务
 
-Step 5 第二小项：Set 2 binding 1（depth_resolved nearest）+ binding 2（normal_resolved nearest）写入双份 Set 2
+Step 5 第三小项：Temporal binding 1（depth_resolved）每帧更新逻辑
 
 ---
 
