@@ -158,8 +158,13 @@ void main() {
                                           expected_prev_depth,
                                           current_ao, rejected);
 
-    // TODO: temporal blend + history invalid handling (sub-item 3)
+    // Temporal blend
+    // pc.temporal_blend is 0.0 when history is invalid (first frame / resize),
+    // set by Renderer based on is_history_valid() query.
+    // Rejected pixels also use current-only (blend = 0).
+    float blend = rejected ? 0.0 : pc.temporal_blend;
+    float result_ao = mix(current_ao, history_ao, blend);
 
-    // Placeholder: output current frame value (blending not yet implemented)
-    imageStore(ao_output, pixel, vec4(current_ao, 0.0, 0.0, 0.0));
+    // G channel passthrough: 0.0 until Step 12 adds specular occlusion
+    imageStore(ao_output, pixel, vec4(result_ao, 0.0, 0.0, 0.0));
 }
