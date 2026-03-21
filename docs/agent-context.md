@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 7 第三小项：gtao.comp：输出 RG8（R=AO, G=0.0）+ bias/intensity 应用
+Step 7 第四小项：GTAOPass 类（setup / record / destroy / rebuild_pipelines）+ Set 3 layout + pipeline
 
 ---
 
