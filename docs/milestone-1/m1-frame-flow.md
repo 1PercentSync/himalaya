@@ -7,11 +7,11 @@
 
 ## MSAA 处理策略
 
-Depth/Normal PrePass 在 MSAA 下输出多采样 buffer，但屏幕空间效果（SSAO、Contact Shadows）全部在 **resolve 后的单采样** buffer 上操作。
+Depth/Normal PrePass 在 MSAA 下输出多采样 buffer，但屏幕空间效果（AO、Contact Shadows）全部在 **resolve 后的单采样** buffer 上操作。
 
 具体流程：Depth/Normal 先 resolve → 屏幕空间效果在单采样上操作 → Forward Pass（MSAA）→ 透明 Pass（MSAA）→ Color resolve → 后处理链。
 
-**取舍：** Resolve 会丢失子像素信息（一个像素内多个 sample 记录的不同 depth/normal 被平均），但 SSAO 本身是低频近似效果，加上 temporal filtering 的模糊，精度损失在视觉上不可感知。反过来，直接在 MSAA buffer 上操作需要 sampler2DMS per-sample 处理，性能和实现复杂度显著增加。
+**取舍：** Resolve 会丢失子像素信息（一个像素内多个 sample 记录的不同 depth/normal 被平均），但 AO 本身是低频近似效果，加上 temporal filtering 的模糊，精度损失在视觉上不可感知。反过来，直接在 MSAA buffer 上操作需要 sampler2DMS per-sample 处理，性能和实现复杂度显著增加。
 
 ---
 

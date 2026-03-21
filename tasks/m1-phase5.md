@@ -8,8 +8,8 @@
 
 - [ ] create_managed_image 新增 temporal 参数 + 内部分配第二张 backing image
 - [ ] clear() swap current/history + resize 重建两张 + history 无效标记
-- [ ] get_history_image() API（首帧/resize 后返回 invalid）
-- [ ] use_managed_image() 对 temporal image 的 initial layout 处理（current UNDEFINED, history SHADER_READ_ONLY_OPTIMAL）
+- [ ] get_history_image() 始终返回 valid + is_history_valid() 查询有效性
+- [ ] use_managed_image() 对 temporal image：current UNDEFINED + final_layout SHADER_READ_ONLY_OPTIMAL，history SHADER_READ_ONLY_OPTIMAL（首帧 UNDEFINED）
 
 ## Step 2：Per-frame Set 2
 
@@ -29,7 +29,7 @@
 - [ ] RenderFeatures 新增 ao + contact_shadows + Application 初始化
 - [ ] FEATURE_AO + FEATURE_CONTACT_SHADOWS（bindings.glsl）+ feature_flags 填充逻辑
 - [ ] AOConfig + ContactShadowConfig 结构体 + Application 初始化
-- [ ] GlobalUBO 新增 inv_projection + prev_view_projection + bindings.glsl 同步 + Renderer 填充
+- [ ] GlobalUBO 新增 inv_projection + prev_view_projection + bindings.glsl 同步 + Renderer 填充 + 帧末缓存 prev_view_projection
 - [ ] RenderInput + FrameContext 新增 ao_config + contact_shadow_config 指针
 
 ## Step 5：Depth/Normal Set 2 绑定 + AO 资源创建
@@ -58,7 +58,6 @@
 
 ## Step 8：AO Temporal Filter（R8 单通道）
 
-- [ ] Renderer prev_view_projection 追踪（帧末缓存当前帧 VP）
 - [ ] ao_temporal.comp：reprojection（inv_view_projection → world → prev_view_projection → prev UV）
 - [ ] ao_temporal.comp：三层 rejection + R 通道处理 + G 通道 passthrough
 - [ ] ao_temporal.comp：temporal blend + history 无效处理
