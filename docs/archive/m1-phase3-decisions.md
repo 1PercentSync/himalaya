@@ -74,9 +74,7 @@
 
 性能：`UNDEFINED → 目标 layout` + `loadOp = CLEAR` 被 driver 合并处理为 no-op 或几个 cycle 的元数据标记操作（GPU 的压缩元数据如 HTILE/HiZ 在 CLEAR 时重新初始化）。每帧每个 managed 资源多一次 barrier，但 GPU 和带宽开销均为零。方案 A 在后续帧省掉的只是这个 no-op barrier，实际节省接近零。
 
-实现：`use_managed_image(handle, final_layout)` initial layout 统一 UNDEFINED。`final_layout` 由调用方显式指定——非 temporal 传 `UNDEFINED`（不插入帧末 barrier，等效于阶段三的行为），temporal current 传 `SHADER_READ_ONLY_OPTIMAL`（帧末 transition，确保 swap 后 history layout 正确）。
-
-**Temporal 资源兼容性：** 阶段五引入的 temporal 资源（需要保留上帧内容）通过 `use_managed_image` 的 `final_layout` 参数控制帧末 transition，`get_history_image()` 返回独立 `RGResourceId` 读取上帧内容。RG 内部不区分 temporal 和非 temporal——统一根据 `final_layout` 参数决定是否插入帧末 barrier。
+实现：`use_managed_image(handle)` initial layout 统一 UNDEFINED，帧末不插入 final layout transition。阶段三的所有 managed 资源每帧 CLEAR 覆写，不需要帧间 layout 保持。
 
 **现有 depth buffer 迁移：** 阶段三将阶段二手动管理的 depth buffer 迁移为 managed 资源，删除手动创建/销毁代码。
 
