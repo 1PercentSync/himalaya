@@ -37,7 +37,7 @@
 - [x] Resolved depth 标记 temporal + FrameContext 新增 depth_prev
 - [x] Set 2 binding 1（depth_resolved nearest）+ binding 2（normal_resolved nearest）写入双份 Set 2
 - [x] Temporal binding 1（depth_resolved）每帧更新逻辑
-- [ ] 创建 managed images（ao_noisy RG8、ao_filtered RG8 temporal、contact_shadow_mask R8）+ FrameContext 新增 RGResourceId
+- [x] 创建 managed images（ao_noisy RG8、ao_filtered RG8 temporal、contact_shadow_mask R8）+ FrameContext 新增 RGResourceId
 - [ ] Set 2 binding 3（ao_texture linear）+ binding 4（contact_shadow_mask linear）写入双份 Set 2
 - [ ] Temporal binding 3（ao_filtered）每帧更新逻辑
 
