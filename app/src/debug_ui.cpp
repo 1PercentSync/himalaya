@@ -325,6 +325,8 @@ namespace himalaya::app {
         if (ImGui::CollapsingHeader("Features", ImGuiTreeNodeFlags_DefaultOpen)) {
             ImGui::Checkbox("Skybox", &ctx.features.skybox);
             ImGui::Checkbox("Shadows", &ctx.features.shadows);
+            ImGui::Checkbox("AO", &ctx.features.ao);
+            ImGui::Checkbox("Contact Shadows", &ctx.features.contact_shadows);
         }
 
         // Shadow section
