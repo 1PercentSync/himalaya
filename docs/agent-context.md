@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 8 第二小项：ao_temporal.comp：三层 rejection + R 通道处理 + G 通道 passthrough
+Step 8 第三小项：ao_temporal.comp：temporal blend + history 无效处理
 
 ---
 

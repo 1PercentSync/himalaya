@@ -59,7 +59,7 @@
 ## Step 8：AO Temporal Filter（R8 单通道）
 
 - [x] ao_temporal.comp：reprojection（inv_view_projection → world → prev_view_projection → prev UV）
-- [ ] ao_temporal.comp：三层 rejection + R 通道处理 + G 通道 passthrough
+- [x] ao_temporal.comp：三层 rejection + R 通道处理 + G 通道 passthrough
 - [ ] ao_temporal.comp：temporal blend + history 无效处理
 - [ ] AOTemporalPass 类（setup / record / destroy / rebuild_pipelines）+ push descriptors
 
