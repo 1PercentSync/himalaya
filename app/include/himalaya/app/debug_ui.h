@@ -15,6 +15,7 @@ namespace himalaya::rhi {
 } // namespace himalaya::rhi
 
 namespace himalaya::framework {
+    struct AOConfig;
     struct Camera;
     struct RenderFeatures;
     struct ShadowConfig;
@@ -100,6 +101,9 @@ namespace himalaya::app {
 
         /** @brief Shadow bias and sampling parameters (mutable for slider controls). */
         framework::ShadowConfig& shadow_config;
+
+        /** @brief AO parameters (mutable for slider controls). */
+        framework::AOConfig& ao_config;
 
         // --- MSAA (display + action) ---
 

@@ -452,11 +452,36 @@ namespace himalaya::app {
             }
         }
 
-        // AO section (skeleton — sliders added in Step 7/10)
+        // AO section
         if (ctx.features.ao) {
             ImGui::Separator();
             if (ImGui::CollapsingHeader("Ambient Occlusion")) {
-                ImGui::TextDisabled("Parameters added in later steps");
+                ImGui::SliderFloat("Radius", &ctx.ao_config.radius, 0.1f, 5.0f, "%.2f m");
+
+                // Directions combo (2/4/8)
+                constexpr uint32_t kDirections[] = {2, 4, 8};
+                constexpr const char *kDirLabels[] = {"2", "4", "8"};
+                int dir_idx = 1; // default to 4
+                for (int i = 0; i < 3; ++i) {
+                    if (kDirections[i] == ctx.ao_config.directions) { dir_idx = i; break; }
+                }
+                if (ImGui::Combo("Directions", &dir_idx, kDirLabels, 3)) {
+                    ctx.ao_config.directions = kDirections[dir_idx];
+                }
+
+                // Steps per direction combo (2/4/8)
+                constexpr uint32_t kSteps[] = {2, 4, 8};
+                constexpr const char *kStepLabels[] = {"2", "4", "8"};
+                int step_idx = 1; // default to 4
+                for (int i = 0; i < 3; ++i) {
+                    if (kSteps[i] == ctx.ao_config.steps_per_dir) { step_idx = i; break; }
+                }
+                if (ImGui::Combo("Steps/Dir", &step_idx, kStepLabels, 3)) {
+                    ctx.ao_config.steps_per_dir = kSteps[step_idx];
+                }
+
+                ImGui::SliderFloat("Bias", &ctx.ao_config.bias, 0.0f, 0.1f, "%.4f");
+                ImGui::SliderFloat("Intensity", &ctx.ao_config.intensity, 0.5f, 3.0f, "%.2f");
             }
         }
 
