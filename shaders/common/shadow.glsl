@@ -170,7 +170,7 @@ struct ShadowProjData {
 ShadowProjData prepare_shadow_proj(vec3 world_pos, vec3 world_normal, int cascade) {
     ShadowProjData proj;
 
-    // Normal offset (same logic as sample_shadow / sample_shadow_pcf)
+    // Normal offset (same logic as sample_shadow_pcf)
     float texel_ws = global.cascade_texel_world_size[cascade];
     vec3 offset_pos = world_pos + world_normal * global.shadow_normal_offset * texel_ws;
 
@@ -378,39 +378,6 @@ int select_cascade(float view_depth, out float blend_factor) {
 }
 
 /**
- * Sample the shadow map with a single hardware comparison (hard shadow).
- *
- * Applies normal offset bias before projecting to light space: the sampling
- * position is pushed along the surface normal by an amount proportional to
- * the cascade's texel world size (precomputed on CPU, stored in GlobalUBO).
- * This complements the hardware depth bias (slope) set during shadow map
- * rendering.
- *
- * @param world_pos    Fragment world-space position.
- * @param world_normal Fragment world-space shading normal (normalized).
- * @param cascade      Cascade index.
- * @return Shadow factor: 1.0 = fully lit, 0.0 = fully in shadow.
- */
-float sample_shadow(vec3 world_pos, vec3 world_normal, int cascade) {
-    // Normal offset: push along normal to reduce acne on surfaces
-    // nearly parallel to the light direction
-    float texel_ws = global.cascade_texel_world_size[cascade];
-    vec3 offset_pos = world_pos + world_normal * global.shadow_normal_offset * texel_ws;
-
-    // Project to light clip space (w = 1 for orthographic, divide is a no-op)
-    vec4 light_clip = global.cascade_view_proj[cascade] * vec4(offset_pos, 1.0);
-    vec3 light_ndc = light_clip.xyz / light_clip.w;
-
-    // NDC [-1,1] -> UV [0,1]
-    vec2 shadow_uv = light_ndc.xy * 0.5 + 0.5;
-    float ref_depth = light_ndc.z;
-
-    // Hardware comparison: GREATER_OR_EQUAL with Reverse-Z
-    // Returns 1.0 when ref_depth >= stored (lit), 0.0 when occluded
-    return texture(rt_shadow_map, vec4(shadow_uv, float(cascade), ref_depth));
-}
-
-/**
  * Sample the shadow map with PCF (Percentage-Closer Filtering).
  *
  * Performs a (2R+1) x (2R+1) grid of hardware 2x2 comparison samples,
@@ -418,8 +385,7 @@ float sample_shadow(vec3 world_pos, vec3 world_normal, int cascade) {
  * sampler2DArrayShadow returns a bilinear-interpolated comparison over
  * a 2x2 texel footprint, so the effective filter is wider than the grid.
  *
- * When R = 0, falls back to a single hardware comparison (hard shadow),
- * identical to sample_shadow().
+ * When R = 0, falls back to a single hardware comparison (hard shadow).
  *
  * @param world_pos    Fragment world-space position.
  * @param world_normal Fragment world-space shading normal (normalized).
@@ -427,7 +393,8 @@ float sample_shadow(vec3 world_pos, vec3 world_normal, int cascade) {
  * @return Shadow factor: 1.0 = fully lit, 0.0 = fully in shadow.
  */
 float sample_shadow_pcf(vec3 world_pos, vec3 world_normal, int cascade) {
-    // Normal offset (same logic as sample_shadow)
+    // Normal offset: push along normal to reduce acne on surfaces
+    // nearly parallel to the light direction
     float texel_ws = global.cascade_texel_world_size[cascade];
     vec3 offset_pos = world_pos + world_normal * global.shadow_normal_offset * texel_ws;
 
