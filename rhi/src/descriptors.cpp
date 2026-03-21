@@ -215,6 +215,11 @@ namespace himalaya::rhi {
                                nullptr);
     }
 
+    std::vector<VkDescriptorSetLayout> DescriptorManager::get_compute_set_layouts(
+        const VkDescriptorSetLayout set3_push_layout) const {
+        return {set0_layout_, set1_layout_, set2_layout_, set3_push_layout};
+    }
+
     void DescriptorManager::write_set0_buffer(const uint32_t frame_index,
                                               const uint32_t binding,
                                               const BufferHandle buffer,

@@ -179,6 +179,19 @@ namespace himalaya::rhi {
         void update_render_target(uint32_t frame_index, uint32_t binding,
                                   ImageHandle image, SamplerHandle sampler) const;
 
+        /**
+         * @brief Returns descriptor set layouts for compute pipeline creation.
+         *
+         * Combines the three global set layouts (Set 0-2) with a caller-provided
+         * Set 3 push descriptor layout, avoiding manual layout assembly in each
+         * compute pass.
+         *
+         * @param set3_push_layout Push descriptor set layout for Set 3 (per-pass I/O).
+         * @return Vector of {set0, set1, set2, set3} layouts.
+         */
+        [[nodiscard]] std::vector<VkDescriptorSetLayout> get_compute_set_layouts(
+            VkDescriptorSetLayout set3_push_layout) const;
+
     private:
         /** @brief Vulkan context (device). */
         Context *context_ = nullptr;
