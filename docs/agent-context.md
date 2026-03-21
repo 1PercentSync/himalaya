@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 9 第四小项：forward.frag：FEATURE_AO 守护
+Step 9 第五小项：Renderer 编排：features.ao 条件调用 + FrameContext 条件资源声明
 
 ---
 
