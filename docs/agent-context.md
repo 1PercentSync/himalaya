@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段五 — 屏幕空间效果
-- **进度**：Step 1 进行中（3/~40）
+- **进度**：Step 1 完成（4/~40）
 
 ### 下一个任务
 
-Step 1 第四小项：use_managed_image() 新增 final_layout 参数 + 所有现有调用点适配
+Step 2 第一小项：DescriptorManager Set 2 pool 分配 2 份 set、get_set2(frame_index)
 
 ---
 

@@ -9,7 +9,7 @@
 - [x] create_managed_image 新增 temporal 参数 + 内部分配第二张 backing image
 - [x] clear() swap current/history + resize 重建两张 + history 无效标记
 - [x] get_history_image() 始终返回 valid + is_history_valid() 查询有效性
-- [ ] use_managed_image() 对 temporal image：current UNDEFINED + final_layout SHADER_READ_ONLY_OPTIMAL，history SHADER_READ_ONLY_OPTIMAL（首帧 UNDEFINED）
+- [x] use_managed_image() 对 temporal image：current UNDEFINED + final_layout SHADER_READ_ONLY_OPTIMAL，history SHADER_READ_ONLY_OPTIMAL（首帧 UNDEFINED）
 
 ## Step 2：Per-frame Set 2
 
