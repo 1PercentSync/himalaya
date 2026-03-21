@@ -8,12 +8,12 @@
 
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
-- **Phase**：阶段四 — 阴影
-- **进度**：Step 7 完成（18/18），阶段四全部完成
+- **Phase**：阶段五 — 屏幕空间效果
+- **进度**：Step 1 待开始（0/21）
 
 ### 下一个任务
 
-阶段四已全部完成，等待用户决定下一步方向
+Step 1 第一小项：RG temporal 机制
 
 ---
 
@@ -24,9 +24,9 @@ CLAUDE.md 已自动加载，以下为额外必读：
 | 文档 | 说明 |
 |------|------|
 | `docs/milestone-1/milestone-1.md` | M1 范围、预期效果、已知局限性 |
-| `docs/current-phase.md` | 当前阶段实现步骤（阶段四） |
+| `docs/current-phase.md` | 当前阶段实现步骤（阶段五） |
 | `docs/milestone-1/m1-interfaces.md` | M1 接口与目标结构：文件结构、关键接口与数据结构 |
-| `tasks/m1-phase4.md` | 阶段四任务清单（复选框进度跟踪） |
+| `tasks/m1-phase5.md` | 阶段五任务清单（复选框进度跟踪） |
 
 ## 按需文档
 
@@ -56,6 +56,8 @@ CLAUDE.md 已自动加载，以下为额外必读：
 | `docs/archive/m1-phase3-plan.md` | M1 阶段三实现步骤（已完成） |
 | `tasks/archive/m1-phase3.md` | M1 阶段三任务清单（已完成） |
 | `docs/archive/pcss-reference.md` | PCSS 方向光实现参考资料 |
+| `docs/archive/m1-phase4-plan.md` | M1 阶段四实现步骤（已完成） |
+| `tasks/archive/m1-phase4.md` | M1 阶段四任务清单（已完成） |
 
 ---
 
