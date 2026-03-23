@@ -97,7 +97,7 @@
 
 ## Step 10c：HDR Sun 方向光 + 色温模式
 
-- [ ] `color_temperature_to_rgb()` 工具函数（framework 层 `color_utils.h` / `color_utils.cpp`）
+- [x] `color_temperature_to_rgb()` 工具函数（framework 层 `color_utils.h` / `color_utils.cpp`）
 - [ ] IBL 类新增 `equirect_width()` / `equirect_height()` getter
 - [ ] `LightSourceMode` 枚举新增 `HdrSun`，DebugUI combo 适配四项（Scene / Fallback / HDR Sun / None）
 - [ ] `AppConfig` 新增 `hdr_sun_coords` 持久化（HDR 路径 → 像素坐标映射）+ 序列化/反序列化
