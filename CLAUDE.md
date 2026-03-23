@@ -194,4 +194,4 @@ himalaya/
 
 CMake 构建后拷贝 shader 到 build 目录。开发期编辑 build 目录副本触发热重载，确认后同步回源码目录。
 
-若只修改了 shader 而未改动 C++ 代码，CLion 不会触发 CMake 构建（直接启动），shader 不会被拷贝到 build 目录。此时手动运行 `scripts/sync-shaders.sh` 将源码目录的 shader 同步到 build 目录。
+若只修改了 shader 而未改动 C++ 代码，CLion 不会触发 CMake 构建（直接启动），shader 不会被拷贝到 build 目录。此时 Agent 运行 `scripts/sync-shaders.sh` 将源码目录的 shader 同步到 build 目录。
