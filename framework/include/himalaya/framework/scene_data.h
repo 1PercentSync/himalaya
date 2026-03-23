@@ -219,8 +219,8 @@ namespace himalaya::framework {
         /** @brief Steps per search direction (2/4/8). */
         uint32_t steps_per_dir;
 
-        /** @brief Depth comparison bias to reduce self-occlusion. */
-        float bias;
+        /** @brief Thin occluder compensation (0 = off, 0.7 = XeGTAO quality). */
+        float thin_compensation;
 
         /** @brief AO intensity multiplier (higher = darker occlusion). */
         float intensity;

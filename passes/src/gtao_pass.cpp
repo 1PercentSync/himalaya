@@ -25,7 +25,7 @@ namespace himalaya::passes {
         float radius;
         uint32_t directions;
         uint32_t steps_per_dir;
-        float bias;
+        float thin_compensation;
         float intensity;
         uint32_t frame_index;
     };
@@ -159,7 +159,7 @@ namespace himalaya::passes {
                              .radius = ctx.ao_config->radius,
                              .directions = ctx.ao_config->directions,
                              .steps_per_dir = ctx.ao_config->steps_per_dir,
-                             .bias = ctx.ao_config->bias,
+                             .thin_compensation = ctx.ao_config->thin_compensation,
                              .intensity = ctx.ao_config->intensity,
                              .frame_index = ctx.frame_index,
                          };

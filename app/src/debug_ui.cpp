@@ -480,7 +480,7 @@ namespace himalaya::app {
                     ctx.ao_config.steps_per_dir = kSteps[step_idx];
                 }
 
-                ImGui::SliderFloat("Bias##ao", &ctx.ao_config.bias, 0.0f, 0.1f, "%.4f");
+                ImGui::SliderFloat("Thin Compensation", &ctx.ao_config.thin_compensation, 0.0f, 0.7f, "%.2f");
                 ImGui::SliderFloat("Intensity##ao", &ctx.ao_config.intensity, 0.5f, 3.0f, "%.2f");
                 ImGui::SliderFloat("Temporal Blend", &ctx.ao_config.temporal_blend, 0.0f, 0.98f, "%.2f");
             }
