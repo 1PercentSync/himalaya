@@ -23,7 +23,7 @@
 | Roughness buffer | DepthPrePass 新增 R8 输出 | GTAO SO + M2 SSR |
 | Contact Shadows | Screen-space ray march + 深度自适应 thickness + 距离衰减 + 无 temporal | 确定性输出，push constant 传光方向 |
 | Contact Shadows 多光源 | M1 单方向光单 dispatch 单 R8 | shader 不假设光源类型，M2 方案待定 |
-| HDR Sun 方向光 | 新增 `LightSourceMode::HdrSun`，equirectangular 像素坐标 → 方向 → `rotate_y(ibl_yaw_)` | 方向光与天空盒太阳对齐，IBL 旋转时同步 |
+| HDR Sun 方向光 | 新增 `LightSourceMode::HdrSun`，equirectangular 像素坐标 → HDR 空间方向 → 逆 `rotate_y`（HDR→世界） | 方向光与天空盒太阳对齐，IBL 旋转时同步 |
 | 色温模型 | Kelvin → 线性 RGB（2000K~12000K），Fallback + HDR Sun 均适用 | 统一的物理色温控制，替代固定白色 |
 | HDR Sun 持久化 | `config.json` 存 HDR 路径 → 像素坐标映射 | 切换 HDR 时自动恢复已标记的太阳位置 |
 
@@ -335,11 +335,13 @@ HDR 环境贴图使用 equirectangular 投影。像素坐标 (x, y) 到方向向
 sun_dir = (cos(φ)·sin(θ), sin(φ), -cos(φ)·cos(θ))
 ```
 
-`sun_dir` 是 HDR 空间中指向太阳的方向（IBL 旋转前）。每帧应用 `rotate_y(sun_dir, sin(ibl_yaw_), cos(ibl_yaw_))` 得到世界空间太阳方向，取反作为 `DirectionalLight.direction`（光线传播方向）。
+`sun_dir` 是 HDR 空间中指向太阳的方向（IBL 旋转前）。Shader 中 `rotate_y(world_dir, sin(yaw), cos(yaw))` 将世界空间→HDR 空间，因此 HDR→世界需要逆旋转（取反 sin 分量）：`rotated_sun = (c·x - s·z, y, s·x + c·z)`。取反后作为 `DirectionalLight.direction`（光线传播方向）。
 
-具体的三角函数符号约定需要对照项目的 equirect-to-cubemap shader 确认，确保 HDR Sun 方向与天空盒中太阳的视觉位置精确对齐。
+三角函数符号约定已对照 `equirect_to_cubemap.comp` 中的 `sample_equirect()` 确认：`phi = atan(dir.z, dir.x)`，`uv.x = phi / 2π + 0.5`。逆映射使用 `dir = (cos(θ)·cos(φ), sin(θ), cos(θ)·sin(φ))`。
 
 **宽高信息**：`init()` 开头用 `stbi_info()` 只读 HDR 文件头获取宽高（不加载像素数据），存入成员变量，通过 `equirect_width()` / `equirect_height()` getter 暴露。这样缓存路径和计算路径均无需额外处理——尺寸获取独立于 `load_equirect()` 和 KTX2 缓存逻辑。
+
+**自动选择**：场景加载时，有 glTF 灯光→Scene，无灯光但有 HDR→HdrSun，都没有→Fallback。
 
 **无坐标时行为**：保持 HdrSun 模式，坐标默认 (0, 0)，对应 HDR 左上角方向。用户通过 UI 输入正确坐标后自动保存。
 
