@@ -365,7 +365,7 @@ namespace himalaya::framework {
     // Size assertions catch additions/removals; offset assertions catch
     // C++ vs std140 alignment divergences (e.g. vec2 requires 8-byte
     // alignment in std140 but glm::vec2 has natural alignment of 4).
-    static_assert(sizeof(GlobalUniformData) == 848, "GlobalUniformData must be 848 bytes (std140)");
+    static_assert(sizeof(GlobalUniformData) == 864, "GlobalUniformData must be 864 bytes (std140)");
     static_assert(offsetof(GlobalUniformData, view) == 0);
     static_assert(offsetof(GlobalUniformData, camera_position_and_exposure) == 256);
     static_assert(offsetof(GlobalUniformData, screen_size) == 272);
@@ -385,6 +385,9 @@ namespace himalaya::framework {
     static_assert(offsetof(GlobalUniformData, cascade_light_size_uv) == 672);
     static_assert(offsetof(GlobalUniformData, cascade_pcss_scale) == 688);
     static_assert(offsetof(GlobalUniformData, cascade_uv_scale_y) == 704);
+    static_assert(offsetof(GlobalUniformData, inv_projection) == 720);
+    static_assert(offsetof(GlobalUniformData, prev_view_projection) == 784);
+    static_assert(offsetof(GlobalUniformData, frame_index) == 848);
     static_assert(sizeof(GPUDirectionalLight) == 32, "GPUDirectionalLight must be 32 bytes (std430)");
     static_assert(sizeof(GPUInstanceData) == 128, "GPUInstanceData must be 128 bytes (std430)");
     static_assert(offsetof(GPUInstanceData, normal_col0) == 64);
