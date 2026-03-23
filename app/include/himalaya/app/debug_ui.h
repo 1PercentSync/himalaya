@@ -86,6 +86,32 @@ namespace himalaya::app {
         /** @brief Whether the fallback light casts shadows. */
         bool &fallback_cast_shadows;
 
+        /** @brief Fallback light color temperature in Kelvin. */
+        float &fallback_color_temp;
+
+        // --- HDR Sun light controls (mutable, shown only in HdrSun mode) ---
+
+        /** @brief HDR sun pixel X coordinate. */
+        int &hdr_sun_x;
+
+        /** @brief HDR sun pixel Y coordinate. */
+        int &hdr_sun_y;
+
+        /** @brief HDR Sun light intensity multiplier. */
+        float &hdr_sun_intensity;
+
+        /** @brief HDR Sun light color temperature in Kelvin. */
+        float &hdr_sun_color_temp;
+
+        /** @brief Whether the HDR Sun light casts shadows. */
+        bool &hdr_sun_cast_shadows;
+
+        /** @brief Original equirect image width (for UI max bounds). */
+        uint32_t equirect_width;
+
+        /** @brief Original equirect image height (for UI max bounds). */
+        uint32_t equirect_height;
+
         // --- Render params (controls) ---
 
         /** @brief Editable reference to the IBL environment light intensity. */
@@ -185,6 +211,9 @@ namespace himalaya::app {
 
         /** @brief Path selected by the user (valid only when env_load_requested is true). */
         std::string new_env_path;
+
+        /** @brief True if HDR sun coordinates were modified (triggers config save). */
+        bool hdr_sun_coords_changed = false;
     };
 
     /**

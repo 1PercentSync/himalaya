@@ -315,8 +315,28 @@ namespace himalaya::app {
             // Fallback light controls (only in Fallback mode)
             if (ctx.light_source_mode == LightSourceMode::Fallback) {
                 ImGui::SliderFloat("Intensity", &ctx.fallback_intensity, 0.0f, 20.0f, "%.1f");
+                ImGui::SliderFloat("Color Temp (K)##fallback", &ctx.fallback_color_temp,
+                                   2000.0f, 12000.0f, "%.0f");
                 ImGui::Checkbox("Cast Shadows", &ctx.fallback_cast_shadows);
                 ImGui::TextDisabled("Alt + Left Drag to rotate");
+            }
+
+            // HDR Sun light controls (only in HdrSun mode)
+            if (ctx.light_source_mode == LightSourceMode::HdrSun) {
+                if (ImGui::InputInt("Sun X", &ctx.hdr_sun_x)) {
+                    ctx.hdr_sun_x = std::clamp(ctx.hdr_sun_x, 0,
+                        ctx.equirect_width > 0 ? static_cast<int>(ctx.equirect_width) - 1 : 0);
+                    actions.hdr_sun_coords_changed = true;
+                }
+                if (ImGui::InputInt("Sun Y", &ctx.hdr_sun_y)) {
+                    ctx.hdr_sun_y = std::clamp(ctx.hdr_sun_y, 0,
+                        ctx.equirect_height > 0 ? static_cast<int>(ctx.equirect_height) - 1 : 0);
+                    actions.hdr_sun_coords_changed = true;
+                }
+                ImGui::SliderFloat("Intensity##hdrsun", &ctx.hdr_sun_intensity, 0.0f, 20.0f, "%.1f");
+                ImGui::SliderFloat("Color Temp (K)##hdrsun", &ctx.hdr_sun_color_temp,
+                                   2000.0f, 12000.0f, "%.0f");
+                ImGui::Checkbox("Cast Shadows##hdrsun", &ctx.hdr_sun_cast_shadows);
             }
         }
 

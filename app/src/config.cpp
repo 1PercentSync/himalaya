@@ -105,8 +105,8 @@ namespace himalaya::app {
                 j["scene_path"] = config.scene_path;
                 j["env_path"] = config.env_path;
                 nlohmann::json coords = nlohmann::json::object();
-                for (const auto& [path, xy] : config.hdr_sun_coords) {
-                    coords[path] = {xy.first, xy.second};
+                for (const auto& [hdr_path, xy] : config.hdr_sun_coords) {
+                    coords[hdr_path] = {xy.first, xy.second};
                 }
                 j["hdr_sun_coords"] = coords;
                 file << j.dump(2);

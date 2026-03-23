@@ -17,7 +17,6 @@
 
 #include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
-#include <glm/ext/scalar_constants.hpp>
 #include <imgui.h>
 #include <spdlog/spdlog.h>
 
@@ -99,10 +98,15 @@ namespace himalaya::app {
         auto_position_camera();
         camera_controller_.set_focus_target(&scene_loader_.scene_bounds());
 
-        // Auto-select light source: Scene if glTF has lights, Fallback otherwise
-        light_source_mode_ = scene_loader_.directional_lights().empty()
-                                 ? LightSourceMode::Fallback
-                                 : LightSourceMode::Scene;
+        // Auto-select light source: Scene if glTF has lights,
+        // HdrSun if HDR loaded, Fallback as last resort
+        if (!scene_loader_.directional_lights().empty()) {
+            light_source_mode_ = LightSourceMode::Scene;
+        } else if (renderer_.ibl().equirect_width() > 0) {
+            light_source_mode_ = LightSourceMode::HdrSun;
+        } else {
+            light_source_mode_ = LightSourceMode::Fallback;
+        }
 
         // Restore persisted HDR sun coordinates for the current environment
         if (const auto it = config_.hdr_sun_coords.find(config_.env_path);
@@ -271,7 +275,7 @@ namespace himalaya::app {
                 std::sin(fallback_light_pitch_),
                 -std::cos(fallback_light_yaw_) * std::cos(fallback_light_pitch_),
             },
-            .color = glm::vec3(1.0f),
+            .color = framework::color_temperature_to_rgb(fallback_light_color_temp_),
             .intensity = fallback_light_intensity_,
             .cast_shadows = fallback_light_cast_shadows_,
         };
@@ -287,21 +291,24 @@ namespace himalaya::app {
             const auto eq_h = static_cast<float>(ibl.equirect_height());
             glm::vec3 sun_dir{0.0f, 1.0f, 0.0f}; // default: straight up
             if (eq_w > 0.0f && eq_h > 0.0f) {
-                const float phi = (static_cast<float>(hdr_sun_x_) / eq_w - 0.5f) * glm::two_pi<float>();
-                const float theta = (0.5f - static_cast<float>(hdr_sun_y_) / eq_h) * glm::pi<float>();
+                constexpr float kPi = 3.14159265358979323846f;
+                constexpr float kTwoPi = 2.0f * kPi;
+                const float phi = (static_cast<float>(hdr_sun_x_) / eq_w - 0.5f) * kTwoPi;
+                const float theta = (0.5f - static_cast<float>(hdr_sun_y_) / eq_h) * kPi;
                 sun_dir = {
                     std::cos(theta) * std::cos(phi),
                     std::sin(theta),
                     std::cos(theta) * std::sin(phi),
                 };
             }
-            // Apply IBL rotation (same rotate_y as shaders)
+            // Inverse of shader rotate_y: shader rotates world→HDR by +yaw,
+            // we need HDR→world which is -yaw (negate sin component)
             const float s = std::sin(ibl_yaw_);
             const float c = std::cos(ibl_yaw_);
             const glm::vec3 rotated_sun{
-                c * sun_dir.x + s * sun_dir.z,
+                c * sun_dir.x - s * sun_dir.z,
                 sun_dir.y,
-                -s * sun_dir.x + c * sun_dir.z,
+                s * sun_dir.x + c * sun_dir.z,
             };
             hdr_sun_light_ = {
                 .direction = -rotated_sun, // light travels toward scene
@@ -383,6 +390,14 @@ namespace himalaya::app {
             .ibl_rotation_deg = glm::degrees(ibl_yaw_),
             .fallback_intensity = fallback_light_intensity_,
             .fallback_cast_shadows = fallback_light_cast_shadows_,
+            .fallback_color_temp = fallback_light_color_temp_,
+            .hdr_sun_x = hdr_sun_x_,
+            .hdr_sun_y = hdr_sun_y_,
+            .hdr_sun_intensity = hdr_sun_intensity_,
+            .hdr_sun_color_temp = hdr_sun_color_temp_,
+            .hdr_sun_cast_shadows = hdr_sun_cast_shadows_,
+            .equirect_width = renderer_.ibl().equirect_width(),
+            .equirect_height = renderer_.ibl().equirect_height(),
             .ibl_intensity = ibl_intensity_,
             .ev = ev_,
             .debug_render_mode = debug_render_mode_,
@@ -441,6 +456,8 @@ namespace himalaya::app {
             // Auto-select light source mode based on new scene
             if (!new_scene_lights.empty()) {
                 light_source_mode_ = LightSourceMode::Scene;
+            } else if (renderer_.ibl().equirect_width() > 0) {
+                light_source_mode_ = LightSourceMode::HdrSun;
             } else {
                 light_source_mode_ = LightSourceMode::Fallback;
             }
@@ -465,6 +482,11 @@ namespace himalaya::app {
 
         if (actions.env_load_requested) {
             switch_environment(actions.new_env_path);
+        }
+
+        if (actions.hdr_sun_coords_changed && !config_.env_path.empty()) {
+            config_.hdr_sun_coords[config_.env_path] = {hdr_sun_x_, hdr_sun_y_};
+            save_config(config_);
         }
     }
 

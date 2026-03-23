@@ -129,6 +129,9 @@ namespace himalaya::app {
         /** @brief Whether the fallback light casts shadows. */
         bool fallback_light_cast_shadows_ = true;
 
+        /** @brief Fallback light color temperature in Kelvin. */
+        float fallback_light_color_temp_ = 6500.0f;
+
         /** @brief Constructed fallback DirectionalLight (rebuilt each frame from yaw/pitch). */
         framework::DirectionalLight fallback_light_{};
 
