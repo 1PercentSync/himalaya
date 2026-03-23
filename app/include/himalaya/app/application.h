@@ -161,7 +161,7 @@ namespace himalaya::app {
 
         /** @brief AO configuration parameters. */
         framework::AOConfig ao_config_{
-            .radius = 0.5f,
+            .radius = 0.15f,
             .directions = 4,
             .steps_per_dir = 4,
             .bias = 0.01f,

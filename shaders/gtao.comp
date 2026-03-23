@@ -29,8 +29,9 @@ layout(push_constant) uniform GTAOPushConstants {
     float radius;           // sampling radius (world-space meters)
     uint  directions;       // number of search directions
     uint  steps_per_dir;    // steps per search direction
-    float bias;             // depth comparison bias
+    float bias;             // reserved (unused after Step 10a restructure)
     float intensity;        // AO intensity multiplier
+    uint  frame_index;      // current frame index for temporal noise variation
 } pc;
 
 // ---- View-space reconstruction ----
@@ -68,6 +69,30 @@ vec3 get_view_normal(vec2 uv) {
     vec3 world_normal = decode_normal_r10g10b10a2(encoded);
     return normalize(mat3(global.view) * world_normal);
 }
+
+// ---- Constants ----
+
+/**
+ * Thin occluder compensation strength (post-search blend).
+ *
+ * After the horizon search completes, the final horizon cosine is blended
+ * toward the tangent-plane initial value by this factor.  Reduces false
+ * occlusion from thin objects (poles, fences) at the cost of slightly
+ * weaker AO everywhere.
+ *
+ * Applied ONCE after the search, NOT per-step — per-step decay would
+ * destroy legitimate thick-occluder AO (wall corners, object contacts).
+ *
+ * Key property: when low_cos == max_cos (self-occluded side of tilted
+ * surfaces), the blend has no effect.
+ *
+ * 0.0 = off, 0.7 = XeGTAO quality (3 slices, 6 steps).
+ * Lower values for fewer slices/steps to preserve corner AO.
+ */
+const float kThinOccluderCompensation = 0.2;
+
+/** Golden ratio fractional part for quasi-random temporal noise offset. */
+const float kGoldenRatioFract = 0.6180339887;
 
 // ---- GTAO inner integral ----
 
@@ -136,8 +161,11 @@ void main() {
     vec3 view_normal = get_view_normal(uv);
     vec3 view_dir = normalize(-view_pos);
 
-    // Per-pixel direction rotation (eliminates directional banding)
-    float noise = interleaved_gradient_noise(pixel);
+    // Per-pixel direction rotation with per-frame temporal variation.
+    // Golden ratio offset ensures maximal spacing between consecutive frames,
+    // letting the temporal filter accumulate different directions across frames.
+    float noise = fract(interleaved_gradient_noise(pixel)
+                      + float(pc.frame_index % 64) * kGoldenRatioFract);
 
     // World-space radius → screen-space radius (pixels)
     // projection[1][1] = 1/tan(fov_y/2), so focal_y = screen_height/2 * proj[1][1]
@@ -146,6 +174,7 @@ void main() {
     radius_px = min(radius_px, 256.0); // cap to prevent huge radius at close range
 
     float ao = 0.0;
+    float radius2 = pc.radius * pc.radius;
 
     for (uint i = 0; i < pc.directions; i++) {
         // Search direction: uniform half-circle [0, pi) with per-pixel rotation
@@ -156,14 +185,34 @@ void main() {
         vec2 step_uv = omega * radius_px
                       / (global.screen_size * float(pc.steps_per_dir));
 
-        // Horizon search: track max cos(angle_from_V) for both sides.
-        // Higher cosine = closer to V = more occlusion.
-        // Initialize at bias to reject near-tangent samples (self-intersection).
-        float max_cos_pos = pc.bias;
-        float max_cos_neg = pc.bias;
+        // ---- Project normal onto slice plane BEFORE search ----
+        // This allows correct tangent-plane initialization and falloff targets.
+        // Screen direction omega maps to view-space tangent direction;
+        // Y is negated to compensate for the Y-flipped viewport.
+        vec3 tangent_vs = normalize(vec3(omega.x, -omega.y, 0.0));
+        vec3 bitangent_vs = normalize(cross(view_dir, tangent_vs));
+        vec3 n_proj = view_normal - bitangent_vs * dot(view_normal, bitangent_vs);
+        float n_proj_len = length(n_proj);
+        n_proj = (n_proj_len > EPSILON) ? n_proj / n_proj_len : view_dir;
 
-        float radius2 = pc.radius * pc.radius;
+        // Signed normal angle from V (positive toward the tangent_vs side).
+        // Clamp cos_n >= 0: if the projected normal points away from the camera
+        // (possible with extreme normal maps or back-facing geometry), treat it
+        // as perpendicular to the view — the maximum valid tilt.
+        float cos_n = clamp(dot(n_proj, view_dir), 0.0, 1.0);
+        float n_angle = sign(dot(n_proj, tangent_vs)) * acos(cos_n);
 
+        // ---- Initialize horizons to tangent plane limits ----
+        // cos(n_angle + PI/2) = -sin(n_angle) for positive side
+        // cos(-n_angle + PI/2) = sin(n_angle) for negative side
+        // These represent "no occlusion beyond the surface tangent plane".
+        float sin_n = sin(n_angle);
+        float low_cos_pos = -sin_n;
+        float low_cos_neg = sin_n;
+        float max_cos_pos = low_cos_pos;
+        float max_cos_neg = low_cos_neg;
+
+        // ---- Horizon search (standard max tracking) ----
         for (uint j = 1; j <= pc.steps_per_dir; j++) {
             float t = float(j);
 
@@ -173,10 +222,10 @@ void main() {
             vec3 dp = sp - view_pos;
             float len2 = dot(dp, dp);
             if (len2 > EPSILON) {
-                // Distance falloff: samples beyond world-space radius decay to bias
+                // Distance falloff: decay toward tangent plane limit outside radius
                 float falloff = clamp(1.0 - len2 / radius2, 0.0, 1.0);
                 float cos_h = dot(dp, view_dir) * inversesqrt(len2);
-                max_cos_pos = max(max_cos_pos, mix(pc.bias, cos_h, falloff));
+                max_cos_pos = max(max_cos_pos, mix(low_cos_pos, cos_h, falloff));
             }
 
             // Negative direction
@@ -187,35 +236,24 @@ void main() {
             if (len2 > EPSILON) {
                 float falloff = clamp(1.0 - len2 / radius2, 0.0, 1.0);
                 float cos_h = dot(dp, view_dir) * inversesqrt(len2);
-                max_cos_neg = max(max_cos_neg, mix(pc.bias, cos_h, falloff));
+                max_cos_neg = max(max_cos_neg, mix(low_cos_neg, cos_h, falloff));
             }
         }
 
+        // ---- Thin occluder compensation (post-search, single blend) ----
+        // Blend final horizon toward the tangent-plane initial value.
+        // When low_cos == max_cos (self-occluded side), this is a no-op.
+        max_cos_pos = mix(max_cos_pos, low_cos_pos, kThinOccluderCompensation);
+        max_cos_neg = mix(max_cos_neg, low_cos_neg, kThinOccluderCompensation);
+
         // Convert horizon cosines to opening angles from V
-        // cos(angle) → angle;  small angle = close to V = high occlusion
         float h_pos = acos(clamp(max_cos_pos, -1.0, 1.0));
         float h_neg = acos(clamp(max_cos_neg, -1.0, 1.0));
 
-        // Project normal onto the slice plane.
-        // Screen direction omega maps to view-space tangent direction;
-        // Y is negated to compensate for the Y-flipped viewport.
-        vec3 tangent_vs = normalize(vec3(omega.x, -omega.y, 0.0));
-        vec3 bitangent_vs = normalize(cross(view_dir, tangent_vs));
-        vec3 n_proj = view_normal - bitangent_vs * dot(view_normal, bitangent_vs);
-        float n_proj_len = length(n_proj);
-        n_proj = (n_proj_len > EPSILON) ? n_proj / n_proj_len : view_dir;
-
-        // Signed normal angle from V (positive toward the h_pos / tangent_vs side)
-        float cos_n = clamp(dot(n_proj, view_dir), -1.0, 1.0);
-        float n_angle = sign(dot(n_proj, tangent_vs)) * acos(cos_n);
-
-        // Clamp horizons against the surface (samples below the surface
-        // are self-occluded, not geometry occlusion)
-        h_pos = clamp(max(h_pos, n_angle), 0.0, HALF_PI);
-        h_neg = clamp(max(h_neg, -n_angle), 0.0, HALF_PI);
-
-        // Accumulate cosine-weighted visibility for this slice
-        ao += gtao_slice_visibility(h_pos, h_neg, n_angle);
+        // Accumulate cosine-weighted visibility, weighted by projected normal length.
+        // n_proj_len compensates for the foreshortening of the normal projection onto
+        // the slice plane — slices perpendicular to the normal's tilt contribute less.
+        ao += n_proj_len * gtao_slice_visibility(h_pos, h_neg, n_angle);
     }
 
     // Average over all directions

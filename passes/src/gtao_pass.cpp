@@ -27,9 +27,10 @@ namespace himalaya::passes {
         uint32_t steps_per_dir;
         float bias;
         float intensity;
+        uint32_t frame_index;
     };
 
-    static_assert(sizeof(GTAOPushConstants) == 20);
+    static_assert(sizeof(GTAOPushConstants) == 24);
 
     // ---- Workgroup size (must match gtao.comp local_size) ----
 
@@ -160,6 +161,7 @@ namespace himalaya::passes {
                              .steps_per_dir = ctx.ao_config->steps_per_dir,
                              .bias = ctx.ao_config->bias,
                              .intensity = ctx.ao_config->intensity,
+                             .frame_index = ctx.frame_index,
                          };
                          cmd.push_constants(pipeline_.layout, VK_SHADER_STAGE_COMPUTE_BIT,
                                             &pc, sizeof(pc));
