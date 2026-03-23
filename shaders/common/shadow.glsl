@@ -285,8 +285,12 @@ void blocker_search(ShadowProjData proj, int cascade, float rotation,
  * @return Shadow factor: 1.0 = fully lit, 0.0 = fully in shadow.
  */
 float sample_shadow_pcss(ShadowProjData proj, int cascade) {
-    // Per-pixel rotation angle — computed once, shared by blocker search and PCF
-    float rotation = interleaved_gradient_noise(gl_FragCoord.xy) * 6.2831853;
+    // Per-pixel rotation angle with temporal variation — TAA accumulates
+    // different rotations across frames, effectively multiplying sample count.
+    // Golden ratio fractional offset decorrelates successive frames.
+    float noise = fract(interleaved_gradient_noise(gl_FragCoord.xy)
+                        + float(global.frame_index % 64u) * 0.6180339887);
+    float rotation = noise * 6.2831853;
 
     // Step 1: Blocker search
     float avg_blocker, num_blockers;

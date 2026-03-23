@@ -755,6 +755,7 @@ namespace himalaya::app {
         // --- Phase 5 matrices ---
         ubo_data.inv_projection = glm::inverse(input.camera.projection);
         ubo_data.prev_view_projection = prev_view_projection_;
+        ubo_data.frame_index = input.frame_index;
 
         // --- Shadow fields ---
         ubo_data.shadow_normal_offset = input.shadow_config.normal_offset;

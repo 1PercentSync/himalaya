@@ -296,6 +296,8 @@ namespace himalaya::framework {
         // ---- Phase 5 fields ----
         glm::mat4 inv_projection{}; ///< offset 720 — depth → view-space position reconstruction (GTAO)
         glm::mat4 prev_view_projection{}; ///< offset 784 — temporal reprojection (current world → prev UV)
+        uint32_t frame_index = 0; ///< offset 848 — current frame-in-flight index (PCSS temporal noise, etc.)
+        uint32_t _phase5_pad[3]{}; ///< offset 852 — pad to 864 (vec4 alignment)
     };
 
     /**
