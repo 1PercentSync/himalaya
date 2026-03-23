@@ -339,7 +339,7 @@ sun_dir = (cos(φ)·sin(θ), sin(φ), -cos(φ)·cos(θ))
 
 具体的三角函数符号约定需要对照项目的 equirect-to-cubemap shader 确认，确保 HDR Sun 方向与天空盒中太阳的视觉位置精确对齐。
 
-**宽高信息**：IBL 类在预计算时记录原始 equirect 分辨率，通过 `equirect_width()` / `equirect_height()` getter 暴露。
+**宽高信息**：`init()` 开头用 `stbi_info()` 只读 HDR 文件头获取宽高（不加载像素数据），存入成员变量，通过 `equirect_width()` / `equirect_height()` getter 暴露。这样缓存路径和计算路径均无需额外处理——尺寸获取独立于 `load_equirect()` 和 KTX2 缓存逻辑。
 
 **无坐标时行为**：保持 HdrSun 模式，坐标默认 (0, 0)，对应 HDR 左上角方向。用户通过 UI 输入正确坐标后自动保存。
 
