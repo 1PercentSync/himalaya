@@ -23,6 +23,9 @@
 | Roughness buffer | DepthPrePass 新增 R8 输出 | GTAO SO + M2 SSR |
 | Contact Shadows | Screen-space ray march + 深度自适应 thickness + 距离衰减 + 无 temporal | 确定性输出，push constant 传光方向 |
 | Contact Shadows 多光源 | M1 单方向光单 dispatch 单 R8 | shader 不假设光源类型，M2 方案待定 |
+| HDR Sun 方向光 | 新增 `LightSourceMode::HdrSun`，equirectangular 像素坐标 → 方向 → `rotate_y(ibl_yaw_)` | 方向光与天空盒太阳对齐，IBL 旋转时同步 |
+| 色温模型 | Kelvin → 线性 RGB（2000K~12000K），Fallback + HDR Sun 均适用 | 统一的物理色温控制，替代固定白色 |
+| HDR Sun 持久化 | `config.json` 存 HDR 路径 → 像素坐标映射 | 切换 HDR 时自动恢复已标记的太阳位置 |
 
 ---
 
@@ -305,3 +308,70 @@ GTAO 计算 SO 用（Step 12），M2 SSR 复用同一 buffer。
 - Push constant 传光方向：shader 不假设光源类型
 
 **多光源**：M1 单方向光单 dispatch 单 R8。Push constant 传光方向使 shader 不假设光源类型，M2 多光源方案待定。
+
+---
+
+## HDR Sun 方向光
+
+### 光源模式扩展
+
+**选择：新增 `LightSourceMode::HdrSun`，与 Scene / Fallback / None 并列**
+
+现有方向光模式中，Scene 依赖 glTF 灯光数据，Fallback 由用户手动调整 yaw/pitch。HDR Sun 从 HDR 环境贴图中太阳的像素坐标推导方向，与 IBL 旋转耦合。
+
+三种模式解决不同场景：
+- **Scene**：glTF 文件自带方向光，直接使用
+- **Fallback**：无 glTF 灯光时手动调整方向，灵活但与天空盒不关联
+- **HDR Sun**：方向光方向由 HDR 太阳位置决定，旋转 IBL 时方向光同步跟随，确保光影与天空一致
+
+### Equirectangular 坐标转换
+
+HDR 环境贴图使用 equirectangular 投影。像素坐标 (x, y) 到方向向量的转换：
+
+```
+θ = (x / width) * 2π            // 水平角（经度，0 → 2π）
+φ = π/2 - (y / height) * π      // 垂直角（纬度，π/2 → -π/2）
+
+sun_dir = (cos(φ)·sin(θ), sin(φ), -cos(φ)·cos(θ))
+```
+
+`sun_dir` 是 HDR 空间中指向太阳的方向（IBL 旋转前）。每帧应用 `rotate_y(sun_dir, sin(ibl_yaw_), cos(ibl_yaw_))` 得到世界空间太阳方向，取反作为 `DirectionalLight.direction`（光线传播方向）。
+
+具体的三角函数符号约定需要对照项目的 equirect-to-cubemap shader 确认，确保 HDR Sun 方向与天空盒中太阳的视觉位置精确对齐。
+
+**宽高信息**：IBL 类在预计算时记录原始 equirect 分辨率，通过 `equirect_width()` / `equirect_height()` getter 暴露。
+
+**无坐标时行为**：保持 HdrSun 模式，坐标默认 (0, 0)，对应 HDR 左上角方向。用户通过 UI 输入正确坐标后自动保存。
+
+### 色温模型
+
+**选择：Kelvin → 线性 RGB 转换函数，Fallback 和 HDR Sun 模式共用**
+
+- 范围：2000K（烛光暖橙）~ 12000K（蓝天冷白），默认 6500K（D65 标准光源）
+- 输出：线性空间 RGB，归一化到 (1,1,1) 附近（6500K ≈ 白色）
+- 算法：基于 CIE 色彩匹配函数的分段多项式近似（Tanner Helland 或类似方法）
+- 位置：`framework/color_utils.h`（渲染相关的颜色科学工具）
+
+Fallback 模式原来固定 `color = vec3(1.0f)`，改为 `color = color_temperature_to_rgb(fallback_light_color_temp_)`。HDR Sun 模式同理。两种模式各自独立的色温参数。
+
+**为什么不采样 HDR 像素颜色**：IBL 预计算后原始 equirect 像素数据已释放（仅保留 cubemap），恢复需要额外保留内存或重新读取文件。色温滑条简单且可控，用户可直接调到视觉上匹配天空的色调。M2 可考虑加载时采样太阳区域自动推导色温。
+
+### 持久化策略
+
+**选择：扩展 `AppConfig`，config.json 新增 `hdr_sun_coords` 字段**
+
+```json
+{
+  "scene_path": "...",
+  "env_path": "...",
+  "hdr_sun_coords": {
+    "D:/HDR/meadow.hdr": [4865, 939],
+    "D:/HDR/studio.hdr": [2048, 512]
+  }
+}
+```
+
+- **Per-HDR**：仅像素坐标 (x, y)，因为太阳位置是 HDR 图片的固有属性
+- **全局**：色温、强度、投影设置属于用户偏好，不随 HDR 切换
+- 切换 HDR 时自动查找已存坐标；修改坐标时自动 `save_config()`
+- key 使用 HDR 绝对路径字符串（与 `env_path` 一致）

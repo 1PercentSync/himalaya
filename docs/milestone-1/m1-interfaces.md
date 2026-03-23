@@ -47,7 +47,8 @@ framework/
 │   ├── scene_data.h             # 渲染列表、光源、探针数据结构定义（纯头文件）
 │   ├── culling.h                # 视锥剔除
 │   ├── shadow.h                 # CSM cascade 计算（PSSM 分割、正交投影、texel snapping）
-│   └── imgui_backend.h          # ImGui 集成
+│   ├── imgui_backend.h          # ImGui 集成
+│   └── color_utils.h            # 色温 → 线性 RGB 转换
 └── src/
     └── ...
 ```
@@ -90,14 +91,16 @@ app/
 │   ├── renderer.h               # 渲染子系统（RG 编排、pass 管理、GPU 数据填充）
 │   ├── scene_loader.h           # glTF 加载 → 渲染列表
 │   ├── camera_controller.h      # 自由漫游相机控制
-│   └── debug_ui.h               # ImGui 面板、各 Pass 参数调整
+│   ├── debug_ui.h               # ImGui 面板、各 Pass 参数调整
+│   └── config.h                 # 应用配置持久化（scene/env 路径、HDR Sun 坐标）
 └── src/
     ├── main.cpp                 # 入口
     ├── application.cpp
     ├── renderer.cpp
     ├── scene_loader.cpp
     ├── camera_controller.cpp
-    └── debug_ui.cpp
+    ├── debug_ui.cpp
+    └── config.cpp
 ```
 
 App 层拥有 GLFW 窗口，传 `GLFWwindow*` 给 RHI 创建 Surface。Application 持有 RHI 基础设施和 App 模块，Renderer 持有渲染子系统，详见 `m1-design-decisions-core.md`「App 层设计」。
@@ -571,6 +574,10 @@ public:
     BindlessIndex brdf_lut_index() const;
     BindlessIndex skybox_cubemap_index() const;  // 中间 cubemap，用于 Skybox Pass
     uint32_t prefiltered_mip_count() const;
+
+    /// 原始 equirectangular 输入图像的尺寸（HDR Sun 坐标转换用）
+    uint32_t equirect_width() const;
+    uint32_t equirect_height() const;
 };
 ```
 
@@ -1478,5 +1485,60 @@ public:
     // setup() 内部创建 R8 roughness managed image
     // record() 声明 roughness 为额外 color attachment 输出
     // on_sample_count_changed() 同步更新 roughness sample count
+};
+```
+
+#### 色温工具函数（阶段五 Step 10c 引入）
+
+定义在 `framework/color_utils.h`。纯函数，无状态。
+
+```cpp
+namespace himalaya::framework {
+    /// Kelvin → 线性空间 RGB。范围 2000K~12000K，6500K ≈ (1,1,1)。
+    /// 基于 CIE 色彩匹配函数的分段多项式近似。
+    glm::vec3 color_temperature_to_rgb(float kelvin);
+}
+```
+
+#### AppConfig 扩展（阶段五 Step 10c）
+
+```cpp
+struct AppConfig {
+    std::string scene_path;
+    std::string env_path;
+
+    /// HDR 文件路径 → 太阳像素坐标 (x, y) 映射。
+    /// key 为 HDR 绝对路径（与 env_path 格式一致）。
+    std::unordered_map<std::string, std::pair<int, int>> hdr_sun_coords;
+};
+```
+
+#### LightSourceMode 扩展（阶段五 Step 10c）
+
+```cpp
+enum class LightSourceMode : uint8_t {
+    Scene,    ///< glTF 场景方向光
+    Fallback, ///< 用户手动 yaw/pitch 方向光
+    HdrSun,   ///< HDR 太阳坐标推导方向，随 IBL 旋转同步
+    None,     ///< 无方向光（仅 IBL）
+};
+```
+
+#### DebugUIContext 扩展（阶段五 Step 10c）
+
+```cpp
+struct DebugUIContext {
+    // ... 已有字段 ...
+
+    // --- Step 10c: HDR Sun ---
+    int& hdr_sun_x;                ///< HDR 太阳 X 像素坐标（mutable）
+    int& hdr_sun_y;                ///< HDR 太阳 Y 像素坐标（mutable）
+    float& hdr_sun_intensity;      ///< HDR Sun 光强（mutable）
+    float& hdr_sun_color_temp;     ///< HDR Sun 色温 Kelvin（mutable）
+    bool& hdr_sun_cast_shadows;    ///< HDR Sun 投影开关（mutable）
+    bool has_hdr;                  ///< 是否有已加载的 HDR 环境
+
+    // --- Step 10c: Fallback 色温 ---
+    float& fallback_color_temp;    ///< Fallback 光色温 Kelvin（mutable）
 };
 ```
