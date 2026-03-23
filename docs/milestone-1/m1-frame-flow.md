@@ -65,9 +65,14 @@ Contact Shadows Pass (compute)
   输出：Contact Shadow Mask（R8）
   注：与 GTAO 无数据依赖，RG 不插入 barrier，GPU 可重叠执行
 
+AO Spatial Blur Pass (compute)
+  输入：AO Texture（噪声版）
+  输出：AO Texture（空间滤波后，RG8）
+  注：5×5 edge-aware bilateral blur，深度驱动边缘权重
+
 AO Temporal Filter Pass (compute)
-  输入：AO Texture（当前帧）、AO History（上一帧）、Depth Buffer、Depth History（上一帧）
-  输出：AO Texture（RG8 滤波后）、AO History（更新）
+  输入：AO Texture（空间滤波后）、AO History（上一帧）、Depth Buffer、Depth History（上一帧）
+  输出：AO Texture（RG8 时域滤波后）、AO History（更新）
 ```
 
 ### 阶段五：主光照
@@ -164,8 +169,9 @@ Color Grading Pass
 | Depth History（单采样） | 上一帧 Depth Resolve（RG temporal swap） | AO Temporal Filter（prev depth rejection） | 帧间（temporal） |
 | Normal Buffer（单采样） | Normal Resolve | GTAO | 帧内 |
 | Roughness Buffer（R8） | Depth PrePass | GTAO（specular occlusion 计算） | 帧内 |
-| AO Texture（RG8 噪声版） | GTAO Pass | AO Temporal Filter | 帧内 |
-| AO Texture（RG8 滤波后） | AO Temporal Filter | Forward Pass | 帧内 |
+| AO Texture（RG8 噪声版） | GTAO Pass | AO Spatial Blur | 帧内 |
+| AO Texture（RG8 空间滤波后） | AO Spatial Blur | AO Temporal Filter | 帧内 |
+| AO Texture（RG8 时域滤波后） | AO Temporal Filter | Forward Pass | 帧内 |
 | AO History（RG8） | AO Temporal Filter | 下一帧 AO Temporal Filter | 帧间（temporal） |
 | Contact Shadow Mask（R8） | Contact Shadows Pass | Forward Pass | 帧内 |
 | HDR Color Buffer（MSAA） | Forward Pass | Transparent Pass、MSAA Resolve | 帧内 |

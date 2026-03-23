@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段五 — 屏幕空间效果
-- **进度**：Step 10 完成（42/~54）
+- **进度**：Step 10 完成，Step 10a/10b 待做（42/~61）
 
 ### 下一个任务
 
-Step 11 第一小项：R8 roughness managed image 创建 + on_sample_count_changed 适配
+Step 10a 第一小项：重构 horizon search 流程：法线投影移到搜索循环之前（每 slice 先投影再搜索）
 
 ---
 

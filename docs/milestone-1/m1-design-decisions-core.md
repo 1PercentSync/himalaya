@@ -367,12 +367,17 @@ float shadow_distance_fade(float view_depth);
 
 Feature 层用 `ao`（RenderFeatures、feature_flags、DebugUI、config 结构体），Implementation 层用 `gtao`（shader 文件名、pass 类名）。
 
+### AO 算法
+
+GTAO horizon search + cosine-weighted 解析积分。Step 10a 修正：投影法线长度权重、正确的切平面极限初始化/falloff、thickness heuristic（薄物体光晕）、帧间噪声变化。Step 10b 增强：二次步进分布、R1 步进抖动、5×5 edge-aware bilateral spatial blur。
+
 ### AO 集成
 
 - **Diffuse indirect**：`ssao × material_ao` + Jimenez 2016 multi-bounce 色彩补偿（浅色表面压暗减轻）
 - **Specular indirect**：仅由 SO 控制（material AO 不参与——标量 AO 乘方向相关的 specular 物理不正确）
 - SO 方案 B1：GTAO 读 roughness buffer + 重建 reflection direction，per-direction 评估 specular cone 与 horizon 重叠，输出 RG8 G 通道
 - 仅调制间接光（IBL diffuse + IBL specular），直接光已有 shadow map + contact shadows 覆盖
+- 管线：GTAO → Spatial Blur → Temporal Filter → Forward 采样
 
 ### Contact Shadows
 

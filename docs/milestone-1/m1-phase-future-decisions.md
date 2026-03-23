@@ -43,3 +43,23 @@
 ## RenderFeatures 后处理扩展（阶段八构想，来自阶段四规划）
 
 阶段四设计 RenderFeatures 机制时预留了后处理 pass 的运行时开关扩展空间（阶段八 Bloom、Vignette 等后处理 pass 各自的 bool flag）。
+
+---
+
+## GTAO 深度 MIP 层级（M1 末尾评估，来自阶段五 Step 10 审查）
+
+当前 GTAO 直接采样全分辨率深度。大半径时远处步进的纹理缓存命中率低。XeGTAO 构建 5 级深度 MIP 层级（偏向远端的加权滤波器），远处步进读粗 MIP，缓存效率显著提升。
+
+方案概要：新增 depth prefilter compute pass，输入硬件深度 → 输出线性 view-space depth 的 5 级 MIP 链（R16F 或 R32F）。GTAO shader 按步进距离选择 MIP（`mipLevel = clamp(log2(offsetLength) − offset, 0, 4)`）。
+
+M1 分辨率和默认半径（0.5m）下缓存压力不显著。在 M1 所有 Step 完成后进行性能评估，若 GTAO pass 耗时超预期再实施。
+
+---
+
+## Visibility Bitmask AO / VBAO（潜在升级路径，来自阶段五 Step 10 审查）
+
+GTAO 的 heightfield 假设将每个可见表面视为无限厚。Thickness heuristic（Step 10a）能缓解但不能根治薄物体（围栏、密集植被）的光晕问题。
+
+Visibility Bitmask（Therrien et al., 2023）将 GTAO 的两个 horizon 角替换为 32-bit 遮挡/可见扇区掩码，允许光线穿过恒定厚度的表面背后。Bevy 引擎在 v0.15 从 GTAO 迁移到此方案。
+
+这是核心算法替换（horizon search → bitmask 积累），shader 需大幅改写。仅在实测发现 thickness heuristic 不足以应对场景中的薄物体时实施，优先级在 M2 或更后。

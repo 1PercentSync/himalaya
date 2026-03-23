@@ -115,7 +115,7 @@ Irradiance Probes + SDF GI（条件性，依赖 SDF 基础设施）
 
 | 演进 | 方案 |
 |------|------|
-| Pass 1 | GTAO + per-effect temporal filtering（同时搭建 per-effect temporal 基础设施，SSGI/SSR 复用）+ specular occlusion + multi-bounce |
+| Pass 1 | GTAO + 空间降噪 + per-effect temporal filtering（同时搭建 per-effect temporal 基础设施，SSGI/SSR 复用）+ specular occlusion + multi-bounce |
 | Pass 2 | GTAO 调优（采样策略、M2 半分辨率 + upscaler 配合） |
 
 跳过 HBAO 和 Crytek SSAO，直接实现 GTAO。GTAO 与简单 SSAO 的架构完全相同（输入 depth+normal，输出 AO 标量），区别仅在 shader 采样逻辑（~40 行差异），避免 M2 替换丢弃品。烘焙 AO 随 Lightmap 和材质管线自然覆盖。

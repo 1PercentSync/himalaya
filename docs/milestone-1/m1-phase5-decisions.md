@@ -193,11 +193,64 @@ GTAO 读 roughness buffer + 重建 reflection direction，per-direction 评估 s
 
 GTAO 输出 RG8_UNORM：R = diffuse AO，G = specular occlusion。Step 7 先只写 R（G=0），Step 12 升级 B1 后写 RG。
 
+### GTAO 正确性修订（Step 10a）
+
+初始实现（Step 7）在测试中发现两类问题：深度不连续处的黑色光晕、倾斜表面 AO 强度偏差。审查后确认以下正确性问题，基于 XeGTAO（Intel 开源参考实现）和原始 GTAO 论文修正：
+
+**1. 缺失投影法线长度权重**
+
+GTAO 论文公式：`slice_visibility = n_proj_len × (â(h₀, γ) + â(h₁, γ))`。初始实现遗漏了 `n_proj_len` 因子。当法线与 slice 平面接近垂直时，投影法线长度趋近 0，该 slice 本不应贡献 AO，但缺失权重导致所有 slice 等权参与。对倾斜表面（如地面 + 水平 slice）AO 强度偏差明显。
+
+**2. Horizon 初始化与 falloff 目标**
+
+初始实现将 horizon cosine 初始化为固定 `bias`（0.01），falloff 也衰减到 `bias`。正确做法（XeGTAO）：先投影法线到 slice 平面得到角度 γ，然后：
+- 正方向初始化为 `cos(γ + π/2) = -sin(γ)`
+- 负方向初始化为 `cos(-γ + π/2) = sin(γ)`
+
+这使得初始 horizon 和 falloff 目标反映实际表面几何。当 γ≈0（表面朝向相机）时，初始值≈0，与原始 `bias=0.01` 近似等效，但当 γ 显著时（倾斜表面）差异很大。
+
+**修复需重构流程**：法线投影从搜索循环后移到循环前（每 slice 先投影，再用切平面极限初始化 horizon，再搜索）。
+
+**3. Thickness heuristic（薄物体光晕）**
+
+Heightfield 假设将每个可见表面视为无限厚——薄物体（围栏、柱子）背后的深度回退不会降低 horizon。初始实现的 `max()` 操作无法"放松"已建立的高 horizon。
+
+添加 thickness heuristic：当后续样本的 horizon cosine 低于当前最大值（深度回退），用可控强度衰减当前最大值。这允许 horizon 在通过薄物体后回退，减少虚假遮蔽。
+
+**4. 帧间噪声变化**
+
+初始 IGN 噪声是纯像素坐标确定性的，每帧相同像素产生相同噪声模式。Push constants 新增 `frame_index`，噪声计算加入帧偏移（`pixel + frame_index × constant`），使 temporal filter 能跨帧积累不同方向/步进偏移的采样，等效方向数从 N 提升到 N × 帧数。
+
+### AO 采样优化（Step 10b）
+
+**步进分布**：从线性 `t = j` 改为二次幂 `t = (j/N)²×N`，将更多样本集中在像素附近（细缝和角落 AO 最需要近处精度）。XeGTAO 的自动调优系统确认最优幂次约为 2.0。
+
+**步进抖动**：新增 R1 quasi-random 序列对每个步进位置施加偏移（与方向抖动的 IGN 正交），将步进量化 banding 打散为高频噪声，由空间/temporal filter 高效去除。
+
+**Falloff 形状**：从 `1 − d²/r²`（从 0 距离就开始衰减）改为 XeGTAO 风格——内部 ~38% 半径保持 100% 权重，外部 ~62% 线性衰减。近处细节保留完整，远处更积极截断。
+
+### AO 空间降噪（Step 10b）
+
+**选择：5×5 edge-aware bilateral blur**
+
+初始实现依赖纯 temporal filter 降噪。帧间噪声变化和采样优化提高了每帧噪声方差，需要空间降噪先平滑帧内噪声，减轻 temporal filter 负担（降低所需 blend factor → 更少 ghosting）。
+
+算法：5×5 kernel，权重由相邻像素间的深度差异决定（深度差异大 → 边缘 → 权重趋零），不跨越深度不连续处模糊（天然限制光晕扩散范围）。对称边缘权重：A→B 的边缘权重乘以 B→A 的权重，确保滤波稳定。
+
+**管线变更**：GTAO → **AO Spatial Blur** → AO Temporal。新增 `ao_blurred`（RG8）managed image 作为 spatial blur 输出 / temporal filter 输入。AO Temporal 的输入从 `ao_noisy` 改为 `ao_blurred`。
+
+**AOSpatialPass Set 3 push descriptor layout（2 bindings）**：
+
+| Binding | 类型 | 资源 | Sampler |
+|---------|------|------|---------|
+| 0 | `image2D` (storage, rg8) | ao_blurred (output) | — |
+| 1 | `sampler2D` (sampled) | ao_noisy (input) | nearest_clamp |
+
 ### AO Temporal Filter
 
-**选择：三层 rejection + 无 blur pass**
+**选择：三层 rejection + 空间降噪后 temporal**
 
-GTAO 原始噪声低（结构化搜索 + 解析积分），temporal filter 即可得到干净结果，不需要额外空间模糊 pass。
+GTAO 经空间降噪（5×5 bilateral blur）后进入 temporal filter。空间降噪先平滑帧内噪声，temporal filter 在干净输入上做跨帧积累，blend factor 可适当降低以减少 ghosting。
 
 三层 rejection：
 1. **UV 有效性**：prev_uv 越界 → reject

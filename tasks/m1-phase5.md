@@ -76,6 +76,25 @@
 - [x] Debug render mode 新增 DEBUG_MODE_AO_SSAO + DEBUG_MODE_AO 改为复合结果
 - [x] DebugUI AO 面板补充 temporal blend 滑条
 
+## Step 10a：GTAO 正确性修复
+
+- [x] 重构 horizon search 流程：法线投影移到搜索循环之前（每 slice 先投影再搜索）
+- [x] 修复 `n_proj_len` 缺失：slice 可见性乘以投影法线长度
+- [x] Horizon 初始化改为切平面极限 `cos(γ ± π/2)`，替代固定 bias
+- [x] Falloff 目标改为切平面极限（而非固定 bias），使衰减行为与视角无关
+- [x] 添加 thickness heuristic：后续样本深度回退时衰减 horizon（EMA 或类似机制）
+- [x] Push constants 新增 `frame_index`，IGN 噪声加入帧间变化
+
+## Step 10b：GTAO 质量增强
+
+- [ ] 步进分布改为二次幂曲线（样本集中在像素附近）
+- [ ] 添加 R1 序列步进抖动（消除 banding）
+- [ ] Falloff 形状调整：flat inner + steep outer（XeGTAO 风格）
+- [ ] 新增 `ao_spatial.comp`：5×5 edge-aware bilateral blur
+- [ ] 新增 `AOSpatialPass` 类（setup / record / destroy / rebuild_pipelines）
+- [ ] Renderer 编排：GTAO → AO Spatial Blur → AO Temporal 管线串联
+- [ ] 新增 managed image `ao_blurred`（RG8）或复用 `ao_noisy` 作为 spatial blur 输出
+
 ## Step 11：Roughness Buffer
 
 - [ ] R8 roughness managed image 创建 + on_sample_count_changed 适配
