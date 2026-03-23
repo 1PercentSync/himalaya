@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段五 — 屏幕空间效果
-- **进度**：Step 10a 完成，Step 10b 前五项完成（53/~61）
+- **进度**：Step 10a 完成，Step 10b 完成（55/~61）
 
 ### 下一个任务
 
-Step 10b 第六小项：Renderer 编排：GTAO → AO Spatial Blur → AO Temporal 管线串联
+Step 11 第一小项：R8 roughness managed image 创建 + on_sample_count_changed 适配
 
 ---
 
