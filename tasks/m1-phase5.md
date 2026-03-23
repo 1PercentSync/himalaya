@@ -98,10 +98,10 @@
 ## Step 10c：HDR Sun 方向光 + 色温模式
 
 - [x] `color_temperature_to_rgb()` 工具函数（framework 层 `color_utils.h` / `color_utils.cpp`）
-- [ ] IBL 类新增 `equirect_width()` / `equirect_height()` getter
-- [ ] `LightSourceMode` 枚举新增 `HdrSun`，DebugUI combo 适配四项（Scene / Fallback / HDR Sun / None）
-- [ ] `AppConfig` 新增 `hdr_sun_coords` 持久化（HDR 路径 → 像素坐标映射）+ 序列化/反序列化
-- [ ] Application HDR Sun 成员 + `update()` 中 equirectangular 坐标 → 方向转换 + IBL 旋转耦合
+- [x] IBL 类新增 `equirect_width()` / `equirect_height()` getter
+- [x] `LightSourceMode` 枚举新增 `HdrSun`，DebugUI combo 适配四项（Scene / Fallback / HDR Sun / None）
+- [x] `AppConfig` 新增 `hdr_sun_coords` 持久化（HDR 路径 → 像素坐标映射）+ 序列化/反序列化
+- [x] Application HDR Sun 成员 + `update()` 中 equirectangular 坐标 → 方向转换 + IBL 旋转耦合
 - [ ] Fallback 模式新增色温支持（`fallback_light_color_temp_` + `color_temperature_to_rgb` 应用）
 - [ ] HDR Sun 模式新增色温支持（`hdr_sun_color_temp_` + `color_temperature_to_rgb` 应用）
 - [ ] DebugUI：HDR Sun 控件（Sun X/Y 输入、Intensity、Color Temp、Cast Shadows）+ Fallback 新增 Color Temp slider
