@@ -1,0 +1,173 @@
+#version 460
+
+/**
+ * @file ao_spatial.comp
+ * @brief AO spatial denoising compute shader — 5x5 edge-aware bilateral blur.
+ *
+ * Smooths GTAO output (ao_noisy) using Gaussian spatial weights combined
+ * with depth-based bilateral edge weights.  Path-accumulated edge weights
+ * prevent blurring across depth discontinuities and avoid "tunneling"
+ * through thin geometry (e.g., a 1-pixel edge between two same-depth
+ * surfaces is correctly blocked).
+ *
+ * Output: RG8 where R = blurred diffuse AO, G = blurred specular occlusion
+ * (G = 0.0 until Step 12 adds B1 specular occlusion).
+ *
+ * Workgroup: 8x8 (one thread per pixel, no shared memory).
+ */
+
+#include "common/bindings.glsl"
+#include "common/constants.glsl"
+
+layout(local_size_x = 8, local_size_y = 8) in;
+
+// ---- Set 3: push descriptors (per-dispatch I/O) ----
+
+layout(set = 3, binding = 0, rg8) uniform writeonly image2D ao_output;
+layout(set = 3, binding = 1) uniform sampler2D ao_input_tex;
+
+// ---- Constants ----
+
+/**
+ * 5x5 Gaussian kernel weights, sigma = 1.5.
+ * Pre-computed: exp(-(dx*dx + dy*dy) / (2 * 1.5 * 1.5)).
+ * Indexed as kGaussian[(dy+2) * 5 + (dx+2)].
+ */
+const float kGaussian[25] = float[25](
+    0.1691, 0.3292, 0.4111, 0.3292, 0.1691,  // dy = -2
+    0.3292, 0.6412, 0.8007, 0.6412, 0.3292,  // dy = -1
+    0.4111, 0.8007, 1.0000, 0.8007, 0.4111,  // dy =  0
+    0.3292, 0.6412, 0.8007, 0.6412, 0.3292,  // dy = +1
+    0.1691, 0.3292, 0.4111, 0.3292, 0.1691   // dy = +2
+);
+
+/**
+ * Relative depth threshold for edge detection.
+ * Depth difference exceeding this fraction of the reference depth
+ * produces zero edge weight.  Scene-scale independent.
+ */
+const float kDepthEdgeThreshold = 0.05;
+
+// ---- Depth utilities ----
+
+/**
+ * Convert raw Reverse-Z depth to linear view-space distance.
+ *
+ * Derivation from the perspective projection matrix:
+ *   depth = (P[2][2] * vz + P[3][2]) / (-vz)
+ *   => linear_distance = -vz = P[3][2] / (depth + P[2][2])
+ *
+ * @param d Raw depth value (Reverse-Z: near=1, far=0).
+ * @return Positive linear view-space distance from camera.
+ */
+float linearize_depth(float d) {
+    return global.projection[3][2] / (d + global.projection[2][2]);
+}
+
+/**
+ * Bilateral edge weight between two pixels based on linear depth.
+ *
+ * Uses relative depth comparison for scene-scale independence.
+ * Linear ramp from 1.0 (identical depth) to 0.0 (exceeds threshold).
+ *
+ * @param z1 Linear depth of first pixel.
+ * @param z2 Linear depth of second pixel.
+ * @return Edge weight in [0, 1].
+ */
+float depth_edge_weight(float z1, float z2) {
+    float diff = abs(z1 - z2);
+    float ref = max(z1, z2);
+    return clamp(1.0 - diff / (ref * kDepthEdgeThreshold), 0.0, 1.0);
+}
+
+// ---- Main ----
+
+void main() {
+    ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 size = ivec2(global.screen_size);
+
+    if (pixel.x >= size.x || pixel.y >= size.y) return;
+
+    // ---- Load 5x5 linearized depths ----
+
+    float depths[25]; // depths[(y+2) * 5 + (x+2)]
+    for (int dy = -2; dy <= 2; dy++) {
+        for (int dx = -2; dx <= 2; dx++) {
+            ivec2 p = clamp(pixel + ivec2(dx, dy), ivec2(0), size - 1);
+            depths[(dy + 2) * 5 + (dx + 2)] =
+                linearize_depth(texelFetch(rt_depth_resolved, p, 0).r);
+        }
+    }
+
+    // ---- Precompute adjacent edge weights ----
+
+    // Horizontal: h_edge[y * 4 + x] = weight between (x,y) and (x+1,y)
+    float h_edge[20];
+    for (int y = 0; y < 5; y++) {
+        for (int x = 0; x < 4; x++) {
+            h_edge[y * 4 + x] = depth_edge_weight(
+                depths[y * 5 + x], depths[y * 5 + x + 1]);
+        }
+    }
+
+    // Vertical: v_edge[y * 5 + x] = weight between (x,y) and (x,y+1)
+    float v_edge[20];
+    for (int y = 0; y < 4; y++) {
+        for (int x = 0; x < 5; x++) {
+            v_edge[y * 5 + x] = depth_edge_weight(
+                depths[y * 5 + x], depths[(y + 1) * 5 + x]);
+        }
+    }
+
+    // ---- Weighted blur with path-accumulated edge weights ----
+
+    vec2 total_ao = vec2(0.0);
+    float total_weight = 0.0;
+
+    for (int dy = -2; dy <= 2; dy++) {
+        for (int dx = -2; dx <= 2; dx++) {
+
+            // Accumulate edge weights along grid path (horizontal first,
+            // then vertical).  This prevents "tunneling" — even if the
+            // center and sample have similar depths, an intervening depth
+            // discontinuity drives the weight to zero.
+
+            float path_w = 1.0;
+
+            // Horizontal leg: center column (2) → target column (2+dx),
+            // staying at center row (2).
+            int cx = 2;
+            int tx = 2 + dx;
+            if (dx > 0) {
+                for (int x = cx; x < tx; x++)
+                    path_w *= h_edge[2 * 4 + x];       // row 2
+            } else {
+                for (int x = cx - 1; x >= tx; x--)
+                    path_w *= h_edge[2 * 4 + x];       // row 2
+            }
+
+            // Vertical leg: center row (2) → target row (2+dy),
+            // at target column (tx).
+            int ty = 2 + dy;
+            if (dy > 0) {
+                for (int y = 2; y < ty; y++)
+                    path_w *= v_edge[y * 5 + tx];      // column tx
+            } else {
+                for (int y = 1; y >= ty; y--)
+                    path_w *= v_edge[y * 5 + tx];      // column tx
+            }
+
+            float w = kGaussian[(dy + 2) * 5 + (dx + 2)] * path_w;
+
+            ivec2 p = clamp(pixel + ivec2(dx, dy), ivec2(0), size - 1);
+            vec2 ao_val = texelFetch(ao_input_tex, p, 0).rg;
+
+            total_ao += ao_val * w;
+            total_weight += w;
+        }
+    }
+
+    total_ao /= max(total_weight, EPSILON);
+
+    imageStore(ao_output, pixel, vec4(total_ao, 0.0, 0.0));
+}
