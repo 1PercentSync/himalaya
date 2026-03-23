@@ -58,6 +58,7 @@ CLAUDE.md 已自动加载，以下为额外必读：
 | `docs/archive/m1-phase3-plan.md` | M1 阶段三实现步骤（已完成） |
 | `tasks/archive/m1-phase3.md` | M1 阶段三任务清单（已完成） |
 | `docs/archive/pcss-reference.md` | PCSS 方向光实现参考资料 |
+| `docs/archive/gtao-reference.md` | GTAO 算法实现参考资料 |
 | `docs/archive/m1-phase4-plan.md` | M1 阶段四实现步骤（已完成） |
 | `tasks/archive/m1-phase4.md` | M1 阶段四任务清单（已完成） |
 | `docs/archive/m1-phase1-decisions.md` | M1 阶段一设计决策（已完成） |
