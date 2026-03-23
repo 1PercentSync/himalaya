@@ -91,7 +91,7 @@
 - [x] 添加 R1 序列步进抖动（消除 banding）
 - [x] Falloff 形状调整：flat inner + steep outer（XeGTAO 风格）
 - [x] 新增 `ao_spatial.comp`：5×5 edge-aware bilateral blur
-- [ ] 新增 `AOSpatialPass` 类（setup / record / destroy / rebuild_pipelines）
+- [x] 新增 `AOSpatialPass` 类（setup / record / destroy / rebuild_pipelines）
 - [ ] Renderer 编排：GTAO → AO Spatial Blur → AO Temporal 管线串联
 - [ ] 新增 managed image `ao_blurred`（RG8）作为 spatial blur 输出
 

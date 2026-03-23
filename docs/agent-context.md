@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段五 — 屏幕空间效果
-- **进度**：Step 10a 完成，Step 10b 前四项完成（52/~61）
+- **进度**：Step 10a 完成，Step 10b 前五项完成（53/~61）
 
 ### 下一个任务
 
-Step 10b 第五小项：新增 `AOSpatialPass` 类（setup / record / destroy / rebuild_pipelines）
+Step 10b 第六小项：Renderer 编排：GTAO → AO Spatial Blur → AO Temporal 管线串联
 
 ---
 
