@@ -251,6 +251,15 @@ namespace himalaya::framework {
         rm_ = &rm;
         dm_ = &dm;
 
+        // Read equirect dimensions from HDR header (no pixel decode)
+        {
+            int w = 0, h = 0;
+            if (!hdr_path.empty() && stbi_info(hdr_path.c_str(), &w, &h, nullptr)) {
+                equirect_width_ = static_cast<uint32_t>(w);
+                equirect_height_ = static_cast<uint32_t>(h);
+            }
+        }
+
         // --- Phase 1: Check caches (CPU only, before any GPU work) ---
         const auto hdr_hash = content_hash(std::filesystem::path(hdr_path));
 
@@ -607,5 +616,13 @@ namespace himalaya::framework {
 
     uint32_t IBL::prefiltered_mip_count() const {
         return prefiltered_mip_count_;
+    }
+
+    uint32_t IBL::equirect_width() const {
+        return equirect_width_;
+    }
+
+    uint32_t IBL::equirect_height() const {
+        return equirect_height_;
     }
 } // namespace himalaya::framework

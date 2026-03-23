@@ -90,6 +90,12 @@ namespace himalaya::framework {
         /** @brief Number of mip levels in the prefiltered environment map (for roughness → mip mapping). */
         [[nodiscard]] uint32_t prefiltered_mip_count() const;
 
+        /** @brief Original equirectangular input image width in pixels. 0 if no HDR loaded. */
+        [[nodiscard]] uint32_t equirect_width() const;
+
+        /** @brief Original equirectangular input image height in pixels. 0 if no HDR loaded. */
+        [[nodiscard]] uint32_t equirect_height() const;
+
     private:
         /** @brief Deferred cleanup function list, executed after end_immediate(). */
         using DeferredCleanup = std::vector<std::function<void()> >;
@@ -271,5 +277,9 @@ namespace himalaya::framework {
 
         // --- Prefiltered mip count ---
         uint32_t prefiltered_mip_count_ = 0;
+
+        // --- Original equirect dimensions (for HDR Sun coordinate conversion) ---
+        uint32_t equirect_width_ = 0;
+        uint32_t equirect_height_ = 0;
     };
 } // namespace himalaya::framework
