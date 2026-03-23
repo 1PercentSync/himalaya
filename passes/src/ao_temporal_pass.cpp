@@ -46,7 +46,7 @@ namespace himalaya::passes {
 
         // Create Set 3 push descriptor layout:
         //   binding 0 = storage image (ao_filtered output)
-        //   binding 1 = combined image sampler (ao_noisy input)
+        //   binding 1 = combined image sampler (ao_blurred input)
         //   binding 2 = combined image sampler (ao_history input)
         //   binding 3 = combined image sampler (depth_prev input)
         const std::array bindings = {
@@ -139,7 +139,7 @@ namespace himalaya::passes {
     void AOTemporalPass::record(framework::RenderGraph &rg,
                                 const framework::FrameContext &ctx) const {
         // Declare resource usage:
-        //   read: depth (Set 2 for reprojection), ao_noisy, ao_history, depth_prev
+        //   read: depth (Set 2 for reprojection), ao_blurred, ao_history, depth_prev
         //   write: ao_filtered
         const std::array resources = {
             framework::RGResourceUsage{
@@ -148,7 +148,7 @@ namespace himalaya::passes {
                 framework::RGStage::Compute,
             },
             framework::RGResourceUsage{
-                ctx.ao_noisy,
+                ctx.ao_blurred,
                 framework::RGAccessType::Read,
                 framework::RGStage::Compute,
             },
@@ -187,10 +187,10 @@ namespace himalaya::passes {
                          const auto ao_filtered_handle = rg.get_image(ctx.ao_filtered);
                          cmd.push_storage_image(*rm_, pipeline_.layout, 3, 0, ao_filtered_handle);
 
-                         // Push Set 3 binding 1: ao_noisy sampled input
-                         const auto ao_noisy_handle = rg.get_image(ctx.ao_noisy);
+                         // Push Set 3 binding 1: ao_blurred sampled input (spatial blur output)
+                         const auto ao_blurred_handle = rg.get_image(ctx.ao_blurred);
                          cmd.push_sampled_image(*rm_, pipeline_.layout, 3, 1,
-                                               ao_noisy_handle, nearest_sampler_);
+                                               ao_blurred_handle, nearest_sampler_);
 
                          // Push Set 3 binding 2: ao_history sampled input
                          const auto ao_history_handle = rg.get_image(ctx.ao_history);

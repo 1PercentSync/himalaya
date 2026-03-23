@@ -8,7 +8,7 @@
  * using reprojection and three-layer rejection (UV validity, depth consistency,
  * neighborhood clamp).
  *
- * Input:  ao_noisy (Set 3 push sampled), ao_history (Set 3 push sampled),
+ * Input:  ao_blurred (Set 3 push sampled), ao_history (Set 3 push sampled),
  *         depth_prev (Set 3 push sampled), depth (Set 2 binding 1).
  * Output: ao_filtered (RG8, Set 3 push storage image).
  */

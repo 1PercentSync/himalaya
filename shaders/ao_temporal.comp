@@ -4,8 +4,8 @@
  * @file ao_temporal.comp
  * @brief AO temporal filter compute shader.
  *
- * Blends current-frame GTAO output (ao_noisy) with the previous frame's
- * filtered result (ao_history) using reprojection and multi-layer rejection.
+ * Blends current-frame spatially denoised AO (ao_blurred) with the previous
+ * frame's filtered result (ao_history) using reprojection and multi-layer rejection.
  *
  * Output: RG8 where R = temporally filtered diffuse AO,
  * G = 0.0 (specular occlusion passthrough, Step 12 adapts dual-channel).
@@ -21,7 +21,7 @@ layout(local_size_x = 8, local_size_y = 8) in;
 // ---- Set 3: push descriptors (per-dispatch I/O) ----
 
 layout(set = 3, binding = 0, rg8) uniform writeonly image2D ao_output;
-layout(set = 3, binding = 1) uniform sampler2D ao_noisy_tex;
+layout(set = 3, binding = 1) uniform sampler2D ao_input_tex;
 layout(set = 3, binding = 2) uniform sampler2D ao_history_tex;
 layout(set = 3, binding = 3) uniform sampler2D depth_prev_tex;
 
@@ -120,7 +120,7 @@ float evaluate_rejection(ivec2 pixel, ivec2 size,
     for (int dy = -1; dy <= 1; ++dy) {
         for (int dx = -1; dx <= 1; ++dx) {
             ivec2 neighbor = clamp(pixel + ivec2(dx, dy), ivec2(0), size - 1);
-            float val = texelFetch(ao_noisy_tex, neighbor, 0).r;
+            float val = texelFetch(ao_input_tex, neighbor, 0).r;
             ao_min = min(ao_min, val);
             ao_max = max(ao_max, val);
         }
@@ -142,7 +142,7 @@ void main() {
     vec2 uv = (vec2(pixel) + 0.5) / global.screen_size;
 
     // Read current frame AO (R channel; G channel is 0.0 until Step 12)
-    float current_ao = texelFetch(ao_noisy_tex, pixel, 0).r;
+    float current_ao = texelFetch(ao_input_tex, pixel, 0).r;
 
     // Read current depth for reprojection
     float depth = texture(rt_depth_resolved, uv).r;

@@ -234,6 +234,20 @@ namespace himalaya::app {
                                                                     .mip_levels = 1,
                                                                 }, false);
 
+        // AO spatially denoised (RG8): written by AO Spatial, read by AO Temporal
+        managed_ao_blurred_ = render_graph_.create_managed_image("AO Blurred", {
+                                                                      .size_mode = framework::RGSizeMode::Relative,
+                                                                      .width_scale = 1.0f,
+                                                                      .height_scale = 1.0f,
+                                                                      .width = 0,
+                                                                      .height = 0,
+                                                                      .format = rhi::Format::R8G8Unorm,
+                                                                      .usage = rhi::ImageUsage::Storage |
+                                                                               rhi::ImageUsage::Sampled,
+                                                                      .sample_count = 1,
+                                                                      .mip_levels = 1,
+                                                                  }, false);
+
         // AO temporal-filtered output (RG8, temporal): written by AO Temporal, sampled via Set 2
         managed_ao_filtered_ = render_graph_.create_managed_image("AO Filtered", {
                                                                        .size_mode = framework::RGSizeMode::Relative,
@@ -468,6 +482,13 @@ namespace himalaya::app {
                          *descriptor_manager_,
                          shader_compiler_);
 
+        // --- AO Spatial blur compute pass ---
+        ao_spatial_pass_.setup(*ctx_,
+                               *resource_manager_,
+                               *descriptor_manager_,
+                               shader_compiler_,
+                               nearest_clamp_sampler_);
+
         // --- AO Temporal filter compute pass ---
         ao_temporal_pass_.setup(*ctx_,
                                 *resource_manager_,
@@ -506,6 +527,7 @@ namespace himalaya::app {
         skybox_pass_.destroy();
         tonemapping_pass_.destroy();
         gtao_pass_.destroy();
+        ao_spatial_pass_.destroy();
         ao_temporal_pass_.destroy();
 
         for (const auto ubo: global_ubo_buffers_) {
@@ -538,6 +560,7 @@ namespace himalaya::app {
         if (managed_msaa_normal_.valid())
             render_graph_.destroy_managed_image(managed_msaa_normal_);
         render_graph_.destroy_managed_image(managed_ao_noisy_);
+        render_graph_.destroy_managed_image(managed_ao_blurred_);
         render_graph_.destroy_managed_image(managed_ao_filtered_);
         render_graph_.destroy_managed_image(managed_contact_shadow_mask_);
         render_graph_.destroy_managed_image(managed_hdr_color_);
@@ -667,6 +690,7 @@ namespace himalaya::app {
         skybox_pass_.rebuild_pipelines();
         tonemapping_pass_.rebuild_pipelines();
         gtao_pass_.rebuild_pipelines();
+        ao_spatial_pass_.rebuild_pipelines();
         ao_temporal_pass_.rebuild_pipelines();
 
         spdlog::info("All shaders reloaded");
@@ -912,6 +936,8 @@ namespace himalaya::app {
         // Phase 5 AO/Contact Shadow resources
         const auto ao_noisy_resource = render_graph_.use_managed_image(
             managed_ao_noisy_, VK_IMAGE_LAYOUT_UNDEFINED);
+        const auto ao_blurred_resource = render_graph_.use_managed_image(
+            managed_ao_blurred_, VK_IMAGE_LAYOUT_UNDEFINED);
         const auto ao_filtered_resource = render_graph_.use_managed_image(
             managed_ao_filtered_, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
         const auto ao_history_resource = render_graph_.get_history_image(managed_ao_filtered_);
@@ -936,6 +962,7 @@ namespace himalaya::app {
         frame_ctx.depth = depth_resource;
         frame_ctx.depth_prev = depth_prev_resource;
         frame_ctx.ao_noisy = ao_noisy_resource;
+        frame_ctx.ao_blurred = ao_blurred_resource;
         frame_ctx.ao_filtered = ao_filtered_resource;
         frame_ctx.ao_history = ao_history_resource;
         frame_ctx.ao_history_valid = render_graph_.is_history_valid(managed_ao_filtered_);
@@ -969,9 +996,10 @@ namespace himalaya::app {
         // --- Depth + Normal PrePass ---
         depth_prepass_.record(render_graph_, frame_ctx);
 
-        // --- AO passes (GTAO → AO Temporal, conditional on feature toggle) ---
+        // --- AO passes (GTAO → Spatial Blur → Temporal, conditional on feature toggle) ---
         if (input.features.ao) {
             gtao_pass_.record(render_graph_, frame_ctx);
+            ao_spatial_pass_.record(render_graph_, frame_ctx);
             ao_temporal_pass_.record(render_graph_, frame_ctx);
         }
 

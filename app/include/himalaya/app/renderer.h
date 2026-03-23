@@ -10,6 +10,7 @@
 #include <himalaya/framework/render_graph.h>
 #include <himalaya/framework/scene_data.h>
 #include <himalaya/framework/texture.h>
+#include <himalaya/passes/ao_spatial_pass.h>
 #include <himalaya/passes/ao_temporal_pass.h>
 #include <himalaya/passes/depth_prepass.h>
 #include <himalaya/passes/forward_pass.h>
@@ -264,6 +265,9 @@ namespace himalaya::app {
         /** @brief GTAO compute pass (horizon search AO). */
         passes::GTAOPass gtao_pass_{};
 
+        /** @brief AO spatial denoising compute pass (5x5 bilateral blur). */
+        passes::AOSpatialPass ao_spatial_pass_{};
+
         /** @brief AO temporal filter compute pass (reprojection + rejection + blend). */
         passes::AOTemporalPass ao_temporal_pass_{};
 
@@ -287,6 +291,9 @@ namespace himalaya::app {
 
         /** @brief GTAO raw output (RG8, non-temporal, Storage | Sampled). */
         framework::RGManagedHandle managed_ao_noisy_;
+
+        /** @brief Spatially denoised AO (RG8, non-temporal, Storage | Sampled). */
+        framework::RGManagedHandle managed_ao_blurred_;
 
         /** @brief AO temporal-filtered output (RG8, temporal, Storage | Sampled). */
         framework::RGManagedHandle managed_ao_filtered_;
