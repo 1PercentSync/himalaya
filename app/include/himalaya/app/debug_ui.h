@@ -25,13 +25,14 @@ namespace himalaya::app {
     /**
      * @brief Which directional light source is active.
      *
-     * Scene and Fallback are mutually exclusive. None disables all
-     * directional lights (IBL only). Application auto-selects on
+     * Scene, Fallback, and HdrSun are mutually exclusive. None disables
+     * all directional lights (IBL only). Application auto-selects on
      * scene load: Scene if glTF has lights, otherwise Fallback.
      */
     enum class LightSourceMode : uint8_t {
         Scene,    ///< Use scene's glTF directional lights.
         Fallback, ///< Use the user-controllable fallback light.
+        HdrSun,   ///< Derive direction from HDR sun pixel coordinates + IBL rotation.
         None,     ///< No directional lights (IBL only).
     };
 

@@ -71,6 +71,14 @@ namespace himalaya::app {
             if (json.contains("env_path") && json["env_path"].is_string()) {
                 config.env_path = json["env_path"].get<std::string>();
             }
+            if (json.contains("hdr_sun_coords") && json["hdr_sun_coords"].is_object()) {
+                for (auto& [key, val] : json["hdr_sun_coords"].items()) {
+                    if (val.is_array() && val.size() == 2
+                        && val[0].is_number_integer() && val[1].is_number_integer()) {
+                        config.hdr_sun_coords[key] = {val[0].get<int>(), val[1].get<int>()};
+                    }
+                }
+            }
 
             spdlog::info("Loaded config from {}", path.string());
         } catch (const std::exception& e) {
@@ -96,6 +104,11 @@ namespace himalaya::app {
                 nlohmann::json j;
                 j["scene_path"] = config.scene_path;
                 j["env_path"] = config.env_path;
+                nlohmann::json coords = nlohmann::json::object();
+                for (const auto& [path, xy] : config.hdr_sun_coords) {
+                    coords[path] = {xy.first, xy.second};
+                }
+                j["hdr_sun_coords"] = coords;
                 file << j.dump(2);
             }
 

@@ -212,6 +212,9 @@ namespace himalaya::app {
         /** @brief Returns the total GPU draw calls (vkCmdDrawIndexed) from the last frame. */
         [[nodiscard]] uint32_t last_draw_call_count() const;
 
+        /** @brief Returns the IBL module (read-only, for equirect dimensions etc.). */
+        [[nodiscard]] const framework::IBL &ibl() const;
+
         /** @brief Returns the current shadow map resolution (width = height). */
         [[nodiscard]] uint32_t shadow_resolution() const;
 

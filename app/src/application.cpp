@@ -5,7 +5,9 @@
 
 #include <himalaya/app/application.h>
 
+#include <himalaya/framework/color_utils.h>
 #include <himalaya/framework/culling.h>
+#include <himalaya/framework/ibl.h>
 #include <himalaya/framework/mesh.h>
 #include <himalaya/framework/scene_data.h>
 #include <himalaya/rhi/commands.h>
@@ -15,6 +17,7 @@
 
 #include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
+#include <glm/ext/scalar_constants.hpp>
 #include <imgui.h>
 #include <spdlog/spdlog.h>
 
@@ -100,6 +103,13 @@ namespace himalaya::app {
         light_source_mode_ = scene_loader_.directional_lights().empty()
                                  ? LightSourceMode::Fallback
                                  : LightSourceMode::Scene;
+
+        // Restore persisted HDR sun coordinates for the current environment
+        if (const auto it = config_.hdr_sun_coords.find(config_.env_path);
+            it != config_.hdr_sun_coords.end()) {
+            hdr_sun_x_ = it->second.first;
+            hdr_sun_y_ = it->second.second;
+        }
     }
 
     void Application::auto_position_camera() {
@@ -167,6 +177,17 @@ namespace himalaya::app {
         }
 
         config_.env_path = path;
+
+        // Restore persisted HDR sun coordinates for the new environment
+        if (const auto it = config_.hdr_sun_coords.find(path);
+            it != config_.hdr_sun_coords.end()) {
+            hdr_sun_x_ = it->second.first;
+            hdr_sun_y_ = it->second.second;
+        } else {
+            hdr_sun_x_ = 0;
+            hdr_sun_y_ = 0;
+        }
+
         save_config(config_);
     }
 
@@ -255,6 +276,41 @@ namespace himalaya::app {
             .cast_shadows = fallback_light_cast_shadows_,
         };
 
+        // Build HDR Sun light from equirect pixel coords + IBL rotation each frame.
+        // Inverse of equirect_to_cubemap.comp sample_equirect():
+        //   phi   = (x/w - 0.5) * 2π   (longitude, from +X axis)
+        //   theta = (0.5 - y/h) * π     (latitude, +Y = up)
+        //   dir   = (cos(theta)*cos(phi), sin(theta), cos(theta)*sin(phi))
+        {
+            const auto &ibl = renderer_.ibl();
+            const auto eq_w = static_cast<float>(ibl.equirect_width());
+            const auto eq_h = static_cast<float>(ibl.equirect_height());
+            glm::vec3 sun_dir{0.0f, 1.0f, 0.0f}; // default: straight up
+            if (eq_w > 0.0f && eq_h > 0.0f) {
+                const float phi = (static_cast<float>(hdr_sun_x_) / eq_w - 0.5f) * glm::two_pi<float>();
+                const float theta = (0.5f - static_cast<float>(hdr_sun_y_) / eq_h) * glm::pi<float>();
+                sun_dir = {
+                    std::cos(theta) * std::cos(phi),
+                    std::sin(theta),
+                    std::cos(theta) * std::sin(phi),
+                };
+            }
+            // Apply IBL rotation (same rotate_y as shaders)
+            const float s = std::sin(ibl_yaw_);
+            const float c = std::cos(ibl_yaw_);
+            const glm::vec3 rotated_sun{
+                c * sun_dir.x + s * sun_dir.z,
+                sun_dir.y,
+                -s * sun_dir.x + c * sun_dir.z,
+            };
+            hdr_sun_light_ = {
+                .direction = -rotated_sun, // light travels toward scene
+                .color = framework::color_temperature_to_rgb(hdr_sun_color_temp_),
+                .intensity = hdr_sun_intensity_,
+                .cast_shadows = hdr_sun_cast_shadows_,
+            };
+        }
+
         // Determine active lights based on light source mode
         const auto scene_lights = scene_loader_.directional_lights();
         std::span<const framework::DirectionalLight> lights;
@@ -264,6 +320,9 @@ namespace himalaya::app {
                 break;
             case LightSourceMode::Fallback:
                 lights = {&fallback_light_, 1};
+                break;
+            case LightSourceMode::HdrSun:
+                lights = {&hdr_sun_light_, 1};
                 break;
             case LightSourceMode::None:
                 break;
@@ -393,6 +452,9 @@ namespace himalaya::app {
                     break;
                 case LightSourceMode::Fallback:
                     scene_render_data_.directional_lights = {&fallback_light_, 1};
+                    break;
+                case LightSourceMode::HdrSun:
+                    scene_render_data_.directional_lights = {&hdr_sun_light_, 1};
                     break;
                 case LightSourceMode::None:
                     scene_render_data_.directional_lights = {};

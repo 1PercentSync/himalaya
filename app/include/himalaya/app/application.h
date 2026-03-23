@@ -114,7 +114,7 @@ namespace himalaya::app {
 
         // --- Light source ---
 
-        /** @brief Active light source mode (Scene/Fallback/None). */
+        /** @brief Active light source mode (Scene/Fallback/HdrSun/None). */
         LightSourceMode light_source_mode_ = LightSourceMode::Scene;
 
         /** @brief Fallback light direction yaw in radians. */
@@ -131,6 +131,26 @@ namespace himalaya::app {
 
         /** @brief Constructed fallback DirectionalLight (rebuilt each frame from yaw/pitch). */
         framework::DirectionalLight fallback_light_{};
+
+        // --- HDR Sun light ---
+
+        /** @brief HDR sun pixel X coordinate in equirectangular image. */
+        int hdr_sun_x_ = 0;
+
+        /** @brief HDR sun pixel Y coordinate in equirectangular image. */
+        int hdr_sun_y_ = 0;
+
+        /** @brief HDR Sun light intensity multiplier. */
+        float hdr_sun_intensity_ = 3.0f;
+
+        /** @brief HDR Sun light color temperature in Kelvin. */
+        float hdr_sun_color_temp_ = 6500.0f;
+
+        /** @brief Whether the HDR Sun light casts shadows. */
+        bool hdr_sun_cast_shadows_ = true;
+
+        /** @brief Constructed HDR Sun DirectionalLight (rebuilt each frame from coords + IBL yaw). */
+        framework::DirectionalLight hdr_sun_light_{};
 
         /** @brief Debug render mode (0=Full PBR, 1-7=debug visualizations). */
         uint32_t debug_render_mode_ = 0;

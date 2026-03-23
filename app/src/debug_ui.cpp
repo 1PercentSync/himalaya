@@ -291,9 +291,9 @@ namespace himalaya::app {
         ImGui::Separator();
         if (ImGui::CollapsingHeader("Lighting", ImGuiTreeNodeFlags_DefaultOpen)) {
             // Light source mode combo
-            constexpr const char *kModeLabels[] = {"Scene", "Fallback", "None"};
+            constexpr const char *kModeLabels[] = {"Scene", "Fallback", "HDR Sun", "None"};
             auto mode_index = static_cast<int>(ctx.light_source_mode);
-            if (ImGui::Combo("Light Source", &mode_index, kModeLabels, 3)) {
+            if (ImGui::Combo("Light Source", &mode_index, kModeLabels, 4)) {
                 // Prevent selecting Scene when scene has no lights
                 if (mode_index == 0 && !ctx.scene_has_lights) {
                     mode_index = static_cast<int>(ctx.light_source_mode);

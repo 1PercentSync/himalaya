@@ -7,14 +7,17 @@
 
 #include <filesystem>
 #include <string>
+#include <unordered_map>
+#include <utility>
 
 namespace himalaya::app {
     /**
      * @brief Persistent application configuration.
      *
-     * Stores user-selected scene and environment paths. Serialized as JSON
-     * to `%LOCALAPPDATA%\himalaya\config.json`. Both fields are optional —
-     * empty string means no file configured (first run or after reset).
+     * Stores user-selected scene and environment paths, and per-HDR
+     * sun pixel coordinates. Serialized as JSON to
+     * `%LOCALAPPDATA%\himalaya\config.json`. All fields are optional —
+     * empty/default means no value configured.
      */
     struct AppConfig {
         /** @brief Absolute path to the glTF scene file (.gltf / .glb). */
@@ -22,6 +25,14 @@ namespace himalaya::app {
 
         /** @brief Absolute path to the HDR environment map (.hdr). */
         std::string env_path;
+
+        /**
+         * @brief Per-HDR sun pixel coordinates (x, y).
+         *
+         * Key is the HDR absolute file path. Value is the pixel position
+         * of the sun in the equirectangular image, used by HdrSun light mode.
+         */
+        std::unordered_map<std::string, std::pair<int, int>> hdr_sun_coords;
     };
 
     /**

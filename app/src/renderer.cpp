@@ -696,6 +696,10 @@ namespace himalaya::app {
         spdlog::info("All shaders reloaded");
     }
 
+    const framework::IBL &Renderer::ibl() const {
+        return ibl_;
+    }
+
     uint32_t Renderer::current_sample_count() const {
         return current_sample_count_;
     }
