@@ -62,6 +62,9 @@ namespace himalaya::framework {
         /** @brief GTAO raw output (RG8: R=diffuse AO, G=specular occlusion). */
         RGResourceId ao_noisy;
 
+        /** @brief Spatially denoised AO (RG8, output of 5x5 bilateral blur). */
+        RGResourceId ao_blurred;
+
         /** @brief AO temporal-filtered output (RG8 temporal current, Set 2 binding 3). */
         RGResourceId ao_filtered;
 
