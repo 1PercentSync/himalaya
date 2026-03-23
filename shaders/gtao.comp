@@ -75,6 +75,15 @@ vec3 get_view_normal(vec2 uv) {
 /** Golden ratio fractional part for quasi-random temporal noise offset. */
 const float kGoldenRatioFract = 0.6180339887;
 
+/**
+ * Falloff inner range as a fraction of the effect radius.
+ * Samples within radius * (1 - kFalloffRange) have full weight;
+ * beyond that, weight linearly drops to zero at the radius boundary.
+ * 0.615 matches XeGTAO's auto-tuned optimal (preserves near detail,
+ * aggressive far cutoff).
+ */
+const float kFalloffRange = 0.615;
+
 // ---- GTAO core ----
 
 /**
@@ -128,23 +137,30 @@ float gtao_slice_visibility(float h1, float h2, float n) {
 /**
  * Sample one horizon direction and update the running maximum.
  *
- * @param uv        Center pixel UV.
- * @param offset    UV offset for this sample (step_uv * t).
- * @param view_pos  Center pixel view-space position.
- * @param view_dir  Normalized view direction.
- * @param low_cos   Tangent-plane cosine (falloff target and initial value).
- * @param max_cos   Running maximum horizon cosine (updated in-place).
- * @param radius2   Squared world-space effect radius.
+ * Falloff uses linear distance with flat-inner/steep-outer shape:
+ * full weight inside radius*(1-kFalloffRange), linear decay to zero at radius.
+ *
+ * @param uv          Center pixel UV.
+ * @param offset      UV offset for this sample.
+ * @param view_pos    Center pixel view-space position.
+ * @param view_dir    Normalized view direction.
+ * @param low_cos     Tangent-plane cosine (falloff target and initial value).
+ * @param max_cos     Running maximum horizon cosine (updated in-place).
+ * @param falloff_mul Precomputed: -1 / (radius * kFalloffRange).
+ * @param falloff_add Precomputed: 1 / kFalloffRange.
  */
 void horizon_sample(vec2 uv, vec2 offset, vec3 view_pos, vec3 view_dir,
-                    float low_cos, inout float max_cos, float radius2) {
+                    float low_cos, inout float max_cos,
+                    float falloff_mul, float falloff_add) {
     vec2 suv = clamp(uv + offset, vec2(0.0), vec2(1.0));
     vec3 sp = reconstruct_view_pos(suv, texture(rt_depth_resolved, suv).r);
     vec3 dp = sp - view_pos;
     float len2 = dot(dp, dp);
     if (len2 > EPSILON) {
-        float falloff = clamp(1.0 - len2 / radius2, 0.0, 1.0);
-        float cos_h = dot(dp, view_dir) * inversesqrt(len2);
+        float inv_len = inversesqrt(len2);
+        float cos_h = dot(dp, view_dir) * inv_len;
+        // dist = len2 * inv_len = sqrt(len2); reuse inv_len to avoid sqrt()
+        float falloff = clamp(len2 * inv_len * falloff_mul + falloff_add, 0.0, 1.0);
         max_cos = max(max_cos, mix(low_cos, cos_h, falloff));
     }
 }
@@ -164,22 +180,28 @@ void main() {
     vec3 view_normal = get_view_normal(uv);
     vec3 view_dir = normalize(-view_pos);
 
-    // Per-pixel direction jitter with per-frame temporal variation
-    float noise = fract(interleaved_gradient_noise(pixel)
-                      + float(pc.frame_index % 64) * kGoldenRatioFract);
+    // Decorrelated noise: direction jitter and step jitter (XeGTAO approach)
+    float base_noise = fract(interleaved_gradient_noise(pixel)
+                           + float(pc.frame_index % 64) * kGoldenRatioFract);
+    float dir_noise  = base_noise;
+    float step_noise = fract(base_noise * 0.7 + 0.15);
 
     // World-space radius → screen-space radius (pixels)
     float proj_scale = 0.5 * global.screen_size.y * global.projection[1][1];
     float radius_px = min(pc.radius * proj_scale / max(-view_pos.z, 0.1), 256.0);
 
+    // Precompute falloff constants (linear distance, flat inner + steep outer)
+    float falloff_mul = -1.0 / (pc.radius * kFalloffRange);
+    float falloff_add = 1.0 / kFalloffRange;
+
     float ao = 0.0;
-    float radius2 = pc.radius * pc.radius;
 
     for (uint i = 0; i < pc.directions; i++) {
-        float phi = (PI / float(pc.directions)) * (float(i) + noise);
+        float phi = (PI / float(pc.directions)) * (float(i) + dir_noise);
         vec2 omega = vec2(cos(phi), sin(phi));
-        vec2 step_uv = omega * radius_px
-                      / (global.screen_size * float(pc.steps_per_dir));
+
+        // Full-radius UV direction (step offset computed per-step via power curve)
+        vec2 uv_dir = omega * radius_px / global.screen_size;
 
         // Project normal onto the slice plane (tangent_vs × view_dir).
         // Y negated to compensate for the Y-flipped viewport.
@@ -201,11 +223,16 @@ void main() {
         float max_cos_pos = low_cos_pos;
         float max_cos_neg = low_cos_neg;
 
-        // Horizon search
+        // Horizon search: quadratic power curve clusters samples near the pixel
+        // center where crevice/corner detail matters most.
         for (uint j = 1; j <= pc.steps_per_dir; j++) {
-            vec2 offset = step_uv * float(j);
-            horizon_sample(uv,  offset, view_pos, view_dir, low_cos_pos, max_cos_pos, radius2);
-            horizon_sample(uv, -offset, view_pos, view_dir, low_cos_neg, max_cos_neg, radius2);
+            float linear_t = (float(j) - 1.0 + step_noise) / float(pc.steps_per_dir);
+            float t = linear_t * linear_t;
+            vec2 offset = uv_dir * t;
+            horizon_sample(uv,  offset, view_pos, view_dir,
+                           low_cos_pos, max_cos_pos, falloff_mul, falloff_add);
+            horizon_sample(uv, -offset, view_pos, view_dir,
+                           low_cos_neg, max_cos_neg, falloff_mul, falloff_add);
         }
 
         // Thin occluder compensation: post-search blend toward tangent plane.
