@@ -87,9 +87,9 @@
 
 ## Step 10b：GTAO 质量增强
 
-- [ ] 步进分布改为二次幂曲线（样本集中在像素附近）
-- [ ] 添加 R1 序列步进抖动（消除 banding）
-- [ ] Falloff 形状调整：flat inner + steep outer（XeGTAO 风格）
+- [x] 步进分布改为二次幂曲线（样本集中在像素附近）
+- [x] 添加 R1 序列步进抖动（消除 banding）
+- [x] Falloff 形状调整：flat inner + steep outer（XeGTAO 风格）
 - [ ] 新增 `ao_spatial.comp`：5×5 edge-aware bilateral blur
 - [ ] 新增 `AOSpatialPass` 类（setup / record / destroy / rebuild_pipelines）
 - [ ] Renderer 编排：GTAO → AO Spatial Blur → AO Temporal 管线串联
