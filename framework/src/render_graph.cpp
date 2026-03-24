@@ -174,7 +174,10 @@ namespace himalaya::framework {
                     .stage = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
                     .access = access == RGAccessType::Read
                                   ? VK_ACCESS_2_SHADER_SAMPLED_READ_BIT
-                                  : VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+                                  : (VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT |
+                                     (access == RGAccessType::ReadWrite
+                                          ? VK_ACCESS_2_SHADER_STORAGE_READ_BIT
+                                          : VkAccessFlags2{0})),
                 };
 
             case RGStage::Transfer:
