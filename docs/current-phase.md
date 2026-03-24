@@ -365,7 +365,7 @@ DepthPrePass 扩展，独立于 GTAO 升级可验证。
 
 实现细节：
 - Bent normal：Algorithm 2 解析积分，三角恒等式展开（零额外 trig 调用），view-space 存储
-- SO 评估：`smoothstep(0, 1, (αv − β) / αs)` 工业标准近似（XeGTAO / UE / Frostbite 均采用）
+- SO 评估：`smoothstep(0, 1, (αv − β) / αs)` + `mix(raw, 1.0, ao²)` 掠射角补偿
 - Bent normal 解码（forward.frag）：`transpose(mat3(view))` 从 view-space 转 world-space
 - Spatial blur：编码空间线性操作，无需 decode/encode（affine 编码保证正确性）
 - Temporal：AO（A 通道）邻域 clamp，bent normal（RGB）不 clamp 共享 blend factor，输出前 decode → normalize → encode

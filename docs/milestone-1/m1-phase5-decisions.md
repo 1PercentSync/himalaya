@@ -200,11 +200,14 @@ GTAO 在 horizon search 中额外计算 bent normal（Algorithm 2，XeGTAO v1.30
 - Visibility cone：方向 = bent normal，半角 `αv = acos(sqrt(1 − AO))`（从 AO 值反推 cone 面积）
 - Specular cone：方向 = reflection direction R，半角 `αs` 由 roughness 推导：`cos(αs) = 0.01^(0.5 * r²)`（Jimenez 2016 最优拟合，u = 0.01）
 - Cone 间夹角：`β = acos(clamp(dot(bentNormal, R), -1, 1))`
-- SO = `smoothstep(0.0, 1.0, (αv − β) / αs)`（smoothstep 近似，工业标准做法）
+- SO_raw = `smoothstep(0.0, 1.0, (αv − β) / αs)`（smoothstep 近似，工业标准做法）
+- SO = `mix(SO_raw, 1.0, ao²)`（AO 补偿，见下方「掠射角补偿」）
 
 **分阶段实施：** Step 9 先用 Lagarde 近似公式（`saturate(pow(NdotV + ao, exp2(-16 * roughness - 1)) - 1 + ao)`，Lagarde & de Rousiers 2014）验证 AO 管线正确性（不需要 bent normal），Step 12 升级到 GTSO 后可直接对比精度差异。Lagarde 函数保留在 forward.frag 中，通过 `global.ao_so_mode`（0=Lagarde, 1=GTSO）运行时切换，DebugUI 提供 Checkbox 供实时对比。
 
 **SO mode GlobalUBO 布局：** `ao_so_mode` 位于 offset 852（`frame_index` 之后），复用 `_phase5_pad` 的一个 slot，GlobalUniformData 总大小不变（864 bytes）。AOConfig 新增 `bool use_gtso = true`，Renderer 填充 `ubo.ao_so_mode = ao_config->use_gtso ? 1 : 0`。
+
+**掠射角补偿（ao² mix）：** Cone intersection 模型将 visibility cone 边界（αv=π/2 时等于切平面）等同于遮蔽边界。AO=1 时半球完全无遮蔽，但 specular cone 在掠射角超出半球，公式错误地将超出部分计为"被遮蔽"——roughness=0.7 + NdotV=0.5 时 SO≈0.35，而物理正确值为 1.0。这不是 smoothstep 近似的误差，精确球面 cap 交集面积比也有同样问题。补偿公式 `mix(SO_raw, 1.0, ao²)` 在 AO→1 时将 SO 推向 1.0，消除虚假掠射角暗化；AO 较低时补偿最小，保留 GTSO 的方向性精度。
 
 **输出格式变更：** GTAO 输出从 RG8 升级为 RGBA8_UNORM。Step 7 先只写 A 通道（AO），RGB 填充默认值（编码后的 view-space normal 或 (0.5, 0.5, 0.5)），Step 12 升级后写完整 bent normal + AO。`ao_noisy`、`ao_blurred`、`ao_filtered` 三张纹理同步从 RG8 改为 RGBA8（bent normal 需要经过 spatial blur 和 temporal filter 降噪）。
 
