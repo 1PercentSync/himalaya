@@ -120,7 +120,7 @@
 - [x] ao_spatial.comp：适配 RGBA8 四通道降噪
 - [x] ao_temporal.comp：适配 RGBA8（AO 邻域 clamp 改 A 通道，bent normal RGB blend 不 clamp）
 - [x] forward.frag：SO 改用 GTSO 解析公式（bent normal cone 交集），删除 Lagarde 近似
-- [ ] SO mode 运行时切换：GlobalUBO `ao_so_mode` + AOConfig `use_gtso` + DebugUI Checkbox + forward.frag 分支
+- [x] SO mode 运行时切换：GlobalUBO `ao_so_mode` + AOConfig `use_gtso` + DebugUI Checkbox + forward.frag 分支 + 掠射角 ao² 补偿
 
 ## Step 13：Contact Shadows Compute
 
