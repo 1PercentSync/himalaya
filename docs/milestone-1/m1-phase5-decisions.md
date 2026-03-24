@@ -202,7 +202,9 @@ GTAO 在 horizon search 中额外计算 bent normal（Algorithm 2，XeGTAO v1.30
 - Cone 间夹角：`β = acos(clamp(dot(bentNormal, R), -1, 1))`
 - SO = `smoothstep(0.0, 1.0, (αv − β) / αs)`（smoothstep 近似，工业标准做法）
 
-**分阶段实施：** Step 9 先用 Lagarde 近似公式（`saturate(pow(NdotV + ao, exp2(-16 * roughness - 1)) - 1 + ao)`，Lagarde & de Rousiers 2014）验证 AO 管线正确性（不需要 bent normal），Step 12 升级到 GTSO 后可直接对比精度差异。
+**分阶段实施：** Step 9 先用 Lagarde 近似公式（`saturate(pow(NdotV + ao, exp2(-16 * roughness - 1)) - 1 + ao)`，Lagarde & de Rousiers 2014）验证 AO 管线正确性（不需要 bent normal），Step 12 升级到 GTSO 后可直接对比精度差异。Lagarde 函数保留在 forward.frag 中，通过 `global.ao_so_mode`（0=Lagarde, 1=GTSO）运行时切换，DebugUI 提供 Checkbox 供实时对比。
+
+**SO mode GlobalUBO 布局：** `ao_so_mode` 位于 offset 852（`frame_index` 之后），复用 `_phase5_pad` 的一个 slot，GlobalUniformData 总大小不变（864 bytes）。AOConfig 新增 `bool use_gtso = true`，Renderer 填充 `ubo.ao_so_mode = ao_config->use_gtso ? 1 : 0`。
 
 **输出格式变更：** GTAO 输出从 RG8 升级为 RGBA8_UNORM。Step 7 先只写 A 通道（AO），RGB 填充默认值（编码后的 view-space normal 或 (0.5, 0.5, 0.5)），Step 12 升级后写完整 bent normal + AO。`ao_noisy`、`ao_blurred`、`ao_filtered` 三张纹理同步从 RG8 改为 RGBA8（bent normal 需要经过 spatial blur 和 temporal filter 降噪）。
 

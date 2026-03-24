@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 12 全部完成（5/5），下一个任务：Step 13 Contact Shadows Compute
+Step 12 第六小项（补充）：SO mode 运行时切换（GlobalUBO ao_so_mode + AOConfig use_gtso + DebugUI + forward.frag 分支）
 
 ---
 

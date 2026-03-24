@@ -440,7 +440,8 @@ struct GlobalUniformData {
     glm::mat4 inv_projection;                  // offset 720 — 深度 → view-space 位置重建 (GTAO)
     glm::mat4 prev_view_projection;            // offset 784 — 时域重投影 (当前世界坐标 → 上一帧 UV)
     uint32_t frame_index;                      // offset 848 — 当前帧索引 (PCSS 时域噪声变化等)
-    uint32_t _phase5_pad[3];                   // offset 852 — pad to 864 (vec4 alignment)
+    uint32_t ao_so_mode;                       // offset 852 — 0=Lagarde, 1=GTSO (SO 评估方法)
+    uint32_t _phase5_pad[2];                   // offset 856 — pad to 864 (vec4 alignment)
 };  // total: 864 bytes (54 × 16)
 
 // GPU 方向光 — std430 layout, 32 bytes per element
@@ -1337,6 +1338,7 @@ struct AOConfig {
     float bias;                // depth 比较偏移
     float intensity;           // AO 强度乘数
     float temporal_blend;      // history 混合因子 (0.0-1.0)
+    bool use_gtso;             // true=GTSO (bent normal), false=Lagarde 近似
 };
 ```
 

@@ -355,7 +355,9 @@ DepthPrePass 扩展，独立于 GTAO 升级可验证。
 - GTAOPass / AOSpatialPass / AOTemporalPass C++ 侧：Set 3 layout storage image 格式 `rg8` → `rgba8`
 - Renderer：managed image 创建格式 RG8 → RGBA8
 
-**验证**：对比 Step 9 基线 — 光滑表面在部分遮蔽区域 SO 更精确（反射方向朝向开阔时 SO 更高），整体视觉差异细微但可在 debug mode 中对比
+- SO mode 运行时切换：GlobalUBO 新增 `ao_so_mode`（0=Lagarde, 1=GTSO），AOConfig 新增 `use_gtso`，DebugUI AO 面板 Checkbox
+
+**验证**：对比 Step 9 基线 — 光滑表面在部分遮蔽区域 SO 更精确（反射方向朝向开阔时 SO 更高），整体视觉差异细微但可在 debug mode 中对比；DebugUI 可切换 GTSO / Lagarde 实时对比
 
 #### 设计要点
 
@@ -367,6 +369,7 @@ DepthPrePass 扩展，独立于 GTAO 升级可验证。
 - Bent normal 解码（forward.frag）：`transpose(mat3(view))` 从 view-space 转 world-space
 - Spatial blur：编码空间线性操作，无需 decode/encode（affine 编码保证正确性）
 - Temporal：AO（A 通道）邻域 clamp，bent normal（RGB）不 clamp 共享 blend factor，输出前 decode → normalize → encode
+- SO mode 切换：`global.ao_so_mode` 控制 forward.frag 分支（Lagarde 保留为对比基线），offset 852（复用 `_phase5_pad` 一个 slot，总大小不变 864 bytes）
 
 ---
 
