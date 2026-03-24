@@ -98,16 +98,16 @@ const float DEPTH_REJECT_THRESHOLD = 0.05;
  * previous-frame depths.  Linearization ensures uniform rejection
  * sensitivity at all distances (raw Reverse-Z is non-linear).
  *
- * Layer 3 — Neighborhood clamp: gather 3×3 min/max from current-frame
- * input (ao_blurred) R channel via texelFetch and clamp the history value
- * into [min, max].  Prevents stale history from drifting beyond the
- * current local AO range.
+ * Layer 3 — Neighborhood clamp: gather 3x3 min/max from current-frame
+ * input (ao_blurred) A channel (AO) via texelFetch and clamp the
+ * history AO into [min, max].  Bent normal (RGB) is NOT clamped —
+ * min/max of direction vectors has no physical meaning.
  *
  * @param pixel              Current pixel coordinates.
  * @param size               Screen dimensions in pixels.
  * @param prev_uv            Reprojected UV in previous frame.
  * @param expected_prev_depth Expected depth at prev_uv from reprojection.
- * @param current_ao         Current frame AO value (R channel).
+ * @param current_ao         Current frame AO value (A channel).
  * @param[out] rejected      Set to true if history is fully rejected.
  * @return History AO value (clamped if accepted, or current_ao if rejected).
  */
@@ -132,20 +132,20 @@ float evaluate_rejection(ivec2 pixel, ivec2 size,
         return current_ao;
     }
 
-    // ---- Layer 3: Neighborhood clamp (R channel only) ----
+    // ---- Layer 3: Neighborhood clamp (A channel = AO only) ----
     float ao_min = 1.0;
     float ao_max = 0.0;
     for (int dy = -1; dy <= 1; ++dy) {
         for (int dx = -1; dx <= 1; ++dx) {
             ivec2 neighbor = clamp(pixel + ivec2(dx, dy), ivec2(0), size - 1);
-            float val = texelFetch(ao_input_tex, neighbor, 0).r;
+            float val = texelFetch(ao_input_tex, neighbor, 0).a;
             ao_min = min(ao_min, val);
             ao_max = max(ao_max, val);
         }
     }
 
-    // Read history and clamp to neighborhood range
-    float history_ao = texture(ao_history_tex, prev_uv).r;
+    // Read history AO and clamp to neighborhood range
+    float history_ao = texture(ao_history_tex, prev_uv).a;
     return clamp(history_ao, ao_min, ao_max);
 }
 
@@ -159,8 +159,8 @@ void main() {
 
     vec2 uv = (vec2(pixel) + 0.5) / global.screen_size;
 
-    // Read current frame AO (R channel; G channel is 0.0 until Step 12)
-    float current_ao = texelFetch(ao_input_tex, pixel, 0).r;
+    // Read current frame (RGB = bent normal encoded, A = AO)
+    vec4 current = texelFetch(ao_input_tex, pixel, 0);
 
     // Read current depth for reprojection
     float depth = texture(rt_depth_resolved, uv).r;
@@ -170,19 +170,27 @@ void main() {
     vec2 prev_uv = reproj.xy;
     float expected_prev_depth = reproj.z;
 
-    // Three-layer rejection (R channel)
+    // Three-layer rejection (AO neighborhood clamp on A channel)
     bool rejected;
     float history_ao = evaluate_rejection(pixel, size, prev_uv,
                                           expected_prev_depth,
-                                          current_ao, rejected);
+                                          current.a, rejected);
 
-    // Temporal blend
-    // pc.temporal_blend is 0.0 when history is invalid (first frame / resize),
-    // set by Renderer based on is_history_valid() query.
-    // Rejected pixels also use current-only (blend = 0).
+    // Temporal blend factor (0.0 on rejection or invalid history)
     float blend = rejected ? 0.0 : pc.temporal_blend;
-    float result_ao = mix(current_ao, history_ao, blend);
 
-    // G channel passthrough: 0.0 until Step 12 adds specular occlusion
-    imageStore(ao_output, pixel, vec4(result_ao, 0.0, 0.0, 0.0));
+    // AO blend (A channel, with neighborhood-clamped history)
+    float result_ao = mix(current.a, history_ao, blend);
+
+    // Bent normal blend (RGB, no neighborhood clamp — direction min/max
+    // has no physical meaning; shares blend factor and rejection result)
+    vec3 history_bent = rejected ? current.rgb : texture(ao_history_tex, prev_uv).rgb;
+    vec3 result_bent = mix(current.rgb, history_bent, blend);
+
+    // Decode → normalize → re-encode (blended encoded values may drift
+    // from unit length after averaging)
+    vec3 bn = result_bent * 2.0 - 1.0;
+    bn = (dot(bn, bn) > EPSILON) ? normalize(bn) : vec3(0.0, 0.0, 1.0);
+
+    imageStore(ao_output, pixel, vec4(bn * 0.5 + 0.5, result_ao));
 }
