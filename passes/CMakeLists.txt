@@ -3,6 +3,7 @@ add_library(himalaya_passes STATIC)
 target_sources(himalaya_passes PRIVATE
         src/ao_spatial_pass.cpp
         src/ao_temporal_pass.cpp
+        src/contact_shadows_pass.cpp
         src/depth_prepass.cpp
         src/gtao_pass.cpp
         src/forward_pass.cpp

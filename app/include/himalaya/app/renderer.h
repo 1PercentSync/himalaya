@@ -12,6 +12,7 @@
 #include <himalaya/framework/texture.h>
 #include <himalaya/passes/ao_spatial_pass.h>
 #include <himalaya/passes/ao_temporal_pass.h>
+#include <himalaya/passes/contact_shadows_pass.h>
 #include <himalaya/passes/depth_prepass.h>
 #include <himalaya/passes/forward_pass.h>
 #include <himalaya/passes/gtao_pass.h>
@@ -273,6 +274,9 @@ namespace himalaya::app {
 
         /** @brief AO temporal filter compute pass (reprojection + rejection + blend). */
         passes::AOTemporalPass ao_temporal_pass_{};
+
+        /** @brief Contact shadows compute pass (screen-space ray march). */
+        passes::ContactShadowsPass contact_shadows_pass_{};
 
         /** @brief HDR color buffer (R16G16B16A16F, 1x, managed, auto-rebuilt on resize). */
         framework::RGManagedHandle managed_hdr_color_;

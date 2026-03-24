@@ -21,10 +21,9 @@
 
 layout(local_size_x = 8, local_size_y = 8) in;
 
-// ---- Set 3: push descriptor (per-dispatch I/O) ----
+// ---- Set 3: push descriptor (per-dispatch output) ----
 
 layout(set = 3, binding = 0, r8) uniform writeonly image2D out_contact_shadow;
-layout(set = 3, binding = 1) uniform sampler2D in_depth;
 
 // ---- Push constants: Contact Shadow parameters (from ContactShadowConfig) ----
 
@@ -85,7 +84,7 @@ void main() {
 
     // Sample depth at current pixel
     vec2 uv = (vec2(pixel) + 0.5) / vec2(size);
-    float depth = texelFetch(in_depth, pixel, 0).r;
+    float depth = texelFetch(rt_depth_resolved, pixel, 0).r;
 
     // Skip sky pixels (reverse-Z: depth=0 at infinite far plane)
     if (depth <= 0.0) {
@@ -136,7 +135,7 @@ void main() {
         float expected_depth = mix(start_depth, end_depth, t);
 
         // Sample actual scene depth at this UV
-        float sampled_depth = texture(in_depth, sample_uv).r;
+        float sampled_depth = texture(rt_depth_resolved, sample_uv).r;
 
         // Depth-adaptive thickness: wider tolerance for distant surfaces
         float thickness = pc.base_thickness * linear_depth(sampled_depth);

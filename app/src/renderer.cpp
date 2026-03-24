@@ -524,6 +524,12 @@ namespace himalaya::app {
                                 shader_compiler_,
                                 nearest_clamp_sampler_);
 
+        // --- Contact shadows compute pass ---
+        contact_shadows_pass_.setup(*ctx_,
+                                    *resource_manager_,
+                                    *descriptor_manager_,
+                                    shader_compiler_);
+
         // --- Set 2 binding 0: hdr_color for TonemappingPass sampling ---
         update_hdr_color_descriptor();
 
@@ -557,6 +563,7 @@ namespace himalaya::app {
         gtao_pass_.destroy();
         ao_spatial_pass_.destroy();
         ao_temporal_pass_.destroy();
+        contact_shadows_pass_.destroy();
 
         for (const auto ubo: global_ubo_buffers_) {
             resource_manager_->destroy_buffer(ubo);
@@ -745,6 +752,7 @@ namespace himalaya::app {
         gtao_pass_.rebuild_pipelines();
         ao_spatial_pass_.rebuild_pipelines();
         ao_temporal_pass_.rebuild_pipelines();
+        contact_shadows_pass_.rebuild_pipelines();
 
         spdlog::info("All shaders reloaded");
     }
@@ -1069,6 +1077,11 @@ namespace himalaya::app {
             gtao_pass_.record(render_graph_, frame_ctx);
             ao_spatial_pass_.record(render_graph_, frame_ctx);
             ao_temporal_pass_.record(render_graph_, frame_ctx);
+        }
+
+        // --- Contact shadows (conditional on feature toggle + directional light presence) ---
+        if (input.features.contact_shadows && !input.lights.empty()) {
+            contact_shadows_pass_.record(render_graph_, frame_ctx);
         }
 
         // --- Forward pass ---
