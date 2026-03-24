@@ -301,13 +301,13 @@ Prev depth 来自 resolved depth 的 temporal history（`get_history_image(depth
 
 DepthPrePass 新增 R8 roughness managed image 输出。DepthPrePass 已读材质数据（alpha test），roughness 从同一材质取出（`material.roughness_factor * texture(metallic_roughness_tex).g`），shader 改动很小。MSAA 时 AVERAGE resolve（与 normal 一致），roughness 是标量 [0,1]，多个子采样平均物理合理。
 
-M2 SSR 复用此 buffer。M1 阶段无消费方——GTSO 的 SO 评估在 forward.frag 中使用 per-fragment material roughness（比 roughness buffer 更精确），GTAO 不需要读 roughness buffer。Roughness buffer 在 M1 仍提前创建，确保 DepthPrePass 管线和资源就绪，M2 SSR 可直接使用。
+**M1 阶段无消费方的原因**：Roughness buffer 最初为 B1 SO 方案设计——B1 要求 GTAO 在 compute shader 中读取 per-pixel roughness 来评估 specular cone 与 horizon 的重叠。后来 SO 方案从 B1 改为 Bent Normal + GTSO（见上方「Specular Occlusion」），GTSO 的 SO 评估移到了 forward.frag，直接使用 per-fragment material roughness（从材质纹理实时采样，比 roughness buffer 更精确），GTAO 不再需要读 roughness buffer。但 roughness buffer 本身仍有价值——M2 SSR 需要屏幕空间 roughness 来确定反射 ray 的 cone 宽度，因此保留 Step 11 的实现，确保 DepthPrePass 管线和资源就绪，M2 可直接使用。
 
-**Clear 值 1.0f**：未覆盖像素（天空等）为最大粗糙度。GTAO SO 中 roughness=1 的像素 specular cone 极宽，SO 趋近于 diffuse AO，不会产生错误的 specular 增强。
+**Clear 值 1.0f**：未覆盖像素（天空等）为最大粗糙度，M2 SSR 中 roughness=1 的像素不会产生错误的镜面反射。
 
 **管线适配**：新增 roughness color attachment 后，`GraphicsPipelineDesc::color_formats` 从 `{kNormalFormat}` 扩展为 `{kNormalFormat, kRoughnessFormat}`。`create_pipelines()` 被 `setup()` 和 `on_sample_count_changed()` 共用，只改一处。
 
-**FrameContext**：新增 `roughness`（resolved，1x）+ `msaa_roughness`（MSAA target，sample_count > 1 时有效），与 `normal` / `msaa_normal` 模式一致。`msaa_roughness` 仅 DepthPrePass::record() 内部使用（渲染目标选择 + RG 资源声明），后续消费方只读 resolved `roughness`。
+**FrameContext**：新增 `roughness`（resolved，1x）+ `msaa_roughness`（MSAA target，sample_count > 1 时有效），与 `normal` / `msaa_normal` 模式一致。`msaa_roughness` 仅 DepthPrePass::record() 内部使用（渲染目标选择 + RG 资源声明）。
 
 ---
 

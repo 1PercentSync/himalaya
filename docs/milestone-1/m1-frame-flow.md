@@ -168,7 +168,7 @@ Color Grading Pass
 | Depth Buffer（单采样） | Depth Resolve | GTAO、Contact Shadows、Height Fog | 帧内 + 帧间（temporal，AO Temporal rejection 用） |
 | Depth History（单采样） | 上一帧 Depth Resolve（RG temporal swap） | AO Temporal Filter（prev depth rejection） | 帧间（temporal） |
 | Normal Buffer（单采样） | Normal Resolve | GTAO | 帧内 |
-| Roughness Buffer（R8） | Depth PrePass | M2 SSR（M1 阶段无消费方，预留） | 帧内 |
+| Roughness Buffer（R8） | Depth PrePass | M2 SSR（原为 B1 SO 设计，SO 改为 GTSO 后 M1 无消费方） | 帧内 |
 | AO Texture（RGBA8 噪声版） | GTAO Pass | AO Spatial Blur | 帧内 |
 | AO Texture（RGBA8 空间滤波后） | AO Spatial Blur | AO Temporal Filter | 帧内 |
 | AO Texture（RGBA8 时域滤波后） | AO Temporal Filter | Forward Pass（读 bent normal + AO，计算 GTSO） | 帧内 |

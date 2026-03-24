@@ -338,7 +338,7 @@ DepthPrePass 扩展，独立于 GTAO 升级可验证。
 实现细节：
 - 管线 `color_formats` 从 `{kNormalFormat}` 扩展为 `{kNormalFormat, kRoughnessFormat}`（dynamic rendering 管线创建时须声明 attachment formats）
 - Clear 值 1.0f（最大粗糙度），未被几何体覆盖的像素（天空等）不产生错误的 specular occlusion
-- FrameContext 新增 `msaa_roughness`（与 `msaa_normal` 模式一致），仅 DepthPrePass::record() 使用；M1 阶段 resolved `roughness` 无消费方（GTSO 在 forward.frag 使用 per-fragment material roughness），M2 SSR 将读取此 buffer
+- FrameContext 新增 `msaa_roughness`（与 `msaa_normal` 模式一致），仅 DepthPrePass::record() 使用；roughness buffer 原为 B1 SO 设计，SO 改为 GTSO 后 M1 无消费方（GTSO 在 forward.frag 使用 per-fragment material roughness），保留供 M2 SSR 使用
 - Opaque shader 原本只采样 `normal_tex`，新增 `metallic_roughness_tex` 采样；无纹理时默认白色纹理，`1.0 * roughness_factor = roughness_factor`，行为正确
 
 ---
@@ -509,4 +509,4 @@ shaders/
 |------|------|
 | GTAO 输出 | RGBA8_UNORM：RGB=bent normal（×0.5+0.5 编码），A=diffuse AO。Step 7 先只写 A（RGB 填默认），Step 12 升级 GTSO 后写完整 bent normal + AO |
 | Compute workgroup size | 所有 compute pass（GTAO、AO Temporal、Contact Shadows）统一 8×8（每像素独立计算，无 shared memory 需求） |
-| AO 资源 usage | ao_noisy / ao_blurred / ao_filtered / contact_shadow_mask: `Storage \| Sampled`（compute storage write + sampled read）。roughness: `ColorAttachment \| Sampled`（DepthPrePass color attachment，M1 无消费方，M2 SSR 用） |
+| AO 资源 usage | ao_noisy / ao_blurred / ao_filtered / contact_shadow_mask: `Storage \| Sampled`（compute storage write + sampled read）。roughness: `ColorAttachment \| Sampled`（DepthPrePass color attachment；原为 B1 SO 设计，SO 改为 GTSO 后 M1 无消费方，保留供 M2 SSR） |
