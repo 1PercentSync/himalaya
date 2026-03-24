@@ -150,6 +150,15 @@ void main() {
                 }
                 break;
             }
+            case DEBUG_MODE_CONTACT_SHADOWS: {
+                // Raw contact shadow mask (R channel, 1=lit 0=shadowed)
+                if ((global.feature_flags & FEATURE_CONTACT_SHADOWS) != 0u) {
+                    vis = vec3(texture(rt_contact_shadow_mask, gl_FragCoord.xy / global.screen_size).r);
+                } else {
+                    vis = vec3(1.0);
+                }
+                break;
+            }
             case DEBUG_MODE_SHADOW_CASCADES: {
                 if ((global.feature_flags & FEATURE_SHADOWS) != 0u) {
                     float vd = -(global.view * vec4(frag_world_pos, 1.0)).z;

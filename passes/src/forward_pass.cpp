@@ -16,6 +16,7 @@
 #include <himalaya/rhi/shader.h>
 
 #include <array>
+#include <vector>
 
 #include <spdlog/spdlog.h>
 
@@ -207,39 +208,33 @@ namespace himalaya::passes {
         // MSAA: msaa_color(W) + msaa_depth(R) + hdr_color(W, resolve target)
         // 1x:   hdr_color(W) + depth(R)
         // Depth is read-only: EQUAL test, no write, no resolve (PrePass owns depth).
+        // Screen-space effect textures (ao_filtered, contact_shadow_mask) are read
+        // via Set 2 — declared here so the RG inserts compute→fragment barriers.
+        std::vector<framework::RGResourceUsage> resources;
         if (msaa) {
-            const std::array resources = {
-                framework::RGResourceUsage{
-                    ctx.msaa_color,
-                    framework::RGAccessType::Write,
-                    framework::RGStage::ColorAttachment,
-                },
-                framework::RGResourceUsage{
-                    ctx.msaa_depth,
-                    framework::RGAccessType::Read,
-                    framework::RGStage::DepthAttachment,
-                },
-                framework::RGResourceUsage{
-                    ctx.hdr_color,
-                    framework::RGAccessType::Write,
-                    framework::RGStage::ColorAttachment,
-                },
-            };
-            rg.add_pass("Forward", resources, execute);
+            resources.push_back({ctx.msaa_color, framework::RGAccessType::Write,
+                                 framework::RGStage::ColorAttachment});
+            resources.push_back({ctx.msaa_depth, framework::RGAccessType::Read,
+                                 framework::RGStage::DepthAttachment});
+            resources.push_back({ctx.hdr_color, framework::RGAccessType::Write,
+                                 framework::RGStage::ColorAttachment});
         } else {
-            const std::array resources = {
-                framework::RGResourceUsage{
-                    ctx.hdr_color,
-                    framework::RGAccessType::Write,
-                    framework::RGStage::ColorAttachment,
-                },
-                framework::RGResourceUsage{
-                    ctx.depth,
-                    framework::RGAccessType::Read,
-                    framework::RGStage::DepthAttachment,
-                },
-            };
-            rg.add_pass("Forward", resources, execute);
+            resources.push_back({ctx.hdr_color, framework::RGAccessType::Write,
+                                 framework::RGStage::ColorAttachment});
+            resources.push_back({ctx.depth, framework::RGAccessType::Read,
+                                 framework::RGStage::DepthAttachment});
         }
+
+        // Screen-space effect read dependencies (compute write → fragment read barrier)
+        if (ctx.features->ao) {
+            resources.push_back({ctx.ao_filtered, framework::RGAccessType::Read,
+                                 framework::RGStage::Fragment});
+        }
+        if (ctx.features->contact_shadows) {
+            resources.push_back({ctx.contact_shadow_mask, framework::RGAccessType::Read,
+                                 framework::RGStage::Fragment});
+        }
+
+        rg.add_pass("Forward", resources, execute);
     }
 } // namespace himalaya::passes
