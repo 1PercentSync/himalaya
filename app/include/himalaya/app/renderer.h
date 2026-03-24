@@ -304,6 +304,12 @@ namespace himalaya::app {
         /** @brief Contact shadow mask (R8, non-temporal, Storage | Sampled). */
         framework::RGManagedHandle managed_contact_shadow_mask_;
 
+        /** @brief Resolved roughness buffer (R8Unorm, 1x, ColorAttachment | Sampled). */
+        framework::RGManagedHandle managed_roughness_;
+
+        /** @brief MSAA roughness buffer (R8Unorm, Nx, ColorAttachment); invalid when sample_count == 1. */
+        framework::RGManagedHandle managed_msaa_roughness_;
+
         /** @brief Current MSAA sample count (1 = no MSAA, default 4x). */
         uint32_t current_sample_count_ = 4;
 

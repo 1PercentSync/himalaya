@@ -74,6 +74,12 @@ namespace himalaya::framework {
         /** @brief Contact shadow mask (R8, Set 2 binding 4). */
         RGResourceId contact_shadow_mask;
 
+        /** @brief Resolved roughness buffer (R8Unorm, 1x). */
+        RGResourceId roughness;
+
+        /** @brief MSAA roughness buffer; invalid when sample_count == 1. */
+        RGResourceId msaa_roughness;
+
         // ---- Scene data (non-owning references) ----
 
         /** @brief Loaded mesh resources. */

@@ -276,6 +276,22 @@ namespace himalaya::app {
                                                                               .mip_levels = 1,
                                                                           }, false);
 
+        // Resolved roughness buffer (R8, 1x): direct render target in 1x mode,
+        // MSAA roughness resolve target (AVERAGE) in multi-sample mode.
+        // Sampled by GTAO SO (Step 12) and M2 SSR.
+        managed_roughness_ = render_graph_.create_managed_image("Roughness", {
+                                                                    .size_mode = framework::RGSizeMode::Relative,
+                                                                    .width_scale = 1.0f,
+                                                                    .height_scale = 1.0f,
+                                                                    .width = 0,
+                                                                    .height = 0,
+                                                                    .format = rhi::Format::R8Unorm,
+                                                                    .usage = rhi::ImageUsage::ColorAttachment |
+                                                                             rhi::ImageUsage::Sampled,
+                                                                    .sample_count = 1,
+                                                                    .mip_levels = 1,
+                                                                }, false);
+
         // Fall back to the highest supported sample count if the default isn't available
         while (current_sample_count_ > 1 &&
                !(ctx_->msaa_sample_counts & current_sample_count_)) {
@@ -319,6 +335,18 @@ namespace himalaya::app {
                                                                           .sample_count = current_sample_count_,
                                                                           .mip_levels = 1,
                                                                       }, false);
+
+            managed_msaa_roughness_ = render_graph_.create_managed_image("MSAA Roughness", {
+                                                                             .size_mode = framework::RGSizeMode::Relative,
+                                                                             .width_scale = 1.0f,
+                                                                             .height_scale = 1.0f,
+                                                                             .width = 0,
+                                                                             .height = 0,
+                                                                             .format = rhi::Format::R8Unorm,
+                                                                             .usage = rhi::ImageUsage::ColorAttachment,
+                                                                             .sample_count = current_sample_count_,
+                                                                             .mip_levels = 1,
+                                                                         }, false);
         }
 
         shader_compiler_.set_include_path("shaders");
@@ -559,6 +587,8 @@ namespace himalaya::app {
             render_graph_.destroy_managed_image(managed_msaa_depth_);
         if (managed_msaa_normal_.valid())
             render_graph_.destroy_managed_image(managed_msaa_normal_);
+        if (managed_msaa_roughness_.valid())
+            render_graph_.destroy_managed_image(managed_msaa_roughness_);
         render_graph_.destroy_managed_image(managed_ao_noisy_);
         render_graph_.destroy_managed_image(managed_ao_blurred_);
         render_graph_.destroy_managed_image(managed_ao_filtered_);
@@ -566,6 +596,7 @@ namespace himalaya::app {
         render_graph_.destroy_managed_image(managed_hdr_color_);
         render_graph_.destroy_managed_image(managed_depth_);
         render_graph_.destroy_managed_image(managed_normal_);
+        render_graph_.destroy_managed_image(managed_roughness_);
         unregister_swapchain_images();
     }
 
@@ -621,14 +652,26 @@ namespace himalaya::app {
                                                   .sample_count = new_sample_count,
                                                   .mip_levels = 1,
                                               });
+            render_graph_.update_managed_desc(managed_msaa_roughness_, {
+                                                  .size_mode = framework::RGSizeMode::Relative,
+                                                  .width_scale = 1.0f,
+                                                  .height_scale = 1.0f,
+                                                  .width = 0, .height = 0,
+                                                  .format = rhi::Format::R8Unorm,
+                                                  .usage = rhi::ImageUsage::ColorAttachment,
+                                                  .sample_count = new_sample_count,
+                                                  .mip_levels = 1,
+                                              });
         } else if (old > 1) {
             // Multi-sample → 1x: destroy MSAA resources
             render_graph_.destroy_managed_image(managed_msaa_color_);
             render_graph_.destroy_managed_image(managed_msaa_depth_);
             render_graph_.destroy_managed_image(managed_msaa_normal_);
+            render_graph_.destroy_managed_image(managed_msaa_roughness_);
             managed_msaa_color_ = {};
             managed_msaa_depth_ = {};
             managed_msaa_normal_ = {};
+            managed_msaa_roughness_ = {};
         } else {
             // 1x → multi-sample: create MSAA resources
             managed_msaa_color_ = render_graph_.create_managed_image("MSAA Color", {
@@ -661,6 +704,16 @@ namespace himalaya::app {
                                                                           .sample_count = new_sample_count,
                                                                           .mip_levels = 1,
                                                                       }, false);
+            managed_msaa_roughness_ = render_graph_.create_managed_image("MSAA Roughness", {
+                                                                             .size_mode = framework::RGSizeMode::Relative,
+                                                                             .width_scale = 1.0f,
+                                                                             .height_scale = 1.0f,
+                                                                             .width = 0, .height = 0,
+                                                                             .format = rhi::Format::R8Unorm,
+                                                                             .usage = rhi::ImageUsage::ColorAttachment,
+                                                                             .sample_count = new_sample_count,
+                                                                             .mip_levels = 1,
+                                                                         }, false);
         }
 
         // Rebuild pipelines for MSAA-affected passes
@@ -923,11 +976,14 @@ namespace himalaya::app {
 
         const auto normal_resource = render_graph_.use_managed_image(
             managed_normal_, VK_IMAGE_LAYOUT_UNDEFINED);
+        const auto roughness_resource = render_graph_.use_managed_image(
+            managed_roughness_, VK_IMAGE_LAYOUT_UNDEFINED);
 
         // Use MSAA managed resources when multi-sampled
         framework::RGResourceId msaa_color_resource;
         framework::RGResourceId msaa_depth_resource;
         framework::RGResourceId msaa_normal_resource;
+        framework::RGResourceId msaa_roughness_resource;
         if (managed_msaa_color_.valid())
             msaa_color_resource = render_graph_.use_managed_image(
                 managed_msaa_color_, VK_IMAGE_LAYOUT_UNDEFINED);
@@ -937,6 +993,9 @@ namespace himalaya::app {
         if (managed_msaa_normal_.valid())
             msaa_normal_resource = render_graph_.use_managed_image(
                 managed_msaa_normal_, VK_IMAGE_LAYOUT_UNDEFINED);
+        if (managed_msaa_roughness_.valid())
+            msaa_roughness_resource = render_graph_.use_managed_image(
+                managed_msaa_roughness_, VK_IMAGE_LAYOUT_UNDEFINED);
 
         // Phase 5 AO/Contact Shadow resources
         const auto ao_noisy_resource = render_graph_.use_managed_image(
@@ -973,9 +1032,11 @@ namespace himalaya::app {
         frame_ctx.ao_history_valid = render_graph_.is_history_valid(managed_ao_filtered_);
         frame_ctx.contact_shadow_mask = contact_shadow_resource;
         frame_ctx.normal = normal_resource;
+        frame_ctx.roughness = roughness_resource;
         frame_ctx.msaa_color = msaa_color_resource;
         frame_ctx.msaa_depth = msaa_depth_resource;
         frame_ctx.msaa_normal = msaa_normal_resource;
+        frame_ctx.msaa_roughness = msaa_roughness_resource;
         frame_ctx.meshes = input.meshes;
         frame_ctx.materials = input.materials;
         frame_ctx.cull_result = &input.cull_result;
