@@ -348,10 +348,10 @@ DepthPrePass 扩展，独立于 GTAO 升级可验证。
 从 Lagarde 近似公式升级到 GTSO（Jimenez 2016），基于 XeGTAO v1.30 bent normal 参考实现。
 
 - `ao_noisy`、`ao_blurred`、`ao_filtered` 格式从 RG8 升级为 RGBA8（RGB = bent normal × 0.5 + 0.5，A = AO）
-- `gtao.comp`：新增 bent normal 计算（Algorithm 2），per-slice 累积 bent normal 方向，输出 RGBA8
+- `gtao.comp`：新增 bent normal 计算（Algorithm 2 解析积分，三角恒等式展开零额外 trig 调用），per-slice 累积 bent normal 方向，输出 RGBA8
 - `ao_spatial.comp`：适配 RGBA8 四通道（bent normal + AO 一起降噪）
 - `ao_temporal.comp`：适配 RGBA8（AO 邻域 clamp 改为 A 通道，bent normal RGB blend 不 clamp，blend 后 normalize）
-- `forward.frag`：SO 改用 GTSO 解析公式（visibility cone + specular cone 交集），删除 Lagarde 近似
+- `forward.frag`：SO 改用 GTSO smoothstep 近似（visibility cone + specular cone 交集），删除 Lagarde 近似
 - GTAOPass / AOSpatialPass / AOTemporalPass C++ 侧：Set 3 layout storage image 格式 `rg8` → `rgba8`
 - Renderer：managed image 创建格式 RG8 → RGBA8
 
@@ -360,6 +360,13 @@ DepthPrePass 扩展，独立于 GTAO 升级可验证。
 #### 设计要点
 
 见 `milestone-1/m1-phase5-decisions.md`「Specular Occlusion」。参考实现：[XeGTAO](https://github.com/GameTechDev/XeGTAO) v1.30 bent normal 支持。
+
+实现细节：
+- Bent normal：Algorithm 2 解析积分，三角恒等式展开（零额外 trig 调用），view-space 存储
+- SO 评估：`smoothstep(0, 1, (αv − β) / αs)` 工业标准近似（XeGTAO / UE / Frostbite 均采用）
+- Bent normal 解码（forward.frag）：`transpose(mat3(view))` 从 view-space 转 world-space
+- Spatial blur：编码空间线性操作，无需 decode/encode（affine 编码保证正确性）
+- Temporal：AO（A 通道）邻域 clamp，bent normal（RGB）不 clamp 共享 blend factor，输出前 decode → normalize → encode
 
 ---
 

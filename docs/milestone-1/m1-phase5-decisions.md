@@ -194,17 +194,40 @@ GTAO 在 horizon search 中额外计算 bent normal（Algorithm 2，XeGTAO v1.30
 
 **为什么选 GTSO 而非 B1（per-direction cone overlap）：** B1 方案（GTAO 直接在每个 slice 中评估 specular cone 与 horizon 重叠）没有公开参考实现。GTSO 有 XeGTAO 完整参考，bent normal 计算仅在 GTAO shader 中增加 ~25% ALU 开销，且 bent normal 是通用中间表示，M2 可复用于 SSGI 等场景。
 
-**为什么用解析公式而非 3D LUT：** 论文建议将 cone 交集预计算为 3D LUT（β, αv, αs）。但项目中无 3D 纹理管理基础设施，且 cone 交集的解析公式（球面 cap 交集）在 forward.frag 中仅评估一次/片元，ALU 开销可忽略。避免引入额外资源类型。
+**为什么用 smoothstep 近似而非 3D LUT：** 论文建议将 cone 交集预计算为 3D LUT（β, αv, αs）。但项目中无 3D 纹理管理基础设施。运行时使用 smoothstep 近似（工业标准，XeGTAO / UE / Frostbite 均采用），在 forward.frag 中仅 ~5 ALU ops/片元。精确球面 cap 面积比需额外 acos + 分支处理且数值稳定性差（`sin(αv)·sin(β)` 作除数，角度趋零时发散），视觉差异在最终画面不可察觉——SO 本身是环境光上的二次调制。
 
 **GTSO cone 交集参数：**
 - Visibility cone：方向 = bent normal，半角 `αv = acos(sqrt(1 − AO))`（从 AO 值反推 cone 面积）
 - Specular cone：方向 = reflection direction R，半角 `αs` 由 roughness 推导：`cos(αs) = 0.01^(0.5 * r²)`（Jimenez 2016 最优拟合，u = 0.01）
 - Cone 间夹角：`β = acos(clamp(dot(bentNormal, R), -1, 1))`
-- SO = 解析球面 cap 交集面积 / specular cone 面积
+- SO = `smoothstep(0.0, 1.0, (αv − β) / αs)`（smoothstep 近似，工业标准做法）
 
 **分阶段实施：** Step 9 先用 Lagarde 近似公式（`saturate(pow(NdotV + ao, exp2(-16 * roughness - 1)) - 1 + ao)`，Lagarde & de Rousiers 2014）验证 AO 管线正确性（不需要 bent normal），Step 12 升级到 GTSO 后可直接对比精度差异。
 
 **输出格式变更：** GTAO 输出从 RG8 升级为 RGBA8_UNORM。Step 7 先只写 A 通道（AO），RGB 填充默认值（编码后的 view-space normal 或 (0.5, 0.5, 0.5)），Step 12 升级后写完整 bent normal + AO。`ao_noisy`、`ao_blurred`、`ao_filtered` 三张纹理同步从 RG8 改为 RGBA8（bent normal 需要经过 spatial blur 和 temporal filter 降噪）。
+
+**Bent normal 逐 slice 计算（Algorithm 2）：** GTAO 论文 Algorithm 2 的 cosine-weighted 平均可见方向解析积分。每个 slice 从 horizon 角 h1（正方向）、h2（负方向）和投影法线角 γ 计算切线方向分量 t1 和视线方向分量 t2：
+
+```
+t1 = (6·sin(h1−γ) − sin(3h1−γ) + 6·sin(h2+γ) − sin(3h2+γ)
+      + 16·sin(γ) − 3·(sin(h1+γ) + sin(h2−γ))) / 12
+t2 = (−cos(3h1−γ) − cos(3h2+γ) + 8·cos(γ)
+      − 3·(cos(h1+γ) + cos(h2−γ))) / 12
+bent += n_proj_len × (tangent × t1 + view_dir × t2)
+```
+
+零额外 trig 调用实现：公式中所有三角函数通过已有值的代数组合展开。当前代码已持有 `cos(h1) = max_cos_pos`、`cos(h2) = max_cos_neg`、`sin(γ) = sin_n`、`cos(γ) = cos_n`。展开恒等式：
+
+- `sin(h) = sqrt(1 − cos²(h))`（2 次 sqrt，正/负各一）
+- `sin(3h) = 3·sin(h) − 4·sin³(h)`，`cos(3h) = 4·cos³(h) − 3·cos(h)`（纯乘加）
+- `sin(a±b) = sin(a)·cos(b) ± cos(a)·sin(b)`（纯乘加）
+- `cos(a±b) = cos(a)·cos(b) ∓ sin(a)·sin(b)`（纯乘加）
+
+因此 t1 和 t2 的全部计算仅需 2 个 sqrt + 乘加运算，无 sin/cos/acos 调用。
+
+各 slice 累积后 normalize 编码为 `RGB = bn × 0.5 + 0.5`，AO 写入 A 通道。
+
+**Bent normal 坐标空间：** View-space 存储（GTAO 自然输出空间）。消费端 forward.frag 通过 `transpose(mat3(view))` 转回 world-space，与 reflection direction 计算 cone 夹角。View-space 存储意味着相机旋转时 temporal history 的 bent normal 与当前帧不一致——已知风险，由 depth rejection 部分保护，见下方 AO Temporal Filter 章节「Bent normal temporal 风险」。
 
 ### GTAO 正确性修订（Step 10a）
 
