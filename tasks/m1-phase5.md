@@ -111,7 +111,7 @@
 - [x] R8 roughness managed image 创建 + on_sample_count_changed 适配
 - [x] depth_prepass.frag + depth_prepass_masked.frag：输出 roughness
 - [x] DepthPrePass：roughness 额外 color attachment + MSAA AVERAGE resolve
-- [ ] FrameContext 新增 roughness + msaa_roughness RGResourceId
+- [x] FrameContext 新增 roughness + msaa_roughness RGResourceId
 
 ## Step 12：GTAO SO 升级（B1）
 
