@@ -229,8 +229,11 @@ void main() {
             radiance *= blend_cascade_shadow(frag_world_pos, N, view_depth);
         }
 
-        // Contact shadow attenuation (screen-space ray march, primary light only)
-        radiance *= contact_shadow;
+        // Contact shadow attenuation (primary directional light only —
+        // the compute shader traces rays for directional_lights[0])
+        if (i == 0u) {
+            radiance *= contact_shadow;
+        }
 
         direct_diffuse  += (1.0 - F) * diffuse_color * INV_PI * radiance;
         direct_specular += D * Vis * F * radiance;

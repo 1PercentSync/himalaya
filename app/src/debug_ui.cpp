@@ -527,9 +527,8 @@ namespace himalaya::app {
 
                 ImGui::SliderFloat("Max Distance##cs", &ctx.contact_shadow_config.max_distance,
                                    0.1f, 5.0f, "%.2f m");
-                ImGui::SliderFloat("Base Thickness", &ctx.contact_shadow_config.base_thickness,
-                                   0.0001f, 0.05f, "%.4f",
-                                   ImGuiSliderFlags_Logarithmic);
+                ImGui::SliderFloat("Min Thickness (m)", &ctx.contact_shadow_config.base_thickness,
+                                   0.001f, 0.1f, "%.3f m");
             }
         }
 

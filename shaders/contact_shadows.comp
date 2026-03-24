@@ -5,8 +5,9 @@
  * @brief Screen-space contact shadows compute shader.
  *
  * Ray-marches from each pixel towards the primary directional light in
- * screen space.  On hit, outputs a shadow mask value based on distance
- * fade (full shadow at contact, fading towards max search distance).
+ * clip space.  Interpolates in clip space with per-step perspective divide
+ * for correct screen UV and depth.  Uses interleaved gradient noise (IGN)
+ * temporal jitter to convert step banding into noise resolvable by TAA.
  *
  * Output: R8 contact_shadow_mask (1.0 = lit, 0.0 = fully shadowed).
  *
@@ -33,38 +34,59 @@ layout(push_constant) uniform ContactShadowPushConstants {
     float base_thickness;   // depth-adaptive thickness base value
 } pc;
 
-// ---- World-space reconstruction ----
+// ---- Utility functions ----
 
 /**
- * Reconstruct world-space position from depth buffer.
+ * Convert raw Reverse-Z depth to positive linear view-space distance.
  *
- * Uses inv_view_projection to map screen UV + depth to world space.
- * Accounts for the Y-flipped viewport used by scene passes (negative
- * viewport height): screen y increases downward but NDC y increases
- * upward.
+ * Derivation from the perspective projection matrix P:
+ *   depth = (P[2][2] * vz + P[3][2]) / (-vz)
+ *   => linear_distance = -vz = P[3][2] / (depth + P[2][2])
  *
- * @param uv    Texel-center UV in [0,1] (y=0 at top of screen).
- * @param depth Raw depth value (Reverse-Z: near=1, far=0).
- * @return World-space position.
+ * @param d Raw depth value (Reverse-Z: near=1, far=0).
+ * @return Positive linear view-space distance from camera.
  */
-vec3 reconstruct_world_pos(vec2 uv, float depth) {
-    vec2 ndc = vec2(uv.x * 2.0 - 1.0, 1.0 - uv.y * 2.0);
-    vec4 world_h = global.inv_view_projection * vec4(ndc, depth, 1.0);
-    return world_h.xyz / world_h.w;
+float linearize_depth(float d) {
+    return global.projection[3][2] / (d + global.projection[2][2]);
 }
 
 /**
- * Compute linear view-space depth from raw reverse-Z depth.
+ * Interleaved gradient noise (Jorge Jimenez, Call of Duty: Advanced Warfare).
  *
- * With the reverse-Z infinite far-plane projection used by this engine,
- * inv_projection[3][2] = near and inv_projection[2][2] = 0, giving:
- *   linear_z = near / depth
+ * Produces a scalar in [0, 1) that varies per pixel and per frame.
+ * The temporal offset (frame * 5.588238) rotates the noise pattern
+ * each frame, enabling TAA to accumulate diverse samples.
  *
- * @param depth Raw depth value (Reverse-Z: near=1, far=0).
- * @return Positive linear distance from camera.
+ * @param screen_pos Pixel coordinate (integer or fractional).
+ * @param frame      Frame counter for temporal variation.
+ * @return Noise value in [0, 1).
  */
-float linear_depth(float depth) {
-    return global.inv_projection[3][2] / depth;
+float interleaved_gradient_noise(vec2 screen_pos, uint frame) {
+    screen_pos += float(frame) * 5.588238;
+    vec3 magic = vec3(0.06711056, 0.00583715, 52.9829189);
+    return fract(magic.z * fract(dot(screen_pos, magic.xy)));
+}
+
+/**
+ * NDC xy [-1,1] to screen UV [0,1] with Y-flip compensation.
+ *
+ * Scene passes use a flipped viewport (negative height), so screen y
+ * increases downward while NDC y increases upward.
+ */
+vec2 ndc_to_uv(vec2 ndc_xy) {
+    return vec2(ndc_xy.x * 0.5 + 0.5, 0.5 - ndc_xy.y * 0.5);
+}
+
+/**
+ * Screen edge fade to prevent hard shadow cutoff at viewport boundaries.
+ *
+ * Returns 1.0 well inside the screen, fading to 0.0 within kEdgeWidth
+ * of any edge.
+ */
+float screen_edge_fade(vec2 uv) {
+    const float kEdgeWidth = 0.05;
+    vec2 fade = smoothstep(vec2(0.0), vec2(kEdgeWidth), min(uv, 1.0 - uv));
+    return fade.x * fade.y;
 }
 
 // ---- Main ----
@@ -83,7 +105,6 @@ void main() {
     }
 
     // Sample depth at current pixel
-    vec2 uv = (vec2(pixel) + 0.5) / vec2(size);
     float depth = texelFetch(rt_depth_resolved, pixel, 0).r;
 
     // Skip sky pixels (reverse-Z: depth=0 at infinite far plane)
@@ -92,63 +113,109 @@ void main() {
         return;
     }
 
-    // Reconstruct world-space position
-    vec3 world_pos = reconstruct_world_pos(uv, depth);
+    // ---- Ray setup ----
 
-    // Read light direction from LightBuffer SSBO
-    // direction_and_intensity.xyz is the light propagation direction (towards surface)
+    vec2 uv = (vec2(pixel) + 0.5) / vec2(size);
+    vec2 ndc = vec2(uv.x * 2.0 - 1.0, 1.0 - uv.y * 2.0);
+
+    // Build start_clip directly from the pixel's known NDC coordinates.
+    // This avoids the inv_view_projection → view_projection round-trip
+    // that accumulates floating-point error at distance (far pixels have
+    // tiny NDC depth values where small absolute errors matter).
+    float start_w = linearize_depth(depth); // = clip.w = -view_z (exact)
+    vec4 start_clip = vec4(ndc * start_w, depth * start_w, start_w);
+
+    // Reconstruct world-space position for ray end calculation only.
+    // Round-trip error in end_clip merely shifts the ray direction slightly,
+    // which is tolerable; the critical precision is at the ray origin.
+    vec4 world_h = global.inv_view_projection * vec4(ndc, depth, 1.0);
+    vec3 world_pos = world_h.xyz / world_h.w;
+
+    // direction_and_intensity.xyz = propagation direction (toward surface)
     vec3 light_dir = normalize(directional_lights[0].direction_and_intensity.xyz);
+    vec3 ray_dir = -light_dir; // surface toward light
 
-    // Ray direction: from surface towards the light (opposite of propagation)
-    vec3 ray_dir = -light_dir;
+    vec3 ray_end_world = world_pos + ray_dir * pc.max_distance;
+    vec4 end_clip = global.view_projection * vec4(ray_end_world, 1.0);
 
-    // Compute world-space ray end point
-    vec3 ray_end = world_pos + ray_dir * pc.max_distance;
+    // ---- Self-intersection bias ----
+    // Compute screen-space ray length to determine how much t to skip.
+    // Offsetting ~2 pixels prevents sampling the origin surface's own depth.
 
-    // Project start and end to clip space
-    vec4 start_clip = global.view_projection * vec4(world_pos, 1.0);
-    vec4 end_clip = global.view_projection * vec4(ray_end, 1.0);
+    vec3 end_ndc   = end_clip.xyz / end_clip.w;
+    vec2 start_px  = ndc_to_uv(ndc) * vec2(size);
+    vec2 end_px    = ndc_to_uv(end_ndc.xy) * vec2(size);
+    float ray_len_px = length(end_px - start_px);
 
-    // Perspective divide → NDC
-    vec3 start_ndc = start_clip.xyz / start_clip.w;
-    vec3 end_ndc = end_clip.xyz / end_clip.w;
+    // Bias in t-space: skip first ~2 pixels (clamped so bias ≤ 10% of ray)
+    float t_bias = clamp(2.0 / max(ray_len_px, 1.0), 0.0, 0.1);
 
-    // NDC → UV (Y-flipped viewport compensation)
-    vec2 start_uv = vec2(start_ndc.x * 0.5 + 0.5, 0.5 - start_ndc.y * 0.5);
-    vec2 end_uv = vec2(end_ndc.x * 0.5 + 0.5, 0.5 - end_ndc.y * 0.5);
+    // ---- Dynamic compare tolerance (UE-style) ----
+    // Proportional to per-step depth change of the ray.  For distant floor
+    // pixels where the ray barely changes depth, the tolerance is tiny,
+    // automatically rejecting false hits from walls/ceiling at similar depths.
+    // base_thickness serves as a minimum floor for very short rays.
 
-    float start_depth = start_ndc.z;
-    float end_depth = end_ndc.z;
+    float lin_start = start_w;
+    float lin_end   = linearize_depth(end_ndc.z);
+    float depth_span = abs(lin_end - lin_start);
+    float tolerance  = max(2.0 * depth_span / float(pc.step_count),
+                           pc.base_thickness);
 
-    // Step along the ray in screen space
-    float shadow = 1.0;  // 1.0 = lit (no shadow)
+    // ---- Step parameters ----
 
-    for (uint i = 1u; i <= pc.step_count; ++i) {
-        float t = float(i) / float(pc.step_count);
+    float t_range = 1.0 - t_bias;
+    float step_t  = t_range / float(pc.step_count);
 
-        vec2 sample_uv = mix(start_uv, end_uv, t);
+    // ---- Temporal jitter (IGN) ----
+    // Offset all steps by [0, 1) × step_t, converting banding to noise.
 
-        // Skip samples outside screen bounds
-        if (any(lessThan(sample_uv, vec2(0.0))) || any(greaterThan(sample_uv, vec2(1.0)))) break;
+    float noise    = interleaved_gradient_noise(vec2(pixel), global.frame_index);
+    float t_jitter = noise * step_t;
 
-        // Expected ray depth at this step (linear interpolation in NDC Z)
-        float expected_depth = mix(start_depth, end_depth, t);
+    // ---- Ray march ----
 
-        // Sample actual scene depth at this UV
-        float sampled_depth = texture(rt_depth_resolved, sample_uv).r;
+    float shadow = 1.0; // 1.0 = lit, 0.0 = fully shadowed
 
-        // Depth-adaptive thickness: wider tolerance for distant surfaces
-        float thickness = pc.base_thickness * linear_depth(sampled_depth);
+    for (uint i = 0u; i < pc.step_count; ++i) {
+        float t = t_bias + t_jitter + float(i) * step_t;
 
-        // Occlusion test (Reverse-Z: closer to camera = higher depth value)
-        // The ray moves away from camera towards the light.
-        // An occluder exists when the scene surface at this UV is:
-        //   1) closer to camera than the ray point (sampled_depth > expected_depth)
-        //   2) but not too far in front (within thickness)
-        if (sampled_depth > expected_depth
-            && (sampled_depth - expected_depth) < thickness) {
-            // Distance fade: full shadow at contact (t≈0), fading at max distance (t≈1)
-            shadow = smoothstep(0.0, 1.0, t);
+        // Interpolate in clip space, then perspective divide
+        vec4 ray_clip = mix(start_clip, end_clip, t);
+
+        // Guard against crossing the camera plane (w ≤ 0)
+        if (ray_clip.w <= 0.0) break;
+
+        vec3 ray_ndc  = ray_clip.xyz / ray_clip.w;
+        vec2 sample_uv    = ndc_to_uv(ray_ndc.xy);
+        float ray_depth   = ray_ndc.z;
+
+        // Screen bounds check
+        if (any(lessThan(sample_uv, vec2(0.0))) || any(greaterThan(sample_uv, vec2(1.0))))
+            break;
+
+        // Sample scene depth and convert both to linear view-space distance.
+        // Comparison in linear space avoids the NDC nonlinearity problem:
+        // in Reverse-Z, the same world-space thickness maps to vastly
+        // different NDC deltas at different distances (~near/z²), making
+        // NDC-space comparison unreliable.
+        float scene_depth = texture(rt_depth_resolved, sample_uv).r;
+        float lin_scene = linearize_depth(scene_depth);
+        float lin_ray   = linearize_depth(ray_depth);
+
+        // Occlusion test in linear space.
+        // Scene closer to camera than ray → lin_scene < lin_ray → delta > 0.
+        // The delta must be within the dynamic tolerance (computed before
+        // the loop) to reject false positives from thick geometry.
+        float lin_delta = lin_ray - lin_scene;
+
+        if (lin_delta > 0.0 && lin_delta < tolerance) {
+            // Hit — compute shadow with distance and edge fading.
+            // Full shadow near contact, fading in the last 25% of the ray
+            // to soften the shadow terminus at max search distance.
+            float end_fade  = 1.0 - smoothstep(0.75, 1.0, t);
+            float edge_fade = screen_edge_fade(sample_uv);
+            shadow = 1.0 - end_fade * edge_fade;
             break;
         }
     }
