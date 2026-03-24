@@ -10,8 +10,7 @@
  * through thin geometry (e.g., a 1-pixel edge between two same-depth
  * surfaces is correctly blocked).
  *
- * Output: RG8 where R = blurred diffuse AO, G = blurred specular occlusion
- * (G = 0.0 until Step 12 adds B1 specular occlusion).
+ * Output: RGBA8 where RGB = blurred bent normal (x 0.5 + 0.5), A = blurred AO.
  *
  * Workgroup: 8x8 (one thread per pixel, no shared memory).
  */
@@ -23,7 +22,7 @@ layout(local_size_x = 8, local_size_y = 8) in;
 
 // ---- Set 3: push descriptors (per-dispatch I/O) ----
 
-layout(set = 3, binding = 0, rg8) uniform writeonly image2D ao_output;
+layout(set = 3, binding = 0, rgba8) uniform writeonly image2D ao_output;
 layout(set = 3, binding = 1) uniform sampler2D ao_input_tex;
 
 // ---- Constants ----

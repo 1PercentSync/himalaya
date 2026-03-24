@@ -220,42 +220,42 @@ namespace himalaya::app {
 
         // --- Phase 5 AO/Contact Shadow resources ---
 
-        // GTAO raw output (RG8): written by GTAO compute, read by AO Temporal
+        // GTAO raw output (RGBA8: RGB=bent normal, A=AO): written by GTAO compute, read by AO Spatial
         managed_ao_noisy_ = render_graph_.create_managed_image("AO Noisy", {
                                                                     .size_mode = framework::RGSizeMode::Relative,
                                                                     .width_scale = 1.0f,
                                                                     .height_scale = 1.0f,
                                                                     .width = 0,
                                                                     .height = 0,
-                                                                    .format = rhi::Format::R8G8Unorm,
+                                                                    .format = rhi::Format::R8G8B8A8Unorm,
                                                                     .usage = rhi::ImageUsage::Storage |
                                                                              rhi::ImageUsage::Sampled,
                                                                     .sample_count = 1,
                                                                     .mip_levels = 1,
                                                                 }, false);
 
-        // AO spatially denoised (RG8): written by AO Spatial, read by AO Temporal
+        // AO spatially denoised (RGBA8): written by AO Spatial, read by AO Temporal
         managed_ao_blurred_ = render_graph_.create_managed_image("AO Blurred", {
                                                                       .size_mode = framework::RGSizeMode::Relative,
                                                                       .width_scale = 1.0f,
                                                                       .height_scale = 1.0f,
                                                                       .width = 0,
                                                                       .height = 0,
-                                                                      .format = rhi::Format::R8G8Unorm,
+                                                                      .format = rhi::Format::R8G8B8A8Unorm,
                                                                       .usage = rhi::ImageUsage::Storage |
                                                                                rhi::ImageUsage::Sampled,
                                                                       .sample_count = 1,
                                                                       .mip_levels = 1,
                                                                   }, false);
 
-        // AO temporal-filtered output (RG8, temporal): written by AO Temporal, sampled via Set 2
+        // AO temporal-filtered output (RGBA8, temporal): written by AO Temporal, sampled via Set 2
         managed_ao_filtered_ = render_graph_.create_managed_image("AO Filtered", {
                                                                        .size_mode = framework::RGSizeMode::Relative,
                                                                        .width_scale = 1.0f,
                                                                        .height_scale = 1.0f,
                                                                        .width = 0,
                                                                        .height = 0,
-                                                                       .format = rhi::Format::R8G8Unorm,
+                                                                       .format = rhi::Format::R8G8B8A8Unorm,
                                                                        .usage = rhi::ImageUsage::Storage |
                                                                                 rhi::ImageUsage::Sampled,
                                                                        .sample_count = 1,

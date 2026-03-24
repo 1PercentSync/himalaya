@@ -7,8 +7,8 @@
  * Blends current-frame spatially denoised AO (ao_blurred) with the previous
  * frame's filtered result (ao_history) using reprojection and multi-layer rejection.
  *
- * Output: RG8 where R = temporally filtered diffuse AO,
- * G = 0.0 (specular occlusion passthrough, Step 12 adapts dual-channel).
+ * Output: RGBA8 where RGB = temporally filtered bent normal (x 0.5 + 0.5),
+ * A = temporally filtered diffuse AO.
  *
  * Workgroup: 8x8 (one thread per pixel, no shared memory).
  */
@@ -20,7 +20,7 @@ layout(local_size_x = 8, local_size_y = 8) in;
 
 // ---- Set 3: push descriptors (per-dispatch I/O) ----
 
-layout(set = 3, binding = 0, rg8) uniform writeonly image2D ao_output;
+layout(set = 3, binding = 0, rgba8) uniform writeonly image2D ao_output;
 layout(set = 3, binding = 1) uniform sampler2D ao_input_tex;
 layout(set = 3, binding = 2) uniform sampler2D ao_history_tex;
 layout(set = 3, binding = 3) uniform sampler2D depth_prev_tex;
