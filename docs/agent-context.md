@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段五 — 屏幕空间效果
-- **进度**：Step 11 完成（67/~69）
+- **进度**：Step 12 完成（72/~69）
 
 ### 下一个任务
 
-Step 12 第五小项：forward.frag SO 改用 GTSO smoothstep 近似（bent normal cone 交集），删除 Lagarde 近似
+Step 12 全部完成（5/5），下一个任务：Step 13 Contact Shadows Compute
 
 ---
 

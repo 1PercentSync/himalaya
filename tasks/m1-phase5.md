@@ -119,7 +119,7 @@
 - [x] gtao.comp：新增 bent normal 计算（Algorithm 2）+ 输出 RGBA8
 - [x] ao_spatial.comp：适配 RGBA8 四通道降噪
 - [x] ao_temporal.comp：适配 RGBA8（AO 邻域 clamp 改 A 通道，bent normal RGB blend 不 clamp）
-- [ ] forward.frag：SO 改用 GTSO 解析公式（bent normal cone 交集），删除 Lagarde 近似
+- [x] forward.frag：SO 改用 GTSO 解析公式（bent normal cone 交集），删除 Lagarde 近似
 
 ## Step 13：Contact Shadows Compute
 
