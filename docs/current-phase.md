@@ -381,7 +381,7 @@ DepthPrePass 扩展，独立于 GTAO 升级可验证。
 - `contact_shadows.comp`：每步深度比较 + 深度自适应 thickness（`base_thickness × linear_depth`）
 - `contact_shadows.comp`：距离衰减（首次命中 + smoothstep fade），push constants 传参数
 - `contact_shadows.comp`：光方向从 LightBuffer SSBO（Set 0 Binding 1）读取 `directional_lights[0]`
-- `ContactShadowsPass` 类（setup / record / destroy / rebuild_pipelines），push descriptors 绑 depth 读 + contact_shadow_mask 写
+- `ContactShadowsPass` 类（setup / record / destroy / rebuild_pipelines），Set 3 push descriptor 仅 contact_shadow_mask storage 写（depth 从 Set 2 binding 1 读取）
 
 **验证**：RenderDoc 检查 contact_shadow_mask — 物体接地处有阴影遮罩，远端衰减渐变
 
@@ -427,9 +427,9 @@ AO Temporal (compute)
   写: ao_filtered (push descriptor storage image)
     ↓
 Contact Shadows (compute)                          ← 与 AO 管线零数据依赖，
-  读: depth (push descriptor),                        RG 不插入 barrier，GPU 可重叠执行
+  读: depth (Set 2 binding 1),                         RG 不插入 barrier，GPU 可重叠执行
        light direction (LightBuffer SSBO, Set 0 Binding 1)
-  写: contact_shadow_mask (R8, push descriptor storage image)
+  写: contact_shadow_mask (R8, Set 3 push descriptor storage image)
     ↓
 ForwardPass (MSAA, depth EQUAL write OFF)
   读: shadow_map (Set 2 binding 5/6), ao_filtered (Set 2 binding 3, RGBA8: bent normal + AO),
