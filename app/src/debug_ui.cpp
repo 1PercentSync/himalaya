@@ -503,6 +503,7 @@ namespace himalaya::app {
                 ImGui::SliderFloat("Thin Compensation", &ctx.ao_config.thin_compensation, 0.0f, 0.7f, "%.2f");
                 ImGui::SliderFloat("Intensity##ao", &ctx.ao_config.intensity, 0.5f, 3.0f, "%.2f");
                 ImGui::SliderFloat("Temporal Blend", &ctx.ao_config.temporal_blend, 0.0f, 0.98f, "%.2f");
+                ImGui::Checkbox("GTSO (Bent Normal)", &ctx.ao_config.use_gtso);
             }
         }
 

@@ -227,6 +227,9 @@ namespace himalaya::framework {
 
         /** @brief History blend factor for temporal accumulation (0.0-1.0). */
         float temporal_blend;
+
+        /** @brief Use GTSO (bent normal cone intersection) for specular occlusion; false = Lagarde approximation. */
+        bool use_gtso;
     };
 
     /**
@@ -297,7 +300,8 @@ namespace himalaya::framework {
         glm::mat4 inv_projection{}; ///< offset 720 — depth → view-space position reconstruction (GTAO)
         glm::mat4 prev_view_projection{}; ///< offset 784 — temporal reprojection (current world → prev UV)
         uint32_t frame_index = 0; ///< offset 848 — monotonically increasing frame counter (temporal noise variation)
-        uint32_t _phase5_pad[3]{}; ///< offset 852 — pad to 864 (vec4 alignment)
+        uint32_t ao_so_mode = 1; ///< offset 852 — 0 = Lagarde approximation, 1 = GTSO (bent normal)
+        uint32_t _phase5_pad[2]{}; ///< offset 856 — pad to 864 (vec4 alignment)
     };
 
     /**
@@ -388,6 +392,7 @@ namespace himalaya::framework {
     static_assert(offsetof(GlobalUniformData, inv_projection) == 720);
     static_assert(offsetof(GlobalUniformData, prev_view_projection) == 784);
     static_assert(offsetof(GlobalUniformData, frame_index) == 848);
+    static_assert(offsetof(GlobalUniformData, ao_so_mode) == 852);
     static_assert(sizeof(GPUDirectionalLight) == 32, "GPUDirectionalLight must be 32 bytes (std430)");
     static_assert(sizeof(GPUInstanceData) == 128, "GPUInstanceData must be 128 bytes (std430)");
     static_assert(offsetof(GPUInstanceData, normal_col0) == 64);

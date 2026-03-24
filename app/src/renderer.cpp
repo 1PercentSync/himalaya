@@ -813,6 +813,7 @@ namespace himalaya::app {
         ubo_data.inv_projection = glm::inverse(input.camera.projection);
         ubo_data.prev_view_projection = prev_view_projection_;
         ubo_data.frame_index = frame_counter_;
+        ubo_data.ao_so_mode = input.ao_config.use_gtso ? 1u : 0u;
 
         // --- Shadow fields ---
         ubo_data.shadow_normal_offset = input.shadow_config.normal_offset;

@@ -59,6 +59,11 @@ struct GPUMaterialData {
 #define FEATURE_AO              (1u << 1)
 #define FEATURE_CONTACT_SHADOWS (1u << 2)
 
+// ---- AO specular occlusion mode (GlobalUBO.ao_so_mode) ----
+
+#define AO_SO_LAGARDE 0
+#define AO_SO_GTSO    1
+
 // ---- Shadow cascade constants ----
 
 #define MAX_SHADOW_CASCADES 4
@@ -122,6 +127,7 @@ layout(set = 0, binding = 0) uniform GlobalUBO {
     mat4 inv_projection;                    // offset 720 — depth → view-space position (GTAO)
     mat4 prev_view_projection;              // offset 784 — temporal reprojection (current world → prev UV)
     uint frame_index;                       // offset 848 — monotonically increasing frame counter (temporal noise)
+    uint ao_so_mode;                        // offset 852 — 0 = Lagarde, 1 = GTSO (bent normal)
 } global;
 
 layout(set = 0, binding = 1) readonly buffer LightBuffer {

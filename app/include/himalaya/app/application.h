@@ -190,6 +190,7 @@ namespace himalaya::app {
             .thin_compensation = 0.2f,
             .intensity = 1.0f,
             .temporal_blend = 0.9f,
+            .use_gtso = true,
         };
 
         /** @brief Contact Shadows configuration parameters. */
