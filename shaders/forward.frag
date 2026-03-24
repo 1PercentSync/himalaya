@@ -51,22 +51,30 @@ vec3 multi_bounce_ao(float ao, vec3 albedo) {
 }
 
 /**
- * Lagarde specular occlusion approximation (Lagarde 2014).
+ * GTSO specular occlusion (Jimenez 2016, smoothstep approximation).
  *
- * Estimates how much the specular reflection direction is occluded based
- * on the diffuse AO value, view angle, and surface roughness.  Rougher
- * surfaces have wider specular lobes, so they are less affected.
+ * Evaluates the overlap between a visibility cone (derived from bent
+ * normal + AO) and a specular cone (reflection direction + roughness).
+ * Industry-standard approximation used by XeGTAO, UE, and Frostbite.
  *
- * This is an interim approximation — Step 12 replaces it with per-direction
- * cone-horizon overlap computed directly by the GTAO shader.
- *
- * @param NdotV    Clamped dot(N, V).
- * @param ao       Screen-space ambient occlusion [0,1].
- * @param roughness Surface roughness [0,1].
+ * @param bent_normal World-space bent normal (normalized).
+ * @param R           World-space reflection direction (normalized).
+ * @param ao          Diffuse ambient occlusion [0,1].
+ * @param roughness   Surface roughness [0,1].
  * @return Specular occlusion factor [0,1].
  */
-float lagarde_so(float NdotV, float ao, float roughness) {
-    return clamp(pow(NdotV + ao, exp2(-16.0 * roughness - 1.0)) - 1.0 + ao, 0.0, 1.0);
+float gtso_specular_occlusion(vec3 bent_normal, vec3 R, float ao, float roughness) {
+    // Visibility cone half-angle: area of unoccluded cap → half-angle
+    float alpha_v = acos(sqrt(1.0 - ao));
+
+    // Specular cone half-angle: Jimenez 2016 optimal fit (u = 0.01)
+    float alpha_s = max(acos(pow(0.01, 0.5 * roughness * roughness)), 0.01);
+
+    // Angle between cone axes
+    float beta = acos(clamp(dot(bent_normal, R), -1.0, 1.0));
+
+    // Smoothstep approximation of sphere cap intersection ratio
+    return smoothstep(0.0, 1.0, (alpha_v - beta) / alpha_s);
 }
 
 void main() {
@@ -104,15 +112,15 @@ void main() {
                 dbg_mat_ao = 1.0 + mat.occlusion_strength * (dbg_mat_ao - 1.0);
                 float dbg_ssao = 1.0;
                 if ((global.feature_flags & FEATURE_AO) != 0u) {
-                    dbg_ssao = texture(rt_ao_texture, gl_FragCoord.xy / global.screen_size).r;
+                    dbg_ssao = texture(rt_ao_texture, gl_FragCoord.xy / global.screen_size).a;
                 }
                 vis = vec3(dbg_ssao * dbg_mat_ao);
                 break;
             }
             case DEBUG_MODE_AO_SSAO: {
-                // Raw GTAO output (R channel, temporal-filtered)
+                // Raw GTAO output (A channel, temporal-filtered)
                 if ((global.feature_flags & FEATURE_AO) != 0u) {
-                    vis = vec3(texture(rt_ao_texture, gl_FragCoord.xy / global.screen_size).r);
+                    vis = vec3(texture(rt_ao_texture, gl_FragCoord.xy / global.screen_size).a);
                 } else {
                     vis = vec3(1.0);
                 }
@@ -201,23 +209,26 @@ void main() {
     float material_ao = texture(textures[nonuniformEXT(mat.occlusion_tex)], frag_uv0).r;
     material_ao = 1.0 + mat.occlusion_strength * (material_ao - 1.0);
 
-    // Screen-space AO (GTAO temporal-filtered, guarded by FEATURE_AO)
+    // Screen-space AO + bent normal (GTAO temporal-filtered, guarded by FEATURE_AO)
     vec2 screen_uv = gl_FragCoord.xy / global.screen_size;
     float ssao = 1.0;
+    float specular_ao = 1.0;
     if ((global.feature_flags & FEATURE_AO) != 0u) {
-        ssao = texture(rt_ao_texture, screen_uv).r;
+        vec4 ao_data = texture(rt_ao_texture, screen_uv);
+        ssao = ao_data.a;
+
+        // Decode bent normal: view-space (encoded x0.5+0.5) → world-space
+        vec3 bent_ws = transpose(mat3(global.view)) * (ao_data.rgb * 2.0 - 1.0);
+        bent_ws = (dot(bent_ws, bent_ws) > EPSILON) ? normalize(bent_ws) : N;
+
+        // GTSO specular occlusion (visibility cone × specular cone intersection)
+        specular_ao = gtso_specular_occlusion(bent_ws, R, ssao, roughness);
     }
 
     // Diffuse AO: combine SSAO with material AO + multi-bounce color compensation
     // Jimenez 2016: prevents over-darkening on light-colored surfaces (high albedo)
     float combined_ao = ssao * material_ao;
     vec3 diffuse_ao = multi_bounce_ao(combined_ao, diffuse_color);
-
-    // Specular occlusion: Lagarde approximation from SSAO (material_ao not used —
-    // AO is direction-independent, specular is direction-dependent, mixing them
-    // would incorrectly darken reflections facing open areas).
-    // When AO disabled, ssao=1.0 → lagarde_so returns ~1.0 (no attenuation).
-    float specular_ao = lagarde_so(NdotV, ssao, roughness);
 
     // Emissive
     vec3 emissive = texture(textures[nonuniformEXT(mat.emissive_tex)], frag_uv0).rgb
