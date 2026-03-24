@@ -375,11 +375,12 @@ DepthPrePass 扩展，独立于 GTAO 升级可验证。
 
 ### Step 13：Contact Shadows Compute
 
-> **帧执行顺序注意**：虽然 Step 编号在 AO Temporal(Step 8) 之后，但帧内执行顺序为 GTAO → Contact Shadows → AO Temporal。Contact Shadows 与 GTAO 无数据依赖，插在两者之间允许 GPU 重叠执行。详见「阶段五帧流程」。
+> **帧执行顺序**：Contact Shadows 与 AO 管线零数据依赖（只共享 depth 只读访问），录制在 AO 管线之后、Forward 之前。RG 不会在 AO Temporal → Contact Shadows 之间插入 barrier，GPU 可重叠执行。
 
 - `contact_shadows.comp`：世界空间起点 + 光方向 × 最大距离 → 投影到屏幕空间 → UV 步进
 - `contact_shadows.comp`：每步深度比较 + 深度自适应 thickness（`base_thickness × linear_depth`）
 - `contact_shadows.comp`：距离衰减（首次命中 + smoothstep fade），push constants 传参数
+- `contact_shadows.comp`：光方向从 LightBuffer SSBO（Set 0 Binding 1）读取 `directional_lights[0]`
 - `ContactShadowsPass` 类（setup / record / destroy / rebuild_pipelines），push descriptors 绑 depth 读 + contact_shadow_mask 写
 
 **验证**：RenderDoc 检查 contact_shadow_mask — 物体接地处有阴影遮罩，远端衰减渐变
@@ -417,10 +418,6 @@ GTAO Pass (compute)
   读: depth (Set 2 binding 1), normal (Set 2 binding 2)
   写: ao_noisy (RGBA8: RGB=bent normal, A=AO, push descriptor storage image)
     ↓
-Contact Shadows (compute)                          ← GTAO 与 Contact Shadows 无数据依赖，
-  读: depth (push descriptor), light direction (push constant)    RG 不插入 barrier，GPU 可重叠执行
-  写: contact_shadow_mask (R8, push descriptor storage image)
-    ↓
 AO Spatial Blur (compute)                          ← [Step 10b] 5×5 edge-aware bilateral blur
   读: ao_noisy (push descriptor sampled)
   写: ao_blurred (RGBA8, push descriptor storage image)
@@ -428,6 +425,11 @@ AO Spatial Blur (compute)                          ← [Step 10b] 5×5 edge-awar
 AO Temporal (compute)
   读: ao_blurred, ao_history, depth, depth_prev (push descriptors)
   写: ao_filtered (push descriptor storage image)
+    ↓
+Contact Shadows (compute)                          ← 与 AO 管线零数据依赖，
+  读: depth (push descriptor),                        RG 不插入 barrier，GPU 可重叠执行
+       light direction (LightBuffer SSBO, Set 0 Binding 1)
+  写: contact_shadow_mask (R8, push descriptor storage image)
     ↓
 ForwardPass (MSAA, depth EQUAL write OFF)
   读: shadow_map (Set 2 binding 5/6), ao_filtered (Set 2 binding 3, RGBA8: bent normal + AO),
