@@ -1391,7 +1391,8 @@ struct FrameContext {
 
     // --- 阶段五新增 ---
     RGResourceId depth_prev;             // 上一帧 resolved depth (temporal history)
-    RGResourceId roughness;              // DepthPrePass roughness 输出 (R8)
+    RGResourceId roughness;              // DepthPrePass roughness 输出 (R8, resolved)
+    RGResourceId msaa_roughness;         // MSAA roughness; invalid when sample_count == 1
     RGResourceId ao_noisy;               // GTAO 原始输出 (RG8)
     RGResourceId ao_filtered;            // AO Temporal 滤波后 (RG8, Set 2 binding 3)
     RGResourceId contact_shadow_mask;    // Contact Shadow mask (R8, Set 2 binding 4)

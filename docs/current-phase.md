@@ -325,16 +325,21 @@ light.direction = -rotated_sun
 DepthPrePass 扩展，独立于 GTAO 升级可验证。
 
 - R8 roughness managed image 创建（Relative 1.0x，sample_count 跟随 MSAA），on_sample_count_changed 适配
-- `depth_prepass.frag`：输出 roughness（`material.roughness_factor * texture(metallic_roughness_tex).g`）
-- `depth_prepass_masked.frag`：同上
+- `depth_prepass.frag` + `depth_prepass_masked.frag`：输出 roughness（`material.roughness_factor * texture(metallic_roughness_tex).g`）
 - DepthPrePass：roughness 作为额外 color attachment + MSAA AVERAGE resolve
-- FrameContext 新增 `roughness` RGResourceId
+- FrameContext 新增 `roughness` + `msaa_roughness` RGResourceId
 
 **验证**：RenderDoc 检查 roughness 纹理 — 金属面 ~0.3-0.5、粗糙面 ~0.7-1.0，值与材质一致
 
 #### 设计要点
 
 见 `milestone-1/m1-phase5-decisions.md`「Roughness Buffer」。
+
+实现细节：
+- 管线 `color_formats` 从 `{kNormalFormat}` 扩展为 `{kNormalFormat, kRoughnessFormat}`（dynamic rendering 管线创建时须声明 attachment formats）
+- Clear 值 1.0f（最大粗糙度），未被几何体覆盖的像素（天空等）不产生错误的 specular occlusion
+- FrameContext 新增 `msaa_roughness`（与 `msaa_normal` 模式一致），仅 DepthPrePass::record() 使用；后续消费方（Step 12 GTAO SO）只读 resolved 的 `roughness`
+- Opaque shader 原本只采样 `normal_tex`，新增 `metallic_roughness_tex` 采样；无纹理时默认白色纹理，`1.0 * roughness_factor = roughness_factor`，行为正确
 
 ---
 
