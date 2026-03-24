@@ -24,6 +24,7 @@ layout(location = 2) in vec4 frag_tangent;
 layout(location = 3) flat in uint frag_material_index;
 
 layout(location = 0) out vec4 out_normal;
+layout(location = 1) out float out_roughness;
 
 void main() {
     GPUMaterialData mat = materials[frag_material_index];
@@ -44,4 +45,8 @@ void main() {
 
     // Encode to R10G10B10A2 UNORM
     out_normal = encode_normal_r10g10b10a2(shading_normal);
+
+    // Roughness from metallic-roughness texture (G channel) scaled by material factor
+    out_roughness = texture(textures[nonuniformEXT(mat.metallic_roughness_tex)], frag_uv0).g
+                    * mat.roughness_factor;
 }
