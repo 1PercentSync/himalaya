@@ -30,6 +30,7 @@ namespace himalaya::passes {
     // ---- Attachment formats (hardcoded per design) ----
     constexpr VkFormat kDepthFormat = VK_FORMAT_D32_SFLOAT;
     constexpr VkFormat kNormalFormat = VK_FORMAT_A2B10G10R10_UNORM_PACK32;
+    constexpr VkFormat kRoughnessFormat = VK_FORMAT_R8_UNORM;
 
     // ---- Init / Destroy ----
 
@@ -96,7 +97,7 @@ namespace himalaya::passes {
             rhi::GraphicsPipelineDesc desc;
             desc.vertex_shader = vert_module;
             desc.fragment_shader = frag_module;
-            desc.color_formats = {kNormalFormat};
+            desc.color_formats = {kNormalFormat, kRoughnessFormat};
             desc.depth_format = kDepthFormat;
             desc.sample_count = sample_count;
             desc.vertex_bindings = {binding};
@@ -171,16 +172,41 @@ namespace himalaya::passes {
                 depth_attachment.resolveImageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
             }
 
+            // Roughness attachment: render to MSAA roughness with AVERAGE resolve, or directly to 1x
+            const auto roughness_target = rg.get_image(msaa ? ctx.msaa_roughness : ctx.roughness);
+
+            VkRenderingAttachmentInfo roughness_attachment{};
+            roughness_attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+            roughness_attachment.imageView = rm_->get_image(roughness_target).view;
+            roughness_attachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+            roughness_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+            roughness_attachment.storeOp = msaa
+                                               ? VK_ATTACHMENT_STORE_OP_DONT_CARE
+                                               : VK_ATTACHMENT_STORE_OP_STORE;
+            roughness_attachment.clearValue.color = {{1.0f, 0.0f, 0.0f, 0.0f}};
+
+            if (msaa) {
+                const auto resolve_target = rg.get_image(ctx.roughness);
+                roughness_attachment.resolveMode = VK_RESOLVE_MODE_AVERAGE_BIT;
+                roughness_attachment.resolveImageView = rm_->get_image(resolve_target).view;
+                roughness_attachment.resolveImageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+            }
+
             // Derive render area from depth target
             const auto &depth_image = rm_->get_image(depth_target);
             const VkExtent2D render_extent{depth_image.desc.width, depth_image.desc.height};
+
+            const VkRenderingAttachmentInfo color_attachments[] = {
+                normal_attachment,
+                roughness_attachment,
+            };
 
             VkRenderingInfo rendering_info{};
             rendering_info.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
             rendering_info.renderArea = {{0, 0}, render_extent};
             rendering_info.layerCount = 1;
-            rendering_info.colorAttachmentCount = 1;
-            rendering_info.pColorAttachments = &normal_attachment;
+            rendering_info.colorAttachmentCount = 2;
+            rendering_info.pColorAttachments = color_attachments;
             rendering_info.pDepthAttachment = &depth_attachment;
 
             cmd.begin_rendering(rendering_info);
@@ -243,8 +269,8 @@ namespace himalaya::passes {
         };
 
         // Resource declarations differ by MSAA mode:
-        // MSAA: msaa_depth(RW) + msaa_normal(W) + depth(W, resolve) + normal(W, resolve)
-        // 1x:   depth(RW) + normal(W)
+        // MSAA: msaa targets(RW/W) + resolve targets(W) for depth, normal, roughness
+        // 1x:   depth(RW) + normal(W) + roughness(W)
         if (msaa) {
             const std::array resources = {
                 framework::RGResourceUsage{
@@ -258,12 +284,22 @@ namespace himalaya::passes {
                     framework::RGStage::ColorAttachment,
                 },
                 framework::RGResourceUsage{
+                    ctx.msaa_roughness,
+                    framework::RGAccessType::Write,
+                    framework::RGStage::ColorAttachment,
+                },
+                framework::RGResourceUsage{
                     ctx.depth,
                     framework::RGAccessType::Write,
                     framework::RGStage::DepthAttachment,
                 },
                 framework::RGResourceUsage{
                     ctx.normal,
+                    framework::RGAccessType::Write,
+                    framework::RGStage::ColorAttachment,
+                },
+                framework::RGResourceUsage{
+                    ctx.roughness,
                     framework::RGAccessType::Write,
                     framework::RGStage::ColorAttachment,
                 },
@@ -278,6 +314,11 @@ namespace himalaya::passes {
                 },
                 framework::RGResourceUsage{
                     ctx.normal,
+                    framework::RGAccessType::Write,
+                    framework::RGStage::ColorAttachment,
+                },
+                framework::RGResourceUsage{
+                    ctx.roughness,
                     framework::RGAccessType::Write,
                     framework::RGStage::ColorAttachment,
                 },

@@ -11,8 +11,8 @@
  * Two pipelines: Opaque (no discard, Early-Z guaranteed) and Mask
  * (alpha test + discard). Drawn in order: Opaque first, then Mask.
  *
- * When MSAA is active, resolves depth (MAX_BIT) and normal (AVERAGE)
- * via Dynamic Rendering to 1x resolved targets.
+ * When MSAA is active, resolves depth (MAX_BIT), normal (AVERAGE),
+ * and roughness (AVERAGE) via Dynamic Rendering to 1x resolved targets.
  */
 
 #include <himalaya/rhi/pipeline.h>
