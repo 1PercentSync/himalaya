@@ -759,7 +759,7 @@ namespace himalaya::app {
         // --- Phase 5 matrices ---
         ubo_data.inv_projection = glm::inverse(input.camera.projection);
         ubo_data.prev_view_projection = prev_view_projection_;
-        ubo_data.frame_index = input.frame_index;
+        ubo_data.frame_index = frame_counter_;
 
         // --- Shadow fields ---
         ubo_data.shadow_normal_offset = input.shadow_config.normal_offset;
@@ -991,6 +991,7 @@ namespace himalaya::app {
         frame_ctx.ao_config = &input.ao_config;
         frame_ctx.contact_shadow_config = &input.contact_shadow_config;
         frame_ctx.frame_index = input.frame_index;
+        frame_ctx.frame_number = frame_counter_;
         frame_ctx.sample_count = current_sample_count_;
 
         // --- CSM Shadow Pass (before depth prepass — shadow map needed by forward) ---
@@ -1053,6 +1054,7 @@ namespace himalaya::app {
 
         // Cache current VP for next frame's temporal reprojection
         prev_view_projection_ = input.camera.view_projection;
+        ++frame_counter_;
     }
 
     // ---- Resize handling ----

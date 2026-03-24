@@ -126,6 +126,9 @@ namespace himalaya::framework {
         /** @brief Current frame-in-flight index (0 to kMaxFramesInFlight-1). */
         uint32_t frame_index = 0;
 
+        /** @brief Monotonically increasing frame counter for temporal noise variation. */
+        uint32_t frame_number = 0;
+
         /** @brief Current MSAA sample count (1 = no MSAA). */
         uint32_t sample_count = 1;
     };

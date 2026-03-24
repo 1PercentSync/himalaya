@@ -161,7 +161,7 @@ namespace himalaya::passes {
                              .steps_per_dir = ctx.ao_config->steps_per_dir,
                              .thin_compensation = ctx.ao_config->thin_compensation,
                              .intensity = ctx.ao_config->intensity,
-                             .frame_index = ctx.frame_index,
+                             .frame_index = ctx.frame_number,
                          };
                          cmd.push_constants(pipeline_.layout, VK_SHADER_STAGE_COMPUTE_BIT,
                                             &pc, sizeof(pc));

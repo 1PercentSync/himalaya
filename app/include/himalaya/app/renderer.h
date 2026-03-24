@@ -368,6 +368,9 @@ namespace himalaya::app {
         /** @brief Cached view-projection from the previous frame (temporal reprojection). */
         glm::mat4 prev_view_projection_{1.0f};
 
+        /** @brief Monotonically increasing frame counter for temporal noise variation. */
+        uint32_t frame_counter_ = 0;
+
         // --- Private helpers ---
 
         /** @brief Updates Set 2 binding 0 with the current hdr_color backing image. */
