@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 12 全部完成（6/6），下一个任务：Step 13 Contact Shadows Compute
+Step 13 进行中（3/4）：shader 完成，下一个任务：ContactShadowsPass C++ 类 + Renderer 集成
 
 ---
 
