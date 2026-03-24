@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 12 第一小项：ao_noisy / ao_blurred / ao_filtered managed image 格式 RG8 → RGBA8 + Set 3 layout 更新
+Step 12 第二小项：gtao.comp 新增 bent normal 计算（Algorithm 2）+ 输出 RGBA8
 
 ---
 
