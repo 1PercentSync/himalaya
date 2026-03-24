@@ -113,13 +113,13 @@
 - [x] DepthPrePass：roughness 额外 color attachment + MSAA AVERAGE resolve
 - [x] FrameContext 新增 roughness + msaa_roughness RGResourceId
 
-## Step 12：GTAO SO 升级（B1）
+## Step 12：Bent Normal + GTSO
 
-- [ ] GTAO Set 3 push descriptor 新增 roughness binding
-- [ ] gtao.comp：读 roughness + 重建 view/reflection direction
-- [ ] gtao.comp：per-direction specular cone vs horizon overlap → G 通道输出
-- [ ] ao_temporal.comp：RG8 双通道适配（SO 通道同 blend factor、不做邻域 clamp）
-- [ ] forward.frag：SO 改读 G 通道，删除 Lagarde 近似
+- [ ] ao_noisy / ao_blurred / ao_filtered managed image 格式 RG8 → RGBA8 + Set 3 layout 更新
+- [ ] gtao.comp：新增 bent normal 计算（Algorithm 2）+ 输出 RGBA8
+- [ ] ao_spatial.comp：适配 RGBA8 四通道降噪
+- [ ] ao_temporal.comp：适配 RGBA8（AO 邻域 clamp 改 A 通道，bent normal RGB blend 不 clamp）
+- [ ] forward.frag：SO 改用 GTSO 解析公式（bent normal cone 交集），删除 Lagarde 近似
 
 ## Step 13：Contact Shadows Compute
 

@@ -87,8 +87,8 @@
 ## 阶段五：屏幕空间效果
 
 - RG temporal 机制 + per-frame-in-flight Set 2 + compute pass push descriptors（基础设施）
-- DepthPrePass roughness 输出（GTAO specular occlusion 计算需要 per-pixel roughness）
-- GTAO Pass（AO + specular occlusion 直接计算，RG8 输出）
+- DepthPrePass roughness 输出（M2 SSR 需要 per-pixel roughness，M1 预建）
+- GTAO Pass（AO + bent normal 计算，RGBA8 输出）
 - AO Temporal Filter Pass（reprojection + prev depth rejection + 邻域 clamp）
 - AO Forward 集成（乘法复合 + multi-bounce 色彩补偿 + specular occlusion 调制 IBL specular）
 - Contact Shadows Pass（screen-space ray march，距离衰减输出）

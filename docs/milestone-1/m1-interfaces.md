@@ -1393,8 +1393,8 @@ struct FrameContext {
     RGResourceId depth_prev;             // 上一帧 resolved depth (temporal history)
     RGResourceId roughness;              // DepthPrePass roughness 输出 (R8, resolved)
     RGResourceId msaa_roughness;         // MSAA roughness; invalid when sample_count == 1
-    RGResourceId ao_noisy;               // GTAO 原始输出 (RG8)
-    RGResourceId ao_filtered;            // AO Temporal 滤波后 (RG8, Set 2 binding 3)
+    RGResourceId ao_noisy;               // GTAO 原始输出 (RGBA8: RGB=bent normal, A=AO)
+    RGResourceId ao_filtered;            // AO Temporal 滤波后 (RGBA8, Set 2 binding 3)
     RGResourceId contact_shadow_mask;    // Contact Shadow mask (R8, Set 2 binding 4)
 
     const AOConfig* ao_config = nullptr;
@@ -1455,8 +1455,8 @@ public:
 
 | Binding | 类型 | 资源 | Sampler |
 |---------|------|------|---------|
-| 0 | `image2D` (storage, rg8) | ao_filtered (output) | — |
-| 1 | `sampler2D` (sampled) | ao_noisy (input) | nearest_clamp |
+| 0 | `image2D` (storage, rgba8) | ao_filtered (output) | — |
+| 1 | `sampler2D` (sampled) | ao_blurred (input) | nearest_clamp |
 | 2 | `sampler2D` (sampled) | ao_history (input) | nearest_clamp |
 | 3 | `sampler2D` (sampled) | depth_prev (input) | nearest_clamp |
 

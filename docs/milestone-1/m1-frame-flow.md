@@ -57,8 +57,8 @@ Normal Resolve
 
 ```
 GTAO Pass (compute)
-  输入：Depth Buffer（单采样）、Normal Buffer（单采样）、Roughness Buffer
-  输出：AO Texture（RG8：R=diffuse AO 噪声版、G=specular occlusion 噪声版）
+  输入：Depth Buffer（单采样）、Normal Buffer（单采样）
+  输出：AO Texture（RGBA8：RGB=bent normal 噪声版、A=diffuse AO 噪声版）
 
 Contact Shadows Pass (compute)
   输入：Depth Buffer（单采样）、光源方向
@@ -67,12 +67,12 @@ Contact Shadows Pass (compute)
 
 AO Spatial Blur Pass (compute)
   输入：AO Texture（噪声版）
-  输出：AO Texture（空间滤波后，RG8）
-  注：5×5 edge-aware bilateral blur，深度驱动边缘权重
+  输出：AO Texture（空间滤波后，RGBA8）
+  注：5×5 edge-aware bilateral blur，深度驱动边缘权重，bent normal + AO 一起降噪
 
 AO Temporal Filter Pass (compute)
   输入：AO Texture（空间滤波后）、AO History（上一帧）、Depth Buffer、Depth History（上一帧）
-  输出：AO Texture（RG8 时域滤波后）、AO History（更新）
+  输出：AO Texture（RGBA8 时域滤波后）、AO History（更新）
 ```
 
 ### 阶段五：主光照
@@ -168,11 +168,11 @@ Color Grading Pass
 | Depth Buffer（单采样） | Depth Resolve | GTAO、Contact Shadows、Height Fog | 帧内 + 帧间（temporal，AO Temporal rejection 用） |
 | Depth History（单采样） | 上一帧 Depth Resolve（RG temporal swap） | AO Temporal Filter（prev depth rejection） | 帧间（temporal） |
 | Normal Buffer（单采样） | Normal Resolve | GTAO | 帧内 |
-| Roughness Buffer（R8） | Depth PrePass | GTAO（specular occlusion 计算） | 帧内 |
-| AO Texture（RG8 噪声版） | GTAO Pass | AO Spatial Blur | 帧内 |
-| AO Texture（RG8 空间滤波后） | AO Spatial Blur | AO Temporal Filter | 帧内 |
-| AO Texture（RG8 时域滤波后） | AO Temporal Filter | Forward Pass | 帧内 |
-| AO History（RG8） | AO Temporal Filter | 下一帧 AO Temporal Filter | 帧间（temporal） |
+| Roughness Buffer（R8） | Depth PrePass | M2 SSR（M1 阶段无消费方，预留） | 帧内 |
+| AO Texture（RGBA8 噪声版） | GTAO Pass | AO Spatial Blur | 帧内 |
+| AO Texture（RGBA8 空间滤波后） | AO Spatial Blur | AO Temporal Filter | 帧内 |
+| AO Texture（RGBA8 时域滤波后） | AO Temporal Filter | Forward Pass（读 bent normal + AO，计算 GTSO） | 帧内 |
+| AO History（RGBA8） | AO Temporal Filter | 下一帧 AO Temporal Filter | 帧间（temporal） |
 | Contact Shadow Mask（R8） | Contact Shadows Pass | Forward Pass | 帧内 |
 | HDR Color Buffer（MSAA） | Forward Pass | Transparent Pass、MSAA Resolve | 帧内 |
 | Refraction Source | HDR Copy | Transparent Pass | 帧内 |

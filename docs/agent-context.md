@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 12 第一小项：GTAO Set 3 push descriptor 新增 roughness binding
+Step 12 第一小项：ao_noisy / ao_blurred / ao_filtered managed image 格式 RG8 → RGBA8 + Set 3 layout 更新
 
 ---
 

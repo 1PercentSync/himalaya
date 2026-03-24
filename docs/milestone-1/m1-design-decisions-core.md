@@ -375,7 +375,7 @@ GTAO horizon search + cosine-weighted 解析积分。Step 10a 修正：投影法
 
 - **Diffuse indirect**：`ssao × material_ao` + Jimenez 2016 multi-bounce 色彩补偿（浅色表面压暗减轻）
 - **Specular indirect**：仅由 SO 控制（material AO 不参与——标量 AO 乘方向相关的 specular 物理不正确）
-- SO 方案 B1：GTAO 读 roughness buffer + 重建 reflection direction，per-direction 评估 specular cone 与 horizon 重叠，输出 RG8 G 通道
+- SO 方案：Bent Normal + GTSO（Jimenez 2016）。GTAO 计算 bent normal（XeGTAO Algorithm 2），输出 RGBA8（RGB=bent normal, A=AO）。forward.frag 用解析公式计算 visibility cone 与 specular cone 交集
 - 仅调制间接光（IBL diffuse + IBL specular），直接光已有 shadow map + contact shadows 覆盖
 - 管线：GTAO → Spatial Blur → Temporal Filter → Forward 采样
 
