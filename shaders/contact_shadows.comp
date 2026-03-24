@@ -179,13 +179,10 @@ void main() {
     // ---- Step parameters ----
 
     float t_range = 1.0 - t_bias;
-    float step_t  = t_range / float(pc.step_count);
 
-    // ---- Temporal jitter (IGN) ----
-    // Offset all steps by [0, 1) × step_t, converting banding to noise.
-
-    float noise    = interleaved_gradient_noise(vec2(pixel), global.frame_index);
-    float t_jitter = noise * step_t;
+    // Temporal jitter (IGN): folded into the non-linear step formula below
+    // as (i + noise) / N, producing per-pixel sub-step variation.
+    float noise = interleaved_gradient_noise(vec2(pixel), global.frame_index);
 
     // ---- Ray march ----
     //
