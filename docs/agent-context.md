@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 12 第二小项：gtao.comp 新增 bent normal 计算（Algorithm 2）+ 输出 RGBA8
+Step 12 第三小项：ao_spatial.comp 适配 RGBA8 四通道降噪
 
 ---
 
