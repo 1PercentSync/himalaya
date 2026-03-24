@@ -194,6 +194,7 @@ void main() {
     float falloff_add = 1.0 / kFalloffRange;
 
     float ao = 0.0;
+    vec3 bent = vec3(0.0);
 
     for (uint i = 0; i < pc.directions; i++) {
         float phi = (PI / float(pc.directions)) * (float(i) + dir_noise);
@@ -239,14 +240,60 @@ void main() {
         max_cos_pos = mix(max_cos_pos, low_cos_pos, pc.thin_compensation);
         max_cos_neg = mix(max_cos_neg, low_cos_neg, pc.thin_compensation);
 
-        float h_pos = acos(clamp(max_cos_pos, -1.0, 1.0));
-        float h_neg = acos(clamp(max_cos_neg, -1.0, 1.0));
+        float cos_h1 = clamp(max_cos_pos, -1.0, 1.0);
+        float cos_h2 = clamp(max_cos_neg, -1.0, 1.0);
+
+        float h_pos = acos(cos_h1);
+        float h_neg = acos(cos_h2);
 
         ao += n_proj_len * gtao_slice_visibility(h_pos, h_neg, n_angle);
+
+        // ---- Bent normal (Algorithm 2, trig identity expansion) ----
+        // Per-slice cosine-weighted mean unoccluded direction.
+        // All compound-angle trig expanded from cos_h/sin_h/cos_n/sin_n
+        // using identities — zero additional sin/cos/acos calls.
+
+        float sin_h1 = sqrt(max(1.0 - cos_h1 * cos_h1, 0.0));
+        float sin_h2 = sqrt(max(1.0 - cos_h2 * cos_h2, 0.0));
+
+        // Triple angles: sin(3x) = 3s - 4s³, cos(3x) = 4c³ - 3c
+        float sin_3h1 = sin_h1 * (3.0 - 4.0 * sin_h1 * sin_h1);
+        float cos_3h1 = cos_h1 * (4.0 * cos_h1 * cos_h1 - 3.0);
+        float sin_3h2 = sin_h2 * (3.0 - 4.0 * sin_h2 * sin_h2);
+        float cos_3h2 = cos_h2 * (4.0 * cos_h2 * cos_h2 - 3.0);
+
+        // sin(a ± b) and cos(a ± b) via product identities
+        float sin_h1_sub_n = sin_h1 * cos_n - cos_h1 * sin_n;
+        float sin_3h1_sub_n = sin_3h1 * cos_n - cos_3h1 * sin_n;
+        float sin_h2_add_n = sin_h2 * cos_n + cos_h2 * sin_n;
+        float sin_3h2_add_n = sin_3h2 * cos_n + cos_3h2 * sin_n;
+        float sin_h1_add_n = sin_h1 * cos_n + cos_h1 * sin_n;
+        float sin_h2_sub_n = sin_h2 * cos_n - cos_h2 * sin_n;
+
+        float cos_3h1_sub_n = cos_3h1 * cos_n + sin_3h1 * sin_n;
+        float cos_3h2_add_n = cos_3h2 * cos_n - sin_3h2 * sin_n;
+        float cos_h1_add_n = cos_h1 * cos_n - sin_h1 * sin_n;
+        float cos_h2_sub_n = cos_h2 * cos_n + sin_h2 * sin_n;
+
+        // Tangent-direction integral (GTAO paper Algorithm 2, eq. 11)
+        float t1 = (6.0 * sin_h1_sub_n - sin_3h1_sub_n
+                  + 6.0 * sin_h2_add_n - sin_3h2_add_n
+                  + 16.0 * sin_n
+                  - 3.0 * (sin_h1_add_n + sin_h2_sub_n)) / 12.0;
+
+        // View-direction integral
+        float t2 = (-cos_3h1_sub_n - cos_3h2_add_n
+                  + 8.0 * cos_n
+                  - 3.0 * (cos_h1_add_n + cos_h2_sub_n)) / 12.0;
+
+        bent += n_proj_len * (tangent_vs * t1 + view_dir * t2);
     }
 
     ao = clamp(ao / float(pc.directions), 0.0, 1.0);
     ao = pow(ao, pc.intensity);
 
-    imageStore(ao_output, pixel, vec4(ao, 0.0, 0.0, 0.0));
+    // Normalize bent normal; fallback to view-space surface normal if degenerate
+    bent = (dot(bent, bent) > EPSILON) ? normalize(bent) : view_normal;
+
+    imageStore(ao_output, pixel, vec4(bent * 0.5 + 0.5, ao));
 }
