@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 12 第三小项：ao_spatial.comp 适配 RGBA8 四通道降噪
+Step 12 第四小项：ao_temporal.comp 适配 RGBA8（AO 邻域 clamp 改 A 通道，bent normal RGB blend 不 clamp）
 
 ---
 
