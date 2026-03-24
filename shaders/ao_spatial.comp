@@ -120,7 +120,7 @@ void main() {
 
     // ---- Weighted blur with path-accumulated edge weights ----
 
-    vec2 total_ao = vec2(0.0);
+    vec4 total_val = vec4(0.0);
     float total_weight = 0.0;
 
     for (int dy = -2; dy <= 2; dy++) {
@@ -159,14 +159,14 @@ void main() {
             float w = kGaussian[(dy + 2) * 5 + (dx + 2)] * path_w;
 
             ivec2 p = clamp(pixel + ivec2(dx, dy), ivec2(0), size - 1);
-            vec2 ao_val = texelFetch(ao_input_tex, p, 0).rg;
+            vec4 sample_val = texelFetch(ao_input_tex, p, 0);
 
-            total_ao += ao_val * w;
+            total_val += sample_val * w;
             total_weight += w;
         }
     }
 
-    total_ao /= max(total_weight, EPSILON);
+    total_val /= max(total_weight, EPSILON);
 
-    imageStore(ao_output, pixel, vec4(total_ao, 0.0, 0.0));
+    imageStore(ao_output, pixel, total_val);
 }
