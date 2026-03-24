@@ -127,7 +127,7 @@
 - [x] contact_shadows.comp：screen-space ray march + UV 步进（光方向从 LightBuffer SSBO 读取）
 - [x] contact_shadows.comp：深度比较 + 深度自适应 thickness
 - [x] contact_shadows.comp：距离衰减 + push constants（config 参数）
-- [ ] ContactShadowsPass 类（setup / record / destroy / rebuild_pipelines）+ push descriptors + Renderer 集成
+- [x] ContactShadowsPass 类（setup / record / destroy / rebuild_pipelines）+ push descriptors + Renderer 集成
 
 ## Step 14：Contact Shadows Forward 集成
 
