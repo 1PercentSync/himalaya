@@ -65,6 +65,7 @@ CLAUDE.md 已自动加载，以下为额外必读：
 | `docs/archive/m1-phase2-decisions.md` | M1 阶段二设计决策（已完成） |
 | `docs/archive/m1-phase3-decisions.md` | M1 阶段三设计决策（已完成） |
 | `docs/archive/m1-phase4-decisions.md` | M1 阶段四设计决策（已完成） |
+| `docs/archive/contact-shadows-reference.md` | Contact Shadows 实现参考资料 |
 
 ---
 
