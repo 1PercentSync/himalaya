@@ -262,7 +262,7 @@ Toggle 无需 GPU idle、无 descriptor 更新，下一帧生效。
 ### DepthPrePass 约定
 
 - Depth + Normal 一步到位（阶段五 AO、M2 SSR/SSGI 均依赖）
-- 阶段五新增 R8 roughness 输出（GTAO SO + M2 SSR）
+- 阶段五新增 R8 roughness 输出（M2 SSR，M1 阶段无消费方——GTSO 在 forward.frag 使用 per-fragment material roughness）
 - Alpha Mask 双 pipeline（Opaque 无 discard 保 Early-Z，Mask 有 discard），先 opaque 后 mask
 - Forward Pass 配合：`EQUAL + depth write OFF + invariant gl_Position`（确定性 zero overdraw）
 

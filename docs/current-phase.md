@@ -338,7 +338,7 @@ DepthPrePass 扩展，独立于 GTAO 升级可验证。
 实现细节：
 - 管线 `color_formats` 从 `{kNormalFormat}` 扩展为 `{kNormalFormat, kRoughnessFormat}`（dynamic rendering 管线创建时须声明 attachment formats）
 - Clear 值 1.0f（最大粗糙度），未被几何体覆盖的像素（天空等）不产生错误的 specular occlusion
-- FrameContext 新增 `msaa_roughness`（与 `msaa_normal` 模式一致），仅 DepthPrePass::record() 使用；后续消费方（Step 12 GTAO SO）只读 resolved 的 `roughness`
+- FrameContext 新增 `msaa_roughness`（与 `msaa_normal` 模式一致），仅 DepthPrePass::record() 使用；M1 阶段 resolved `roughness` 无消费方（GTSO 在 forward.frag 使用 per-fragment material roughness），M2 SSR 将读取此 buffer
 - Opaque shader 原本只采样 `normal_tex`，新增 `metallic_roughness_tex` 采样；无纹理时默认白色纹理，`1.0 * roughness_factor = roughness_factor`，行为正确
 
 ---
