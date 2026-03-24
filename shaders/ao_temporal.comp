@@ -65,6 +65,22 @@ vec3 reproject(vec2 uv, float depth) {
     return vec3(prev_uv, prev_ndc.z);
 }
 
+// ---- Depth utilities ----
+
+/**
+ * Convert raw Reverse-Z depth to linear view-space distance.
+ *
+ * Linearizing before comparison ensures uniform rejection sensitivity
+ * at all distances.  Raw Reverse-Z values cluster near 0 for far
+ * objects, making relative thresholds overly aggressive there.
+ *
+ * @param d Raw depth value (Reverse-Z: near=1, far=0).
+ * @return Positive linear view-space distance from camera.
+ */
+float linearize_depth(float d) {
+    return global.projection[3][2] / (d + global.projection[2][2]);
+}
+
 // ---- Rejection constants ----
 
 /** @brief Relative depth threshold for disocclusion detection (5%). */
@@ -78,9 +94,9 @@ const float DEPTH_REJECT_THRESHOLD = 0.05;
  * Layer 1 — UV validity: prev_uv outside [0,1] means the pixel was
  * off-screen last frame; reject entirely (return current_ao).
  *
- * Layer 2 — Depth consistency: compare the expected previous-frame depth
- * (from reprojection) against the actually stored depth.  A relative
- * threshold adapts to Reverse-Z precision at all distances.
+ * Layer 2 — Depth consistency: compare linearized expected and stored
+ * previous-frame depths.  Linearization ensures uniform rejection
+ * sensitivity at all distances (raw Reverse-Z is non-linear).
  *
  * Layer 3 — Neighborhood clamp: gather 3×3 min/max from current-frame
  * input (ao_blurred) R channel via texelFetch and clamp the history value
@@ -107,10 +123,11 @@ float evaluate_rejection(ivec2 pixel, ivec2 size,
         return current_ao;
     }
 
-    // ---- Layer 2: Depth consistency ----
-    float stored_prev_depth = texture(depth_prev_tex, prev_uv).r;
-    float depth_diff = abs(expected_prev_depth - stored_prev_depth);
-    if (depth_diff / max(expected_prev_depth, 1e-4) > DEPTH_REJECT_THRESHOLD) {
+    // ---- Layer 2: Depth consistency (linearized for uniform sensitivity) ----
+    float lin_expected = linearize_depth(expected_prev_depth);
+    float lin_stored   = linearize_depth(texture(depth_prev_tex, prev_uv).r);
+    float depth_diff   = abs(lin_expected - lin_stored);
+    if (depth_diff / max(lin_expected, 1e-4) > DEPTH_REJECT_THRESHOLD) {
         rejected = true;
         return current_ao;
     }
