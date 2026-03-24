@@ -133,7 +133,7 @@ namespace himalaya::rhi {
     }
 
     // ReSharper disable once CppParameterMayBeConst
-    void CommandBuffer::push_descriptor_set(VkPipelineLayout layout,
+    void CommandBuffer::push_compute_descriptor_set(VkPipelineLayout layout,
                                             const uint32_t set,
                                             const std::span<const VkWriteDescriptorSet> writes) const {
         vkCmdPushDescriptorSet(cmd_,
@@ -164,7 +164,7 @@ namespace himalaya::rhi {
             .pImageInfo = &image_info,
         };
 
-        push_descriptor_set(layout, set, {&write, 1});
+        push_compute_descriptor_set(layout, set, {&write, 1});
     }
 
     void CommandBuffer::push_sampled_image(const ResourceManager &rm,
@@ -190,7 +190,7 @@ namespace himalaya::rhi {
             .pImageInfo = &image_info,
         };
 
-        push_descriptor_set(layout, set, {&write, 1});
+        push_compute_descriptor_set(layout, set, {&write, 1});
     }
 
     void CommandBuffer::copy_buffer_to_image(const VkCopyBufferToImageInfo2 &copy_info) const {

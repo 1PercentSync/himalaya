@@ -185,7 +185,7 @@ namespace himalaya::framework {
                 .pImageInfo = &output_info,
             },
         };
-        cmd.push_descriptor_set(pipeline.layout, 0, writes);
+        cmd.push_compute_descriptor_set(pipeline.layout, 0, writes);
 
         // Dispatch: one workgroup per 16×16 texel block, 6 faces
         constexpr uint32_t kGroupSize = 16;
@@ -384,7 +384,7 @@ namespace himalaya::framework {
                 .pImageInfo = &output_info,
             },
         };
-        cmd.push_descriptor_set(pipeline.layout, 0, writes);
+        cmd.push_compute_descriptor_set(pipeline.layout, 0, writes);
 
         // Dispatch: one workgroup per 16x16 texel block, 6 faces
         constexpr uint32_t kGroupSize = 16;
@@ -597,7 +597,7 @@ namespace himalaya::framework {
                     .pImageInfo = &output_info,
                 },
             };
-            cmd.push_descriptor_set(pipeline.layout, 0, writes);
+            cmd.push_compute_descriptor_set(pipeline.layout, 0, writes);
 
             const uint32_t groups = (mip_size + kGroupSize - 1) / kGroupSize;
             cmd.dispatch(std::max(groups, 1u), std::max(groups, 1u), 6);
@@ -848,7 +848,7 @@ namespace himalaya::framework {
                 .pImageInfo = &output_info,
             },
         };
-        cmd.push_descriptor_set(pipeline.layout, 0, writes);
+        cmd.push_compute_descriptor_set(pipeline.layout, 0, writes);
 
         constexpr uint32_t kGroupSize = 16;
         constexpr uint32_t kGroups = (kSize + kGroupSize - 1) / kGroupSize;

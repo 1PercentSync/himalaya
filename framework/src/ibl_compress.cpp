@@ -219,7 +219,7 @@ namespace himalaya::framework {
                             .pBufferInfo = &dst_info,
                         },
                     };
-                    cmd.push_descriptor_set(pipeline.layout, 0, writes);
+                    cmd.push_compute_descriptor_set(pipeline.layout, 0, writes);
 
                     struct {
                         float texel_size_rcp[2];

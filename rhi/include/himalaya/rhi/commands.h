@@ -187,17 +187,17 @@ namespace himalaya::rhi {
         void dispatch(uint32_t group_count_x, uint32_t group_count_y, uint32_t group_count_z) const;
 
         /**
-         * @brief Pushes descriptors directly without pre-allocated descriptor sets.
+         * @brief Pushes descriptors to the compute pipeline without pre-allocated descriptor sets.
          *
          * Vulkan 1.4 core (promoted from VK_KHR_push_descriptor).
-         * Used exclusively for IBL one-time init compute dispatches.
+         * Used for IBL init compute dispatches and per-frame compute pass Set 3.
          *
          * @param layout Pipeline layout compatible with the pushed descriptors.
          * @param set    Descriptor set index to push to.
          * @param writes Descriptor write operations.
          */
-        void push_descriptor_set(VkPipelineLayout layout, uint32_t set,
-                                 std::span<const VkWriteDescriptorSet> writes) const;
+        void push_compute_descriptor_set(VkPipelineLayout layout, uint32_t set,
+                                         std::span<const VkWriteDescriptorSet> writes) const;
 
         /**
          * @brief Pushes a storage image descriptor for compute output.
