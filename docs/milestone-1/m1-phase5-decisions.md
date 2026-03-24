@@ -329,15 +329,16 @@ GTAO 计算 SO 用（Step 12），M2 SSR 复用同一 buffer。
 HDR 环境贴图使用 equirectangular 投影。像素坐标 (x, y) 到方向向量的转换：
 
 ```
-θ = (x / width) * 2π            // 水平角（经度，0 → 2π）
-φ = π/2 - (y / height) * π      // 垂直角（纬度，π/2 → -π/2）
+// 与 shader sample_equirect() 的 atan(dir.z, dir.x) 约定一致
+φ = (x / width - 0.5) * 2π     // 方位角（经度），[-π, π]
+θ = (0.5 - y / height) * π     // 仰角（纬度），[-π/2, π/2]
 
-sun_dir = (cos(φ)·sin(θ), sin(φ), -cos(φ)·cos(θ))
+sun_dir = (cos(θ)·cos(φ), sin(θ), cos(θ)·sin(φ))
 ```
 
 `sun_dir` 是 HDR 空间中指向太阳的方向（IBL 旋转前）。Shader 中 `rotate_y(world_dir, sin(yaw), cos(yaw))` 将世界空间→HDR 空间，因此 HDR→世界需要逆旋转（取反 sin 分量）：`rotated_sun = (c·x - s·z, y, s·x + c·z)`。取反后作为 `DirectionalLight.direction`（光线传播方向）。
 
-三角函数符号约定已对照 `equirect_to_cubemap.comp` 中的 `sample_equirect()` 确认：`phi = atan(dir.z, dir.x)`，`uv.x = phi / 2π + 0.5`。逆映射使用 `dir = (cos(θ)·cos(φ), sin(θ), cos(θ)·sin(φ))`。
+三角函数符号约定对照 `equirect_to_cubemap.comp` 中的 `sample_equirect()` 确认：`phi = atan(dir.z, dir.x)`，`uv.x = phi / 2π + 0.5`，`theta = asin(dir.y)`，`uv.y = 0.5 - theta / π`。上述公式是其精确逆映射。
 
 **宽高信息**：`init()` 开头用 `stbi_info()` 只读 HDR 文件头获取宽高（不加载像素数据），存入成员变量，通过 `equirect_width()` / `equirect_height()` getter 暴露。这样缓存路径和计算路径均无需额外处理——尺寸获取独立于 `load_equirect()` 和 KTX2 缓存逻辑。
 
