@@ -54,14 +54,13 @@ namespace himalaya::framework {
         const glm::vec3 linear{to_linear(r), to_linear(g), to_linear(b)};
 
         // Normalize so that 6500K ≈ (1, 1, 1)
-        // Pre-computed: color_temperature_to_rgb_raw(6500) gives a specific value,
-        // we divide by it. Computing the reference inline to avoid a static.
-        const float t_ref = 6500.0f / 100.0f; // = 65.0
-        const float r_ref = 255.0f; // t <= 66
-        const float g_ref = 99.4708025861f * std::log(t_ref) - 161.1195681661f;
-        const float b_ref = 138.5177312231f * std::log(t_ref - 10.0f) - 305.0447927307f;
-        const glm::vec3 ref{to_linear(r_ref), to_linear(std::clamp(g_ref, 0.0f, 255.0f)),
-                            to_linear(std::clamp(b_ref, 0.0f, 255.0f))};
+        static const glm::vec3 ref = [&to_linear] {
+            constexpr float t_ref = 6500.0f / 100.0f;
+            constexpr float r_ref = 255.0f;
+            const float g_ref = std::clamp(99.4708025861f * std::log(t_ref) - 161.1195681661f, 0.0f, 255.0f);
+            const float b_ref = std::clamp(138.5177312231f * std::log(t_ref - 10.0f) - 305.0447927307f, 0.0f, 255.0f);
+            return glm::vec3{to_linear(r_ref), to_linear(g_ref), to_linear(b_ref)};
+        }();
 
         return linear / ref;
     }
