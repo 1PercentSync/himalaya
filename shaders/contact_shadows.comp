@@ -19,6 +19,7 @@
  */
 
 #include "common/bindings.glsl"
+#include "common/normal.glsl"
 
 layout(local_size_x = 8, local_size_y = 8) in;
 
@@ -118,6 +119,22 @@ void main() {
     vec2 uv = (vec2(pixel) + 0.5) / vec2(size);
     vec2 ndc = vec2(uv.x * 2.0 - 1.0, 1.0 - uv.y * 2.0);
 
+    // direction_and_intensity.xyz = propagation direction (toward surface)
+    vec3 light_dir = normalize(directional_lights[0].direction_and_intensity.xyz);
+    vec3 ray_dir = -light_dir; // surface toward light
+
+    // Early out for backfacing surfaces (NdotL ≤ 0).
+    // The lighting equation already zeroes radiance via NdotL, so the
+    // contact shadow mask is irrelevant.  Skipping the march avoids
+    // wasted work and inconsistent debug-view output on backfaces.
+    vec3 world_normal = decode_normal_r10g10b10a2(
+        texelFetch(rt_normal_resolved, pixel, 0));
+    float NdotL = dot(world_normal, ray_dir);
+    if (NdotL <= 0.0) {
+        imageStore(out_contact_shadow, pixel, vec4(1.0));
+        return;
+    }
+
     // Build start_clip directly from the pixel's known NDC coordinates.
     // This avoids the inv_view_projection → view_projection round-trip
     // that accumulates floating-point error at distance (far pixels have
@@ -131,12 +148,18 @@ void main() {
     vec4 world_h = global.inv_view_projection * vec4(ndc, depth, 1.0);
     vec3 world_pos = world_h.xyz / world_h.w;
 
-    // direction_and_intensity.xyz = propagation direction (toward surface)
-    vec3 light_dir = normalize(directional_lights[0].direction_and_intensity.xyz);
-    vec3 ray_dir = -light_dir; // surface toward light
-
     vec3 ray_end_world = world_pos + ray_dir * pc.max_distance;
     vec4 end_clip = global.view_projection * vec4(ray_end_world, 1.0);
+
+    // If the ray end crosses behind the camera (w ≤ 0), clamp it to just
+    // before the camera plane.  This happens when the sun is behind the
+    // camera and the surface is close — the ray toward the light passes
+    // through the camera's position.
+    if (end_clip.w <= 0.0) {
+        // Find t where mix(start_clip, end_clip, t).w = 0, then pull back
+        float t_safe = start_clip.w / (start_clip.w - end_clip.w) * 0.99;
+        end_clip = mix(start_clip, end_clip, max(t_safe, 0.01));
+    }
 
     // ---- Self-intersection bias ----
     // Compute screen-space ray length to determine how much t to skip.
@@ -150,32 +173,6 @@ void main() {
     // Bias in t-space: skip first ~2 pixels (clamped so bias ≤ 10% of ray)
     float t_bias = clamp(2.0 / max(ray_len_px, 1.0), 0.0, 0.1);
 
-    // ---- Dynamic compare tolerance (UE-style) ----
-    // Proportional to per-step depth change of the ray.  For distant floor
-    // pixels where the ray barely changes depth, the tolerance is tiny,
-    // automatically rejecting false hits from walls/ceiling at similar depths.
-    // base_thickness serves as a minimum floor for very short rays.
-
-    float lin_start = start_w;
-    float lin_end   = linearize_depth(end_ndc.z);
-    float depth_span = abs(lin_end - lin_start);
-    float tolerance  = max(2.0 * depth_span / float(pc.step_count),
-                           pc.base_thickness);
-
-    // ---- Depth bias (self-intersection avoidance) ----
-    // Push the ray origin slightly toward the camera in clip-space depth.
-    // This ensures the starting surface is always "behind" the ray
-    // (negative lin_delta), preventing self-shadowing on floors/walls
-    // with gentle depth gradients at grazing light angles.
-    //
-    // The bias equals `tolerance` meters in linear depth.  Because it
-    // lives in start_clip only, the mix() interpolation naturally fades
-    // it to zero at the ray end — no loss of detection at distance.
-    //
-    // Derivation: shifting linear depth by δ requires
-    //   Δclip.z = projection[3][2] * δ / linear_depth
-    start_clip.z += global.projection[3][2] * tolerance / lin_start;
-
     // ---- Step count adaptation ----
     // Clamp step count to the screen-space ray length so we never take
     // more steps than there are pixels to traverse (h3r2tic).  Minimum
@@ -185,6 +182,40 @@ void main() {
     uint effective_steps = clamp(pc.step_count,
                                  2u,
                                  max(2u, uint(ray_len_px / kMinPxPerStep)));
+
+    // ---- Dynamic compare tolerance (UE-style) ----
+    // Proportional to per-step depth change of the ray.  Uses
+    // effective_steps (not pc.step_count) so the tolerance matches the
+    // actual step size after adaptive reduction.
+
+    float lin_start = start_w;
+    float lin_end   = linearize_depth(end_ndc.z);
+    float depth_span = abs(lin_end - lin_start);
+    float tolerance  = max(2.0 * depth_span / float(effective_steps),
+                           pc.base_thickness);
+
+    // ---- Slope-scaled depth bias (self-intersection avoidance) ----
+    // Push the ray origin toward the camera to prevent the starting
+    // surface from registering as an occluder.  The base bias is
+    // `tolerance` meters, scaled by 1/NdotL (clamped) so grazing-angle
+    // rays — where the surface depth gradient across pixels is steepest
+    // relative to the ray's depth change — get proportionally more bias.
+    // This is the screen-space analogue of shadow mapping's slope bias.
+    //
+    // The bias lives only in start_clip, so mix() interpolation fades
+    // it to zero at the ray end — no detection loss at distance.
+    //
+    // Derivation: shifting linear depth by δ requires
+    //   Δclip.z = projection[3][2] * δ / linear_depth
+
+    // NdotL and world_normal already computed above (backface early-out).
+    // Scale: perpendicular light (NdotL=1) → 1× tolerance,
+    //        grazing light   (NdotL→0) → up to 4× tolerance.
+    // Clamped to [0.25, 1] to avoid extreme bias at near-tangent angles.
+    float bias_scale = 1.0 / max(NdotL, 0.25);
+    float depth_bias = tolerance * bias_scale;
+
+    start_clip.z += global.projection[3][2] * depth_bias / lin_start;
 
     // ---- Step parameters ----
 
@@ -233,7 +264,7 @@ void main() {
         float ray_depth   = ray_ndc.z;
 
         // Screen bounds check
-        if (any(lessThan(sample_uv, vec2(0.0))) || any(greaterThan(sample_uv, vec2(1.0))))
+        if (any(lessThan(sample_uv, vec2(0.0))) || any(greaterThanEqual(sample_uv, vec2(1.0))))
             break;
 
         // Dual depth sampling: bilinear (smooth) + nearest (exact).
