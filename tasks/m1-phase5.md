@@ -102,9 +102,9 @@
 - [x] `LightSourceMode` 枚举新增 `HdrSun`，DebugUI combo 适配四项（Scene / Fallback / HDR Sun / None）
 - [x] `AppConfig` 新增 `hdr_sun_coords` 持久化（HDR 路径 → 像素坐标映射）+ 序列化/反序列化
 - [x] Application HDR Sun 成员 + `update()` 中 equirectangular 坐标 → 方向转换 + IBL 旋转耦合
-- [ ] Fallback 模式新增色温支持（`fallback_light_color_temp_` + `color_temperature_to_rgb` 应用）
-- [ ] HDR Sun 模式新增色温支持（`hdr_sun_color_temp_` + `color_temperature_to_rgb` 应用）
-- [ ] DebugUI：HDR Sun 控件（Sun X/Y 输入、Intensity、Color Temp、Cast Shadows）+ Fallback 新增 Color Temp slider
+- [x] Fallback 模式新增色温支持（`fallback_light_color_temp_` + `color_temperature_to_rgb` 应用）
+- [x] HDR Sun 模式新增色温支持（`hdr_sun_color_temp_` + `color_temperature_to_rgb` 应用）
+- [x] DebugUI：HDR Sun 控件（Sun X/Y 输入、Intensity、Color Temp、Cast Shadows）+ Fallback 新增 Color Temp slider
 
 ## Step 11：Roughness Buffer
 

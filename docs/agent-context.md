@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段五 — 屏幕空间效果
-- **进度**：Step 10a 完成，Step 10b 完成，Step 10c 进行中（60/~69）
+- **进度**：Step 10a 完成，Step 10b 完成，Step 10c 完成（63/~69）
 
 ### 下一个任务
 
-Step 10c 第六小项：Fallback 模式新增色温支持
+Step 11 第一小项：R8 roughness managed image 创建 + on_sample_count_changed 适配
 
 ---
 
