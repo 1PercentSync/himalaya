@@ -162,6 +162,20 @@ void main() {
     float tolerance  = max(2.0 * depth_span / float(pc.step_count),
                            pc.base_thickness);
 
+    // ---- Depth bias (self-intersection avoidance) ----
+    // Push the ray origin slightly toward the camera in clip-space depth.
+    // This ensures the starting surface is always "behind" the ray
+    // (negative lin_delta), preventing self-shadowing on floors/walls
+    // with gentle depth gradients at grazing light angles.
+    //
+    // The bias equals `tolerance` meters in linear depth.  Because it
+    // lives in start_clip only, the mix() interpolation naturally fades
+    // it to zero at the ray end — no loss of detection at distance.
+    //
+    // Derivation: shifting linear depth by δ requires
+    //   Δclip.z = projection[3][2] * δ / linear_depth
+    start_clip.z += global.projection[3][2] * tolerance / lin_start;
+
     // ---- Step parameters ----
 
     float t_range = 1.0 - t_bias;
