@@ -109,7 +109,7 @@
 ## Step 11：Roughness Buffer
 
 - [x] R8 roughness managed image 创建 + on_sample_count_changed 适配
-- [ ] depth_prepass.frag + depth_prepass_masked.frag：输出 roughness
+- [x] depth_prepass.frag + depth_prepass_masked.frag：输出 roughness
 - [ ] DepthPrePass：roughness 额外 color attachment + MSAA AVERAGE resolve
 - [ ] FrameContext 新增 roughness + msaa_roughness RGResourceId
 
