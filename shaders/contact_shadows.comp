@@ -1,0 +1,158 @@
+#version 460
+
+/**
+ * @file contact_shadows.comp
+ * @brief Screen-space contact shadows compute shader.
+ *
+ * Ray-marches from each pixel towards the primary directional light in
+ * screen space.  On hit, outputs a shadow mask value based on distance
+ * fade (full shadow at contact, fading towards max search distance).
+ *
+ * Output: R8 contact_shadow_mask (1.0 = lit, 0.0 = fully shadowed).
+ *
+ * Light direction is read from LightBuffer SSBO (Set 0, Binding 1),
+ * using directional_lights[0].  Config parameters (step count, max
+ * distance, base thickness) are passed via push constants.
+ *
+ * Workgroup: 8x8 (one thread per pixel, no shared memory).
+ */
+
+#include "common/bindings.glsl"
+
+layout(local_size_x = 8, local_size_y = 8) in;
+
+// ---- Set 3: push descriptor (per-dispatch I/O) ----
+
+layout(set = 3, binding = 0, r8) uniform writeonly image2D out_contact_shadow;
+layout(set = 3, binding = 1) uniform sampler2D in_depth;
+
+// ---- Push constants: Contact Shadow parameters (from ContactShadowConfig) ----
+
+layout(push_constant) uniform ContactShadowPushConstants {
+    uint  step_count;       // ray march step count (8/16/24/32)
+    float max_distance;     // max search distance (world-space meters)
+    float base_thickness;   // depth-adaptive thickness base value
+} pc;
+
+// ---- World-space reconstruction ----
+
+/**
+ * Reconstruct world-space position from depth buffer.
+ *
+ * Uses inv_view_projection to map screen UV + depth to world space.
+ * Accounts for the Y-flipped viewport used by scene passes (negative
+ * viewport height): screen y increases downward but NDC y increases
+ * upward.
+ *
+ * @param uv    Texel-center UV in [0,1] (y=0 at top of screen).
+ * @param depth Raw depth value (Reverse-Z: near=1, far=0).
+ * @return World-space position.
+ */
+vec3 reconstruct_world_pos(vec2 uv, float depth) {
+    vec2 ndc = vec2(uv.x * 2.0 - 1.0, 1.0 - uv.y * 2.0);
+    vec4 world_h = global.inv_view_projection * vec4(ndc, depth, 1.0);
+    return world_h.xyz / world_h.w;
+}
+
+/**
+ * Compute linear view-space depth from raw reverse-Z depth.
+ *
+ * With the reverse-Z infinite far-plane projection used by this engine,
+ * inv_projection[3][2] = near and inv_projection[2][2] = 0, giving:
+ *   linear_z = near / depth
+ *
+ * @param depth Raw depth value (Reverse-Z: near=1, far=0).
+ * @return Positive linear distance from camera.
+ */
+float linear_depth(float depth) {
+    return global.inv_projection[3][2] / depth;
+}
+
+// ---- Main ----
+
+void main() {
+    ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 size = ivec2(global.screen_size);
+
+    // Out-of-bounds guard
+    if (pixel.x >= size.x || pixel.y >= size.y) return;
+
+    // Early out: no directional lights
+    if (global.directional_light_count == 0u) {
+        imageStore(out_contact_shadow, pixel, vec4(1.0));
+        return;
+    }
+
+    // Sample depth at current pixel
+    vec2 uv = (vec2(pixel) + 0.5) / vec2(size);
+    float depth = texelFetch(in_depth, pixel, 0).r;
+
+    // Skip sky pixels (reverse-Z: depth=0 at infinite far plane)
+    if (depth <= 0.0) {
+        imageStore(out_contact_shadow, pixel, vec4(1.0));
+        return;
+    }
+
+    // Reconstruct world-space position
+    vec3 world_pos = reconstruct_world_pos(uv, depth);
+
+    // Read light direction from LightBuffer SSBO
+    // direction_and_intensity.xyz is the light propagation direction (towards surface)
+    vec3 light_dir = normalize(directional_lights[0].direction_and_intensity.xyz);
+
+    // Ray direction: from surface towards the light (opposite of propagation)
+    vec3 ray_dir = -light_dir;
+
+    // Compute world-space ray end point
+    vec3 ray_end = world_pos + ray_dir * pc.max_distance;
+
+    // Project start and end to clip space
+    vec4 start_clip = global.view_projection * vec4(world_pos, 1.0);
+    vec4 end_clip = global.view_projection * vec4(ray_end, 1.0);
+
+    // Perspective divide → NDC
+    vec3 start_ndc = start_clip.xyz / start_clip.w;
+    vec3 end_ndc = end_clip.xyz / end_clip.w;
+
+    // NDC → UV (Y-flipped viewport compensation)
+    vec2 start_uv = vec2(start_ndc.x * 0.5 + 0.5, 0.5 - start_ndc.y * 0.5);
+    vec2 end_uv = vec2(end_ndc.x * 0.5 + 0.5, 0.5 - end_ndc.y * 0.5);
+
+    float start_depth = start_ndc.z;
+    float end_depth = end_ndc.z;
+
+    // Step along the ray in screen space
+    float shadow = 1.0;  // 1.0 = lit (no shadow)
+
+    for (uint i = 1u; i <= pc.step_count; ++i) {
+        float t = float(i) / float(pc.step_count);
+
+        vec2 sample_uv = mix(start_uv, end_uv, t);
+
+        // Skip samples outside screen bounds
+        if (any(lessThan(sample_uv, vec2(0.0))) || any(greaterThan(sample_uv, vec2(1.0)))) break;
+
+        // Expected ray depth at this step (linear interpolation in NDC Z)
+        float expected_depth = mix(start_depth, end_depth, t);
+
+        // Sample actual scene depth at this UV
+        float sampled_depth = texture(in_depth, sample_uv).r;
+
+        // Depth-adaptive thickness: wider tolerance for distant surfaces
+        float thickness = pc.base_thickness * linear_depth(sampled_depth);
+
+        // Occlusion test (Reverse-Z: closer to camera = higher depth value)
+        // The ray moves away from camera towards the light.
+        // An occluder exists when the scene surface at this UV is:
+        //   1) closer to camera than the ray point (sampled_depth > expected_depth)
+        //   2) but not too far in front (within thickness)
+        if (sampled_depth > expected_depth
+            && (sampled_depth - expected_depth) < thickness) {
+            // Distance fade: full shadow at contact (t≈0), fading at max distance (t≈1)
+            shadow = smoothstep(0.0, 1.0, t);
+            break;
+        }
+    }
+
+    imageStore(out_contact_shadow, pixel, vec4(shadow));
+}
