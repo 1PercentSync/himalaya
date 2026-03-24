@@ -184,6 +184,15 @@ void main() {
     // View-space depth for shadow cascade selection and distance fade
     float view_depth = -(global.view * vec4(frag_world_pos, 1.0)).z;
 
+    // Screen UV (shared by contact shadows and AO sampling)
+    vec2 screen_uv = gl_FragCoord.xy / global.screen_size;
+
+    // Contact shadow mask (1.0 = lit, 0.0 = fully shadowed)
+    float contact_shadow = 1.0;
+    if ((global.feature_flags & FEATURE_CONTACT_SHADOWS) != 0u) {
+        contact_shadow = texture(rt_contact_shadow_mask, screen_uv).r;
+    }
+
     // ---- Direct lighting: Cook-Torrance + Lambert (split for debug modes) ----
     vec3 direct_diffuse = vec3(0.0);
     vec3 direct_specular = vec3(0.0);
@@ -211,6 +220,9 @@ void main() {
             radiance *= blend_cascade_shadow(frag_world_pos, N, view_depth);
         }
 
+        // Contact shadow attenuation (screen-space ray march, primary light only)
+        radiance *= contact_shadow;
+
         direct_diffuse  += (1.0 - F) * diffuse_color * INV_PI * radiance;
         direct_specular += D * Vis * F * radiance;
     }
@@ -234,7 +246,6 @@ void main() {
     material_ao = 1.0 + mat.occlusion_strength * (material_ao - 1.0);
 
     // Screen-space AO + bent normal (GTAO temporal-filtered, guarded by FEATURE_AO)
-    vec2 screen_uv = gl_FragCoord.xy / global.screen_size;
     float ssao = 1.0;
     float specular_ao = 1.0;
     if ((global.feature_flags & FEATURE_AO) != 0u) {
