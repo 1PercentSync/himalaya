@@ -17,6 +17,7 @@ namespace himalaya::rhi {
 namespace himalaya::framework {
     struct AOConfig;
     struct Camera;
+    struct ContactShadowConfig;
     struct RenderFeatures;
     struct ShadowConfig;
 } // namespace himalaya::framework
@@ -131,6 +132,9 @@ namespace himalaya::app {
 
         /** @brief AO parameters (mutable for slider controls). */
         framework::AOConfig& ao_config;
+
+        /** @brief Contact shadow parameters (mutable for slider controls). */
+        framework::ContactShadowConfig& contact_shadow_config;
 
         // --- MSAA (display + action) ---
 

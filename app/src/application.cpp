@@ -404,6 +404,7 @@ namespace himalaya::app {
             .features = features_,
             .shadow_config = shadow_config_,
             .ao_config = ao_config_,
+            .contact_shadow_config = contact_shadow_config_,
             .current_sample_count = renderer_.current_sample_count(),
             .shadow_resolution = renderer_.shadow_resolution(),
             .supported_sample_counts = context_.msaa_sample_counts,

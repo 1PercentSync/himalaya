@@ -475,7 +475,7 @@ namespace himalaya::app {
         // AO section
         if (ctx.features.ao) {
             ImGui::Separator();
-            if (ImGui::CollapsingHeader("Ambient Occlusion")) {
+            if (ImGui::CollapsingHeader("Ambient Occlusion", ImGuiTreeNodeFlags_DefaultOpen)) {
                 ImGui::SliderFloat("Radius", &ctx.ao_config.radius, 0.1f, 5.0f, "%.2f m");
 
                 // Directions combo (2/4/8)
@@ -507,11 +507,29 @@ namespace himalaya::app {
             }
         }
 
-        // Contact Shadows section (skeleton — sliders added in Step 14)
+        // Contact Shadows section
         if (ctx.features.contact_shadows) {
             ImGui::Separator();
-            if (ImGui::CollapsingHeader("Contact Shadows")) {
-                ImGui::TextDisabled("Parameters added in later steps");
+            if (ImGui::CollapsingHeader("Contact Shadows", ImGuiTreeNodeFlags_DefaultOpen)) {
+                // Step count combo (8/16/24/32)
+                constexpr uint32_t kStepCounts[] = {8, 16, 24, 32};
+                constexpr const char *kStepLabels[] = {"8", "16", "24", "32"};
+                int step_idx = 1; // default to 16
+                for (int i = 0; i < IM_ARRAYSIZE(kStepCounts); ++i) {
+                    if (kStepCounts[i] == ctx.contact_shadow_config.step_count) {
+                        step_idx = i;
+                        break;
+                    }
+                }
+                if (ImGui::Combo("Step Count", &step_idx, kStepLabels, IM_ARRAYSIZE(kStepLabels))) {
+                    ctx.contact_shadow_config.step_count = kStepCounts[step_idx];
+                }
+
+                ImGui::SliderFloat("Max Distance##cs", &ctx.contact_shadow_config.max_distance,
+                                   0.1f, 5.0f, "%.2f m");
+                ImGui::SliderFloat("Base Thickness", &ctx.contact_shadow_config.base_thickness,
+                                   0.0001f, 0.05f, "%.4f",
+                                   ImGuiSliderFlags_Logarithmic);
             }
         }
 
