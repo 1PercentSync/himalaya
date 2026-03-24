@@ -188,11 +188,25 @@ void main() {
     float t_jitter = noise * step_t;
 
     // ---- Ray march ----
+    //
+    // Non-linear step distribution (h3r2tic "linear_march_exponent"):
+    // t = (i/N)^exponent * range.  Exponent > 1 packs more samples near
+    // the ray origin where contact detail matters most, and spreads them
+    // out further along the ray.  Cost: one pow() per step.
+    //
+    // The loop breaks on the first valid hit (delta within tolerance).
+    // Thickness failures (delta >= tolerance, ray behind thick geometry)
+    // naturally fall through, allowing the march to find valid occlusion
+    // behind thin objects like fences or foliage.
+
+    const float kMarchExponent = 2.0;
 
     float shadow = 1.0; // 1.0 = lit, 0.0 = fully shadowed
 
     for (uint i = 0u; i < pc.step_count; ++i) {
-        float t = t_bias + t_jitter + float(i) * step_t;
+        // Non-linear step: pow concentrates samples near origin
+        float linear_t = (float(i) + noise) / float(pc.step_count);
+        float t = t_bias + pow(linear_t, kMarchExponent) * t_range;
 
         // Interpolate in clip space, then perspective divide
         vec4 ray_clip = mix(start_clip, end_clip, t);
@@ -209,29 +223,27 @@ void main() {
             break;
 
         // Sample scene depth and convert both to linear view-space distance.
-        // Comparison in linear space avoids the NDC nonlinearity problem:
-        // in Reverse-Z, the same world-space thickness maps to vastly
-        // different NDC deltas at different distances (~near/z²), making
-        // NDC-space comparison unreliable.
         float scene_depth = texture(rt_depth_resolved, sample_uv).r;
         float lin_scene = linearize_depth(scene_depth);
         float lin_ray   = linearize_depth(ray_depth);
 
         // Occlusion test in linear space.
         // Scene closer to camera than ray → lin_scene < lin_ray → delta > 0.
-        // The delta must be within the dynamic tolerance (computed before
-        // the loop) to reject false positives from thick geometry.
+        // The delta must be within the dynamic tolerance to reject
+        // false positives from thick geometry.
         float lin_delta = lin_ray - lin_scene;
 
         if (lin_delta > 0.0 && lin_delta < tolerance) {
-            // Hit — compute shadow with distance and edge fading.
-            // Full shadow near contact, fading in the last 25% of the ray
-            // to soften the shadow terminus at max search distance.
+            // Valid hit — compute shadow strength with distance and edge fade.
+            // Full shadow near contact, fading in the last 25% of the ray.
             float end_fade  = 1.0 - smoothstep(0.75, 1.0, t);
             float edge_fade = screen_edge_fade(sample_uv);
             shadow = 1.0 - end_fade * edge_fade;
             break;
         }
+        // Thickness failure (lin_delta >= tolerance): the ray passed
+        // entirely through a thick object — continue marching to find
+        // valid occlusion behind thin surfaces (fences, foliage).
     }
 
     imageStore(out_contact_shadow, pixel, vec4(shadow));
