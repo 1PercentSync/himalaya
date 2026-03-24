@@ -176,6 +176,16 @@ void main() {
     //   Δclip.z = projection[3][2] * δ / linear_depth
     start_clip.z += global.projection[3][2] * tolerance / lin_start;
 
+    // ---- Step count adaptation ----
+    // Clamp step count to the screen-space ray length so we never take
+    // more steps than there are pixels to traverse (h3r2tic).  Minimum
+    // of 2 steps to keep at least some sampling.
+
+    const float kMinPxPerStep = 1.0;
+    uint effective_steps = clamp(pc.step_count,
+                                 2u,
+                                 max(2u, uint(ray_len_px / kMinPxPerStep)));
+
     // ---- Step parameters ----
 
     float t_range = 1.0 - t_bias;
@@ -191,6 +201,13 @@ void main() {
     // the ray origin where contact detail matters most, and spreads them
     // out further along the ray.  Cost: one pow() per step.
     //
+    // Dual depth sampling (h3r2tic): read both bilinear-filtered and
+    // nearest-neighbor depth at each step.  Bilinear creates false shadows
+    // at silhouettes (interpolates foreground/background depths); nearest
+    // creates "duplo brick" staircase artifacts from quantized positions.
+    // Requiring the ray to pass below BOTH surfaces eliminates both
+    // artifact classes — "the two approaches fix each other's artifacts."
+    //
     // The loop breaks on the first valid hit (delta within tolerance).
     // Thickness failures (delta >= tolerance, ray behind thick geometry)
     // naturally fall through, allowing the march to find valid occlusion
@@ -200,9 +217,9 @@ void main() {
 
     float shadow = 1.0; // 1.0 = lit, 0.0 = fully shadowed
 
-    for (uint i = 0u; i < pc.step_count; ++i) {
+    for (uint i = 0u; i < effective_steps; ++i) {
         // Non-linear step: pow concentrates samples near origin
-        float linear_t = (float(i) + noise) / float(pc.step_count);
+        float linear_t = (float(i) + noise) / float(effective_steps);
         float t = t_bias + pow(linear_t, kMarchExponent) * t_range;
 
         // Interpolate in clip space, then perspective divide
@@ -219,15 +236,24 @@ void main() {
         if (any(lessThan(sample_uv, vec2(0.0))) || any(greaterThan(sample_uv, vec2(1.0))))
             break;
 
-        // Sample scene depth and convert both to linear view-space distance.
-        float scene_depth = texture(rt_depth_resolved, sample_uv).r;
-        float lin_scene = linearize_depth(scene_depth);
-        float lin_ray   = linearize_depth(ray_depth);
+        // Dual depth sampling: bilinear (smooth) + nearest (exact).
+        // Bilinear interpolates across depth discontinuities at silhouettes,
+        // creating phantom surfaces.  Nearest avoids this but quantizes to
+        // texel centers, producing staircase artifacts.  Requiring the ray
+        // to pass below BOTH eliminates both artifact classes.
+        float depth_bilinear = texture(rt_depth_resolved, sample_uv).r;
+        ivec2 sample_texel = ivec2(sample_uv * vec2(size));
+        float depth_nearest  = texelFetch(rt_depth_resolved, sample_texel, 0).r;
 
-        // Occlusion test in linear space.
-        // Scene closer to camera than ray → lin_scene < lin_ray → delta > 0.
-        // The delta must be within the dynamic tolerance to reject
-        // false positives from thick geometry.
+        float lin_bilinear = linearize_depth(depth_bilinear);
+        float lin_nearest  = linearize_depth(depth_nearest);
+        float lin_ray      = linearize_depth(ray_depth);
+
+        // Both surfaces must be closer to camera than the ray (delta > 0),
+        // and within tolerance.  Using max(lin_bilinear, lin_nearest) as
+        // the "scene depth" means we pick the FARTHER of the two — the ray
+        // must be behind both to count as occluded.
+        float lin_scene = max(lin_bilinear, lin_nearest);
         float lin_delta = lin_ray - lin_scene;
 
         if (lin_delta > 0.0 && lin_delta < tolerance) {
