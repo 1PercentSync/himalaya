@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 12 第四小项：ao_temporal.comp 适配 RGBA8（AO 邻域 clamp 改 A 通道，bent normal RGB blend 不 clamp）
+Step 12 第五小项：forward.frag SO 改用 GTSO smoothstep 近似（bent normal cone 交集），删除 Lagarde 近似
 
 ---
 
