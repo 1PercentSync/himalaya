@@ -132,6 +132,6 @@
 ## Step 14：Contact Shadows Forward 集成
 
 - [x] forward.frag：contact shadow 采样 + shadow attenuation 叠加
-- [ ] FEATURE_CONTACT_SHADOWS 守护
+- [x] FEATURE_CONTACT_SHADOWS 守护
 - [ ] Renderer 编排：features.contact_shadows 条件调用
 - [ ] DebugUI Contact Shadows 面板填充（step count、max distance、base thickness）

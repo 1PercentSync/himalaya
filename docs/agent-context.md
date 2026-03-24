@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 14 进行中（1/4），下一小项：FEATURE_CONTACT_SHADOWS 守护
+Step 14 进行中（2/4），下一小项：Renderer 编排 features.contact_shadows 条件调用
 
 ---
 
