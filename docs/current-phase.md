@@ -120,6 +120,8 @@ RHI 层新增 RT Pipeline 创建和命令录制。
 
 SBT layout：raygen region（1 entry）+ miss region（2 entries：environment miss + shadow miss）+ hit region（1 entry：closest-hit）。每个 entry 大小对齐到 `shaderGroupHandleAlignment`，region 起始对齐到 `shaderGroupBaseAlignment`（Step 2 查询的属性）。`maxRayRecursionDepth` 设为 1（不用递归，closest-hit 中 shadow ray 用 `traceRayEXT` 但 miss 不再发射射线）。
 
+RT Pipeline layout 包含完整的 `{Set 0, Set 1, Set 2, Set 3(push)}`，与 graphics/compute pipeline 一致。PT shader 不引用 Set 2，但保持统一 layout 简化绑定路径。
+
 ---
 
 ### Step 5：Scene AS Builder + Set 0 扩展
@@ -137,7 +139,7 @@ Framework 层场景加速结构构建 + Descriptor 扩展。
     - `destroy()`：释放 BLAS、TLAS、Geometry Info buffer
     - `tlas_handle()` / `geometry_info_buffer()` getter
 - `DescriptorManager` 扩展：
-  - `init()` 接收 `bool rt_supported` 参数
+  - `init()` 内部从 `context_->rt_supported` 读取 RT 状态（不加额外参数）
   - `rt_supported = true` 时 Set 0 layout 新增 binding 4（`VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR`）+ binding 5（SSBO）
   - 新增 `write_set0_tlas(TLASHandle)` + `write_set0_buffer` 复用写 binding 5
 - `BufferUsage` 枚举新增 `ShaderDeviceAddress`，`ResourceManager` 在 buffer 创建时映射到 `VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT`
@@ -159,8 +161,8 @@ Geometry Info buffer 是 GPU_ONLY + ShaderDeviceAddress，场景加载时通过 
 编写路径追踪 shader 并验证编译。
 
 - 新增 `shaders/rt/pt_common.glsl`：
-  - Sobol / Halton 低差异序列生成
-  - Blue noise 纹理采样偏移
+  - Sobol 低差异序列生成 + Cranley-Patterson rotation
+  - Blue noise 纹理采样偏移（预生成 128×128 纹理，注册到 bindless 数组）
   - cosine-weighted hemisphere sampling
   - GGX importance sampling（复用 `common/brdf.glsl` 中的 GGX 函数）
   - Russian Roulette（bounce ≥ 2 时按路径吞吐量概率终止）
@@ -198,8 +200,9 @@ NEE 采样：M1 光源少，暴力遍历 LightBuffer 中所有方向光（无 Li
 
 ### Step 7：Reference View Pass
 
-Pass 层实现 + accumulation 管理。
+Pass 层实现 + accumulation 管理 + RG 扩展。
 
+- `RGStage` 枚举新增 `RayTracing`，RG barrier 计算映射到 `VK_PIPELINE_STAGE_2_RAY_TRACING_SHADER_BIT_KHR` + `VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT`
 - 新增 `passes/reference_view_pass.h` / `.cpp`：
   - `ReferenceViewPass` 类：
     - `setup(Context&, ResourceManager&, DescriptorManager&, ShaderCompiler&)`：编译 RT shader、创建 RT pipeline、创建 accumulation buffer（RGBA32F，Relative 1.0x，Storage usage）
@@ -243,7 +246,7 @@ PT 路径的 RG 编排极简：仅 Reference View Pass + Tonemapping Pass + ImGu
 
 集成 Intel Open Image Denoise GPU 降噪。
 
-- vcpkg.json 新增 OIDN 依赖（需确认 vcpkg 端口可用性，备选：手动集成预编译库）
+- 手动集成 OIDN 预编译库（官方 release 包含 headers + lib + dll，CUDA GPU 支持内置；vcpkg 无端口）
 - 新增 `framework/denoiser.h` / `.cpp`：
   - `Denoiser` 类：
     - `init(Context&, ResourceManager&)`：创建 OIDN device（GPU 优先，fallback CPU）、创建 filter（"RT" filter，beauty + albedo + normal 可选辅助输入）、分配 staging buffers（readback + upload，持久不重建）
@@ -381,14 +384,19 @@ rhi/
 │   ├── context.h                  # [Step 1-2] rt_supported + RT 属性存储
 │   ├── resources.h                # [Step 5] BufferUsage::ShaderDeviceAddress
 │   ├── commands.h                 # [Step 4] trace_rays()
-│   ├── descriptors.h              # [Step 5] init(rt_supported), write_set0_tlas()
+│   ├── descriptors.h              # [Step 5] Set 0 layout 条件扩展 + write_set0_tlas()
 │   └── shader.h                   # [Step 6] RT shader stage 支持
 ├── src/
 │   ├── context.cpp                # [Step 1-2] 设备选择 + RT 扩展启用
 │   ├── resources.cpp              # [Step 5] ShaderDeviceAddress 映射 + get_buffer_device_address
 │   ├── commands.cpp               # [Step 4] trace_rays 实现
-│   ├── descriptors.cpp            # [Step 5] Set 0 layout 扩展 + TLAS descriptor 写入
+│   ├── descriptors.cpp            # [Step 5] Set 0 layout 条件扩展 + TLAS descriptor 写入
 │   └── shader.cpp                 # [Step 6] RT stage 编译支持
+framework/
+├── include/himalaya/framework/
+│   └── render_graph.h             # [Step 7] RGStage::RayTracing 枚举
+├── src/
+│   └── render_graph.cpp           # [Step 7] RayTracing barrier 映射
 framework/
 ├── include/himalaya/framework/
 │   └── scene_data.h               # [Step 8] RenderMode 枚举

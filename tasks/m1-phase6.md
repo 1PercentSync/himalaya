@@ -40,14 +40,15 @@
 - [ ] SceneASBuilder::build()：per-mesh BLAS 构建 + TLAS 构建 + Geometry Info SSBO 构建
 - [ ] BufferUsage 新增 ShaderDeviceAddress + ResourceManager 映射
 - [ ] ResourceManager 新增 get_buffer_device_address()
-- [ ] DescriptorManager::init() 接收 rt_supported，Set 0 layout 条件扩展 binding 4/5
+- [ ] DescriptorManager::init() 从 context_->rt_supported 读取 RT 状态，Set 0 layout 条件扩展 binding 4/5
 - [ ] DescriptorManager 新增 write_set0_tlas()
 - [ ] Renderer：场景加载后调用 SceneASBuilder::build() + 写入 Set 0 binding 4/5
 - [ ] bindings.glsl 新增 Set 0 binding 4（accelerationStructureEXT）+ binding 5（GeometryInfoBuffer）
 
 ## Step 6：PT 核心 shader
 
-- [ ] 新增 shaders/rt/pt_common.glsl：低差异序列 + blue noise + hemisphere sampling + GGX sampling + Russian Roulette + MIS + 顶点插值
+- [ ] 新增 shaders/rt/pt_common.glsl：Sobol + Cranley-Patterson + blue noise 纹理采样 + hemisphere sampling + GGX sampling + Russian Roulette + MIS + 顶点插值
+- [ ] 嵌入预生成 128×128 blue noise 纹理 + Renderer 初始化时注册到 bindless 数组
 - [ ] 新增 shaders/rt/reference_view.rgen：primary ray 计算 + 路径追踪主循环 + accumulation 写入
 - [ ] 新增 shaders/rt/closesthit.rchit：顶点插值 + 材质采样 + NEE + MIS + BRDF 采样
 - [ ] 新增 shaders/rt/miss.rmiss：IBL cubemap 环境采样
@@ -56,6 +57,7 @@
 
 ## Step 7：Reference View Pass
 
+- [ ] RGStage 枚举新增 RayTracing + RG barrier 映射（VK_PIPELINE_STAGE_2_RAY_TRACING_SHADER_BIT_KHR）
 - [ ] 新增 reference_view_pass.h/.cpp：setup / record / destroy / rebuild_pipelines / on_resize
 - [ ] Accumulation buffer 创建（RGBA32F，Relative 1.0x，Storage）
 - [ ] record()：RG pass 注册 + push descriptors + trace_rays dispatch
@@ -73,7 +75,7 @@
 
 ## Step 9：OIDN 集成
 
-- [ ] vcpkg.json 新增 OIDN 依赖（或手动集成预编译库）
+- [ ] 手动集成 OIDN 预编译库（官方 release，含 CUDA GPU 支持）
 - [ ] 新增 denoiser.h/.cpp：Denoiser 类（init / denoise / destroy / on_resize）
 - [ ] OIDN device 创建（GPU 优先 fallback CPU）+ RT filter 创建
 - [ ] 持久 staging buffer 分配（readback + upload）
