@@ -12,13 +12,15 @@
 ### 依赖关系
 
 ```
-Steps 1-2: RHI 层 RT 扩展（设备选择、扩展启用、特性查询）
+Step 1: RHI 层 RT 扩展（设备选择、扩展启用、特性查询）
     ↓
-Step 3: RHI 层 AS 抽象（BLAS/TLAS 创建、构建、销毁）
+Step 2: RHI 层 AS 抽象（BLAS/TLAS 创建、构建、销毁）
     ↓
-Step 4: RHI 层 RT Pipeline 抽象（SBT、trace_rays 命令）
+Step 3: RHI 层 RT Pipeline 抽象（SBT、trace_rays 命令）
     ↓
-Step 5: Framework 层 Scene AS Builder + Set 0 扩展（binding 4/5）
+Step 4: RHI/Framework 层 RT 基础设施（BufferUsage、Descriptor 扩展、GPUGeometryInfo）
+    ↓
+Step 5: Scene AS Builder + Renderer 集成（SceneLoader 变更 + AS 构建 + bindings.glsl）
     ↓
 Step 6: PT 核心 shader（raygen/miss/closesthit，共享 pt_common.glsl）
     ↓
@@ -35,11 +37,11 @@ Step 10: ImGui PT 面板 + 调参
 
 | Step | 主题 | 验证标准 |
 |------|------|----------|
-| 1 | RT 扩展检测与设备选择 | 日志输出 RT 支持状态，有 RT 硬件时 `rt_supported = true` |
-| 2 | RT 扩展启用与特性激活 | 无 validation 报错，RT 设备特性成功启用 |
-| 3 | AS 资源抽象 | 编译通过，无调用方（纯 API 声明 + 实现） |
-| 4 | RT Pipeline + SBT + trace_rays | 编译通过，无调用方 |
-| 5 | Scene AS Builder + Set 0 扩展 | 场景加载后日志输出 BLAS/TLAS 构建信息，无 validation 报错 |
+| 1 | RT 扩展检测 + 启用 + 特性激活 | 日志输出 RT 支持状态，无 validation 报错，RT 属性成功查询 |
+| 2 | AS 资源抽象 | 编译通过，无调用方（纯 API 声明 + 实现） |
+| 3 | RT Pipeline + SBT + trace_rays | 编译通过，无调用方 |
+| 4 | RHI/Framework RT 基础设施 | 编译通过，新增类型和 API 可用但无调用方 |
+| 5 | Scene AS Builder + Renderer 集成 | 场景加载后日志输出 BLAS/TLAS 构建信息，无 validation 报错 |
 | 6 | PT 核心 shader | shader 编译通过（shaderc RT target），无运行时调用 |
 | 7 | Reference View Pass | RenderDoc: accumulation buffer 逐帧亮度增加，静止时收敛 |
 | 8 | 独立渲染路径 + 模式切换 | ImGui 切换光栅化 ↔ PT，两种模式正确显示，切换后缓存有效 |
@@ -48,29 +50,20 @@ Step 10: ImGui PT 面板 + 调参
 
 ---
 
-### Step 1：RT 扩展检测与设备选择
+### Step 1：RT 扩展检测 + 启用 + 特性激活
 
-设备选择逻辑变更，RT 支持作为加分项。
+设备选择逻辑变更 + 条件启用 RT 扩展和设备特性。
 
 - `context.cpp`：新增 RT 所需扩展列表（`VK_KHR_acceleration_structure`、`VK_KHR_ray_tracing_pipeline`、`VK_KHR_ray_query`、`VK_KHR_deferred_host_operations`、`VK_KHR_spirv_1_4`、`VK_KHR_shader_float_controls`）
 - `pick_physical_device()`：对每个候选设备检测 RT 扩展可用性，RT 支持设备在评分中获得额外权重
 - `Context` 新增 `bool rt_supported` 公有字段，设备选择完成后根据最终选中设备的 RT 能力设置
 - 日志输出：选中设备名 + RT 支持状态
-
-**验证**：有 RT 硬件时日志显示 `rt_supported = true`，无 RT 时 `rt_supported = false`，现有渲染不变
-
----
-
-### Step 2：RT 扩展启用与特性激活
-
-在 `create_device()` 中条件启用 RT 扩展和设备特性。
-
 - `rt_supported = true` 时：将 RT 扩展加入设备扩展列表
 - 启用设备特性：`accelerationStructure`、`rayTracingPipeline`、`rayQuery`、`bufferDeviceAddress`（Vulkan 1.2 核心，AS 构建需要）
 - 查询并存储 RT 相关属性（`VkPhysicalDeviceRayTracingPipelinePropertiesKHR`：`shaderGroupHandleSize`、`shaderGroupBaseAlignment`、`maxRayRecursionDepth` 等），Context 新增存储字段
 - `rt_supported = false` 时：跳过所有 RT 相关初始化
 
-**验证**：无 validation 报错，`vkGetPhysicalDeviceProperties2` 成功获取 RT 属性
+**验证**：有 RT 硬件时日志显示 `rt_supported = true`，无 validation 报错，RT 属性成功查询；无 RT 时 `rt_supported = false`，现有渲染不变
 
 #### 设计要点
 
@@ -78,7 +71,7 @@ Step 10: ImGui PT 面板 + 调参
 
 ---
 
-### Step 3：AS 资源抽象
+### Step 2：AS 资源抽象
 
 RHI 层新增加速结构管理。
 
@@ -106,7 +99,7 @@ BLAS 和 TLAS 的 backing buffer 需要 `VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_
 
 ---
 
-### Step 4：RT Pipeline + SBT + trace_rays
+### Step 3：RT Pipeline + SBT + trace_rays
 
 RHI 层新增 RT Pipeline 创建和命令录制。
 
@@ -123,40 +116,51 @@ RHI 层新增 RT Pipeline 创建和命令录制。
 
 #### 设计要点
 
-SBT layout：raygen region（1 entry）+ miss region（2 entries：environment miss + shadow miss）+ hit region（1 entry：closest-hit）。每个 entry 大小对齐到 `shaderGroupHandleAlignment`，region 起始对齐到 `shaderGroupBaseAlignment`（Step 2 查询的属性）。`maxRayRecursionDepth` 设为 1（不用递归，closest-hit 中 shadow ray 用 `traceRayEXT` 但 miss 不再发射射线）。
+SBT layout：raygen region（1 entry）+ miss region（2 entries：environment miss + shadow miss）+ hit region（1 entry：closest-hit）。每个 entry 大小对齐到 `shaderGroupHandleAlignment`，region 起始对齐到 `shaderGroupBaseAlignment`（Step 1 查询的属性）。`maxRayRecursionDepth` 设为 1（不用递归，closest-hit 中 shadow ray 用 `traceRayEXT` 但 miss 不再发射射线）。
 
 RT Pipeline layout 包含完整的 `{Set 0, Set 1, Set 2, Set 3(push)}`，与 graphics/compute pipeline 一致。PT shader 不引用 Set 2，但保持统一 layout 简化绑定路径。
 
 ---
 
-### Step 5：Scene AS Builder + Set 0 扩展
+### Step 4：RHI/Framework RT 基础设施
 
-Framework 层场景加速结构构建 + Descriptor 扩展。
+RT 所需的底层类型扩展和 Descriptor 扩展，为 Step 5 的 SceneASBuilder 集成做准备。
 
-- 新增 `framework/scene_as_builder.h`：
-  - `SceneASBuilder` 类：
-    - `build(Context&, ResourceManager&, AccelerationStructureManager&, std::span<const Mesh>, std::span<const MeshInstance>, std::span<const MaterialInstance>)`：
-      1. 按 `Mesh::group_id` 分组 → 每组收集 BLASGeometry 列表 → 组装 BLASBuildInfo（multi-geometry）
-      2. 调用 `AccelerationStructureManager::build_blas()` 批量构建（每 group 一个 BLAS）
-      3. 构建 Geometry Info SSBO（按 group 连续排列，per-geometry：vertex/index buffer address、stride、vertex/index count、material buffer_offset）
-      4. 按 `(group_id, transform)` 去重 mesh_instances → 组装 `VkAccelerationStructureInstanceKHR` 数组（customIndex = 该 group 在 Geometry Info 中的 base offset）
-      5. 调用 `AccelerationStructureManager::build_tlas()`
-    - `destroy()`：释放 BLAS、TLAS、Geometry Info buffer
-    - `tlas_handle()` / `geometry_info_buffer()` getter
-- `DescriptorManager` 扩展：
-  - `init()` 内部从 `context_->rt_supported` 读取 RT 状态（不加额外参数）
-  - `rt_supported = true` 时 Set 0 layout 新增 binding 4（`VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR`）+ binding 5（SSBO，GeometryInfoBuffer）
-  - 新增 `write_set0_tlas(TLASHandle)` + `write_set0_buffer` 复用写 binding 5
+- `BufferUsage` 枚举新增 `ShaderDeviceAddress`，`ResourceManager` 在 buffer 创建时映射到 `VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT`
+- `ResourceManager` 新增 `get_buffer_device_address(BufferHandle)` 方法
 - GPU 端新增 `GPUGeometryInfo` 结构体（std430，24 bytes）：
   - `uint64_t vertex_buffer_address`（offset 0）
   - `uint64_t index_buffer_address`（offset 8）
   - `uint32_t material_buffer_offset`（offset 16，MaterialBuffer SSBO 索引）
   - `uint32_t _padding`（offset 20）
-- `BufferUsage` 枚举新增 `ShaderDeviceAddress`，`ResourceManager` 在 buffer 创建时映射到 `VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT`
-- `ResourceManager` 新增 `get_buffer_device_address(BufferHandle)` 方法
+- `DescriptorManager` 扩展：
+  - `init()` 内部从 `context_->rt_supported` 读取 RT 状态（不加额外参数）
+  - `rt_supported = true` 时 Set 0 layout 新增 binding 4（`VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR`）+ binding 5（SSBO，GeometryInfoBuffer）
+  - 新增 `write_set0_tlas(TLASHandle)` + `write_set0_buffer` 复用写 binding 5 + `get_rt_set_layouts()`
 - `Mesh` 结构体新增 `group_id`（glTF source mesh index）+ `material_id`（primitive 固有材质，material_instances 索引）
+
+**验证**：编译通过，新增类型和 API 可用但无调用方
+
+---
+
+### Step 5：Scene AS Builder + Renderer 集成
+
+SceneLoader 变更 + SceneASBuilder 实现 + Renderer 集成 + bindings.glsl 扩展。
+
 - `SceneLoader::load()` 新增 `bool rt_supported` 参数：`true` 时 vertex/index buffer 创建额外加 `ShaderDeviceAddress` flag
+- `SceneLoader::load_meshes()` 填充 `group_id` 和 `material_id`
+- 新增 `framework/scene_as_builder.h`：
+  - `SceneASBuilder` 类：
+    - `build(Context&, ResourceManager&, AccelerationStructureManager&, std::span<const Mesh>, std::span<const MeshInstance>, std::span<const MaterialInstance>)`：
+      1. 按 `Mesh::group_id` 分组 → 每组收集 BLASGeometry 列表 → 组装 BLASBuildInfo（multi-geometry）
+      2. 调用 `AccelerationStructureManager::build_blas()` 批量构建（每 group 一个 BLAS）
+      3. 构建 Geometry Info SSBO（按 group 连续排列，per-geometry：vertex/index buffer address、material buffer_offset）
+      4. 按 `(group_id, transform)` 去重 mesh_instances → 组装 `VkAccelerationStructureInstanceKHR` 数组（customIndex = 该 group 在 Geometry Info 中的 base offset）
+      5. 调用 `AccelerationStructureManager::build_tlas()`
+    - `destroy()`：释放 BLAS、TLAS、Geometry Info buffer
+    - `tlas_handle()` / `geometry_info_buffer()` getter
 - Renderer：场景加载后调用 `SceneASBuilder::build()`，写入 Set 0 binding 4/5
+- `bindings.glsl` 新增 `GeometryInfo` struct + Set 0 binding 4（`accelerationStructureEXT`）+ binding 5（`GeometryInfoBuffer`）
 
 **验证**：场景加载后日志输出 BLAS 数量（= unique group 数）+ TLAS instance 数量（= unique node 数）+ Geometry Info buffer 大小，无 validation 报错
 
@@ -380,11 +384,11 @@ ImGui Pass → Present
 ```
 rhi/
 ├── include/himalaya/rhi/
-│   ├── acceleration_structure.h   # [Step 3] BLAS/TLAS 管理
-│   └── rt_pipeline.h              # [Step 4] RT Pipeline + SBT
+│   ├── acceleration_structure.h   # [Step 2] BLAS/TLAS 管理
+│   └── rt_pipeline.h              # [Step 3] RT Pipeline + SBT
 └── src/
-    ├── acceleration_structure.cpp  # [Step 3]
-    └── rt_pipeline.cpp             # [Step 4]
+    ├── acceleration_structure.cpp  # [Step 2]
+    └── rt_pipeline.cpp             # [Step 3]
 framework/
 ├── include/himalaya/framework/
 │   ├── scene_as_builder.h         # [Step 5] 场景加速结构构建
@@ -410,22 +414,22 @@ shaders/rt/
 ```
 rhi/
 ├── include/himalaya/rhi/
-│   ├── context.h                  # [Step 1-2] rt_supported + RT 属性存储
-│   ├── resources.h                # [Step 5] BufferUsage::ShaderDeviceAddress
-│   ├── commands.h                 # [Step 4] trace_rays()
-│   ├── descriptors.h              # [Step 5] Set 0 layout 条件扩展 + write_set0_tlas()
+│   ├── context.h                  # [Step 1] rt_supported + RT 属性存储
+│   ├── resources.h                # [Step 4] BufferUsage::ShaderDeviceAddress
+│   ├── commands.h                 # [Step 3] trace_rays()
+│   ├── descriptors.h              # [Step 4] Set 0 layout 条件扩展 + write_set0_tlas()
 │   └── shader.h                   # [Step 6] RT shader stage 支持
 ├── src/
-│   ├── context.cpp                # [Step 1-2] 设备选择 + RT 扩展启用
-│   ├── resources.cpp              # [Step 5] ShaderDeviceAddress 映射 + get_buffer_device_address
-│   ├── commands.cpp               # [Step 4] trace_rays 实现
-│   ├── descriptors.cpp            # [Step 5] Set 0 layout 条件扩展 + TLAS descriptor 写入
+│   ├── context.cpp                # [Step 1] 设备选择 + RT 扩展启用
+│   ├── resources.cpp              # [Step 4] ShaderDeviceAddress 映射 + get_buffer_device_address
+│   ├── commands.cpp               # [Step 3] trace_rays 实现
+│   ├── descriptors.cpp            # [Step 4] Set 0 layout 条件扩展 + TLAS descriptor 写入
 │   └── shader.cpp                 # [Step 6] RT stage 编译支持
 framework/
 ├── include/himalaya/framework/
-│   ├── mesh.h                     # [Step 5] Mesh 新增 group_id + material_id
+│   ├── mesh.h                     # [Step 4] Mesh 新增 group_id + material_id
 │   ├── render_graph.h             # [Step 7] RGStage::RayTracing 枚举
-│   └── scene_data.h               # [Step 8] RenderMode 枚举
+│   └── scene_data.h               # [Step 4+8] GPUGeometryInfo + RenderMode 枚举
 ├── src/
 │   └── render_graph.cpp           # [Step 7] RayTracing barrier 映射
 app/
@@ -435,7 +439,7 @@ app/
 │   ├── debug_ui.h                 # [Step 10] DebugUIContext PT 字段 + DebugUIActions PT 动作
 │   └── application.h              # [Step 8] render_mode 状态
 ├── src/
-│   ├── scene_loader.cpp            # [Step 5] load_meshes() 填充 group_id/material_id + buffer flags
+│   ├── scene_loader.cpp           # [Step 5] load_meshes() 填充 group_id/material_id + buffer flags
 │   ├── renderer.cpp               # [Step 5-9] AS 构建 + 渲染路径私有方法拆分 + OIDN 触发
 │   ├── debug_ui.cpp               # [Step 10] PT 面板绘制
 │   └── application.cpp            # [Step 8-10] 模式切换 + PT actions 响应

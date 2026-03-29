@@ -4,21 +4,18 @@
 
 ---
 
-## Step 1：RT 扩展检测与设备选择
+## Step 1：RT 扩展检测 + 启用 + 特性激活
 
 - [ ] 新增 RT 扩展列表（acceleration_structure、ray_tracing_pipeline、ray_query、deferred_host_operations、spirv_1_4、shader_float_controls）
 - [ ] pick_physical_device() RT 支持作为加分项评分
 - [ ] Context 新增 `rt_supported` 公有字段
 - [ ] 日志输出选中设备 RT 支持状态
-
-## Step 2：RT 扩展启用与特性激活
-
 - [ ] rt_supported 时 RT 扩展加入设备扩展列表
 - [ ] 启用设备特性：accelerationStructure、rayTracingPipeline、rayQuery、bufferDeviceAddress
 - [ ] 查询并存储 RT pipeline 属性（shaderGroupHandleSize、shaderGroupBaseAlignment、maxRayRecursionDepth 等）
 - [ ] Context 新增 RT 属性存储字段
 
-## Step 3：AS 资源抽象
+## Step 2：AS 资源抽象
 
 - [ ] 新增 acceleration_structure.h：BLASHandle、TLASHandle、BLASGeometry、BLASBuildInfo（multi-geometry：`span<const BLASGeometry> geometries`）类型
 - [ ] AccelerationStructureManager：build_blas() 单次 vkCmdBuild 并行构建全部（PREFER_FAST_TRACE），每个 BLASBuildInfo 支持 1..N geometries
@@ -27,7 +24,7 @@
 - [ ] Scratch buffer 管理：分配大 scratch = 各 BLAS scratch 之和（对齐到 minAccelerationStructureScratchOffsetAlignment），构建完成后释放
 - [ ] 顶点格式硬编码：vertexFormat = R32G32B32_SFLOAT (offset 0)、indexType = UINT32
 
-## Step 4：RT Pipeline + SBT + trace_rays
+## Step 3：RT Pipeline + SBT + trace_rays
 
 - [ ] 新增 rt_pipeline.h：RTPipelineDesc、RTPipeline 类型
 - [ ] create_rt_pipeline()：shader group 创建 + vkCreateRayTracingPipelinesKHR
@@ -35,29 +32,38 @@
 - [ ] RTPipeline::destroy()
 - [ ] CommandBuffer 新增 trace_rays(const RTPipeline&, width, height)
 
-## Step 5：Scene AS Builder + Set 0 扩展
+## Step 4：RHI/Framework RT 基础设施
 
-- [ ] Mesh 结构体新增 group_id（glTF source mesh index）+ material_id（primitive 固有材质）
-- [ ] SceneLoader::load_meshes() 填充 group_id 和 material_id
-- [ ] SceneLoader::load() 新增 rt_supported 参数，true 时 vertex/index buffer 额外加 ShaderDeviceAddress flag
-- [ ] 新增 scene_as_builder.h：SceneASBuilder 类
-- [ ] SceneASBuilder::build()：按 group_id 分组构建 multi-geometry BLAS + 按 (group_id, transform) 去重构建 TLAS + Geometry Info SSBO 构建（按 group 连续排列，customIndex = group base offset）
 - [ ] BufferUsage 新增 ShaderDeviceAddress + ResourceManager 映射
 - [ ] ResourceManager 新增 get_buffer_device_address()
 - [ ] scene_data.h 新增 GPUGeometryInfo 结构体（std430 24B：vertex_buffer_address u64 + index_buffer_address u64 + material_buffer_offset u32 + _padding u32）+ static_assert 守卫
 - [ ] DescriptorManager::init() 从 context_->rt_supported 读取 RT 状态，Set 0 layout 条件扩展 binding 4/5
 - [ ] DescriptorManager 新增 write_set0_tlas() + get_rt_set_layouts()
+- [ ] Mesh 结构体新增 group_id（glTF source mesh index）+ material_id（primitive 固有材质）
+
+## Step 5：Scene AS Builder + Renderer 集成
+
+- [ ] SceneLoader::load() 新增 rt_supported 参数，true 时 vertex/index buffer 额外加 ShaderDeviceAddress flag
+- [ ] SceneLoader::load_meshes() 填充 group_id 和 material_id
+- [ ] 新增 scene_as_builder.h：SceneASBuilder 类
+- [ ] SceneASBuilder::build()：按 group_id 分组构建 multi-geometry BLAS + 按 (group_id, transform) 去重构建 TLAS + Geometry Info SSBO 构建（按 group 连续排列，customIndex = group base offset）
 - [ ] Renderer：场景加载后调用 SceneASBuilder::build() + 写入 Set 0 binding 4/5
 - [ ] bindings.glsl 新增 GeometryInfo struct（含 uint64_t，需 GL_EXT_shader_explicit_arithmetic_types_int64）+ Set 0 binding 4（accelerationStructureEXT）+ binding 5（GeometryInfoBuffer）
 
 ## Step 6：PT 核心 shader
 
-- [ ] 新增 shaders/rt/pt_common.glsl：GLSL 扩展声明（GL_EXT_ray_tracing、GL_EXT_buffer_reference/2、GL_EXT_shader_explicit_arithmetic_types_int64、GL_EXT_nonuniform_qualifier）+ Ray Payload 定义（PrimaryPayload loc 0 + ShadowPayload loc 1）+ Vertex/Index buffer_reference layout + Sobol（常量数组）+ Cranley-Patterson + blue noise 采样 + hemisphere sampling + GGX sampling + Russian Roulette + MIS + 顶点插值
+- [ ] 新增 shaders/rt/pt_common.glsl：GLSL 扩展声明（GL_EXT_ray_tracing、GL_EXT_buffer_reference/2、GL_EXT_shader_explicit_arithmetic_types_int64、GL_EXT_nonuniform_qualifier）
+- [ ] pt_common.glsl：Ray Payload 定义（PrimaryPayload loc 0 + ShadowPayload loc 1）
+- [ ] pt_common.glsl：Vertex / Index buffer_reference layout 定义（匹配 Vertex 结构体 56B）
+- [ ] pt_common.glsl：顶点属性插值工具（GeometryInfo → buffer_reference 读取 → 重心坐标插值 position/normal/UV）
+- [ ] pt_common.glsl：Sobol 低差异序列（预计算方向数表嵌入常量数组）+ Cranley-Patterson rotation
+- [ ] pt_common.glsl：cosine-weighted hemisphere sampling + GGX importance sampling（复用 common/brdf.glsl）
+- [ ] pt_common.glsl：Russian Roulette（bounce ≥ 2）+ MIS power heuristic（balance heuristic）
 - [ ] 嵌入预生成 128×128 R8Unorm blue noise 纹理（公开数据集）+ Renderer 初始化时上传 GPU 注册到 bindless 数组
 - [ ] GlobalUniformData 新增 inv_view（mat4，offset 864），总大小 864→928 bytes + static_assert 更新
 - [ ] bindings.glsl GlobalUBO 新增 inv_view 字段
 - [ ] 新增 shaders/rt/reference_view.rgen：从 GlobalUBO inv_view/inv_projection 计算 primary ray + 路径追踪主循环 + accumulation 写入。Push constant 12B：max_bounces + sample_count + frame_seed
-- [ ] 新增 shaders/rt/closesthit.rchit：geometry_infos[customIndex + geometryIndex] 索引 + 顶点插值（buffer_reference）+ 材质采样 + NEE + MIS + BRDF 采样，写入 PrimaryPayload
+- [ ] 新增 shaders/rt/closesthit.rchit：geometry_infos 索引 + 顶点插值 + 材质采样 + NEE + MIS + BRDF 采样，写入 PrimaryPayload
 - [ ] 新增 shaders/rt/miss.rmiss：IBL cubemap 环境采样，写入 PrimaryPayload（color = 环境辐射度，hit_distance = -1）
 - [ ] 新增 shaders/rt/shadow_miss.rmiss：写入 ShadowPayload（visible = 1）
 - [ ] ShaderCompiler 扩展：支持 RT shader stage（raygen、closesthit、miss），shaderc target vulkan_1_4
