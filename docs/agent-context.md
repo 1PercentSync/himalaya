@@ -40,7 +40,8 @@ CLAUDE.md 已自动加载，以下为额外必读：
 | `docs/project/architecture.md` | 渲染器长远架构、四层结构、架构约束 |
 | `docs/milestone-1/m1-design-decisions-core.md` | M1 核心设计决策参考（决策结果摘要，日后开发仍需参考） |
 | `docs/milestone-1/m1-phase5-decisions.md` | 阶段五设计决策（当前阶段，含完整决策过程） |
-| `docs/milestone-1/m1-phase-future-decisions.md` | M1 未来阶段设计构想（阶段六~八非正式规划） |
+| `docs/milestone-1/m1-rt-decisions.md` | M1 RT 架构决策（阶段六~八：PT 参考视图 + 烘焙器 + 间接光照集成） |
+| `docs/milestone-1/m1-phase-future-decisions.md` | M1 未来阶段设计构想（阶段九~十非正式规划） |
 | `docs/milestone-1/m1-frame-flow.md` | M1 完整帧流程（pass 执行顺序、资源生命周期） |
 | `docs/milestone-1/m1-development-order.md` | M1 的 8 个开发阶段及依赖关系 |
 | `docs/roadmap/milestone-2.md` | M2 规划（画质全面提升） |

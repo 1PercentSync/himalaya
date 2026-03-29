@@ -146,6 +146,65 @@ Color Grading Pass
 
 ---
 
+## PT 参考视图帧流程（独立渲染路径）
+
+PT 参考视图激活时，光栅化管线全部跳过，走独立的精简帧流程。
+
+```
+PT Reference View Pass (RT Pipeline)
+  输入：TLAS、Geometry Info SSBO、材质（PBR 参数 + 纹理）、
+        光源数组、IBL Cubemap、Accumulation Buffer（上一帧累积）
+  输出：Accumulation Buffer（本帧累积后）
+  说明：raygen shader 从相机发射射线，NEE + MIS + Russian Roulette，
+        采样结果 running average 累积。相机移动时重置 sample count
+
+OIDN Denoise（CPU 中转）
+  输入：Accumulation Buffer（readback 到 CPU）
+  输出：Denoised HDR Buffer（upload 回 GPU）
+  说明：不必每帧执行，可每隔 N 次采样触发一次
+
+Tonemapping Pass
+  输入：Denoised HDR Buffer（或未降噪的 Accumulation Buffer）
+  输出：Swapchain Image
+```
+
+### PT 参考视图关键资源
+
+| 资源 | 产生 | 消费 | 存活范围 |
+|------|------|------|----------|
+| TLAS | 场景加载时构建 | PT Reference View Pass | 跨帧持久 |
+| Geometry Info SSBO | 场景加载时构建 | PT Reference View Pass | 跨帧持久 |
+| Accumulation Buffer（RGBA32F） | PT Reference View Pass | OIDN / Tonemapping | 跨帧持久（相机移动时清零） |
+| Denoised HDR Buffer | OIDN | Tonemapping | 帧内 |
+
+## 烘焙模式帧流程（独立渲染路径）
+
+烘焙模式激活时，光栅化和 PT 参考视图均跳过，GPU 全力用于烘焙。
+
+```
+Lightmap Baker Pass (RT Pipeline)
+  输入：Position Map（UV 空间）、Normal Map（UV 空间）、
+        TLAS、Geometry Info SSBO、材质、光源数组、IBL Cubemap、
+        Lightmap Accumulation Buffer（上一帧累积）
+  输出：Lightmap Accumulation Buffer（本帧累积后）
+
+  — 或 —
+
+Probe Baker Pass (RT Pipeline)
+  输入：Probe 位置、TLAS、Geometry Info SSBO、材质、光源数组、IBL Cubemap、
+        Probe Accumulation Cubemap（上一帧累积）
+  输出：Probe Accumulation Cubemap（本帧累积后）
+
+Bake Preview Display
+  输入：当前 Accumulation Buffer / Cubemap
+  输出：Swapchain Image（预览烘焙进度）
+
+烘焙完成后：
+  OIDN Denoise → BC6H 压缩 → KTX2 持久化
+```
+
+---
+
 ## Pass 粒度说明
 
 所有效果保持独立 pass，实现清晰优先。以下效果有合并到其他 pass 的可能但 M1 不做：

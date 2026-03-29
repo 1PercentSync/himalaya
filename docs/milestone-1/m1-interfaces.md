@@ -19,7 +19,9 @@ rhi/
 │   ├── descriptors.h            # Bindless descriptor 管理, Descriptor Set 分配
 │   ├── pipeline.h               # Pipeline 创建与缓存
 │   ├── commands.h               # Command Buffer 录制 wrapper
-│   └── shader.h                 # 运行时编译（GLSL → SPIR-V）、缓存、热重载
+│   ├── shader.h                 # 运行时编译（GLSL → SPIR-V）、缓存、热重载
+│   ├── acceleration_structure.h # BLAS/TLAS 创建、构建、销毁（阶段六引入）
+│   └── rt_pipeline.h            # RT Pipeline 创建、SBT 管理（阶段六引入）
 └── src/
     ├── context.cpp
     ├── swapchain.cpp
@@ -48,7 +50,8 @@ framework/
 │   ├── culling.h                # 视锥剔除
 │   ├── shadow.h                 # CSM cascade 计算（PSSM 分割、正交投影、texel snapping）
 │   ├── imgui_backend.h          # ImGui 集成
-│   └── color_utils.h            # 色温 → 线性 RGB 转换
+│   ├── color_utils.h            # 色温 → 线性 RGB 转换
+│   └── scene_as_builder.h       # 场景加速结构构建器（阶段六引入）
 └── src/
     └── ...
 ```
@@ -69,6 +72,9 @@ passes/
 │   ├── gtao_pass.h              # GTAO (AO compute pass)
 │   ├── ao_temporal_pass.h       # AO Temporal Filter
 │   ├── contact_shadows.h        # Contact Shadows
+│   ├── reference_view_pass.h    # PT 参考视图（阶段六引入）
+│   ├── lightmap_baker_pass.h    # Lightmap 烘焙器（阶段七引入）
+│   ├── probe_baker_pass.h       # Reflection Probe 烘焙器（阶段七引入）
 │   ├── bloom_pass.h             # Bloom 降采样 + 升采样链
 │   ├── auto_exposure.h          # 自动曝光
 │   ├── tonemapping_pass.h       # Tonemapping（ACES）
@@ -134,7 +140,14 @@ shaders/
 ├── transparent.vert/frag
 ├── vignette.comp
 ├── color_grading.comp
-└── height_fog.comp
+├── height_fog.comp
+├── rt/                          # 路径追踪 shader（阶段六引入）
+│   ├── pt_common.glsl           # PT 核心共享（采样、MIS、Russian Roulette）
+│   ├── reference_view.rgen      # 参考视图 raygen shader
+│   ├── lightmap_baker.rgen      # Lightmap 烘焙 raygen shader（阶段七）
+│   ├── probe_baker.rgen         # Probe 烘焙 raygen shader（阶段七）
+│   ├── closesthit.rchit         # 通用 closest-hit shader（材质采样 + NEE）
+│   └── miss.rmiss               # Miss shader（环境光 / IBL 采样）
 ```
 
 - `shaders/common/bindings.glsl` 定义全局绑定布局，所有 shader 通过 `#include` 引用，确保绑定一致性
@@ -1185,6 +1198,14 @@ layout(set = 0, binding = 3) readonly buffer InstanceBuffer {
     GPUInstanceData instances[];
 };
 
+// Set 0, Binding 4: TLAS（阶段六引入，RT shader 专用，光栅化 shader 不引用）
+layout(set = 0, binding = 4) uniform accelerationStructureEXT scene_tlas;
+
+// Set 0, Binding 5: 几何信息（阶段六引入，closest-hit shader 查询顶点/材质数据）
+layout(set = 0, binding = 5) readonly buffer GeometryInfoBuffer {
+    GeometryInfo geometry_infos[];  // per-mesh: vertex/index buffer address + material_id
+};
+
 // Set 1: 持久纹理资产（Bindless 数组）
 layout(set = 1, binding = 0) uniform sampler2D textures[];
 layout(set = 1, binding = 1) uniform samplerCube cubemaps[];
@@ -1226,6 +1247,8 @@ Graphics pipeline 共享统一 layout `{Set 0, Set 1, Set 2}`。Compute pipeline
 | Cubemap 数据 | 初始化 / 加载时 | Set 1, Binding 1 (Bindless) | IBL cubemap |
 | Render Target | init 时 / resize 时 + temporal 每帧 | Set 2, Binding 0-6 (Named, per-frame) | HDR color、depth、normal、AO、shadow map 等 |
 | Per-instance 数据 | 每帧一次（cull 后填充） | Set 0, Binding 3 (SSBO) | 模型矩阵、材质 index（instancing 用）|
+| TLAS | 场景加载时 | Set 0, Binding 4 (AS) | 场景加速结构（阶段六引入，RT shader 专用） |
+| 几何信息 | 场景加载时 | Set 0, Binding 5 (SSBO) | per-mesh vertex/index address + material（阶段六引入） |
 | Per-draw 数据 | 每次绘制（仅 shadow） | Push Constant | cascade index |
 | Compute pass 私有 I/O | 每次 dispatch | Set 3 (Push Descriptor) | storage image 输出、pass-specific 输入（阶段五引入） |
 

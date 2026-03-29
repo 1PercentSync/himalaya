@@ -99,18 +99,54 @@
 
 ---
 
-## 阶段六：间接光照
+## 阶段六：RT 基础设施 + PT 参考视图
 
-- Lightmap 加载与 UV2 处理
-- Lightmap 采样集成到 Forward Lighting Pass
-- Reflection Probes 数据加载
-- Reflection Probe 视差校正采样集成到 Forward Lighting Pass
+**Layer 0 RT 扩展 + Layer 1 场景 AS + Layer 2 PT Pass**
 
-**产出：** 室内场景有了间接光照（Lightmap），不再是纯黑的角落。光滑表面反射周围环境（Reflection Probes），不再只反射天空。这是画面写实度的一个重要跳跃。
+- Vulkan RT 扩展启用（`acceleration_structure` + `ray_tracing_pipeline` + `ray_query`，可选——不支持时禁用 RT 功能）
+- RHI 层 AS 封装（BLAS/TLAS 创建、构建、销毁）
+- RHI 层 RT Pipeline 封装（Shader Group + Shader Binding Table 管理）
+- RHI 层 Command 扩展（`trace_rays()`、`build_acceleration_structure()`）
+- Scene AS Builder（Framework 层：输入 scene data → 构建 per-mesh BLAS + scene TLAS）
+- Set 0 扩展（binding 3: TLAS, binding 4: Geometry Info SSBO）
+- PT 核心 shader（raygen/miss/closesthit，NEE + MIS + Russian Roulette + cosine/GGX importance sampling + Sobol + Blue noise）
+- PT 参考视图 Pass（屏幕空间射线发射，accumulation buffer 跨帧累积，相机移动时重置）
+- OIDN GPU 集成（CPU 内存中转：Vulkan readback → OIDN GPU 降噪 → Vulkan upload）
+- 独立渲染路径（PT 参考视图模式：PT Pass → OIDN → Tonemapping → Swapchain）
+- ImGui 渲染模式切换（光栅化 ↔ PT 参考视图）
+
+**产出：** 能在 PT 参考视图模式下看到路径追踪渲染的画面。相机静止时画面逐渐收敛变清晰，OIDN 降噪提供即时预览。验证整个 RT 技术栈（AS 构建、RT Pipeline、PT 采样、降噪）端到端可用。
+
+**战略价值：** RT 基础设施（AS、RT Pipeline、PT 核心 shader）为阶段七的烘焙器和 M2 的实时 PT 直接复用。独立渲染路径架构为 M2 实时 PT 模式提供框架。
 
 ---
 
-## 阶段七：透明
+## 阶段七：PT 烘焙器
+
+- xatlas 集成（运行时 UV2 自动生成，per-mesh 按需标记，M1 全部静态 mesh 标记）
+- UV2 缓存（xxHash 内容哈希 + 自定义二进制格式：header + 顶点重映射表 + UV2 坐标 + 新 index buffer）
+- Lightmap Baker Pass（UV 空间射线发射：position/normal map 预处理 → raygen shader 逐 texel 发射射线 → accumulation → OIDN 降噪 → BC6H 压缩 → KTX2 持久化）
+- Reflection Probe Baker Pass（cubemap 六面射线发射 → accumulation → OIDN 降噪 → prefilter mip chain → BC6H 压缩 → KTX2 持久化）
+- Probe 自动放置（场景 AABB 内网格放置 + RT 几何过滤剔除墙内探针）
+- 烘焙模式渲染路径（接管渲染，展示烘焙进度，每帧 dispatch 采样并累积）
+- ImGui 烘焙控制面板（触发烘焙、参数配置、进度显示）
+
+**产出：** 能在引擎内烘焙出 Lightmap 和 Reflection Probe 数据，保存为 KTX2 文件。烘焙过程中可观察进度。
+
+---
+
+## 阶段八：间接光照集成
+
+- Lightmap 加载与 UV2 顶点属性处理
+- Lightmap 采样集成到 Forward Lighting Pass（动态分支，per-object 属性条件执行）
+- Reflection Probes 数据加载
+- Reflection Probe 视差校正采样集成到 Forward Lighting Pass
+
+**产出：** 光栅化模式下室内场景有了间接光照（Lightmap），不再是纯黑的角落。光滑表面反射周围环境（Reflection Probes），不再只反射天空。这是画面写实度的一个重要跳跃。
+
+---
+
+## 阶段九：透明
 
 - 透明物体排序
 - HDR Color Buffer 拷贝（折射源）
@@ -122,7 +158,7 @@
 
 ---
 
-## 阶段八：后处理链 + 大气
+## 阶段十：后处理链 + 大气
 
 - 自动曝光（亮度降采样到 1×1 + 时域平滑）
 - Bloom（降采样链 + 升采样链）
@@ -146,13 +182,19 @@
               │            阶段五（依赖阶段三的 Depth/Normal）
               │                      │
               │                      ↓
-              │            阶段六（集成到阶段三的 Forward Pass）
+              │            阶段六（RT 基础设施 + PT 参考视图）
               │                      │
               │                      ↓
-              │            阶段七（依赖阶段三的 HDR Color、Depth）
+              │            阶段七（PT 烘焙器，依赖阶段六的 RT 基础设施）
               │                      │
               │                      ↓
-              └──────────→ 阶段八（依赖阶段二的 Render Graph）
+              │            阶段八（间接光照集成，依赖阶段七的烘焙产出）
+              │                      │
+              │                      ↓
+              │            阶段九（依赖阶段三的 HDR Color、Depth）
+              │                      │
+              │                      ↓
+              └──────────→ 阶段十（依赖阶段二的 Render Graph）
 ```
 
-阶段四、五、六在代码依赖上都需要阶段三完成，但它们之间没有硬依赖——理论上可以调换顺序。选择当前顺序的理由是：阶段四的阴影对画面立体感的提升最直接，阶段五的 temporal filtering 是重要基础设施，阶段六的间接光照在有了阴影和 AO 之后观感对比更明显。
+阶段四、五在代码依赖上都需要阶段三完成，但它们之间没有硬依赖——理论上可以调换顺序。选择当前顺序的理由是：阶段四的阴影对画面立体感的提升最直接，阶段五的 temporal filtering 是重要基础设施。阶段六引入 RT 基础设施，阶段七的烘焙器依赖阶段六，阶段八的间接光照集成依赖阶段七的烘焙产出。阶段九的透明和阶段十的后处理与 RT 无硬依赖，顺延即可。
