@@ -34,23 +34,23 @@ struct GPUInstanceData {
 
 /** PBR material data (std430, 80 bytes). */
 struct GPUMaterialData {
-    vec4  base_color_factor;        // offset  0
-    vec4  emissive_factor;          // offset 16 — xyz = emissiveFactor, w unused
+    vec4 base_color_factor;        // offset  0
+    vec4 emissive_factor;          // offset 16 — xyz = emissiveFactor, w unused
 
     float metallic_factor;          // offset 32
     float roughness_factor;         // offset 36
     float normal_scale;             // offset 40
     float occlusion_strength;       // offset 44
 
-    uint  base_color_tex;           // offset 48 — bindless index
-    uint  emissive_tex;             // offset 52 — bindless index
-    uint  metallic_roughness_tex;   // offset 56 — bindless index
-    uint  normal_tex;               // offset 60 — bindless index
+    uint base_color_tex;           // offset 48 — bindless index
+    uint emissive_tex;             // offset 52 — bindless index
+    uint metallic_roughness_tex;   // offset 56 — bindless index
+    uint normal_tex;               // offset 60 — bindless index
 
-    uint  occlusion_tex;            // offset 64 — bindless index
+    uint occlusion_tex;            // offset 64 — bindless index
     float alpha_cutoff;             // offset 68
-    uint  alpha_mode;               // offset 72 — 0=Opaque, 1=Mask, 2=Blend
-    uint  _padding;                 // offset 76
+    uint alpha_mode;               // offset 72 — 0=Opaque, 1=Mask, 2=Blend
+    uint _padding;                 // offset 76
 };
 
 // ---- Feature flags (bitmask for GlobalUBO.feature_flags) ----
@@ -85,7 +85,7 @@ struct GPUMaterialData {
 
 // ---- Set 0: Global data (updated once per frame) ----
 
-layout(set = 0, binding = 0) uniform GlobalUBO {
+layout (set = 0, binding = 0) uniform GlobalUBO {
     mat4 view;                              // offset   0
     mat4 projection;                        // offset  64
     mat4 view_projection;                   // offset 128
@@ -131,33 +131,33 @@ layout(set = 0, binding = 0) uniform GlobalUBO {
     uint ao_so_mode;                        // offset 852 — 0 = Lagarde, 1 = GTSO (bent normal)
 } global;
 
-layout(set = 0, binding = 1) readonly buffer LightBuffer {
+layout (set = 0, binding = 1) readonly buffer LightBuffer {
     GPUDirectionalLight directional_lights[];
 };
 
-layout(set = 0, binding = 2) readonly buffer MaterialBuffer {
+layout (set = 0, binding = 2) readonly buffer MaterialBuffer {
     GPUMaterialData materials[];
 };
 
-layout(set = 0, binding = 3) readonly buffer InstanceBuffer {
+layout (set = 0, binding = 3) readonly buffer InstanceBuffer {
     GPUInstanceData instances[];
 };
 
 // ---- Set 1: Bindless arrays ----
 
-layout(set = 1, binding = 0) uniform sampler2D textures[];
-layout(set = 1, binding = 1) uniform samplerCube cubemaps[];
+layout (set = 1, binding = 0) uniform sampler2D textures[];
+layout (set = 1, binding = 1) uniform samplerCube cubemaps[];
 
 // ---- Set 2: Render target intermediate products ----
 // PARTIALLY_BOUND — bindings are written as their producing passes are added.
 // Accessing an unwritten binding is guarded by feature_flags in the shader.
 
-layout(set = 2, binding = 0) uniform sampler2D rt_hdr_color;
-layout(set = 2, binding = 1) uniform sampler2D rt_depth_resolved;
-layout(set = 2, binding = 2) uniform sampler2D rt_normal_resolved;
-layout(set = 2, binding = 3) uniform sampler2D rt_ao_texture;
-layout(set = 2, binding = 4) uniform sampler2D rt_contact_shadow_mask;
-layout(set = 2, binding = 5) uniform sampler2DArrayShadow rt_shadow_map;
-layout(set = 2, binding = 6) uniform sampler2DArray rt_shadow_map_depth;
+layout (set = 2, binding = 0) uniform sampler2D rt_hdr_color;
+layout (set = 2, binding = 1) uniform sampler2D rt_depth_resolved;
+layout (set = 2, binding = 2) uniform sampler2D rt_normal_resolved;
+layout (set = 2, binding = 3) uniform sampler2D rt_ao_texture;
+layout (set = 2, binding = 4) uniform sampler2D rt_contact_shadow_mask;
+layout (set = 2, binding = 5) uniform sampler2DArrayShadow rt_shadow_map;
+layout (set = 2, binding = 6) uniform sampler2DArray rt_shadow_map_depth;
 
 #endif // BINDINGS_GLSL

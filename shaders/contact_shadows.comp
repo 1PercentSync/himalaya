@@ -19,37 +19,22 @@
  */
 
 #include "common/bindings.glsl"
+#include "common/depth.glsl"
 #include "common/normal.glsl"
 
-layout(local_size_x = 8, local_size_y = 8) in;
+layout (local_size_x = 8, local_size_y = 8) in;
 
 // ---- Set 3: push descriptor (per-dispatch output) ----
 
-layout(set = 3, binding = 0, r8) uniform writeonly image2D out_contact_shadow;
+layout (set = 3, binding = 0, r8) uniform writeonly image2D out_contact_shadow;
 
 // ---- Push constants: Contact Shadow parameters (from ContactShadowConfig) ----
 
-layout(push_constant) uniform ContactShadowPushConstants {
-    uint  step_count;       // ray march step count (8/16/24/32)
+layout (push_constant) uniform ContactShadowPushConstants {
+    uint step_count;       // ray march step count (8/16/24/32)
     float max_distance;     // max search distance (world-space meters)
     float base_thickness;   // depth-adaptive thickness base value
 } pc;
-
-// ---- Utility functions ----
-
-/**
- * Convert raw Reverse-Z depth to positive linear view-space distance.
- *
- * Derivation from the perspective projection matrix P:
- *   depth = (P[2][2] * vz + P[3][2]) / (-vz)
- *   => linear_distance = -vz = P[3][2] / (depth + P[2][2])
- *
- * @param d Raw depth value (Reverse-Z: near=1, far=0).
- * @return Positive linear view-space distance from camera.
- */
-float linearize_depth(float d) {
-    return global.projection[3][2] / (d + global.projection[2][2]);
-}
 
 /**
  * Interleaved gradient noise (Jorge Jimenez, Call of Duty: Advanced Warfare).
@@ -165,9 +150,9 @@ void main() {
     // Compute screen-space ray length to determine how much t to skip.
     // Offsetting ~2 pixels prevents sampling the origin surface's own depth.
 
-    vec3 end_ndc   = end_clip.xyz / end_clip.w;
-    vec2 start_px  = ndc_to_uv(ndc) * vec2(size);
-    vec2 end_px    = ndc_to_uv(end_ndc.xy) * vec2(size);
+    vec3 end_ndc = end_clip.xyz / end_clip.w;
+    vec2 start_px = ndc_to_uv(ndc) * vec2(size);
+    vec2 end_px = ndc_to_uv(end_ndc.xy) * vec2(size);
     float ray_len_px = length(end_px - start_px);
 
     // Bias in t-space: skip first ~2 pixels (clamped so bias ≤ 10% of ray)
@@ -179,9 +164,7 @@ void main() {
     // of 2 steps to keep at least some sampling.
 
     const float kMinPxPerStep = 1.0;
-    uint effective_steps = clamp(pc.step_count,
-                                 2u,
-                                 max(2u, uint(ray_len_px / kMinPxPerStep)));
+    uint effective_steps = clamp(pc.step_count, 2u, max(2u, uint(ray_len_px / kMinPxPerStep)));
 
     // ---- Dynamic compare tolerance (UE-style) ----
     // Proportional to per-step depth change of the ray.  Uses
@@ -189,10 +172,10 @@ void main() {
     // actual step size after adaptive reduction.
 
     float lin_start = start_w;
-    float lin_end   = linearize_depth(end_ndc.z);
+    float lin_end = linearize_depth(end_ndc.z);
     float depth_span = abs(lin_end - lin_start);
-    float tolerance  = max(2.0 * depth_span / float(effective_steps),
-                           pc.base_thickness);
+    float tolerance = max(2.0 * depth_span / float(effective_steps),
+                          pc.base_thickness);
 
     // ---- Slope-scaled depth bias (self-intersection avoidance) ----
     // Push the ray origin toward the camera to prevent the starting
@@ -259,13 +242,13 @@ void main() {
         // Guard against crossing the camera plane (w ≤ 0)
         if (ray_clip.w <= 0.0) break;
 
-        vec3 ray_ndc  = ray_clip.xyz / ray_clip.w;
-        vec2 sample_uv    = ndc_to_uv(ray_ndc.xy);
-        float ray_depth   = ray_ndc.z;
+        vec3 ray_ndc = ray_clip.xyz / ray_clip.w;
+        vec2 sample_uv = ndc_to_uv(ray_ndc.xy);
+        float ray_depth = ray_ndc.z;
 
         // Screen bounds check
         if (any(lessThan(sample_uv, vec2(0.0))) || any(greaterThanEqual(sample_uv, vec2(1.0))))
-            break;
+        break;
 
         // Dual depth sampling: bilinear (smooth) + nearest (exact).
         // Bilinear interpolates across depth discontinuities at silhouettes,
@@ -274,11 +257,11 @@ void main() {
         // to pass below BOTH eliminates both artifact classes.
         float depth_bilinear = texture(rt_depth_resolved, sample_uv).r;
         ivec2 sample_texel = ivec2(sample_uv * vec2(size));
-        float depth_nearest  = texelFetch(rt_depth_resolved, sample_texel, 0).r;
+        float depth_nearest = texelFetch(rt_depth_resolved, sample_texel, 0).r;
 
         float lin_bilinear = linearize_depth(depth_bilinear);
-        float lin_nearest  = linearize_depth(depth_nearest);
-        float lin_ray      = linearize_depth(ray_depth);
+        float lin_nearest = linearize_depth(depth_nearest);
+        float lin_ray = linearize_depth(ray_depth);
 
         // Both surfaces must be closer to camera than the ray (delta > 0),
         // and within tolerance.  Using max(lin_bilinear, lin_nearest) as
@@ -290,7 +273,7 @@ void main() {
         if (lin_delta > 0.0 && lin_delta < tolerance) {
             // Valid hit — compute shadow strength with distance and edge fade.
             // Full shadow near contact, fading in the last 25% of the ray.
-            float end_fade  = 1.0 - smoothstep(0.75, 1.0, t);
+            float end_fade = 1.0 - smoothstep(0.75, 1.0, t);
             float edge_fade = screen_edge_fade(sample_uv);
             shadow = 1.0 - end_fade * edge_fade;
             break;

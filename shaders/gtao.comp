@@ -16,21 +16,21 @@
 #include "common/constants.glsl"
 #include "common/normal.glsl"
 
-layout(local_size_x = 8, local_size_y = 8) in;
+layout (local_size_x = 8, local_size_y = 8) in;
 
 // ---- Set 3: push descriptor (per-dispatch I/O) ----
 
-layout(set = 3, binding = 0, rgba8) uniform writeonly image2D ao_output;
+layout (set = 3, binding = 0, rgba8) uniform writeonly image2D ao_output;
 
 // ---- Push constants: GTAO parameters (from AOConfig) ----
 
-layout(push_constant) uniform GTAOPushConstants {
+layout (push_constant) uniform GTAOPushConstants {
     float radius;           // sampling radius (world-space meters)
-    uint  directions;       // number of search directions
-    uint  steps_per_dir;    // steps per search direction
+    uint directions;       // number of search directions
+    uint steps_per_dir;    // steps per search direction
     float thin_compensation;// thin occluder compensation (0 = off, 0.7 = XeGTAO quality)
     float intensity;        // AO intensity multiplier
-    uint  frame_index;      // current frame index for temporal noise variation
+    uint frame_index;      // current frame index for temporal noise variation
 } pc;
 
 // ---- View-space reconstruction ----
@@ -96,8 +96,7 @@ const float kFalloffRange = 0.615;
  * @return Noise value in [0, 1).
  */
 float interleaved_gradient_noise(ivec2 pixel) {
-    return fract(52.9829189 * fract(0.06711056 * float(pixel.x)
-                                  + 0.00583715 * float(pixel.y)));
+    return fract(52.9829189 * fract(0.06711056 * float(pixel.x) + 0.00583715 * float(pixel.y)));
 }
 
 /**
@@ -181,8 +180,8 @@ void main() {
 
     // Decorrelated noise: direction jitter and step jitter (XeGTAO approach)
     float base_noise = fract(interleaved_gradient_noise(pixel)
-                           + float(pc.frame_index % 64) * kGoldenRatioFract);
-    float dir_noise  = base_noise;
+                             + float(pc.frame_index % 64) * kGoldenRatioFract);
+    float dir_noise = base_noise;
     float step_noise = fract(base_noise * 0.7 + 0.15);
 
     // World-space radius → screen-space radius (pixels)
@@ -229,7 +228,7 @@ void main() {
             float linear_t = (float(j) - 1.0 + step_noise) / float(pc.steps_per_dir);
             float t = linear_t * linear_t;
             vec2 offset = uv_dir * t;
-            horizon_sample(uv,  offset, view_pos, view_dir,
+            horizon_sample(uv, offset, view_pos, view_dir,
                            low_cos_pos, max_cos_pos, falloff_mul, falloff_add);
             horizon_sample(uv, -offset, view_pos, view_dir,
                            low_cos_neg, max_cos_neg, falloff_mul, falloff_add);
@@ -277,14 +276,14 @@ void main() {
 
         // Tangent-direction integral (GTAO paper Algorithm 2, eq. 11)
         float t1 = (6.0 * sin_h1_sub_n - sin_3h1_sub_n
-                  + 6.0 * sin_h2_add_n - sin_3h2_add_n
-                  + 16.0 * sin_n
-                  - 3.0 * (sin_h1_add_n + sin_h2_sub_n)) / 12.0;
+        + 6.0 * sin_h2_add_n - sin_3h2_add_n
+        + 16.0 * sin_n
+        - 3.0 * (sin_h1_add_n + sin_h2_sub_n)) / 12.0;
 
         // View-direction integral
         float t2 = (-cos_3h1_sub_n - cos_3h2_add_n
-                  + 8.0 * cos_n
-                  - 3.0 * (cos_h1_add_n + cos_h2_sub_n)) / 12.0;
+        + 8.0 * cos_n
+        - 3.0 * (cos_h1_add_n + cos_h2_sub_n)) / 12.0;
 
         bent += n_proj_len * (tangent_vs * t1 + view_dir * t2);
     }

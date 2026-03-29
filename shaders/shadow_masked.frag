@@ -1,5 +1,5 @@
 #version 460
-#extension GL_EXT_nonuniform_qualifier : require
+#extension GL_EXT_nonuniform_qualifier: require
 
 /**
  * @file shadow_masked.frag
@@ -15,14 +15,13 @@
 
 #include "common/bindings.glsl"
 
-layout(location = 0) in vec2 frag_uv0;
-layout(location = 1) flat in uint frag_material_index;
+layout (location = 0) in vec2 frag_uv0;
+layout (location = 1) flat in uint frag_material_index;
 
 void main() {
     GPUMaterialData mat = materials[frag_material_index];
 
-    float alpha = texture(textures[nonuniformEXT(mat.base_color_tex)], frag_uv0).a
-                  * mat.base_color_factor.a;
+    float alpha = texture(textures[nonuniformEXT(mat.base_color_tex)], frag_uv0).a * mat.base_color_factor.a;
     if (alpha < mat.alpha_cutoff) {
         discard;
     }

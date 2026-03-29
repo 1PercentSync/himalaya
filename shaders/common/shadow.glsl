@@ -27,90 +27,90 @@ const float kMaxPenumbraTexels = 64.0;
 // Seed: 42, min_dist_factor: 0.7
 
 const vec2 kBlockerSearchSamples[32] = vec2[32](
-    vec2(-0.101245, -0.121491),
-    vec2(-0.073994,  0.466622),
-    vec2(-0.069841, -0.819647),
-    vec2( 0.229741, -0.184818),
-    vec2(-0.152260,  0.081327),
-    vec2( 0.139177,  0.697126),
-    vec2( 0.439729,  0.074003),
-    vec2(-0.434337, -0.596902),
-    vec2( 0.029408, -0.075060),
-    vec2( 0.287075, -0.784683),
-    vec2(-0.211805,  0.332593),
-    vec2( 0.559328, -0.154099),
-    vec2( 0.259666,  0.171143),
-    vec2( 0.446755, -0.635717),
-    vec2(-0.961020, -0.222613),
-    vec2(-0.536913,  0.513581),
-    vec2( 0.074465,  0.532769),
-    vec2( 0.423107,  0.231886),
-    vec2(-0.397489, -0.454791),
-    vec2(-0.103045,  0.962308),
-    vec2( 0.406000,  0.751193),
-    vec2( 0.318875,  0.527043),
-    vec2( 0.798267, -0.052623),
-    vec2(-0.775006, -0.289792),
-    vec2( 0.023518,  0.177615),
-    vec2(-0.206850,  0.474293),
-    vec2( 0.235674,  0.942002),
-    vec2( 0.400054, -0.393237),
-    vec2( 0.582072, -0.346474),
-    vec2(-0.474948, -0.192784),
-    vec2(-0.816835, -0.480211),
-    vec2(-0.377837,  0.276695)
+vec2(-0.101245, -0.121491),
+vec2(-0.073994, 0.466622),
+vec2(-0.069841, -0.819647),
+vec2(0.229741, -0.184818),
+vec2(-0.152260, 0.081327),
+vec2(0.139177, 0.697126),
+vec2(0.439729, 0.074003),
+vec2(-0.434337, -0.596902),
+vec2(0.029408, -0.075060),
+vec2(0.287075, -0.784683),
+vec2(-0.211805, 0.332593),
+vec2(0.559328, -0.154099),
+vec2(0.259666, 0.171143),
+vec2(0.446755, -0.635717),
+vec2(-0.961020, -0.222613),
+vec2(-0.536913, 0.513581),
+vec2(0.074465, 0.532769),
+vec2(0.423107, 0.231886),
+vec2(-0.397489, -0.454791),
+vec2(-0.103045, 0.962308),
+vec2(0.406000, 0.751193),
+vec2(0.318875, 0.527043),
+vec2(0.798267, -0.052623),
+vec2(-0.775006, -0.289792),
+vec2(0.023518, 0.177615),
+vec2(-0.206850, 0.474293),
+vec2(0.235674, 0.942002),
+vec2(0.400054, -0.393237),
+vec2(0.582072, -0.346474),
+vec2(-0.474948, -0.192784),
+vec2(-0.816835, -0.480211),
+vec2(-0.377837, 0.276695)
 );
 
 const vec2 kPCFSamples[49] = vec2[49](
-    vec2( 0.810041,  0.200145),
-    vec2( 0.420429,  0.534576),
-    vec2(-0.420894, -0.784729),
-    vec2(-0.675572,  0.204635),
-    vec2( 0.652805,  0.078958),
-    vec2(-0.641941,  0.663476),
-    vec2(-0.831494, -0.252852),
-    vec2(-0.384243,  0.168955),
-    vec2( 0.536355, -0.729756),
-    vec2(-0.219972,  0.217613),
-    vec2(-0.702110, -0.054948),
-    vec2( 0.107931, -0.765224),
-    vec2( 0.899620,  0.364125),
-    vec2( 0.288992, -0.461133),
-    vec2( 0.553199, -0.464999),
-    vec2( 0.737844,  0.557919),
-    vec2(-0.833230, -0.488379),
-    vec2(-0.131914, -0.276943),
-    vec2(-0.636064, -0.618311),
-    vec2( 0.463321, -0.341480),
-    vec2(-0.823591, -0.151171),
-    vec2( 0.459772,  0.798104),
-    vec2( 0.043135, -0.219628),
-    vec2(-0.509334, -0.329592),
-    vec2( 0.304251,  0.715480),
-    vec2( 0.729055, -0.142998),
-    vec2( 0.532645,  0.459583),
-    vec2( 0.177902, -0.961030),
-    vec2( 0.308463,  0.178906),
-    vec2( 0.698587,  0.420451),
-    vec2(-0.182538,  0.068220),
-    vec2( 0.950423,  0.015047),
-    vec2( 0.348789, -0.051637),
-    vec2(-0.096144, -0.989919),
-    vec2( 0.774140, -0.534552),
-    vec2(-0.443156,  0.721728),
-    vec2(-0.968097,  0.011489),
-    vec2(-0.267216, -0.878795),
-    vec2( 0.387373, -0.485321),
-    vec2( 0.263605,  0.931173),
-    vec2(-0.683560,  0.466683),
-    vec2(-0.453684, -0.233434),
-    vec2(-0.275150,  0.520855),
-    vec2( 0.165519,  0.387858),
-    vec2( 0.392612, -0.743012),
-    vec2( 0.455418, -0.120538),
-    vec2( 0.106476,  0.668566),
-    vec2( 0.152888,  0.061894),
-    vec2( 0.598654,  0.637049)
+vec2(0.810041, 0.200145),
+vec2(0.420429, 0.534576),
+vec2(-0.420894, -0.784729),
+vec2(-0.675572, 0.204635),
+vec2(0.652805, 0.078958),
+vec2(-0.641941, 0.663476),
+vec2(-0.831494, -0.252852),
+vec2(-0.384243, 0.168955),
+vec2(0.536355, -0.729756),
+vec2(-0.219972, 0.217613),
+vec2(-0.702110, -0.054948),
+vec2(0.107931, -0.765224),
+vec2(0.899620, 0.364125),
+vec2(0.288992, -0.461133),
+vec2(0.553199, -0.464999),
+vec2(0.737844, 0.557919),
+vec2(-0.833230, -0.488379),
+vec2(-0.131914, -0.276943),
+vec2(-0.636064, -0.618311),
+vec2(0.463321, -0.341480),
+vec2(-0.823591, -0.151171),
+vec2(0.459772, 0.798104),
+vec2(0.043135, -0.219628),
+vec2(-0.509334, -0.329592),
+vec2(0.304251, 0.715480),
+vec2(0.729055, -0.142998),
+vec2(0.532645, 0.459583),
+vec2(0.177902, -0.961030),
+vec2(0.308463, 0.178906),
+vec2(0.698587, 0.420451),
+vec2(-0.182538, 0.068220),
+vec2(0.950423, 0.015047),
+vec2(0.348789, -0.051637),
+vec2(-0.096144, -0.989919),
+vec2(0.774140, -0.534552),
+vec2(-0.443156, 0.721728),
+vec2(-0.968097, 0.011489),
+vec2(-0.267216, -0.878795),
+vec2(0.387373, -0.485321),
+vec2(0.263605, 0.931173),
+vec2(-0.683560, 0.466683),
+vec2(-0.453684, -0.233434),
+vec2(-0.275150, 0.520855),
+vec2(0.165519, 0.387858),
+vec2(0.392612, -0.743012),
+vec2(0.455418, -0.120538),
+vec2(0.106476, 0.668566),
+vec2(0.152888, 0.061894),
+vec2(0.598654, 0.637049)
 );
 
 // ---- PCSS utility functions ----
@@ -144,7 +144,7 @@ vec2 rotate_sample(vec2 s, float angle) {
  * sample_shadow_pcss() without further dFdx/dFdy calls.
  */
 struct ShadowProjData {
-    vec2  shadow_uv;   ///< Shadow map UV [0,1].
+    vec2 shadow_uv;   ///< Shadow map UV [0,1].
     float ref_depth;   ///< Light-space NDC depth (Reverse-Z).
     float dz_du;       ///< Depth gradient w.r.t. shadow U.
     float dz_dv;       ///< Depth gradient w.r.t. shadow V.
@@ -192,7 +192,7 @@ ShadowProjData prepare_shadow_proj(vec3 world_pos, vec3 world_normal, int cascad
     //   dz_dy = dz_du * duv_dy.x + dz_dv * duv_dy.y
     float det = duv_dx.x * duv_dy.y - duv_dx.y * duv_dy.x;
     float inv_det = (abs(det) > 1e-10) ? (1.0 / det) : 0.0;
-    proj.dz_du = ( duv_dy.y * dz_dx - duv_dx.y * dz_dy) * inv_det;
+    proj.dz_du = (duv_dy.y * dz_dx - duv_dx.y * dz_dy) * inv_det;
     proj.dz_dv = (-duv_dy.x * dz_dx + duv_dx.x * dz_dy) * inv_det;
 
     // Clamp to prevent extreme gradients at grazing angles
@@ -226,7 +226,7 @@ ShadowProjData prepare_shadow_proj(vec3 world_pos, vec3 world_normal, int cascad
  * @param num_blockers  Output: number of blocker samples found.
  */
 void blocker_search(ShadowProjData proj, int cascade, float rotation,
-                    out float avg_blocker, out float num_blockers) {
+out float avg_blocker, out float num_blockers) {
     avg_blocker = 0.0;
     num_blockers = 0.0;
 
@@ -243,7 +243,7 @@ void blocker_search(ShadowProjData proj, int cascade, float rotation,
     uint sample_count = global.pcss_blocker_samples;
     for (uint i = 0u; i < sample_count; ++i) {
         vec2 offset = rotate_sample(kBlockerSearchSamples[i], rotation)
-                      * vec2(search_u, search_v);
+        * vec2(search_u, search_v);
         vec2 sample_uv = proj.shadow_uv + offset;
 
         // Receiver plane depth bias: adjust comparison depth per sample offset
@@ -303,7 +303,7 @@ float sample_shadow_pcss(ShadowProjData proj, int cascade) {
 
     // All blockers → early-out as fully shadowed (reduces multi-layer light leak)
     if (num_blockers >= float(global.pcss_blocker_samples)
-        && (global.pcss_flags & PCSS_FLAG_BLOCKER_EARLY_OUT) != 0u) {
+    && (global.pcss_flags & PCSS_FLAG_BLOCKER_EARLY_OUT) != 0u) {
         return 0.0;
     }
 
@@ -323,7 +323,7 @@ float sample_shadow_pcss(ShadowProjData proj, int cascade) {
     uint sample_count = global.pcss_pcf_samples;
     for (uint i = 0u; i < sample_count; ++i) {
         vec2 offset = rotate_sample(kPCFSamples[i], rotation)
-                      * vec2(penumbra_u, penumbra_v);
+        * vec2(penumbra_u, penumbra_v);
         vec2 sample_uv = proj.shadow_uv + offset;
 
         // Per-sample receiver plane depth bias
@@ -369,10 +369,10 @@ int select_cascade(float view_depth, out float blend_factor) {
             // Blend region: last (blend_width) fraction of this cascade's
             // split distance.  Smoothly ramps blend_factor from 0 to 1.
             float blend_start = global.cascade_splits[i]
-                                * (1.0 - global.shadow_blend_width);
+            * (1.0 - global.shadow_blend_width);
             if (view_depth > blend_start) {
                 blend_factor = (view_depth - blend_start)
-                               / (global.cascade_splits[i] - blend_start);
+                / (global.cascade_splits[i] - blend_start);
             }
             return i;
         }
