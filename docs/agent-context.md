@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段六 — RT 基础设施 + PT 参考视图（规划完成，待实现）
-- **进度**：Step 1 进行中（5/9 小项完成）
+- **进度**：Step 1 进行中（6/9 小项完成）
 
 ### 下一个任务
 
-继续 Step 1：启用设备特性（accelerationStructure、rayTracingPipeline、rayQuery、bufferDeviceAddress）
+继续 Step 1：rt_supported 时 VMA allocator 添加 BUFFER_DEVICE_ADDRESS flag
 
 ---
 
