@@ -12,7 +12,7 @@
 - [x] 日志输出选中设备 RT 支持状态
 - [x] rt_supported 时 RT 扩展加入设备扩展列表
 - [x] 启用设备特性：accelerationStructure、rayTracingPipeline、rayQuery、bufferDeviceAddress
-- [ ] rt_supported 时 VMA allocator 添加 BUFFER_DEVICE_ADDRESS flag
+- [x] rt_supported 时 VMA allocator 添加 BUFFER_DEVICE_ADDRESS flag
 - [ ] 查询并存储 RT pipeline 属性（shaderGroupHandleSize、shaderGroupBaseAlignment、shaderGroupHandleAlignment、maxRayRecursionDepth）+ AS 属性（minAccelerationStructureScratchOffsetAlignment）
 - [ ] Context 新增 RT 属性存储字段
 
