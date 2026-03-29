@@ -145,6 +145,9 @@ namespace himalaya::rhi {
          */
         VkSampleCountFlags msaa_sample_counts;
 
+        /** @brief Whether the selected GPU supports all RT extensions. */
+        bool rt_supported = false;
+
         /** @brief Logical device. */
         VkDevice device = VK_NULL_HANDLE;
 

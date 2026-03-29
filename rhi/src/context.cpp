@@ -40,10 +40,10 @@ namespace himalaya::rhi {
 
     /** @brief All severity levels — let the callback do spdlog-level filtering at runtime. */
     constexpr VkDebugUtilsMessageSeverityFlagsEXT kAllSeverityFlags =
-        VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
-        VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT |
-        VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
-        VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+            VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
+            VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT |
+            VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
+            VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
 
     void Context::init(GLFWwindow *window) {
         create_instance();
@@ -211,9 +211,9 @@ namespace himalaya::rhi {
     }
 
     // Checks whether the device supports all RT extensions in kRTDeviceExtensions
+    // ReSharper disable once CppParameterMayBeConst
     static bool has_rt_extensions(VkPhysicalDevice dev) {
-        return has_extensions(dev, kRTDeviceExtensions,
-                              static_cast<uint32_t>(std::size(kRTDeviceExtensions)));
+        return has_extensions(dev, kRTDeviceExtensions, std::size(kRTDeviceExtensions));
     }
 
     // Checks whether the device supports all Vulkan features required by the renderer.
@@ -342,6 +342,8 @@ namespace himalaya::rhi {
         // MSAA sample counts supported by both color and depth framebuffers (bitmask)
         msaa_sample_counts = props.limits.framebufferColorSampleCounts &
                              props.limits.framebufferDepthSampleCounts;
+
+        rt_supported = has_rt_extensions(physical_device);
 
         spdlog::info("Selected GPU: {} (score: {}, MSAA support: 0x{:x})", gpu_name, best_score, msaa_sample_counts);
     }
