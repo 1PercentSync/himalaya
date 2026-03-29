@@ -186,21 +186,34 @@ namespace himalaya::rhi {
         return false;
     }
 
-    // Checks whether the device supports all extensions in kRequiredDeviceExtensions
+    // Checks whether the device supports all extensions in the given list
     // ReSharper disable once CppParameterMayBeConst
-    static bool has_required_extensions(VkPhysicalDevice dev) {
+    static bool has_extensions(VkPhysicalDevice dev,
+                               const char *const *extensions, uint32_t extension_count) {
         uint32_t count = 0;
         vkEnumerateDeviceExtensionProperties(dev, nullptr, &count, nullptr);
         std::vector<VkExtensionProperties> available(count);
         vkEnumerateDeviceExtensionProperties(dev, nullptr, &count, available.data());
 
-        for (const auto *required: kRequiredDeviceExtensions) {
-            const bool found = std::ranges::any_of(available, [required](const auto &ext) {
-                return std::strcmp(ext.extensionName, required) == 0;
+        for (uint32_t i = 0; i < extension_count; ++i) {
+            const bool found = std::ranges::any_of(available, [&](const auto &ext) {
+                return std::strcmp(ext.extensionName, extensions[i]) == 0;
             });
             if (!found) return false;
         }
         return true;
+    }
+
+    // Checks whether the device supports all extensions in kRequiredDeviceExtensions
+    static bool has_required_extensions(VkPhysicalDevice dev) {
+        return has_extensions(dev, kRequiredDeviceExtensions,
+                              static_cast<uint32_t>(std::size(kRequiredDeviceExtensions)));
+    }
+
+    // Checks whether the device supports all RT extensions in kRTDeviceExtensions
+    static bool has_rt_extensions(VkPhysicalDevice dev) {
+        return has_extensions(dev, kRTDeviceExtensions,
+                              static_cast<uint32_t>(std::size(kRTDeviceExtensions)));
     }
 
     // Checks whether the device supports all Vulkan features required by the renderer.
@@ -261,8 +274,8 @@ namespace himalaya::rhi {
 
     /**
      * Rates a physical device's suitability. Returns 0 if unsuitable.
-     * Scoring: discrete GPU +1000, then +1 per GB of device-local VRAM.
-     * (An iGPU with over 1000 GB VRAM would outscore a discrete GPU — good luck finding one.)
+     * Scoring: RT support +10000, discrete GPU +1000, then +1 per GB of device-local VRAM.
+     * RT-capable devices are always preferred over non-RT ones.
      */
     // ReSharper disable once CppParameterMayBeConst
     static int rate_device(VkPhysicalDevice dev, VkSurfaceKHR surface) {
@@ -277,6 +290,9 @@ namespace himalaya::rhi {
         if (!has_required_limits(dev)) return 0;
 
         int score = 1;
+        if (has_rt_extensions(dev)) {
+            score += 10000;
+        }
         if (props.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) {
             score += 1000;
         }
