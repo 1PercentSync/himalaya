@@ -7,7 +7,7 @@
 ## Step 1：RT 扩展检测 + 启用 + 特性激活
 
 - [x] 新增 RT 扩展列表（acceleration_structure、ray_tracing_pipeline、ray_query、deferred_host_operations）
-- [ ] pick_physical_device() RT 支持作为加分项评分
+- [x] pick_physical_device() RT 支持作为加分项评分
 - [ ] Context 新增 `rt_supported` 公有字段
 - [ ] 日志输出选中设备 RT 支持状态
 - [ ] rt_supported 时 RT 扩展加入设备扩展列表
