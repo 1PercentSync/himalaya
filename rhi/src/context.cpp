@@ -30,6 +30,14 @@ namespace himalaya::rhi {
         VK_EXT_MEMORY_BUDGET_EXTENSION_NAME,
     };
 
+    /** @brief Optional RT device extensions, enabled when hardware supports all of them. */
+    constexpr const char *kRTDeviceExtensions[] = {
+        VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME,
+        VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME,
+        VK_KHR_RAY_QUERY_EXTENSION_NAME,
+        VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME,
+    };
+
     /** @brief All severity levels — let the callback do spdlog-level filtering at runtime. */
     constexpr VkDebugUtilsMessageSeverityFlagsEXT kAllSeverityFlags =
         VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
