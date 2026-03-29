@@ -345,7 +345,8 @@ namespace himalaya::rhi {
 
         rt_supported = has_rt_extensions(physical_device);
 
-        spdlog::info("Selected GPU: {} (score: {}, MSAA support: 0x{:x})", gpu_name, best_score, msaa_sample_counts);
+        spdlog::info("Selected GPU: {} (score: {}, MSAA support: 0x{:x}, RT: {})",
+                     gpu_name, best_score, msaa_sample_counts, rt_supported ? "yes" : "no");
     }
 
     void Context::create_device() {
