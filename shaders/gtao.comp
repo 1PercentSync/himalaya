@@ -14,6 +14,7 @@
 
 #include "common/bindings.glsl"
 #include "common/constants.glsl"
+#include "common/noise.glsl"
 #include "common/normal.glsl"
 
 layout (local_size_x = 8, local_size_y = 8) in;
@@ -84,20 +85,6 @@ const float kGoldenRatioFract = 0.6180339887;
 const float kFalloffRange = 0.615;
 
 // ---- GTAO core ----
-
-/**
- * Interleaved gradient noise for per-pixel direction jitter.
- *
- * Produces a deterministic pseudo-random value in [0, 1) based on
- * pixel position.  Eliminates directional banding when used to rotate
- * search directions.  From Jimenez 2014 (Next Generation Post Processing).
- *
- * @param pixel Integer pixel coordinates.
- * @return Noise value in [0, 1).
- */
-float interleaved_gradient_noise(ivec2 pixel) {
-    return fract(52.9829189 * fract(0.06711056 * float(pixel.x) + 0.00583715 * float(pixel.y)));
-}
 
 /**
  * GTAO inner integral for one side of a slice (cosine-weighted visibility).
@@ -179,7 +166,7 @@ void main() {
     vec3 view_dir = normalize(-view_pos);
 
     // Decorrelated noise: direction jitter and step jitter (XeGTAO approach)
-    float base_noise = fract(interleaved_gradient_noise(pixel)
+    float base_noise = fract(interleaved_gradient_noise(vec2(pixel))
                              + float(pc.frame_index % 64) * kGoldenRatioFract);
     float dir_noise = base_noise;
     float step_noise = fract(base_noise * 0.7 + 0.15);

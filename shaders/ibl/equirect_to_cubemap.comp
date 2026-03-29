@@ -13,28 +13,7 @@ layout(set = 0, binding = 0) uniform sampler2D u_equirect;
 layout(set = 0, binding = 1, rgba16f) writeonly uniform image2DArray u_cubemap;
 
 #include "common/constants.glsl"
-
-/**
- * Computes the world-space direction for a cubemap texel.
- *
- * @param face Cubemap face index (0..5: +X, -X, +Y, -Y, +Z, -Z).
- * @param uv   Normalized texel coordinate [0, 1]^2.
- * @return Unnormalized direction vector pointing into the face.
- */
-vec3 cube_dir(uint face, vec2 uv) {
-    // Remap [0,1] → [-1,1]
-    vec2 st = uv * 2.0 - 1.0;
-
-    switch (face) {
-        case 0: return vec3( 1.0, -st.y, -st.x);   // +X
-        case 1: return vec3(-1.0, -st.y,  st.x);   // -X
-        case 2: return vec3( st.x,  1.0,  st.y);   // +Y
-        case 3: return vec3( st.x, -1.0, -st.y);   // -Y
-        case 4: return vec3( st.x, -st.y,  1.0);   // +Z
-        case 5: return vec3(-st.x, -st.y, -1.0);   // -Z
-    }
-    return vec3(0.0);
-}
+#include "ibl/ibl_common.glsl"
 
 /**
  * Samples the equirectangular map at the given direction.

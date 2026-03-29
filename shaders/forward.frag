@@ -18,6 +18,7 @@
 #include "common/normal.glsl"
 #include "common/brdf.glsl"
 #include "common/shadow.glsl"
+#include "common/transform.glsl"
 
 layout(location = 0) in vec3 frag_world_pos;
 layout(location = 1) in vec3 frag_normal;
@@ -27,10 +28,6 @@ layout(location = 4) flat in uint frag_material_index;
 
 layout(location = 0) out vec4 out_color;
 
-/** Rotate a direction around the Y axis by angle (sin, cos). */
-vec3 rotate_y(vec3 d, float s, float c) {
-    return vec3(c * d.x + s * d.z, d.y, -s * d.x + c * d.z);
-}
 
 /**
  * Multi-bounce AO color compensation (Jimenez 2016).

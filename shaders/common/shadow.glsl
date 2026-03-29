@@ -6,12 +6,13 @@
  * evaluation.  Intermediate results (cascade index, blend factor) remain
  * visible to callers for debug visualization.
  *
- * Depends on bindings.glsl being included first (GlobalUBO, rt_shadow_map,
- * rt_shadow_map_depth).
+ * Depends on bindings.glsl and noise.glsl being included first.
  */
 
 #ifndef SHADOW_GLSL
 #define SHADOW_GLSL
+
+#include "noise.glsl"
 
 // ---- PCSS constants ----
 
@@ -114,15 +115,6 @@ vec2(0.598654, 0.637049)
 );
 
 // ---- PCSS utility functions ----
-
-/**
- * Interleaved gradient noise for per-pixel Poisson Disk rotation.
- * Returns a value in [0, 1) that varies per screen pixel.
- * Jimenez 2014 (Call of Duty: Advanced Warfare).
- */
-float interleaved_gradient_noise(vec2 screen_pos) {
-    return fract(52.9829189 * fract(dot(screen_pos, vec2(0.06711056, 0.00583715))));
-}
 
 /**
  * Rotate a 2D sample by the given angle (radians).

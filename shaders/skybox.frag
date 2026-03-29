@@ -10,15 +10,11 @@
  */
 
 #include "common/bindings.glsl"
+#include "common/transform.glsl"
 
 layout(location = 0) in vec3 in_world_dir;
 
 layout(location = 0) out vec4 out_color;
-
-/** Rotate a direction around the Y axis by angle (sin, cos). */
-vec3 rotate_y(vec3 d, float s, float c) {
-    return vec3(c * d.x + s * d.z, d.y, -s * d.x + c * d.z);
-}
 
 void main() {
     vec3 dir = normalize(in_world_dir);
