@@ -85,9 +85,10 @@ RHI 层新增加速结构管理。
 - 新增 `rhi/acceleration_structure.h`：
   - `BLASHandle`：BLAS 句柄（VkAccelerationStructureKHR + backing VkBuffer + VmaAllocation）
   - `TLASHandle`：TLAS 句柄（同上）
-  - `BLASBuildInfo`：BLAS 构建输入（vertex buffer address、index buffer address、vertex count、index count、vertex stride、transform）
+  - `BLASGeometry`：单个 geometry 的构建输入（vertex buffer address、index buffer address、vertex count、index count、vertex stride）
+  - `BLASBuildInfo`：BLAS 构建输入，包含 `std::span<const BLASGeometry> geometries`（1..N geometries per BLAS，支持 multi-geometry BLAS）
   - `AccelerationStructureManager` 类：
-    - `build_blas(std::span<const BLASBuildInfo> infos)` → `std::vector<BLASHandle>`：批量构建 BLAS（单次 command buffer 提交，PREFER_FAST_TRACE）
+    - `build_blas(std::span<const BLASBuildInfo> infos)` → `std::vector<BLASHandle>`：批量构建 BLAS（单次 command buffer 提交，PREFER_FAST_TRACE），每个 BLASBuildInfo 生成一个 BLAS
     - `build_tlas(std::span<const VkAccelerationStructureInstanceKHR> instances)` → `TLASHandle`：构建 TLAS
     - `destroy_blas(BLASHandle)`、`destroy_tlas(TLASHandle)`
     - 内部管理 scratch buffer（构建完成后释放）
@@ -130,12 +131,12 @@ Framework 层场景加速结构构建 + Descriptor 扩展。
 
 - 新增 `framework/scene_as_builder.h`：
   - `SceneASBuilder` 类：
-    - `build(Context&, ResourceManager&, AccelerationStructureManager&, std::span<const Mesh>, std::span<const MeshInstance>)`：
-      1. 为每个 unique mesh 收集 BLASBuildInfo（vertex/index buffer device address）
-      2. 调用 `AccelerationStructureManager::build_blas()` 批量构建
-      3. 组装 `VkAccelerationStructureInstanceKHR` 数组（transform、customIndex = instance index、BLAS reference）
-      4. 调用 `AccelerationStructureManager::build_tlas()`
-      5. 构建 Geometry Info SSBO（per-mesh：vertex buffer address、index buffer address、vertex stride、index type、material_id）
+    - `build(Context&, ResourceManager&, AccelerationStructureManager&, std::span<const Mesh>, std::span<const MeshInstance>, std::span<const MaterialInstance>)`：
+      1. 按 `Mesh::group_id` 分组 → 每组收集 BLASGeometry 列表 → 组装 BLASBuildInfo（multi-geometry）
+      2. 调用 `AccelerationStructureManager::build_blas()` 批量构建（每 group 一个 BLAS）
+      3. 构建 Geometry Info SSBO（按 group 连续排列，per-geometry：vertex/index buffer address、stride、vertex/index count、material buffer_offset）
+      4. 按 `(group_id, transform)` 去重 mesh_instances → 组装 `VkAccelerationStructureInstanceKHR` 数组（customIndex = 该 group 在 Geometry Info 中的 base offset）
+      5. 调用 `AccelerationStructureManager::build_tlas()`
     - `destroy()`：释放 BLAS、TLAS、Geometry Info buffer
     - `tlas_handle()` / `geometry_info_buffer()` getter
 - `DescriptorManager` 扩展：
@@ -144,15 +145,19 @@ Framework 层场景加速结构构建 + Descriptor 扩展。
   - 新增 `write_set0_tlas(TLASHandle)` + `write_set0_buffer` 复用写 binding 5
 - `BufferUsage` 枚举新增 `ShaderDeviceAddress`，`ResourceManager` 在 buffer 创建时映射到 `VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT`
 - `ResourceManager` 新增 `get_buffer_device_address(BufferHandle)` 方法
+- `Mesh` 结构体新增 `group_id`（glTF source mesh index）+ `material_id`（primitive 固有材质，material_instances 索引）
+- `SceneLoader::load()` 新增 `bool rt_supported` 参数：`true` 时 vertex/index buffer 创建额外加 `ShaderDeviceAddress` flag
 - Renderer：场景加载后调用 `SceneASBuilder::build()`，写入 Set 0 binding 4/5
 
-**验证**：场景加载后日志输出 BLAS 数量 + TLAS instance 数量 + Geometry Info buffer 大小，无 validation 报错
+**验证**：场景加载后日志输出 BLAS 数量（= unique group 数）+ TLAS instance 数量（= unique node 数）+ Geometry Info buffer 大小，无 validation 报错
 
 #### 设计要点
 
-`VkAccelerationStructureInstanceKHR::instanceCustomIndex` 设为实例在 mesh_instances 数组中的索引（24 位，足够）。Closest-hit shader 通过 `gl_InstanceCustomIndexEXT` 查 InstanceBuffer 获取 material_index，再通过 Geometry Info 获取该 mesh 的 vertex/index buffer address 计算顶点属性（position、normal、UV）。
+`VkAccelerationStructureInstanceKHR::instanceCustomIndex` 设为该 BLAS 对应 group 在 Geometry Info buffer 中的 base offset（24 位，足够）。Closest-hit shader 通过 `geometry_infos[gl_InstanceCustomIndexEXT + gl_GeometryIndexEXT]` 获取当前 geometry 的 vertex/index buffer address 和 material ID。变换矩阵通过 TLAS 内置 `gl_ObjectToWorldEXT` 获取。**RT shader 不访问 InstanceBuffer**。
 
-Geometry Info buffer 是 GPU_ONLY + ShaderDeviceAddress，场景加载时通过 staging buffer 上传。
+TLAS instance 去重利用 `build_mesh_instances()` 的连续性保证：同一 node 的 primitive 在 mesh_instances 中连续排列。SceneASBuilder 预计算 `group_prim_count[group_id]`，迭代 mesh_instances 时每次步进 `count` 个条目，每步产生一个 TLAS instance。
+
+Geometry Info buffer 是 GPU_ONLY，场景加载时通过 staging buffer 上传（不需要 ShaderDeviceAddress，通过 descriptor 绑定访问）。
 
 ---
 
@@ -174,8 +179,9 @@ Geometry Info buffer 是 GPU_ONLY + ShaderDeviceAddress，场景加载时通过 
   - 每 bounce：traceRayEXT → closesthit/miss → 累积贡献
   - Running average 写入 accumulation buffer（`imageStore`，sample_count 加权）
 - 新增 `shaders/rt/closesthit.rchit`：
-  - 插值顶点属性（position、normal、UV）
-  - 读取材质参数（MaterialBuffer + bindless texture 采样）
+  - 通过 `geometry_infos[gl_InstanceCustomIndexEXT + gl_GeometryIndexEXT]` 获取当前 geometry 的 buffer address 和 material ID
+  - 插值顶点属性（position、normal、UV，通过 buffer_reference 从 device address 读取）
+  - 读取材质参数（GeometryInfo.material_id → MaterialBuffer + bindless texture 采样）
   - NEE：随机选择光源，向光源发射 shadow ray（`traceRayEXT` flag `gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsSkipClosestHitShaderEXT`）
   - MIS 权重计算（BRDF pdf vs light pdf）
   - 计算 BRDF 贡献 + 采样下一个方向
@@ -225,9 +231,11 @@ Renderer 分叉为光栅化/PT 两条路径。
 
 - `scene_data.h` 新增 `RenderMode` 枚举（`Rasterization`、`PathTracing`）
 - `RenderInput` 新增 `RenderMode render_mode` 字段
-- `Renderer::render()` 根据 `render_mode` 分叉：
-  - `Rasterization`：现有完整光栅化管线（不变）
-  - `PathTracing`：RG clear → import accumulation buffer + swapchain → Reference View Pass → Tonemapping Pass → ImGui Pass → present
+- `Renderer::render()` 拆分为私有方法：
+  - `fill_common_gpu_data()`：共享的 GPU buffer 填充（GlobalUBO 核心字段、LightBuffer）
+  - `render_rasterization()`：现有完整光栅化管线（不变）
+  - `render_path_tracing()`：RG clear → import accumulation buffer + swapchain → Reference View Pass → Tonemapping Pass → ImGui Pass → present
+  - `render()` 调用 `fill_common_gpu_data()` 后按 `render_mode` switch 到对应私有方法
 - VP 矩阵比较逻辑：Renderer 缓存上一帧 PT 模式的 VP 矩阵，每帧比较，不同则调用 `reset_accumulation()`
 - Accumulation 缓存：模式切换不清零 accumulation buffer 和 sample count，VP 矩阵不变时继续累积
 - Tonemapping 复用：PT 路径中将 accumulation buffer（或 denoised buffer，Step 9）导入为 hdr_color RGResourceId，TonemappingPass 照常读取
@@ -394,19 +402,20 @@ rhi/
 │   └── shader.cpp                 # [Step 6] RT stage 编译支持
 framework/
 ├── include/himalaya/framework/
-│   └── render_graph.h             # [Step 7] RGStage::RayTracing 枚举
+│   ├── mesh.h                     # [Step 5] Mesh 新增 group_id + material_id
+│   ├── render_graph.h             # [Step 7] RGStage::RayTracing 枚举
+│   └── scene_data.h               # [Step 8] RenderMode 枚举
 ├── src/
 │   └── render_graph.cpp           # [Step 7] RayTracing barrier 映射
-framework/
-├── include/himalaya/framework/
-│   └── scene_data.h               # [Step 8] RenderMode 枚举
 app/
 ├── include/himalaya/app/
+│   ├── scene_loader.h             # [Step 5] load() 新增 rt_supported 参数
 │   ├── renderer.h                 # [Step 5-9] SceneASBuilder + ReferenceViewPass + Denoiser 成员
 │   ├── debug_ui.h                 # [Step 10] DebugUIContext PT 字段 + DebugUIActions PT 动作
 │   └── application.h              # [Step 8] render_mode 状态
 ├── src/
-│   ├── renderer.cpp               # [Step 5-9] AS 构建 + 双路径 render + OIDN 触发
+│   ├── scene_loader.cpp            # [Step 5] load_meshes() 填充 group_id/material_id + buffer flags
+│   ├── renderer.cpp               # [Step 5-9] AS 构建 + 渲染路径私有方法拆分 + OIDN 触发
 │   ├── debug_ui.cpp               # [Step 10] PT 面板绘制
 │   └── application.cpp            # [Step 8-10] 模式切换 + PT actions 响应
 shaders/
@@ -419,9 +428,12 @@ shaders/
 
 | 主题 | 说明 |
 |------|------|
+| Multi-geometry BLAS | 同一 glTF mesh 的 primitive 合并为一个 BLAS 的多个 geometry。Mesh.group_id 标识分组，instanceCustomIndex = geometry info base offset，closesthit 用 `geometry_infos[customIndex + geometryIndex]` 索引 |
 | Accumulation buffer | RGBA32F，Relative 1.0x，Storage usage。running average：`new = mix(old, sample, 1/(n+1))`。sample_count=0 时直接覆写 |
 | SBT layout | raygen(1) + miss(2: env + shadow) + hit(1: closesthit)。entry 对齐到 `shaderGroupHandleAlignment`，region 对齐到 `shaderGroupBaseAlignment` |
 | NEE | 暴力遍历 LightBuffer 方向光，无 Light BVH。Shadow ray 使用 `gl_RayFlagsTerminateOnFirstHitEXT \| gl_RayFlagsSkipClosestHitShaderEXT` |
 | Russian Roulette | bounce ≥ 2 时启用，终止概率 = `1 - max(throughput.r, throughput.g, throughput.b)`，存活时 throughput 除以存活概率 |
 | OIDN staging | 持久分配 readback + upload staging buffer（width × height × 16 bytes），避免每次降噪重分配 |
 | 模式切换缓存 | accumulation buffer 和 sample count 在模式切换时不清零。VP 矩阵变化触发重置，模式切换不触发 |
+| 渲染路径组织 | render() 拆分为 fill_common_gpu_data() + render_rasterization() + render_path_tracing() 私有方法，不引入新抽象 |
+| RT shader 热重载 | RTPipeline 封装绑定 pipeline + SBT 生命周期，rebuild_pipelines() 走 destroy + create 全量重建 |

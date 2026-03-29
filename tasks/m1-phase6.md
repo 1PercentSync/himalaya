@@ -20,8 +20,8 @@
 
 ## Step 3：AS 资源抽象
 
-- [ ] 新增 acceleration_structure.h：BLASHandle、TLASHandle、BLASBuildInfo 类型
-- [ ] AccelerationStructureManager：build_blas() 批量构建（PREFER_FAST_TRACE）
+- [ ] 新增 acceleration_structure.h：BLASHandle、TLASHandle、BLASGeometry、BLASBuildInfo（multi-geometry：`span<const BLASGeometry> geometries`）类型
+- [ ] AccelerationStructureManager：build_blas() 批量构建（PREFER_FAST_TRACE），每个 BLASBuildInfo 支持 1..N geometries
 - [ ] AccelerationStructureManager：build_tlas()
 - [ ] AccelerationStructureManager：destroy_blas()、destroy_tlas()
 - [ ] Scratch buffer 管理（构建完成后释放）
@@ -36,8 +36,11 @@
 
 ## Step 5：Scene AS Builder + Set 0 扩展
 
+- [ ] Mesh 结构体新增 group_id（glTF source mesh index）+ material_id（primitive 固有材质）
+- [ ] SceneLoader::load_meshes() 填充 group_id 和 material_id
+- [ ] SceneLoader::load() 新增 rt_supported 参数，true 时 vertex/index buffer 额外加 ShaderDeviceAddress flag
 - [ ] 新增 scene_as_builder.h：SceneASBuilder 类
-- [ ] SceneASBuilder::build()：per-mesh BLAS 构建 + TLAS 构建 + Geometry Info SSBO 构建
+- [ ] SceneASBuilder::build()：按 group_id 分组构建 multi-geometry BLAS + 按 (group_id, transform) 去重构建 TLAS + Geometry Info SSBO 构建（按 group 连续排列，customIndex = group base offset）
 - [ ] BufferUsage 新增 ShaderDeviceAddress + ResourceManager 映射
 - [ ] ResourceManager 新增 get_buffer_device_address()
 - [ ] DescriptorManager::init() 从 context_->rt_supported 读取 RT 状态，Set 0 layout 条件扩展 binding 4/5
@@ -50,7 +53,7 @@
 - [ ] 新增 shaders/rt/pt_common.glsl：Sobol + Cranley-Patterson + blue noise 纹理采样 + hemisphere sampling + GGX sampling + Russian Roulette + MIS + 顶点插值
 - [ ] 嵌入预生成 128×128 blue noise 纹理 + Renderer 初始化时注册到 bindless 数组
 - [ ] 新增 shaders/rt/reference_view.rgen：primary ray 计算 + 路径追踪主循环 + accumulation 写入
-- [ ] 新增 shaders/rt/closesthit.rchit：顶点插值 + 材质采样 + NEE + MIS + BRDF 采样
+- [ ] 新增 shaders/rt/closesthit.rchit：geometry_infos[customIndex + geometryIndex] 索引 + 顶点插值（buffer_reference）+ 材质采样 + NEE + MIS + BRDF 采样
 - [ ] 新增 shaders/rt/miss.rmiss：IBL cubemap 环境采样
 - [ ] 新增 shaders/rt/shadow_miss.rmiss：shadow ray miss（标记未遮挡）
 - [ ] ShaderCompiler 扩展：支持 RT shader stage（raygen、closesthit、miss）
@@ -68,7 +71,7 @@
 
 - [ ] scene_data.h 新增 RenderMode 枚举（Rasterization、PathTracing）
 - [ ] RenderInput 新增 render_mode 字段
-- [ ] Renderer::render() 根据 render_mode 分叉（光栅化 / PT 路径）
+- [ ] Renderer::render() 拆分为私有方法：fill_common_gpu_data() + render_rasterization() + render_path_tracing()，按 render_mode switch
 - [ ] PT 路径：RG clear → accumulation + swapchain import → Reference View → Tonemapping → ImGui → present
 - [ ] VP 矩阵比较 + reset_accumulation() 触发
 - [ ] 模式切换不清零 accumulation（缓存保留）

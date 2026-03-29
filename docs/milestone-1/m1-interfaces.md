@@ -1203,7 +1203,8 @@ layout(set = 0, binding = 4) uniform accelerationStructureEXT scene_tlas;
 
 // Set 0, Binding 5: 几何信息（阶段六引入，closest-hit shader 查询顶点/材质数据）
 layout(set = 0, binding = 5) readonly buffer GeometryInfoBuffer {
-    GeometryInfo geometry_infos[];  // per-mesh: vertex/index buffer address + material_id
+    GeometryInfo geometry_infos[];  // per-geometry: vertex/index buffer address + material_id
+    // Indexed by: gl_InstanceCustomIndexEXT + gl_GeometryIndexEXT
 };
 
 // Set 1: 持久纹理资产（Bindless 数组）
@@ -1248,7 +1249,7 @@ Graphics pipeline 共享统一 layout `{Set 0, Set 1, Set 2}`。Compute pipeline
 | Render Target | init 时 / resize 时 + temporal 每帧 | Set 2, Binding 0-6 (Named, per-frame) | HDR color、depth、normal、AO、shadow map 等 |
 | Per-instance 数据 | 每帧一次（cull 后填充） | Set 0, Binding 3 (SSBO) | 模型矩阵、材质 index（instancing 用）|
 | TLAS | 场景加载时 | Set 0, Binding 4 (AS) | 场景加速结构（阶段六引入，RT shader 专用） |
-| 几何信息 | 场景加载时 | Set 0, Binding 5 (SSBO) | per-mesh vertex/index address + material（阶段六引入） |
+| 几何信息 | 场景加载时 | Set 0, Binding 5 (SSBO) | per-geometry vertex/index address + material（阶段六引入） |
 | Per-draw 数据 | 每次绘制（仅 shadow） | Push Constant | cascade index |
 | Compute pass 私有 I/O | 每次 dispatch | Set 3 (Push Descriptor) | storage image 输出、pass-specific 输入（阶段五引入） |
 
@@ -1566,5 +1567,74 @@ struct DebugUIContext {
 
     // --- Step 10c: Fallback 色温 ---
     float& fallback_color_temp;    ///< Fallback 光色温 Kelvin（mutable）
+};
+```
+
+---
+
+### 阶段六新增/变更接口
+
+#### Mesh 扩展（阶段六）
+
+```cpp
+struct Mesh {
+    rhi::BufferHandle vertex_buffer;
+    rhi::BufferHandle index_buffer;
+    uint32_t vertex_count = 0;
+    uint32_t index_count = 0;
+    uint32_t group_id = 0;      ///< glTF source mesh index (multi-geometry BLAS 分组依据)
+    uint32_t material_id = 0;   ///< material_instances[] 索引 (primitive 固有属性)
+};
+```
+
+`group_id`：来自同一 glTF mesh 的 primitive 共享此值。SceneASBuilder 按此分组构建 multi-geometry BLAS。光栅化路径不读此字段。
+
+`material_id`：与 `MeshInstance.material_id` 值相同（冗余但解耦 RT 和光栅化路径）。SceneASBuilder 直接读取构建 Geometry Info，无需反查 MeshInstance。
+
+#### SceneLoader 扩展（阶段六）
+
+```cpp
+class SceneLoader {
+public:
+    /// rt_supported: true 时 vertex/index buffer 额外加 ShaderDeviceAddress flag
+    bool load(const std::string& path,
+              rhi::ResourceManager& resource_manager,
+              rhi::DescriptorManager& descriptor_manager,
+              framework::MaterialSystem& material_system,
+              const framework::DefaultTextures& default_textures,
+              rhi::SamplerHandle default_sampler,
+              bool rt_supported);  // 阶段六新增
+};
+```
+
+#### AccelerationStructureManager 类型（阶段六）
+
+```cpp
+/// 单个 geometry 的构建输入（对应 BLAS 内一个三角形集合）
+struct BLASGeometry {
+    VkDeviceAddress vertex_buffer_address;
+    VkDeviceAddress index_buffer_address;
+    uint32_t vertex_count;
+    uint32_t index_count;
+    uint32_t vertex_stride;  ///< sizeof(Vertex)
+};
+
+/// BLAS 构建输入（1..N geometries，支持 multi-geometry BLAS）
+struct BLASBuildInfo {
+    std::span<const BLASGeometry> geometries;
+};
+```
+
+#### SceneASBuilder 扩展（阶段六）
+
+```cpp
+class SceneASBuilder {
+public:
+    /// materials 参数用于解析 Mesh::material_id → MaterialInstance::buffer_offset
+    void build(rhi::Context& ctx, rhi::ResourceManager& rm,
+               rhi::AccelerationStructureManager& as_mgr,
+               std::span<const Mesh> meshes,
+               std::span<const MeshInstance> instances,
+               std::span<const MaterialInstance> materials);
 };
 ```

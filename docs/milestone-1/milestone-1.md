@@ -24,7 +24,7 @@
 | 天空静止 | 无昼夜变化 | M2（Bruneton） |
 | 无体积光效果 | 无光柱、无雾气中光散射 | M2（God Rays）/ M3（Froxel） |
 | 仅 MSAA 抗锯齿 | 几何边缘干净但高光闪烁和着色锯齿未处理 | M2（FSR SDK） |
-| 透明物体暂缺 | Phase 3 Step 5（EQUAL depth test）到 Phase 7 期间，`AlphaMode::Blend` 物体不渲染 | M1 Phase 7（Transparent Pass） |
+| 透明物体暂缺 | Phase 3 Step 5（EQUAL depth test）到 Phase 9 期间，`AlphaMode::Blend` 物体不渲染 | M1 Phase 9（Transparent Pass） |
 | 单方向光限制 | 仅支持 1 盏方向光（含 CSM 阴影），多方向光 CSM 需多张 shadow map + per-light cascade 数据 | M2 |
 | 无动态光源阴影 | 只有方向光有阴影，室内点光源/聚光灯无投影阴影 | M3 |
 

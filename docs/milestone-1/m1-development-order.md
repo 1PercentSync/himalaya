@@ -108,7 +108,7 @@
 - RHI 层 RT Pipeline 封装（Shader Group + Shader Binding Table 管理）
 - RHI 层 Command 扩展（`trace_rays()`、`build_acceleration_structure()`）
 - Scene AS Builder（Framework 层：输入 scene data → 构建 per-mesh BLAS + scene TLAS）
-- Set 0 扩展（binding 3: TLAS, binding 4: Geometry Info SSBO）
+- Set 0 扩展（binding 4: TLAS, binding 5: Geometry Info SSBO）
 - PT 核心 shader（raygen/miss/closesthit，NEE + MIS + Russian Roulette + cosine/GGX importance sampling + Sobol + Blue noise）
 - PT 参考视图 Pass（屏幕空间射线发射，accumulation buffer 跨帧累积，相机移动时重置）
 - OIDN GPU 集成（CPU 内存中转：Vulkan readback → OIDN GPU 降噪 → Vulkan upload）

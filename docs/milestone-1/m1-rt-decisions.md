@@ -38,10 +38,12 @@ RT shader 通过已有 descriptor 架构访问场景数据：
 
 - **Set 0 binding 0-3**：复用（GlobalUBO + LightBuffer + MaterialBuffer + InstanceBuffer）
 - **Set 0 binding 4**：TLAS（`accelerationStructureEXT`，新增）
-- **Set 0 binding 5**：Geometry Info SSBO（per-mesh vertex/index buffer device address + material ID，新增）
+- **Set 0 binding 5**：Geometry Info SSBO（per-geometry vertex/index buffer device address + material ID，新增）
 - **Set 1**：复用（bindless textures + cubemaps）
 
-Closest-hit shader 通过 `gl_InstanceCustomIndexEXT` 查 Geometry Info 获取 mesh 的 buffer address 和 material ID，再走与 forward.frag 相同的路径读材质参数和采样纹理。
+Closest-hit shader 通过 `geometry_infos[gl_InstanceCustomIndexEXT + gl_GeometryIndexEXT]` 获取当前 geometry 的 buffer address 和 material ID，再读 MaterialBuffer 获取 PBR 参数并采样 bindless 纹理。变换矩阵通过 TLAS 内置的 `gl_ObjectToWorldEXT` / `gl_WorldToObjectEXT` 获取。
+
+**RT shader 不访问 InstanceBuffer**——transform 来自 TLAS 内置矩阵，material 来自 GeometryInfo。InstanceBuffer 仅服务于光栅化路径。
 
 光栅化 shader 不引用 binding 4/5，存在于 set layout 中不产生开销。
 
@@ -67,11 +69,30 @@ Closest-hit shader 通过 `gl_InstanceCustomIndexEXT` 查 Geometry Info 获取 m
 
 ---
 
-## 加速结构生命周期
+## 加速结构构建策略
 
-- **BLAS**：场景加载时 per unique mesh 构建一次，`PREFER_FAST_TRACE`，场景销毁时释放
-- **TLAS**：场景加载时构建一次，包含所有 mesh instance 变换，场景销毁时释放
-- M1 场景静态，不需要运行时重建。架构上不阻碍后续添加动态 TLAS 更新
+### Multi-geometry BLAS
+
+同一 glTF mesh 下的多个 primitive 合并为**一个 BLAS 的多个 geometry**，而非每个 primitive 单独 BLAS。TLAS 每个 node instance 对应一个 instance entry（而非每个 primitive 一个）。
+
+好处：减少 TLAS instance 数量（N primitives/mesh → 1 TLAS instance/node），提升 TLAS 构建和遍历效率。
+
+`Mesh` 结构体新增 `group_id`（标识 primitive 来源的 glTF mesh）和 `material_id`（primitive 固有的材质，与 MeshInstance.material_id 冗余但解耦 RT 和光栅化路径）。SceneASBuilder 按 `group_id` 分组构建 BLAS，按 `(group_id, transform)` 去重构建 TLAS instances。
+
+`instanceCustomIndex` = 该 BLAS 在 Geometry Info buffer 中的 base offset。Closesthit shader 用 `geometry_infos[gl_InstanceCustomIndexEXT + gl_GeometryIndexEXT]` 索引。
+
+### 生命周期
+
+- **BLAS**：场景加载时 per unique mesh group 构建一次，`PREFER_FAST_TRACE`（不带 `ALLOW_UPDATE`），场景销毁时释放
+- **TLAS**：场景加载时构建一次，包含所有 node instance 变换，场景销毁时释放
+- **Scratch buffer**：M1 构建完成后释放（AccelerationStructureManager 内部管理，调用方不感知）
+- M1 场景静态，不需要运行时重建
+
+### M3 动态演进备注
+
+- 动态物体引入后 TLAS 需每帧重建：AccelerationStructureManager 新增 `rebuild_tlas()`，scratch buffer 改为持久保留（内部变更，调用方无感）
+- Skinned mesh 的 BLAS 需要 refit：构建时带 `ALLOW_UPDATE` flag（仅 skinned mesh，静态 mesh 不带）
+- 这些变更局限在 AccelerationStructureManager 内部 + SceneASBuilder 调用逻辑，不影响 RHI 层其他模块和上层 pass
 
 ---
 
@@ -177,6 +198,32 @@ PT 参考视图仅经过 Tonemapping → Swapchain，不走其他后处理（Blo
 - 自动降噪开关 + 触发间隔（每 N 个采样）
 - 手动降噪按钮（自动关闭时可用）
 - 上次降噪时采样数
+
+---
+
+## Renderer 渲染路径组织
+
+`Renderer::render()` 按渲染模式拆分为独立的私有方法（`render_rasterization()`、`render_path_tracing()`），不引入新类型或新抽象。共享的 GPU buffer 填充逻辑（GlobalUBO 核心字段、LightBuffer）提取为 `fill_common_gpu_data()`。新增渲染路径 = 新增一个私有方法 + switch case 一行。
+
+---
+
+## 降噪系统分离
+
+M1 的 OIDN 和 M2 的 NRD 是**独立系统**，不统一接口：
+
+| | OIDN | NRD |
+|---|---|---|
+| 服务对象 | 参考视图 + 烘焙器（离线质量） | 实时 PT（帧率优先） |
+| 数据流 | CPU 内存中转 | 纯 GPU-side |
+| 执行频率 | 每隔 N 帧 | 每帧 |
+
+M2 引入 NRD 时新建独立模块，OIDN 保留继续服务参考视图和烘焙器。两者的消费者不同，不需要运行时多态切换，不设计统一 `IDenoiser` 接口。
+
+---
+
+## RT Shader 热重载
+
+`RTPipeline` 封装将 VkPipeline + SBT buffer 生命周期绑定在一起。`create_rt_pipeline()` 每次调用都重新查询 `vkGetRayTracingShaderGroupHandlesKHR` 并构建 SBT buffer。`ReferenceViewPass::rebuild_pipelines()` 走 destroy + create 全量重建，SBT 自然跟随更新。无需额外的 SBT 联动机制。
 
 ---
 
