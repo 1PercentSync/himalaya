@@ -50,6 +50,17 @@
 
 ---
 
+## 神经网络渲染与算法演进
+
+| 项目 | 说明 |
+|------|------|
+| NRC（Neural Radiance Cache） | 神经网络替代 SHaRC/ReSTIR GI 缓存层，精度更高，依赖 Tensor Core |
+| DLSS Ray Reconstruction | 神经网络替代 NRD 传统降噪，单 pass transformer 推理，NVIDIA 专有 |
+| Cooperative Vectors | DXR 1.2 / SM 6.9 标准化 shader 内神经网络推理，使 NRC、神经材质等跨厂商可用 |
+| ReSTIR PT | GRIS 框架下对完整光传输路径做重采样，统一替代 ReSTIR DI + ReSTIR GI |
+
+---
+
 ## 明确不做（记录）
 
 | 项目 | 排除理由 |
@@ -63,14 +74,17 @@
 
 ---
 
-## 混合管线方向
+## 混合管线方向（已部分排入 M1–M3）
 
-| 项目 | 说明 |
-|------|------|
-| RT 烘焙管线 | 烘焙器作为 RT 管线的第一个应用场景，同一套 BVH + 路径追踪基础设施 |
-| RTAO | 替换 GTAO，接口一致（输入场景 → 输出单通道遮挡纹理） |
-| RT 反射 | 替换 / 补充 SSR |
-| RT GI | 替换 / 补充 SSGI + Lightmap |
+| 项目 | 说明 | 状态 |
+|------|------|------|
+| RT 烘焙管线 | GPU PT 烘焙器（Lightmap + Reflection Probes） | **M1 排入** |
+| PT 参考视图 | Accumulation debug 渲染 + OIDN viewport denoising | **M1 排入** |
+| RT Reflections | 替换 SSR + Reflection Probes | **M2 排入** |
+| RT Shadows | 替换 CSM / PCSS | **M2 排入** |
+| 实时 PT | ReSTIR DI + SHaRC + NRD | **M2 排入** |
+| ReSTIR GI | 替换 SHaRC | **M3 排入** |
+| RTAO | 替换 GTAO，接口一致（输入场景 → 输出单通道遮挡纹理） | 未排入（GTAO 观感尚可） |
 
 ---
 

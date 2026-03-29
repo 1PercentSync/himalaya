@@ -2,6 +2,7 @@
 
 > **目标**：实现一个场景和光源静态、镜头可自由移动的 Demo，画面写实度说得过去。
 > 场景类型：室内 + 室外。
+> 包含 GPU 路径追踪烘焙器（自烘焙 Lightmap / Reflection Probes）和 PT 参考视图。
 
 ---
 
@@ -47,8 +48,8 @@
 
 - 方向光直接光照（限 1 盏）
 - IBL 环境光（Split-Sum 近似，BRDF Integration LUT 预计算）
-- 单套烘焙 Lightmap（离线工具烘焙）
-- Reflection Probes（视差校正 Parallax Corrected Cubemap）
+- 单套烘焙 Lightmap（GPU PT 烘焙器自烘焙）
+- Reflection Probes（视差校正 Parallax Corrected Cubemap，GPU PT 烘焙器自烘焙）
 
 ### 阴影
 
@@ -81,6 +82,12 @@
 - ACES Tonemapping（拟合曲线）
 - Vignette
 - Color Grading
+
+### 路径追踪
+
+- RT 基础设施（Vulkan RT 扩展、BLAS/TLAS 加速结构、RT Pipeline 抽象）
+- GPU PT 烘焙器（Lightmap + Reflection Probes，NEE + MIS + 低差异序列 + Blue noise + OIDN GPU 降噪）
+- PT 参考视图（accumulation debug 渲染 + OIDN viewport denoising，相机静止时持续累积采样）
 
 ### 不包含
 
