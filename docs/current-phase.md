@@ -60,7 +60,11 @@ Step 10: ImGui PT 面板 + 调参
 - 日志输出：选中设备名 + RT 支持状态
 - `rt_supported = true` 时：将 RT 扩展加入设备扩展列表
 - 启用设备特性：`accelerationStructure`、`rayTracingPipeline`、`rayQuery`、`bufferDeviceAddress`（Vulkan 1.2 核心，AS 构建需要）
-- 查询并存储 RT 相关属性（`VkPhysicalDeviceRayTracingPipelinePropertiesKHR`：`shaderGroupHandleSize`、`shaderGroupBaseAlignment`、`maxRayRecursionDepth` 等），Context 新增存储字段
+- `rt_supported = true` 时：VMA allocator 添加 `VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT` flag（VMA 在分配内存时需要 `VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT`，否则 `vkGetBufferDeviceAddress` 返回无效地址）
+- 查询并存储 RT 相关属性：
+  - `VkPhysicalDeviceRayTracingPipelinePropertiesKHR`：`shaderGroupHandleSize`、`shaderGroupBaseAlignment`、`shaderGroupHandleAlignment`、`maxRayRecursionDepth`
+  - `VkPhysicalDeviceAccelerationStructurePropertiesKHR`：`minAccelerationStructureScratchOffsetAlignment`
+- Context 新增存储字段
 - `rt_supported = false` 时：跳过所有 RT 相关初始化
 
 **验证**：有 RT 硬件时日志显示 `rt_supported = true`，无 validation 报错，RT 属性成功查询；无 RT 时 `rt_supported = false`，现有渲染不变
