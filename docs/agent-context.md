@@ -8,12 +8,12 @@
 
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
-- **Phase**：阶段六 — RT 基础设施 + PT 参考视图（规划中）
-- **进度**：阶段五全部完成，阶段六 milestone 级和架构级决策已完成，待编写详细实现步骤
+- **Phase**：阶段六 — RT 基础设施 + PT 参考视图（规划完成，待实现）
+- **进度**：阶段六实现步骤和任务清单已完成，经过文档审查补全了所有缺失的接口定义、数据结构（GPUGeometryInfo、Ray Payload）和决策记录（scratch buffer 策略、采样策略等），Step 工作量已重新平衡（10 个 Step）
 
 ### 下一个任务
 
-编写 Phase 6 详细实现步骤（`docs/current-phase.md`）和任务清单（`tasks/m1-phase6.md`）
+开始实现 Phase 6 Step 1：RT 扩展检测 + 启用 + 特性激活（`tasks/m1-phase6.md`）
 
 ---
 
