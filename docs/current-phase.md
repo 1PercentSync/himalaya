@@ -54,7 +54,7 @@ Step 10: ImGui PT 面板 + 调参
 
 设备选择逻辑变更 + 条件启用 RT 扩展和设备特性。
 
-- `context.cpp`：新增 RT 所需扩展列表（`VK_KHR_acceleration_structure`、`VK_KHR_ray_tracing_pipeline`、`VK_KHR_ray_query`、`VK_KHR_deferred_host_operations`、`VK_KHR_spirv_1_4`、`VK_KHR_shader_float_controls`）
+- `context.cpp`：新增 RT 所需扩展列表（`VK_KHR_acceleration_structure`、`VK_KHR_ray_tracing_pipeline`、`VK_KHR_ray_query`、`VK_KHR_deferred_host_operations`）
 - `pick_physical_device()`：对每个候选设备检测 RT 扩展可用性，RT 支持设备在评分中获得额外权重
 - `Context` 新增 `bool rt_supported` 公有字段，设备选择完成后根据最终选中设备的 RT 能力设置
 - 日志输出：选中设备名 + RT 支持状态
@@ -71,7 +71,7 @@ Step 10: ImGui PT 面板 + 调参
 
 #### 设计要点
 
-`bufferDeviceAddress` 是 Vulkan 1.2 核心特性，但需要显式启用。AS 构建需要 buffer device address 指定顶点/索引数据位置。`VK_KHR_spirv_1_4` 和 `VK_KHR_shader_float_controls` 是 `VK_KHR_ray_tracing_pipeline` 的依赖扩展。
+`bufferDeviceAddress` 是 Vulkan 1.2 核心特性，但需要显式启用。AS 构建需要 buffer device address 指定顶点/索引数据位置。`VK_KHR_spirv_1_4` 和 `VK_KHR_shader_float_controls` 是 RT 扩展的依赖，但已提升到 Vulkan 1.2 核心，项目目标 1.4 无需显式列出。
 
 ---
 
