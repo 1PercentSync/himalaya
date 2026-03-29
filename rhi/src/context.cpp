@@ -413,8 +413,35 @@ namespace himalaya::rhi {
         features_10.textureCompressionBC = VK_TRUE;
         features_10.shaderStorageImageExtendedFormats = VK_TRUE;
 
+        // RT extension features (conditionally enabled)
+        VkPhysicalDeviceAccelerationStructureFeaturesKHR as_features{};
+        as_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR;
+
+        VkPhysicalDeviceRayTracingPipelineFeaturesKHR rt_pipeline_features{};
+        rt_pipeline_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR;
+
+        VkPhysicalDeviceRayQueryFeaturesKHR ray_query_features{};
+        ray_query_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR;
+
+        if (rt_supported) {
+            features_12.bufferDeviceAddress = VK_TRUE;
+            as_features.accelerationStructure = VK_TRUE;
+            rt_pipeline_features.rayTracingPipeline = VK_TRUE;
+            ray_query_features.rayQuery = VK_TRUE;
+        }
+
+        // Build pNext chain: 12 → 13 → 14 → [RT features if supported]
         features_13.pNext = &features_14;
         features_12.pNext = &features_13;
+
+        void **chain_tail = &features_14.pNext;
+        if (rt_supported) {
+            *chain_tail = &as_features;
+            chain_tail = &as_features.pNext;
+            *chain_tail = &rt_pipeline_features;
+            chain_tail = &rt_pipeline_features.pNext;
+            *chain_tail = &ray_query_features;
+        }
 
         // Merge required + optional RT extensions
         std::vector enabled_extensions(
