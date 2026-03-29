@@ -472,6 +472,9 @@ namespace himalaya::rhi {
     void Context::create_allocator() {
         VmaAllocatorCreateInfo alloc_info{};
         alloc_info.flags = VMA_ALLOCATOR_CREATE_EXT_MEMORY_BUDGET_BIT;
+        if (rt_supported) {
+            alloc_info.flags |= VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
+        }
         alloc_info.physicalDevice = physical_device;
         alloc_info.device = device;
         alloc_info.instance = instance;
