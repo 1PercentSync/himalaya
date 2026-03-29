@@ -21,10 +21,11 @@
 ## Step 3：AS 资源抽象
 
 - [ ] 新增 acceleration_structure.h：BLASHandle、TLASHandle、BLASGeometry、BLASBuildInfo（multi-geometry：`span<const BLASGeometry> geometries`）类型
-- [ ] AccelerationStructureManager：build_blas() 批量构建（PREFER_FAST_TRACE），每个 BLASBuildInfo 支持 1..N geometries
+- [ ] AccelerationStructureManager：build_blas() 单次 vkCmdBuild 并行构建全部（PREFER_FAST_TRACE），每个 BLASBuildInfo 支持 1..N geometries
 - [ ] AccelerationStructureManager：build_tlas()
 - [ ] AccelerationStructureManager：destroy_blas()、destroy_tlas()
-- [ ] Scratch buffer 管理（构建完成后释放）
+- [ ] Scratch buffer 管理：分配大 scratch = 各 BLAS scratch 之和（对齐到 minAccelerationStructureScratchOffsetAlignment），构建完成后释放
+- [ ] 顶点格式硬编码：vertexFormat = R32G32B32_SFLOAT (offset 0)、indexType = UINT32
 
 ## Step 4：RT Pipeline + SBT + trace_rays
 
@@ -43,20 +44,23 @@
 - [ ] SceneASBuilder::build()：按 group_id 分组构建 multi-geometry BLAS + 按 (group_id, transform) 去重构建 TLAS + Geometry Info SSBO 构建（按 group 连续排列，customIndex = group base offset）
 - [ ] BufferUsage 新增 ShaderDeviceAddress + ResourceManager 映射
 - [ ] ResourceManager 新增 get_buffer_device_address()
+- [ ] scene_data.h 新增 GPUGeometryInfo 结构体（std430 24B：vertex_buffer_address u64 + index_buffer_address u64 + material_buffer_offset u32 + _padding u32）+ static_assert 守卫
 - [ ] DescriptorManager::init() 从 context_->rt_supported 读取 RT 状态，Set 0 layout 条件扩展 binding 4/5
-- [ ] DescriptorManager 新增 write_set0_tlas()
+- [ ] DescriptorManager 新增 write_set0_tlas() + get_rt_set_layouts()
 - [ ] Renderer：场景加载后调用 SceneASBuilder::build() + 写入 Set 0 binding 4/5
-- [ ] bindings.glsl 新增 Set 0 binding 4（accelerationStructureEXT）+ binding 5（GeometryInfoBuffer）
+- [ ] bindings.glsl 新增 GeometryInfo struct（含 uint64_t，需 GL_EXT_shader_explicit_arithmetic_types_int64）+ Set 0 binding 4（accelerationStructureEXT）+ binding 5（GeometryInfoBuffer）
 
 ## Step 6：PT 核心 shader
 
-- [ ] 新增 shaders/rt/pt_common.glsl：Sobol + Cranley-Patterson + blue noise 纹理采样 + hemisphere sampling + GGX sampling + Russian Roulette + MIS + 顶点插值
-- [ ] 嵌入预生成 128×128 blue noise 纹理 + Renderer 初始化时注册到 bindless 数组
-- [ ] 新增 shaders/rt/reference_view.rgen：primary ray 计算 + 路径追踪主循环 + accumulation 写入
-- [ ] 新增 shaders/rt/closesthit.rchit：geometry_infos[customIndex + geometryIndex] 索引 + 顶点插值（buffer_reference）+ 材质采样 + NEE + MIS + BRDF 采样
-- [ ] 新增 shaders/rt/miss.rmiss：IBL cubemap 环境采样
-- [ ] 新增 shaders/rt/shadow_miss.rmiss：shadow ray miss（标记未遮挡）
-- [ ] ShaderCompiler 扩展：支持 RT shader stage（raygen、closesthit、miss）
+- [ ] 新增 shaders/rt/pt_common.glsl：GLSL 扩展声明（GL_EXT_ray_tracing、GL_EXT_buffer_reference/2、GL_EXT_shader_explicit_arithmetic_types_int64、GL_EXT_nonuniform_qualifier）+ Ray Payload 定义（PrimaryPayload loc 0 + ShadowPayload loc 1）+ Vertex/Index buffer_reference layout + Sobol（常量数组）+ Cranley-Patterson + blue noise 采样 + hemisphere sampling + GGX sampling + Russian Roulette + MIS + 顶点插值
+- [ ] 嵌入预生成 128×128 R8Unorm blue noise 纹理（公开数据集）+ Renderer 初始化时上传 GPU 注册到 bindless 数组
+- [ ] GlobalUniformData 新增 inv_view（mat4，offset 864），总大小 864→928 bytes + static_assert 更新
+- [ ] bindings.glsl GlobalUBO 新增 inv_view 字段
+- [ ] 新增 shaders/rt/reference_view.rgen：从 GlobalUBO inv_view/inv_projection 计算 primary ray + 路径追踪主循环 + accumulation 写入。Push constant 12B：max_bounces + sample_count + frame_seed
+- [ ] 新增 shaders/rt/closesthit.rchit：geometry_infos[customIndex + geometryIndex] 索引 + 顶点插值（buffer_reference）+ 材质采样 + NEE + MIS + BRDF 采样，写入 PrimaryPayload
+- [ ] 新增 shaders/rt/miss.rmiss：IBL cubemap 环境采样，写入 PrimaryPayload（color = 环境辐射度，hit_distance = -1）
+- [ ] 新增 shaders/rt/shadow_miss.rmiss：写入 ShadowPayload（visible = 1）
+- [ ] ShaderCompiler 扩展：支持 RT shader stage（raygen、closesthit、miss），shaderc target vulkan_1_4
 
 ## Step 7：Reference View Pass
 
@@ -69,7 +73,7 @@
 
 ## Step 8：独立渲染路径 + 模式切换
 
-- [ ] scene_data.h 新增 RenderMode 枚举（Rasterization、PathTracing）
+- [ ] scene_data.h 新增 RenderMode 枚举（Rasterization、PathTracing）（uint8_t）
 - [ ] RenderInput 新增 render_mode 字段
 - [ ] Renderer::render() 拆分为私有方法：fill_common_gpu_data() + render_rasterization() + render_path_tracing()，按 render_mode switch
 - [ ] PT 路径：RG clear → accumulation + swapchain import → Reference View → Tonemapping → ImGui → present
@@ -78,7 +82,7 @@
 
 ## Step 9：OIDN 集成
 
-- [ ] 手动集成 OIDN 预编译库（官方 release，含 CUDA GPU 支持）
+- [ ] 手动集成 OIDN 预编译库（官方 release，含 CUDA GPU 支持），修改 framework/CMakeLists.txt 链接库 + DLL 拷贝
 - [ ] 新增 denoiser.h/.cpp：Denoiser 类（init / denoise / destroy / on_resize）
 - [ ] OIDN device 创建（GPU 优先 fallback CPU）+ RT filter 创建
 - [ ] 持久 staging buffer 分配（readback + upload）

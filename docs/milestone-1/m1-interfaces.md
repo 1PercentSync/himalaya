@@ -1608,9 +1608,46 @@ public:
 };
 ```
 
-#### AccelerationStructureManager 类型（阶段六）
+#### BufferUsage 扩展（阶段六）
 
 ```cpp
+enum class BufferUsage : uint32_t {
+    // ... 已有值 ...
+    ShaderDeviceAddress = 1 << 6,  ///< VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
+};
+```
+
+#### ResourceManager 扩展（阶段六）
+
+```cpp
+class ResourceManager {
+public:
+    // ... 已有接口 ...
+
+    /// 获取 buffer 的 device address（需要 ShaderDeviceAddress usage flag）。
+    [[nodiscard]] VkDeviceAddress get_buffer_device_address(BufferHandle handle) const;
+};
+```
+
+#### AccelerationStructureManager（阶段六）
+
+```cpp
+namespace himalaya::rhi {
+
+/// BLAS 句柄（持有 VkAccelerationStructureKHR + backing buffer）
+struct BLASHandle {
+    VkAccelerationStructureKHR as = VK_NULL_HANDLE;
+    VkBuffer buffer = VK_NULL_HANDLE;
+    VmaAllocation allocation = VK_NULL_HANDLE;
+};
+
+/// TLAS 句柄（持有 VkAccelerationStructureKHR + backing buffer）
+struct TLASHandle {
+    VkAccelerationStructureKHR as = VK_NULL_HANDLE;
+    VkBuffer buffer = VK_NULL_HANDLE;
+    VmaAllocation allocation = VK_NULL_HANDLE;
+};
+
 /// 单个 geometry 的构建输入（对应 BLAS 内一个三角形集合）
 struct BLASGeometry {
     VkDeviceAddress vertex_buffer_address;
@@ -1624,18 +1661,307 @@ struct BLASGeometry {
 struct BLASBuildInfo {
     std::span<const BLASGeometry> geometries;
 };
+
+/// 加速结构资源管理：BLAS/TLAS 创建、构建、销毁。
+/// 顶点格式硬编码：position = R32G32B32_SFLOAT offset 0，index = UINT32。
+class AccelerationStructureManager {
+public:
+    void init(Context* context);
+
+    /// 批量构建 BLAS（单次 vkCmdBuildAccelerationStructuresKHR 并行构建全部）。
+    /// PREFER_FAST_TRACE，每个 BLASBuildInfo 生成一个 BLAS。
+    /// 内部分配 scratch buffer（各 BLAS 独立区域），构建完成后释放。
+    /// 在 immediate command scope 内调用。
+    [[nodiscard]] std::vector<BLASHandle> build_blas(std::span<const BLASBuildInfo> infos);
+
+    /// 构建 TLAS。在 immediate command scope 内调用。
+    [[nodiscard]] TLASHandle build_tlas(std::span<const VkAccelerationStructureInstanceKHR> instances);
+
+    void destroy_blas(BLASHandle& handle);
+    void destroy_tlas(TLASHandle& handle);
+
+    void destroy();
+
+private:
+    Context* context_ = nullptr;
+};
+
+}  // namespace himalaya::rhi
 ```
 
-#### SceneASBuilder 扩展（阶段六）
+#### RT Pipeline（阶段六）
 
 ```cpp
+namespace himalaya::rhi {
+
+/// RT pipeline 创建描述
+struct RTPipelineDesc {
+    VkShaderModule raygen = VK_NULL_HANDLE;
+    VkShaderModule miss = VK_NULL_HANDLE;        ///< 环境 miss
+    VkShaderModule shadow_miss = VK_NULL_HANDLE; ///< shadow miss
+    VkShaderModule closesthit = VK_NULL_HANDLE;
+    uint32_t max_recursion_depth = 1;
+    std::span<const VkDescriptorSetLayout> descriptor_set_layouts;
+    std::span<const VkPushConstantRange> push_constant_ranges;
+};
+
+/// RT pipeline + SBT（生命周期绑定）
+struct RTPipeline {
+    VkPipeline pipeline = VK_NULL_HANDLE;
+    VkPipelineLayout layout = VK_NULL_HANDLE;
+
+    /// SBT buffer（raygen + miss + hit regions）
+    VkBuffer sbt_buffer = VK_NULL_HANDLE;
+    VmaAllocation sbt_allocation = VK_NULL_HANDLE;
+
+    /// SBT region 信息（trace_rays 命令使用）
+    VkStridedDeviceAddressRegionKHR raygen_region{};
+    VkStridedDeviceAddressRegionKHR miss_region{};
+    VkStridedDeviceAddressRegionKHR hit_region{};
+    VkStridedDeviceAddressRegionKHR callable_region{};  ///< 空（不使用 callable shader）
+
+    void destroy(VkDevice device, VmaAllocator allocator);
+};
+
+/// 创建 RT pipeline + 构建 SBT。
+[[nodiscard]] RTPipeline create_rt_pipeline(VkDevice device, VmaAllocator allocator,
+                                            const RTPipelineDesc& desc,
+                                            const VkPhysicalDeviceRayTracingPipelinePropertiesKHR& rt_props);
+
+}  // namespace himalaya::rhi
+```
+
+#### CommandBuffer RT 扩展（阶段六）
+
+```cpp
+class CommandBuffer {
+public:
+    // ... 已有接口 ...
+
+    /// 录制 ray trace dispatch。
+    void trace_rays(const RTPipeline& rt_pipeline, uint32_t width, uint32_t height) const;
+};
+```
+
+#### GPU GeometryInfo 结构体（阶段六）
+
+定义在 `framework/scene_data.h`，C++ 和 GLSL 端布局必须一致。
+
+```cpp
+/// Per-geometry GPU data (Set 0, Binding 5 SSBO element).
+/// std430 layout, 24 bytes per element, aligned to 8.
+/// Indexed by: gl_InstanceCustomIndexEXT + gl_GeometryIndexEXT
+struct GPUGeometryInfo {
+    uint64_t vertex_buffer_address;   ///< offset  0 — Vertex[] device address
+    uint64_t index_buffer_address;    ///< offset  8 — uint32_t[] device address
+    uint32_t material_buffer_offset;  ///< offset 16 — MaterialBuffer SSBO 索引
+    uint32_t _padding;                ///< offset 20 — align to 24 (struct alignment = 8)
+};
+static_assert(sizeof(GPUGeometryInfo) == 24, "GPUGeometryInfo must be 24 bytes (std430)");
+static_assert(alignof(GPUGeometryInfo) == 8);
+static_assert(offsetof(GPUGeometryInfo, index_buffer_address) == 8);
+static_assert(offsetof(GPUGeometryInfo, material_buffer_offset) == 16);
+```
+
+GLSL 端（`shaders/common/bindings.glsl`）：
+
+```glsl
+struct GeometryInfo {
+    uint64_t vertex_buffer_address;
+    uint64_t index_buffer_address;
+    uint     material_buffer_offset;
+    uint     _padding;
+};
+
+layout(set = 0, binding = 5) readonly buffer GeometryInfoBuffer {
+    GeometryInfo geometry_infos[];
+};
+```
+
+#### SceneASBuilder（阶段六）
+
+```cpp
+namespace himalaya::framework {
+
 class SceneASBuilder {
 public:
-    /// materials 参数用于解析 Mesh::material_id → MaterialInstance::buffer_offset
+    /// 从场景数据构建 BLAS + TLAS + Geometry Info SSBO。
+    /// 按 Mesh::group_id 分组构建 multi-geometry BLAS。
+    /// 按 (group_id, transform) 去重构建 TLAS instances。
+    /// 前提：mesh_instances 中同一 node 的 primitive 连续排列
+    ///       （SceneLoader::build_mesh_instances() 保证）。
+    /// materials 参数用于解析 Mesh::material_id → MaterialInstance::buffer_offset。
     void build(rhi::Context& ctx, rhi::ResourceManager& rm,
                rhi::AccelerationStructureManager& as_mgr,
                std::span<const Mesh> meshes,
                std::span<const MeshInstance> instances,
                std::span<const MaterialInstance> materials);
+
+    void destroy();
+
+    [[nodiscard]] const rhi::TLASHandle& tlas_handle() const;
+    [[nodiscard]] rhi::BufferHandle geometry_info_buffer() const;
+
+private:
+    std::vector<rhi::BLASHandle> blas_handles_;
+    rhi::TLASHandle tlas_handle_{};
+    rhi::BufferHandle geometry_info_buffer_{};
+    rhi::AccelerationStructureManager* as_mgr_ = nullptr;
+};
+
+}  // namespace himalaya::framework
+```
+
+#### GlobalUniformData 扩展（阶段六）
+
+```cpp
+struct GlobalUniformData {
+    // ... 阶段五已有字段 (864 bytes) ...
+
+    // --- 阶段六新增 ---
+    glm::mat4 inv_view{};  ///< offset 864 — inverse view matrix (PT raygen primary ray)
+};
+// total: 928 bytes (58 × 16)
+```
+
+bindings.glsl 对应追加：
+
+```glsl
+layout(set = 0, binding = 0) uniform GlobalUBO {
+    // ... 阶段五已有字段 ...
+
+    // --- 阶段六新增 ---
+    mat4 inv_view;  // PT raygen shader 计算 primary ray
+} global;
+```
+
+#### RenderMode 枚举（阶段六）
+
+定义在 `framework/scene_data.h`。
+
+```cpp
+/// 渲染模式选择（Renderer 按此切换渲染路径）。
+enum class RenderMode : uint8_t {
+    Rasterization,  ///< 完整光栅化管线
+    PathTracing,    ///< PT 参考视图
+};
+```
+
+#### RenderInput 扩展（阶段六）
+
+```cpp
+struct RenderInput {
+    // ... 已有字段 ...
+
+    RenderMode render_mode;  ///< 阶段六新增：渲染模式选择
+};
+```
+
+#### ReferenceViewPass（阶段六）
+
+```cpp
+namespace himalaya::passes {
+
+class ReferenceViewPass {
+public:
+    void setup(rhi::Context& ctx, rhi::ResourceManager& rm,
+               rhi::DescriptorManager& dm, rhi::ShaderCompiler& sc);
+
+    /// 向 RG 注册 accumulation buffer + RT pass。
+    void record(framework::RenderGraph& rg, const framework::FrameContext& ctx);
+
+    /// 重置累积（sample count 归零，下一帧 shader 覆写）。
+    void reset_accumulation();
+
+    [[nodiscard]] uint32_t sample_count() const;
+    [[nodiscard]] rhi::ImageHandle accumulation_image() const;
+
+    void rebuild_pipelines();
+    void on_resize();
+    void destroy();
+
+private:
+    rhi::RTPipeline rt_pipeline_{};
+    rhi::ImageHandle accumulation_image_{};
+    uint32_t sample_count_ = 0;
+};
+
+}  // namespace himalaya::passes
+```
+
+#### Denoiser（阶段六）
+
+```cpp
+namespace himalaya::framework {
+
+class Denoiser {
+public:
+    /// 创建 OIDN device（GPU 优先 fallback CPU）+ RT filter + 持久 staging buffers。
+    void init(rhi::Context& ctx, rhi::ResourceManager& rm);
+
+    /// Vulkan readback → OIDN filter execute → Vulkan upload。
+    /// 阻塞操作（GPU denoise + CPU readback），对参考视图可接受。
+    void denoise(rhi::ImageHandle accumulation, rhi::ImageHandle output);
+
+    void on_resize();
+    void destroy();
+};
+
+}  // namespace himalaya::framework
+```
+
+#### DescriptorManager 扩展（阶段六）
+
+```cpp
+class DescriptorManager {
+public:
+    // ... 已有接口 ...
+
+    /// 写入 Set 0 binding 4（TLAS descriptor）。仅 rt_supported 时有效。
+    void write_set0_tlas(const rhi::TLASHandle& tlas);
+
+    /// 返回 RT pipeline 的 descriptor set layouts。
+    /// = {set0_layout, set1_layout, set2_layout, set3_push_layout}
+    /// set3_push_layout 由调用方提供。
+    std::vector<VkDescriptorSetLayout> get_rt_set_layouts(
+        VkDescriptorSetLayout set3_push_layout) const;
+};
+```
+
+#### DebugUIContext / DebugUIActions PT 扩展（阶段六）
+
+```cpp
+struct DebugUIContext {
+    // ... 已有字段 ...
+
+    // --- 阶段六新增 ---
+    framework::RenderMode& render_mode;         ///< 渲染模式（读写）
+    bool rt_supported;                          ///< RT 硬件支持（只读，控制 UI 可见性）
+    uint32_t pt_sample_count;                   ///< 当前累积采样数（只读）
+    uint32_t& pt_target_samples;                ///< 目标采样数（读写，0 = 无限）
+    uint32_t& pt_max_bounces;                   ///< 最大 bounce 数（读写，默认 8，范围 1-32）
+    float pt_elapsed_time;                      ///< 累积耗时秒（只读）
+    bool& denoise_enabled;                      ///< 降噪功能开关（读写）
+    bool& auto_denoise;                         ///< 自动降噪开关（读写）
+    uint32_t& auto_denoise_interval;            ///< 自动降噪间隔（每 N 采样，读写）
+    bool& show_denoised;                        ///< 显示降噪/原始切换（读写）
+    uint32_t last_denoised_sample_count;        ///< 上次降噪时采样数（只读）
+};
+
+struct DebugUIActions {
+    // ... 已有字段 ...
+
+    // --- 阶段六新增 ---
+    bool pt_reset_requested = false;            ///< 重置累积按钮
+    bool pt_denoise_requested = false;          ///< 手动降噪按钮
+};
+```
+
+#### RGStage 扩展（阶段六）
+
+```cpp
+enum class RGStage : uint8_t {
+    // ... 已有值 ...
+    RayTracing,  ///< VK_PIPELINE_STAGE_2_RAY_TRACING_SHADER_BIT_KHR
 };
 ```
