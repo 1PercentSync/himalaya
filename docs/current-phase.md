@@ -334,7 +334,7 @@ OIDN 降噪是阻塞操作（GPU denoise + CPU readback），会造成一帧的�
 ```
 Reference View Pass (RT Pipeline)
   输入: TLAS (Set 0 binding 4), Geometry Info (Set 0 binding 5),
-        GlobalUBO, LightBuffer, MaterialBuffer, InstanceBuffer (Set 0),
+        GlobalUBO, LightBuffer, MaterialBuffer (Set 0 binding 0-2),
         Bindless textures/cubemaps (Set 1),
         Accumulation Buffer (Set 3 push descriptor, storage image)
   输出: Accumulation Buffer (running average 累积)

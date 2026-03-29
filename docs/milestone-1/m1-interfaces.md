@@ -1202,6 +1202,7 @@ layout(set = 0, binding = 3) readonly buffer InstanceBuffer {
 layout(set = 0, binding = 4) uniform accelerationStructureEXT scene_tlas;
 
 // Set 0, Binding 5: 几何信息（阶段六引入，closest-hit shader 查询顶点/材质数据）
+// GeometryInfo struct 在 Step 5/6 实现时定义（涉及 buffer_reference / uint64_t device address 编码选择）
 layout(set = 0, binding = 5) readonly buffer GeometryInfoBuffer {
     GeometryInfo geometry_infos[];  // per-geometry: vertex/index buffer address + material_id
     // Indexed by: gl_InstanceCustomIndexEXT + gl_GeometryIndexEXT
