@@ -148,6 +148,21 @@ namespace himalaya::rhi {
         /** @brief Whether the selected GPU supports all RT extensions. */
         bool rt_supported = false;
 
+        /** @brief RT pipeline: shader group handle size in bytes. */
+        uint32_t rt_shader_group_handle_size = 0;
+
+        /** @brief RT pipeline: required alignment for SBT region start. */
+        uint32_t rt_shader_group_base_alignment = 0;
+
+        /** @brief RT pipeline: required alignment for each SBT entry. */
+        uint32_t rt_shader_group_handle_alignment = 0;
+
+        /** @brief RT pipeline: maximum ray recursion depth. */
+        uint32_t rt_max_ray_recursion_depth = 0;
+
+        /** @brief AS: required alignment for scratch buffer offsets in batched builds. */
+        uint32_t rt_min_scratch_offset_alignment = 0;
+
         /** @brief Logical device. */
         VkDevice device = VK_NULL_HANDLE;
 

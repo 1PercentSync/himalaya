@@ -345,6 +345,32 @@ namespace himalaya::rhi {
 
         rt_supported = has_rt_extensions(physical_device);
 
+        if (rt_supported) {
+            VkPhysicalDeviceRayTracingPipelinePropertiesKHR rt_props{};
+            rt_props.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_PROPERTIES_KHR;
+
+            VkPhysicalDeviceAccelerationStructurePropertiesKHR as_props{};
+            as_props.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_PROPERTIES_KHR;
+            rt_props.pNext = &as_props;
+
+            VkPhysicalDeviceProperties2 props2{};
+            props2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
+            props2.pNext = &rt_props;
+
+            vkGetPhysicalDeviceProperties2(physical_device, &props2);
+
+            rt_shader_group_handle_size = rt_props.shaderGroupHandleSize;
+            rt_shader_group_base_alignment = rt_props.shaderGroupBaseAlignment;
+            rt_shader_group_handle_alignment = rt_props.shaderGroupHandleAlignment;
+            rt_max_ray_recursion_depth = rt_props.maxRayRecursionDepth;
+            rt_min_scratch_offset_alignment = as_props.minAccelerationStructureScratchOffsetAlignment;
+
+            spdlog::info("RT properties: handleSize={}, baseAlign={}, handleAlign={}, maxRecursion={}, scratchAlign={}",
+                         rt_shader_group_handle_size, rt_shader_group_base_alignment,
+                         rt_shader_group_handle_alignment, rt_max_ray_recursion_depth,
+                         rt_min_scratch_offset_alignment);
+        }
+
         spdlog::info("Selected GPU: {} (score: {}, MSAA support: 0x{:x}, RT: {})",
                      gpu_name, best_score, msaa_sample_counts, rt_supported ? "yes" : "no");
     }
