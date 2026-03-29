@@ -416,14 +416,24 @@ namespace himalaya::rhi {
         features_13.pNext = &features_14;
         features_12.pNext = &features_13;
 
+        // Merge required + optional RT extensions
+        std::vector enabled_extensions(
+            std::begin(kRequiredDeviceExtensions),
+            std::end(kRequiredDeviceExtensions));
+        if (rt_supported) {
+            enabled_extensions.insert(enabled_extensions.end(),
+                                      std::begin(kRTDeviceExtensions),
+                                      std::end(kRTDeviceExtensions));
+        }
+
         VkDeviceCreateInfo device_info{};
         device_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
         device_info.pNext = &features_12;
         device_info.pEnabledFeatures = &features_10;
         device_info.queueCreateInfoCount = 1;
         device_info.pQueueCreateInfos = &queue_info;
-        device_info.enabledExtensionCount = static_cast<uint32_t>(std::size(kRequiredDeviceExtensions));
-        device_info.ppEnabledExtensionNames = kRequiredDeviceExtensions;
+        device_info.enabledExtensionCount = static_cast<uint32_t>(enabled_extensions.size());
+        device_info.ppEnabledExtensionNames = enabled_extensions.data();
 
         VK_CHECK(vkCreateDevice(physical_device, &device_info, nullptr, &device));
 
