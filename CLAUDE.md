@@ -28,6 +28,7 @@
 
 ### Agent 约束
 
+- **禁止** 使用 Subagent（Agent 工具）或 Plan 工具，除非用户主动要求
 - **禁止** 执行 cmake、build、run 命令
 - 修改构建配置和工具链文件（CMakeLists.txt、vcpkg.json、.clangd 等）时**必须向用户请求**，经用户同意后方可编辑
 - **只能** 创建和编辑 C++/GLSL 源码文件及文档（构建配置除外，见上条）
