@@ -139,8 +139,9 @@ RT 所需的底层类型扩展和 Descriptor 扩展，为 Step 5 的 SceneASBuil
   - `uint32_t _padding`（offset 20）
 - `DescriptorManager` 扩展：
   - `init()` 内部从 `context_->rt_supported` 读取 RT 状态（不加额外参数）
-  - `rt_supported = true` 时 Set 0 layout 新增 binding 4（`VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR`）+ binding 5（SSBO，GeometryInfoBuffer）
+  - `rt_supported = true` 时 Set 0 layout 新增 binding 4（`VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR`）+ binding 5（SSBO，GeometryInfoBuffer），descriptor pool 容量相应扩展（新增 AS + SSBO 描述符，per frame in flight）
   - 新增 `write_set0_tlas(TLASHandle)` + `write_set0_buffer` 复用写 binding 5 + `get_rt_set_layouts()`
+  - Set 1（bindless textures）layout binding stage flags 添加 `VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR | VK_SHADER_STAGE_MISS_BIT_KHR`（RT shader 需要采样 bindless 纹理数组）
 - `Mesh` 结构体新增 `group_id`（glTF source mesh index）+ `material_id`（primitive 固有材质，material_instances 索引）
 
 **验证**：编译通过，新增类型和 API 可用但无调用方

@@ -38,8 +38,9 @@
 - [ ] BufferUsage 新增 ShaderDeviceAddress + ResourceManager 映射
 - [ ] ResourceManager 新增 get_buffer_device_address()
 - [ ] scene_data.h 新增 GPUGeometryInfo 结构体（std430 24B：vertex_buffer_address u64 + index_buffer_address u64 + material_buffer_offset u32 + _padding u32）+ static_assert 守卫
-- [ ] DescriptorManager::init() 从 context_->rt_supported 读取 RT 状态，Set 0 layout 条件扩展 binding 4/5
+- [ ] DescriptorManager::init() 从 context_->rt_supported 读取 RT 状态，Set 0 layout 条件扩展 binding 4/5 + descriptor pool 容量扩展（新增 AS + SSBO 描述符）
 - [ ] DescriptorManager 新增 write_set0_tlas() + get_rt_set_layouts()
+- [ ] Set 1（bindless textures）layout binding stage flags 添加 `CLOSEST_HIT_BIT_KHR` + `MISS_BIT_KHR`（RT shader 需要采样纹理）
 - [ ] Mesh 结构体新增 group_id（glTF source mesh index）+ material_id（primitive 固有材质）
 
 ## Step 5：Scene AS Builder + Renderer 集成
