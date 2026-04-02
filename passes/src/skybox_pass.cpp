@@ -10,6 +10,7 @@
 #include <himalaya/passes/skybox_pass.h>
 
 #include <himalaya/framework/frame_context.h>
+#include <himalaya/framework/render_constants.h>
 #include <himalaya/framework/render_graph.h>
 #include <himalaya/rhi/commands.h>
 #include <himalaya/rhi/context.h>
@@ -22,6 +23,9 @@
 #include <spdlog/spdlog.h>
 
 namespace himalaya::passes {
+    using framework::kDepthFormat;
+    using framework::kHdrColorFormat;
+
     // ---- Init / Destroy ----
 
     void SkyboxPass::setup(rhi::Context &ctx,
@@ -72,8 +76,8 @@ namespace himalaya::passes {
         rhi::GraphicsPipelineDesc desc;
         desc.vertex_shader = vert_module;
         desc.fragment_shader = frag_module;
-        desc.color_formats = {VK_FORMAT_R16G16B16A16_SFLOAT}; // hdr_color
-        desc.depth_format = VK_FORMAT_D32_SFLOAT;
+        desc.color_formats = {kHdrColorFormat};
+        desc.depth_format = kDepthFormat;
         desc.sample_count = 1; // Always 1x — renders to resolved targets
         // No vertex input (fullscreen triangle from gl_VertexIndex)
         // No push constants

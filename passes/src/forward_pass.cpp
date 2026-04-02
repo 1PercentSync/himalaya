@@ -7,6 +7,7 @@
 
 #include <himalaya/framework/frame_context.h>
 #include <himalaya/framework/mesh.h>
+#include <himalaya/framework/render_constants.h>
 #include <himalaya/framework/render_graph.h>
 #include <himalaya/framework/scene_data.h>
 #include <himalaya/rhi/commands.h>
@@ -21,9 +22,8 @@
 #include <spdlog/spdlog.h>
 
 namespace himalaya::passes {
-    // ---- HDR color attachment format (hardcoded per design) ----
-    constexpr VkFormat kHdrColorFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
-    constexpr VkFormat kDepthFormat = VK_FORMAT_D32_SFLOAT;
+    using framework::kDepthFormat;
+    using framework::kHdrColorFormat;
 
     // ---- Init / Destroy ----
 

@@ -14,6 +14,7 @@
 
 #include <himalaya/framework/frame_context.h>
 #include <himalaya/framework/mesh.h>
+#include <himalaya/framework/render_constants.h>
 #include <himalaya/framework/render_graph.h>
 #include <himalaya/framework/scene_data.h>
 #include <himalaya/rhi/commands.h>
@@ -27,10 +28,9 @@
 #include <spdlog/spdlog.h>
 
 namespace himalaya::passes {
-    // ---- Attachment formats (hardcoded per design) ----
-    constexpr VkFormat kDepthFormat = VK_FORMAT_D32_SFLOAT;
-    constexpr VkFormat kNormalFormat = VK_FORMAT_A2B10G10R10_UNORM_PACK32;
-    constexpr VkFormat kRoughnessFormat = VK_FORMAT_R8_UNORM;
+    using framework::kDepthFormat;
+    using framework::kNormalFormat;
+    using framework::kRoughnessFormat;
 
     // ---- Init / Destroy ----
 

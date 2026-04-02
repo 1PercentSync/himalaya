@@ -2,6 +2,7 @@
 
 #include <himalaya/framework/frame_context.h>
 #include <himalaya/framework/mesh.h>
+#include <himalaya/framework/render_constants.h>
 #include <himalaya/framework/render_graph.h>
 #include <himalaya/framework/scene_data.h>
 #include <himalaya/rhi/commands.h>
@@ -17,8 +18,7 @@
 #include <spdlog/spdlog.h>
 
 namespace himalaya::passes {
-    // ---- Attachment format ----
-    constexpr VkFormat kShadowDepthFormat = VK_FORMAT_D32_SFLOAT;
+    using framework::kDepthFormat;
 
     // ---- Init / Destroy ----
 
@@ -240,7 +240,7 @@ namespace himalaya::passes {
             rhi::GraphicsPipelineDesc desc;
             desc.vertex_shader = vert_module;
             desc.fragment_shader = VK_NULL_HANDLE; // no FS — depth written by rasterizer
-            desc.depth_format = kShadowDepthFormat;
+            desc.depth_format = kDepthFormat;
             desc.sample_count = 1;
             desc.depth_bias_enable = true;
             desc.vertex_bindings = {binding};
@@ -259,7 +259,7 @@ namespace himalaya::passes {
             rhi::GraphicsPipelineDesc desc;
             desc.vertex_shader = vert_module;
             desc.fragment_shader = frag_module;
-            desc.depth_format = kShadowDepthFormat;
+            desc.depth_format = kDepthFormat;
             desc.sample_count = 1;
             desc.depth_bias_enable = true;
             desc.vertex_bindings = {binding};
