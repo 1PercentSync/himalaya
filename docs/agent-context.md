@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 5 第四小项：新增 scene_as_builder.h：SceneASBuilder 类
+Step 5 第五小项：SceneASBuilder::build() 实现（BLAS 分组构建 + TLAS 去重构建 + Geometry Info SSBO）
 
 ---
 
