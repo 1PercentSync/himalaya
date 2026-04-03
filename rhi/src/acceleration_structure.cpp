@@ -179,8 +179,16 @@ namespace himalaya::rhi {
 
         // --- Phase 4: Record build command ---
 
-        // vkCmdBuildAccelerationStructuresKHR takes an array of pointers to range info arrays
+        // vkCmdBuildAccelerationStructuresKHR takes an array of pointers to range info arrays.
+        // Pre-calculate total geometry count and reserve to prevent reallocation
+        // (range_info_ptrs stores addresses into all_range_infos).
+        uint32_t total_geometries = 0;
+        for (uint32_t i = 0; i < count; ++i) {
+            total_geometries += static_cast<uint32_t>(infos[i].geometries.size());
+        }
+
         std::vector<VkAccelerationStructureBuildRangeInfoKHR> all_range_infos;
+        all_range_infos.reserve(total_geometries);
         std::vector<const VkAccelerationStructureBuildRangeInfoKHR *> range_info_ptrs(count);
 
         for (uint32_t i = 0; i < count; ++i) {
