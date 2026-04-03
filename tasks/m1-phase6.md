@@ -52,7 +52,7 @@
 ## Step 5：Scene AS Builder + Renderer 集成
 
 - [x] Context 补充加载 vkGetAccelerationStructureDeviceAddressKHR 函数指针（TLAS instance 构建需要获取 BLAS device address）
-- [ ] SceneLoader::load() 新增 rt_supported 参数，true 时 vertex/index buffer 额外加 ShaderDeviceAddress flag
+- [x] SceneLoader::load() 新增 rt_supported 参数，true 时 vertex/index buffer 额外加 ShaderDeviceAddress flag
 - [ ] SceneLoader::load_meshes() 填充 group_id 和 material_id
 - [ ] 新增 scene_as_builder.h：SceneASBuilder 类
 - [ ] SceneASBuilder::build()：按 group_id 分组构建 multi-geometry BLAS（根据材质 alpha_mode 设置 BLASGeometry::opaque）+ 按 (group_id, transform) 去重构建 TLAS + Geometry Info SSBO 构建（按 group 连续排列，customIndex = group base offset）。遍历 Mesh 时跳过 vertex_count == 0 或 index_count < 3 的 primitive（glTF 不保证所有 primitive 为有效三角形）

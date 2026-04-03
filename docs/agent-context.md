@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 5 第二小项：SceneLoader::load() 新增 rt_supported 参数
+Step 5 第三小项：SceneLoader::load_meshes() 填充 group_id 和 material_id
 
 ---
 
