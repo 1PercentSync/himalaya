@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 5 第五小项：SceneASBuilder::build() 实现（BLAS 分组构建 + TLAS 去重构建 + Geometry Info SSBO）
+Step 5 第六小项：Renderer 集成（场景加载后调用 SceneASBuilder::build() + 写入 Set 0 binding 4/5）
 
 ---
 
