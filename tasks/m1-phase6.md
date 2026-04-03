@@ -18,7 +18,7 @@
 
 ## Step 2：AS 资源抽象
 
-- [ ] 新增 acceleration_structure.h：BLASHandle、TLASHandle、BLASGeometry、BLASBuildInfo（multi-geometry：`span<const BLASGeometry> geometries`）类型
+- [x] 新增 acceleration_structure.h：BLASHandle、TLASHandle、BLASGeometry、BLASBuildInfo（multi-geometry：`span<const BLASGeometry> geometries`）类型
 - [ ] AccelerationStructureManager：build_blas() 单次 vkCmdBuild 并行构建全部（PREFER_FAST_TRACE），每个 BLASBuildInfo 支持 1..N geometries
 - [ ] AccelerationStructureManager：build_tlas()
 - [ ] AccelerationStructureManager：destroy_blas()、destroy_tlas()

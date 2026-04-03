@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段六 — RT 基础设施 + PT 参考视图（规划完成，待实现）
-- **进度**：Step 1 全部完成（9/9），待用户编译验证
+- **进度**：Step 2 进行中（1/6）
 
 ### 下一个任务
 
-用户编译验证 Step 1 后，开始 Step 2：AS 资源抽象
+Step 2 第二小项：AccelerationStructureManager::build_blas() 实现
 
 ---
 
