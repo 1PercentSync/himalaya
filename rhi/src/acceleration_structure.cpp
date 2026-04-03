@@ -16,7 +16,7 @@ namespace himalaya::rhi {
         return (value + alignment - 1) & ~(alignment - 1);
     }
 
-    std::vector<BLASHandle> AccelerationStructureManager::build_blas(std::span<const BLASBuildInfo> infos) {
+    std::vector<BLASHandle> AccelerationStructureManager::build_blas(std::span<const BLASBuildInfo> infos) const {
         assert(context_ && "AccelerationStructureManager not initialized");
         assert(context_->is_immediate_active()
             && "build_blas must be called within begin_immediate/end_immediate scope");
@@ -54,7 +54,9 @@ namespace himalaya::rhi {
                 tri.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR;
                 tri.pNext = nullptr;
                 tri.geometryType = VK_GEOMETRY_TYPE_TRIANGLES_KHR;
-                tri.flags = VK_GEOMETRY_OPAQUE_BIT_KHR;
+                tri.flags = src.opaque
+                                ? VK_GEOMETRY_OPAQUE_BIT_KHR
+                                : VK_GEOMETRY_NO_DUPLICATE_ANY_HIT_INVOCATION_BIT_KHR;
 
                 // ReSharper disable once CppUseStructuredBinding
                 auto &tri_data = tri.geometry.triangles;
@@ -208,6 +210,154 @@ namespace himalaya::rhi {
                      static_cast<double>(total_scratch) / 1024.0);
 
         return handles;
+    }
+
+    TLASHandle AccelerationStructureManager::build_tlas(
+        std::span<const VkAccelerationStructureInstanceKHR> instances) const {
+        assert(context_ && "AccelerationStructureManager not initialized");
+        assert(context_->is_immediate_active()
+            && "build_tlas must be called within begin_immediate/end_immediate scope");
+        assert(!instances.empty() && "build_tlas requires at least one instance");
+
+        VkDevice device = context_->device;
+        const auto instance_count = static_cast<uint32_t>(instances.size());
+        const VkDeviceSize instance_data_size = instance_count * sizeof(VkAccelerationStructureInstanceKHR);
+
+        // --- Phase 1: Upload instance data to a GPU-accessible buffer ---
+
+        VkBufferCreateInfo inst_buf_info{};
+        inst_buf_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        inst_buf_info.size = instance_data_size;
+        inst_buf_info.usage = VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR
+                              | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+        inst_buf_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+        VmaAllocationCreateInfo inst_alloc_info{};
+        inst_alloc_info.usage = VMA_MEMORY_USAGE_AUTO;
+        inst_alloc_info.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT
+                                | VMA_ALLOCATION_CREATE_MAPPED_BIT;
+
+        VkBuffer inst_buffer = VK_NULL_HANDLE;
+        VmaAllocation inst_allocation = VK_NULL_HANDLE;
+        VmaAllocationInfo inst_map_info{};
+        VK_CHECK(vmaCreateBuffer(context_->allocator,
+            &inst_buf_info,
+            &inst_alloc_info,
+            &inst_buffer,
+            &inst_allocation,
+            &inst_map_info));
+
+        std::memcpy(inst_map_info.pMappedData, instances.data(), instance_data_size);
+
+        VkBufferDeviceAddressInfo inst_addr_info{};
+        inst_addr_info.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+        inst_addr_info.buffer = inst_buffer;
+        const VkDeviceAddress inst_address = vkGetBufferDeviceAddress(device, &inst_addr_info);
+
+        // --- Phase 2: Fill geometry info and query build sizes ---
+
+        VkAccelerationStructureGeometryKHR geometry{};
+        geometry.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR;
+        geometry.geometryType = VK_GEOMETRY_TYPE_INSTANCES_KHR;
+        geometry.flags = VK_GEOMETRY_OPAQUE_BIT_KHR;
+        geometry.geometry.instances.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_INSTANCES_DATA_KHR;
+        geometry.geometry.instances.arrayOfPointers = VK_FALSE;
+        geometry.geometry.instances.data.deviceAddress = inst_address;
+
+        VkAccelerationStructureBuildGeometryInfoKHR build_info{};
+        build_info.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR;
+        build_info.type = VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR;
+        build_info.flags = VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR;
+        build_info.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
+        build_info.geometryCount = 1;
+        build_info.pGeometries = &geometry;
+
+        VkAccelerationStructureBuildSizesInfoKHR size_info{};
+        size_info.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR;
+
+        vkGetAccelerationStructureBuildSizesKHR(
+            device,
+            VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR,
+            &build_info,
+            &instance_count,
+            &size_info);
+
+        // --- Phase 3: Create backing buffer and TLAS ---
+
+        TLASHandle handle{};
+
+        VkBufferCreateInfo buf_info{};
+        buf_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        buf_info.size = size_info.accelerationStructureSize;
+        buf_info.usage = VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR
+                         | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+        buf_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+        VmaAllocationCreateInfo alloc_info{};
+        alloc_info.usage = VMA_MEMORY_USAGE_AUTO;
+
+        VK_CHECK(vmaCreateBuffer(context_->allocator,
+            &buf_info, &alloc_info,
+            &handle.buffer, &handle.allocation, nullptr));
+
+        VkAccelerationStructureCreateInfoKHR as_ci{};
+        as_ci.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR;
+        as_ci.buffer = handle.buffer;
+        as_ci.size = size_info.accelerationStructureSize;
+        as_ci.type = VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR;
+
+        VK_CHECK(vkCreateAccelerationStructureKHR(device, &as_ci, nullptr, &handle.as));
+
+        context_->set_debug_name(VK_OBJECT_TYPE_ACCELERATION_STRUCTURE_KHR,
+                                 reinterpret_cast<uint64_t>(handle.as), "TLAS");
+        context_->set_debug_name(VK_OBJECT_TYPE_BUFFER,
+                                 reinterpret_cast<uint64_t>(handle.buffer), "TLAS [Buffer]");
+
+        build_info.dstAccelerationStructure = handle.as;
+
+        // --- Phase 4: Allocate scratch buffer and record build ---
+
+        VkBufferCreateInfo scratch_buf_info{};
+        scratch_buf_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        scratch_buf_info.size = size_info.buildScratchSize;
+        scratch_buf_info.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
+                                 | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+        scratch_buf_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+        VmaAllocationCreateInfo scratch_alloc_info{};
+        scratch_alloc_info.usage = VMA_MEMORY_USAGE_AUTO;
+
+        VkBuffer scratch_buffer = VK_NULL_HANDLE;
+        VmaAllocation scratch_allocation = VK_NULL_HANDLE;
+        VK_CHECK(vmaCreateBuffer(context_->allocator,
+            &scratch_buf_info,
+            &scratch_alloc_info,
+            &scratch_buffer, &scratch_allocation,
+            nullptr));
+
+        context_->set_debug_name(VK_OBJECT_TYPE_BUFFER,
+                                 reinterpret_cast<uint64_t>(scratch_buffer), "TLAS Scratch");
+
+        VkBufferDeviceAddressInfo scratch_addr_info{};
+        scratch_addr_info.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+        scratch_addr_info.buffer = scratch_buffer;
+        build_info.scratchData.deviceAddress = vkGetBufferDeviceAddress(device, &scratch_addr_info);
+
+        VkAccelerationStructureBuildRangeInfoKHR range{};
+        range.primitiveCount = instance_count;
+        const auto *range_ptr = &range;
+
+        vkCmdBuildAccelerationStructuresKHR(context_->immediate_command_buffer, 1, &build_info, &range_ptr);
+
+        // Register temporary buffers for cleanup at end_immediate()
+        context_->push_staging_buffer(inst_buffer, inst_allocation);
+        context_->push_staging_buffer(scratch_buffer, scratch_allocation);
+
+        spdlog::info("Recorded TLAS build: {} instances, scratch {:.1f} KB",
+                     instance_count,
+                     static_cast<double>(size_info.buildScratchSize) / 1024.0);
+
+        return handle;
     }
 
     void AccelerationStructureManager::destroy() {

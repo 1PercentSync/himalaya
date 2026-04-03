@@ -70,6 +70,16 @@ namespace himalaya::rhi {
 
         /** @brief Byte stride between consecutive vertices (sizeof(Vertex)). */
         uint32_t vertex_stride;
+
+        /**
+         * @brief Whether the geometry is fully opaque (no alpha testing needed).
+         *
+         * true  → VK_GEOMETRY_OPAQUE_BIT_KHR (hardware skips any-hit shader).
+         * false → VK_GEOMETRY_NO_DUPLICATE_ANY_HIT_INVOCATION_BIT_KHR
+         *         (hardware invokes any-hit for alpha test / stochastic alpha,
+         *          guaranteed at most once per primitive).
+         */
+        bool opaque;
     };
 
     /**
@@ -112,7 +122,7 @@ namespace himalaya::rhi {
          * @param infos Build inputs; each entry produces one BLAS.
          * @return Handles to the created BLAS instances.
          */
-        [[nodiscard]] std::vector<BLASHandle> build_blas(std::span<const BLASBuildInfo> infos);
+        [[nodiscard]] std::vector<BLASHandle> build_blas(std::span<const BLASBuildInfo> infos) const;
 
         /**
          * @brief Builds a TLAS from instance descriptions.
@@ -124,7 +134,7 @@ namespace himalaya::rhi {
          * @param instances VkAccelerationStructureInstanceKHR array (one per scene instance).
          * @return Handle to the created TLAS.
          */
-        [[nodiscard]] TLASHandle build_tlas(std::span<const VkAccelerationStructureInstanceKHR> instances);
+        [[nodiscard]] TLASHandle build_tlas(std::span<const VkAccelerationStructureInstanceKHR> instances) const;
 
         /**
          * @brief Destroys a BLAS and frees its backing buffer.
