@@ -4,6 +4,7 @@
  */
 
 #include <himalaya/rhi/descriptors.h>
+#include <himalaya/rhi/acceleration_structure.h>
 #include <himalaya/rhi/context.h>
 #include <himalaya/rhi/resources.h>
 
@@ -225,7 +226,7 @@ namespace himalaya::rhi {
                                               const BufferHandle buffer,
                                               const uint64_t range) const {
         assert(frame_index < kMaxFramesInFlight && "Frame index out of range");
-        assert(binding <= 3 && "Set 0 only has bindings 0-3");
+        assert(binding <= (context_->rt_supported ? 5u : 3u) && "Set 0 binding out of range");
 
         const auto &buf = resource_manager_->get_buffer(buffer);
 
@@ -257,6 +258,30 @@ namespace himalaya::rhi {
                                               const uint64_t range) const {
         for (uint32_t i = 0; i < kMaxFramesInFlight; ++i) {
             write_set0_buffer(i, binding, buffer, range);
+        }
+    }
+
+    void DescriptorManager::write_set0_tlas(const TLASHandle &tlas) const {
+        assert(context_->rt_supported && "write_set0_tlas requires RT support");
+
+        for (uint32_t i = 0; i < kMaxFramesInFlight; ++i) {
+            // pNext-chained acceleration structure info for the descriptor write
+            VkWriteDescriptorSetAccelerationStructureKHR as_info{
+                .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR,
+                .accelerationStructureCount = 1,
+                .pAccelerationStructures = &tlas.as,
+            };
+
+            VkWriteDescriptorSet write{
+                .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                .pNext = &as_info,
+                .dstSet = set0_sets_[i],
+                .dstBinding = 4,
+                .descriptorCount = 1,
+                .descriptorType = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR,
+            };
+
+            vkUpdateDescriptorSets(context_->device, 1, &write, 0, nullptr);
         }
     }
 
@@ -336,13 +361,14 @@ namespace himalaya::rhi {
                 VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT,
             };
 
-            constexpr VkDescriptorSetLayoutBindingFlagsCreateInfo set0_flags_info{
+            // ReSharper disable once CppVariableCanBeMadeConstexpr
+            const VkDescriptorSetLayoutBindingFlagsCreateInfo set0_flags_info{
                 .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO,
                 .bindingCount = 6,
                 .pBindingFlags = set0_binding_flags,
             };
 
-            constexpr VkDescriptorSetLayoutCreateInfo set0_info{
+            const VkDescriptorSetLayoutCreateInfo set0_info{
                 .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
                 .pNext = &set0_flags_info,
                 .bindingCount = 6,
@@ -351,7 +377,8 @@ namespace himalaya::rhi {
 
             VK_CHECK(vkCreateDescriptorSetLayout(context_->device, &set0_info, nullptr, &set0_layout_));
         } else {
-            constexpr VkDescriptorSetLayoutCreateInfo set0_info{
+            // ReSharper disable once CppVariableCanBeMadeConstexpr
+            const VkDescriptorSetLayoutCreateInfo set0_info{
                 .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
                 .bindingCount = 4,
                 .pBindings = set0_base_bindings,

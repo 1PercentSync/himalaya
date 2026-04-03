@@ -15,6 +15,7 @@
 namespace himalaya::rhi {
     class Context;
     class ResourceManager;
+    struct TLASHandle;
 
     /** @brief Maximum number of 2D textures in the bindless array (Set 1, Binding 0). */
     constexpr uint32_t kMaxBindlessTextures = 4096;
@@ -99,10 +100,11 @@ namespace himalaya::rhi {
          * @brief Writes a buffer descriptor to a Set 0 binding for a specific frame.
          *
          * Use this for per-frame resources (GlobalUBO, LightBuffer) where each
-         * frame in flight has its own buffer.
+         * frame in flight has its own buffer. Also used for RT bindings when
+         * rt_supported (binding 5 = GeometryInfoBuffer SSBO).
          *
          * @param frame_index Frame in flight index (0 to kMaxFramesInFlight-1).
-         * @param binding     Binding index within Set 0 (0 = GlobalUBO, 1 = LightBuffer, 2 = MaterialBuffer, 3 = InstanceBuffer).
+         * @param binding     Binding index within Set 0 (0-3 base; 5 when RT enabled).
          * @param buffer      Buffer handle to bind.
          * @param range       Byte range of the buffer to expose to the shader.
          */
@@ -111,13 +113,24 @@ namespace himalaya::rhi {
         /**
          * @brief Writes a buffer descriptor to a Set 0 binding across all frames in flight.
          *
-         * Use this for frame-invariant resources (MaterialBuffer) shared across all frames.
+         * Use this for frame-invariant resources (MaterialBuffer, GeometryInfoBuffer)
+         * shared across all frames.
          *
-         * @param binding Binding index within Set 0 (0 = GlobalUBO, 1 = LightBuffer, 2 = MaterialBuffer, 3 = InstanceBuffer).
+         * @param binding Binding index within Set 0 (0-3 base; 5 when RT enabled).
          * @param buffer  Buffer handle to bind.
          * @param range   Byte range of the buffer to expose to the shader.
          */
         void write_set0_buffer(uint32_t binding, BufferHandle buffer, uint64_t range) const;
+
+        /**
+         * @brief Writes a TLAS descriptor to Set 0 binding 4 across all frames in flight.
+         *
+         * Only valid when rt_supported is true. Binding 4 is
+         * VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR.
+         *
+         * @param tlas TLAS handle whose acceleration structure is bound.
+         */
+        void write_set0_tlas(const TLASHandle &tlas) const;
 
         /**
          * @brief Registers a cubemap+sampler pair into the bindless cubemap array.
