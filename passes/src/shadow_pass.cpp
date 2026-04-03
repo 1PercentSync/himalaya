@@ -226,7 +226,7 @@ namespace himalaya::passes {
                 offsetof(framework::Vertex, uv0)
             },
         };
-        const auto set_layouts = dm_->get_global_set_layouts();
+        const auto set_layouts = dm_->get_graphics_set_layouts();
 
         // Push constant range: 4 bytes cascade_index, vertex stage only
         constexpr VkPushConstantRange push_range{

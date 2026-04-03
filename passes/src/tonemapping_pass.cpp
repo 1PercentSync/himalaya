@@ -75,7 +75,7 @@ namespace himalaya::passes {
         desc.sample_count = 1; // Always 1x — processes resolved HDR
         // No vertex input (fullscreen triangle from gl_VertexIndex)
 
-        const auto set_layouts = dm_->get_global_set_layouts();
+        const auto set_layouts = dm_->get_graphics_set_layouts();
         desc.descriptor_set_layouts = {set_layouts.begin(), set_layouts.end()};
 
         // No push constants needed for tonemapping

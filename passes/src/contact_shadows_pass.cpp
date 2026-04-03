@@ -92,7 +92,7 @@ namespace himalaya::passes {
         // ReSharper disable once CppLocalVariableMayBeConst
         VkShaderModule module = rhi::create_shader_module(ctx_->device, spirv);
 
-        const auto set_layouts = dm_->get_compute_set_layouts(set3_layout_);
+        const auto set_layouts = dm_->get_dispatch_set_layouts(set3_layout_);
 
         const VkPushConstantRange push_range{
             .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,

@@ -57,10 +57,10 @@ namespace himalaya::rhi {
         void destroy();
 
         /**
-         * @brief Returns the global set layouts for pipeline creation.
+         * @brief Returns the set layouts for graphics pipeline creation.
          * @return Array of {set0_layout, set1_layout, set2_layout}.
          */
-        [[nodiscard]] std::array<VkDescriptorSetLayout, 3> get_global_set_layouts() const;
+        [[nodiscard]] std::array<VkDescriptorSetLayout, 3> get_graphics_set_layouts() const;
 
         /**
          * @brief Returns the Set 0 descriptor set for the given frame index.
@@ -180,16 +180,16 @@ namespace himalaya::rhi {
                                   ImageHandle image, SamplerHandle sampler) const;
 
         /**
-         * @brief Returns descriptor set layouts for compute pipeline creation.
+         * @brief Returns descriptor set layouts for compute and RT pipeline creation.
          *
          * Combines the three global set layouts (Set 0-2) with a caller-provided
          * Set 3 push descriptor layout, avoiding manual layout assembly in each
-         * compute pass.
+         * dispatch pass.
          *
          * @param set3_push_layout Push descriptor set layout for Set 3 (per-pass I/O).
          * @return Vector of {set0, set1, set2, set3} layouts.
          */
-        [[nodiscard]] std::vector<VkDescriptorSetLayout> get_compute_set_layouts(
+        [[nodiscard]] std::vector<VkDescriptorSetLayout> get_dispatch_set_layouts(
             VkDescriptorSetLayout set3_push_layout) const;
 
     private:

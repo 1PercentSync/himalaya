@@ -93,7 +93,7 @@ namespace himalaya::passes {
         // Shared pipeline descriptor
         const auto binding = framework::Vertex::binding_description();
         const auto attributes = framework::Vertex::attribute_descriptions();
-        const auto set_layouts = dm_->get_global_set_layouts();
+        const auto set_layouts = dm_->get_graphics_set_layouts();
 
         auto make_desc = [&](const VkShaderModule frag_module) {
             rhi::GraphicsPipelineDesc desc;
