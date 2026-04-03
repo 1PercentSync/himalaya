@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 6a 第二小项：GlobalUniformData 新增 inv_view
+Step 6a 第四小项：新增 blue_noise_data.h
 
 ---
 
