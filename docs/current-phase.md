@@ -183,6 +183,23 @@ TLAS instance 去重利用 `build_mesh_instances()` 的连续性保证：**Scene
 
 Geometry Info buffer 是 GPU_ONLY，场景加载时通过 staging buffer 上传（不需要 ShaderDeviceAddress，通过 descriptor 绑定访问）。
 
+**bindings.glsl RT 条件编译**：RT 专用绑定（binding 4 `accelerationStructureEXT` 需 `GL_EXT_ray_tracing`，binding 5 `GeometryInfo` 含 `uint64_t` 需 `GL_EXT_shader_explicit_arithmetic_types_int64`）用 `#ifdef HIMALAYA_RT` 守卫。光栅化 shader 不 define 此宏，RT shader 在 `#include "bindings.glsl"` 前 `#define HIMALAYA_RT`。
+
+**Renderer 集成流程**：Application 场景加载后在新 immediate scope 中调用 `Renderer::build_scene_as(meshes, mesh_instances, materials)`。Renderer 内部创建 `AccelerationStructureManager`（init 时）和 `SceneASBuilder`（成员），`build_scene_as()` 调用 `SceneASBuilder::build()` 后写入 Set 0 binding 4/5。`switch_scene()` 先 destroy 旧 AS，再 build 新 AS。流程示例：
+
+```
+// Application 侧
+context_.begin_immediate();
+scene_loader_.load(..., context_.rt_supported);
+context_.end_immediate();
+
+if (context_.rt_supported) {
+    context_.begin_immediate();
+    renderer_.build_scene_as(meshes, mesh_instances, materials);
+    context_.end_immediate();
+}
+```
+
 ---
 
 ### Step 6：PT 核心 shader
