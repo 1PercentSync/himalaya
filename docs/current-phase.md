@@ -112,7 +112,7 @@ RHI 层新增 RT Pipeline 创建和命令录制。
 - 新增 `rhi/rt_pipeline.h`：
   - `RTPipelineDesc`：RT pipeline 描述（raygen/miss/closesthit/anyhit shader modules、max recursion depth、descriptor set layouts、push constant ranges）
   - `RTPipeline`：持有 VkPipeline + VkPipelineLayout + SBT buffer（raygen/miss/hit regions）
-  - `create_rt_pipeline(VkDevice, const RTPipelineDesc&)` → `RTPipeline`
+  - `create_rt_pipeline(const Context&, const RTPipelineDesc&)` → `RTPipeline`
   - `RTPipeline::destroy(VkDevice)`
 - `rt_pipeline.cpp`：实现 shader group 创建、`vkCreateRayTracingPipelinesKHR`、SBT 构建（`vkGetRayTracingShaderGroupHandlesKHR` → 对齐写入 SBT buffer）
 - `commands.h` 新增 `trace_rays(const RTPipeline&, uint32_t width, uint32_t height)` 方法
@@ -483,3 +483,4 @@ shaders/
 | Ray Payload | 模式 A：closesthit 完成全部着色计算。PrimaryPayload(loc 0): color + next_origin + next_direction + throughput_update + hit_distance（52B）。ShadowPayload(loc 1): visible uint（4B） |
 | GeometryInfo | GPUGeometryInfo std430 24B：vertex_buffer_address(u64) + index_buffer_address(u64) + material_buffer_offset(u32) + _padding(u32)。Shader 端 GLSL 同布局 |
 | RT shader 热重载 | RTPipeline 封装绑定 pipeline + SBT 生命周期，rebuild_pipelines() 走 destroy + create 全量重建 |
+| RT 函数加载 | vulkan-1.lib 不导出 KHR RT/AS 符号。Context 通过 `vkGetDeviceProcAddr` 加载 6 个 device-level 函数指针（create/destroy/build AS、create RT pipeline、get shader group handles），CommandBuffer 同模式加载 `vkCmdTraceRaysKHR`（匿名命名空间，`init_rt_functions(VkDevice)` 初始化） |

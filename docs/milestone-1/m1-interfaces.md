@@ -1743,9 +1743,8 @@ struct RTPipeline {
 };
 
 /// 创建 RT pipeline + 构建 SBT。
-[[nodiscard]] RTPipeline create_rt_pipeline(VkDevice device, VmaAllocator allocator,
-                                            const RTPipelineDesc& desc,
-                                            const VkPhysicalDeviceRayTracingPipelinePropertiesKHR& rt_props);
+/// Context 提供 device、allocator、RT 属性和动态加载的 RT 函数指针。
+[[nodiscard]] RTPipeline create_rt_pipeline(const Context& ctx, const RTPipelineDesc& desc);
 
 }  // namespace himalaya::rhi
 ```
