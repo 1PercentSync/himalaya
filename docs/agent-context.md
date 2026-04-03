@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 5 第六小项：Renderer 集成（场景加载后调用 SceneASBuilder::build() + 写入 Set 0 binding 4/5）
+Step 5 第七小项：bindings.glsl 新增 GeometryInfo struct + Set 0 binding 4/5
 
 ---
 
