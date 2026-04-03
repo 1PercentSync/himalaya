@@ -182,6 +182,8 @@ namespace himalaya::app {
                          kLogLevelNames,
                          IM_ARRAYSIZE(kLogLevelNames))) {
             spdlog::set_level(static_cast<spdlog::level::level_enum>(current_log_level));
+            actions.log_level_changed = true;
+            actions.new_log_level = current_log_level;
         }
 
         // Camera section

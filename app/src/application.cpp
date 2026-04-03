@@ -30,15 +30,19 @@ namespace himalaya::app {
     /** @brief Window title shown in the title bar. */
     constexpr auto kWindowTitle = "Himalaya";
 
-    /** @brief Default log level. Change to debug/info for more verbose Vulkan diagnostics. */
-    constexpr auto kLogLevel = spdlog::level::warn;
+    /** @brief Default log level used when config has no override. */
+    constexpr auto kDefaultLogLevel = spdlog::level::warn;
 
     // ---- Init / Destroy ----
 
     void Application::init() {
-        spdlog::set_level(kLogLevel);
+        spdlog::set_level(kDefaultLogLevel);
 
         config_ = load_config();
+
+        if (!config_.log_level.empty()) {
+            spdlog::set_level(spdlog::level::from_str(config_.log_level));
+        }
 
         glfwInit();
         glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
@@ -506,6 +510,13 @@ namespace himalaya::app {
 
         if (actions.hdr_sun_coords_changed && !config_.env_path.empty()) {
             config_.hdr_sun_coords[config_.env_path] = {hdr_sun_x_, hdr_sun_y_};
+            save_config(config_);
+        }
+
+        if (actions.log_level_changed) {
+            const auto level = static_cast<spdlog::level::level_enum>(actions.new_log_level);
+            const auto sv = spdlog::level::to_string_view(level);
+            config_.log_level = std::string(sv.data(), sv.size());
             save_config(config_);
         }
     }

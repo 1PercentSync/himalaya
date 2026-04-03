@@ -33,6 +33,14 @@ namespace himalaya::app {
          * of the sun in the equirectangular image, used by HdrSun light mode.
          */
         std::unordered_map<std::string, std::pair<int, int>> hdr_sun_coords;
+
+        /**
+         * @brief Persisted spdlog log level name (e.g. "warn", "info").
+         *
+         * Empty string means no user override — Application falls back to
+         * the compile-time default (warn).
+         */
+        std::string log_level;
     };
 
     /**

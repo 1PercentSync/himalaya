@@ -218,6 +218,12 @@ namespace himalaya::app {
 
         /** @brief True if HDR sun coordinates were modified (triggers config save). */
         bool hdr_sun_coords_changed = false;
+
+        /** @brief True if the log level was changed via the combo box. */
+        bool log_level_changed = false;
+
+        /** @brief New spdlog level enum value (valid only when log_level_changed is true). */
+        int new_log_level = 0;
     };
 
     /**
