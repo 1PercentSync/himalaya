@@ -172,8 +172,11 @@ SceneLoader 变更 + SceneASBuilder 实现 + Renderer 集成 + bindings.glsl 扩
     - `tlas_handle()` / `geometry_info_buffer()` getter
 - Renderer：场景加载后调用 `SceneASBuilder::build()`，写入 Set 0 binding 4/5
 - `bindings.glsl` 新增 `GeometryInfo` struct + Set 0 binding 4（`accelerationStructureEXT`）+ binding 5（`GeometryInfoBuffer`）
+- `AppConfig` 新增 `log_level` 字段（`std::string`，默认空）+ `config.cpp` 序列化/反序列化（JSON key `"log_level"`，字符串格式如 `"warn"`、`"info"`；空/缺失 = 默认 `warn`，使用 `spdlog::level::to_string_view()` / `spdlog::level::from_str()` 转换）
+- `Application::init()` 加载 config 后应用 log_level（非空时解析为 `spdlog::level::level_enum`，空时保持默认 `warn`），替代硬编码 `kLogLevel`
+- DebugUI log level 变更持久化：`DebugUIActions` 新增 `log_level_changed` 标志 + `new_log_level`，`Application::update()` 检测变更后更新 `config_.log_level` 并调用 `save_config()`
 
-**验证**：场景加载后日志输出 BLAS 数量（= unique group 数）+ TLAS instance 数量（= unique node 数）+ Geometry Info buffer 大小，无 validation 报错
+**验证**：场景加载后日志输出 BLAS 数量（= unique group 数）+ TLAS instance 数量（= unique node 数）+ Geometry Info buffer 大小，无 validation 报错；DebugUI 修改 log level 后重启应用保持所选级别
 
 #### 设计要点
 
@@ -471,13 +474,15 @@ app/
 ├── include/himalaya/app/
 │   ├── scene_loader.h             # [Step 5] load() 新增 rt_supported 参数
 │   ├── renderer.h                 # [Step 5-9] SceneASBuilder + ReferenceViewPass + Denoiser 成员
-│   ├── debug_ui.h                 # [Step 10] DebugUIContext PT 字段 + DebugUIActions PT 动作
+│   ├── config.h                   # [Step 5] AppConfig 新增 log_level 字段
+│   ├── debug_ui.h                 # [Step 5] DebugUIActions log_level_changed ; [Step 10] DebugUIContext PT 字段 + DebugUIActions PT 动作
 │   └── application.h              # [Step 8] render_mode 状态
 ├── src/
 │   ├── scene_loader.cpp           # [Step 5] load_meshes() 填充 group_id/material_id + buffer flags
 │   ├── renderer.cpp               # [Step 5-9] AS 构建 + 渲染路径私有方法拆分 + OIDN 触发
-│   ├── debug_ui.cpp               # [Step 10] PT 面板绘制
-│   └── application.cpp            # [Step 8-10] 模式切换 + PT actions 响应
+│   ├── config.cpp                 # [Step 5] log_level 序列化/反序列化
+│   ├── debug_ui.cpp               # [Step 5] log level 变更返回 action ; [Step 10] PT 面板绘制
+│   └── application.cpp            # [Step 5] log level 加载 + 变更持久化 ; [Step 8-10] 模式切换 + PT actions 响应
 shaders/
 └── common/bindings.glsl           # [Step 5] Set 0 binding 4/5 声明
 ```
