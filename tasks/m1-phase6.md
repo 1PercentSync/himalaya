@@ -67,7 +67,7 @@
 - [ ] ShaderCompiler 扩展：支持 RT shader stage（raygen、closesthit、anyhit、miss），shaderc target vulkan_1_4
 - [ ] GlobalUniformData 新增 inv_view（mat4，offset 864），总大小 864→928 bytes + static_assert 更新
 - [ ] bindings.glsl GlobalUBO 新增 inv_view 字段
-- [ ] 新增 `app/include/himalaya/app/blue_noise_data.h`：128×128 R8Unorm blue noise 像素数据（`constexpr uint8_t[16384]`，数据源 Calinou/free-blue-noise-textures CC0）+ Renderer 初始化时上传 GPU 注册到 bindless 数组
+- [ ] 新增 `app/include/himalaya/app/blue_noise_data.h`：128×128 R8Unorm blue noise 像素数据（`constexpr uint8_t[16384]`，从 `noise/HDR_L_0.png` 提取）+ Renderer 初始化时上传 GPU 注册到 bindless 数组
 - [ ] 新增 shaders/rt/pt_common.glsl：GLSL 扩展声明（GL_EXT_ray_tracing、GL_EXT_buffer_reference/2、GL_EXT_shader_explicit_arithmetic_types_int64、GL_EXT_nonuniform_qualifier）
 - [ ] pt_common.glsl：Ray Payload 定义（PrimaryPayload loc 0 56B 含 bounce 字段 + ShadowPayload loc 1）
 - [ ] pt_common.glsl：Vertex / Index buffer_reference layout 定义（匹配 Vertex 结构体 56B）
@@ -75,7 +75,7 @@
 - [ ] pt_common.glsl：Ray origin offset 工具函数（Wächter & Binder，Ray Tracing Gems Ch.6）
 - [ ] pt_common.glsl：Shading normal 一致性修正（clamp 到几何法线半球）
 - [ ] pt_common.glsl：Multi-lobe BRDF 选择（Fresnel 估计概率选 diffuse/specular lobe + PDF 补偿）
-- [ ] pt_common.glsl：Sobol 128 维 32-bit 方向数表（16 KB shader 常量）+ 超出 128 维 PCG hash fallback + Cranley-Patterson rotation
+- [ ] pt_common.glsl：Sobol 128 维 32-bit 方向数表（16 KB shader 常量，从 `noise/new-joe-kuo-6.21201` 生成）+ 超出 128 维 PCG hash fallback + Cranley-Patterson rotation
 - [ ] pt_common.glsl：cosine-weighted hemisphere sampling + GGX VNDF importance sampling（Heitz 2018，新增 `sample_ggx_vndf()` + `pdf_ggx_vndf()`；`#include "common/brdf.glsl"` 复用评估函数，不修改 brdf.glsl）
 - [ ] pt_common.glsl：Russian Roulette（bounce ≥ 2）+ MIS power heuristic（balance heuristic，Step 6a 定义函数，方向光不调用，Step 11 env sampling 使用）
 
