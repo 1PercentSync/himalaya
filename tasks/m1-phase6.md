@@ -51,7 +51,7 @@
 
 ## Step 5：Scene AS Builder + Renderer 集成
 
-- [ ] Context 补充加载 vkGetAccelerationStructureDeviceAddressKHR 函数指针（TLAS instance 构建需要获取 BLAS device address）
+- [x] Context 补充加载 vkGetAccelerationStructureDeviceAddressKHR 函数指针（TLAS instance 构建需要获取 BLAS device address）
 - [ ] SceneLoader::load() 新增 rt_supported 参数，true 时 vertex/index buffer 额外加 ShaderDeviceAddress flag
 - [ ] SceneLoader::load_meshes() 填充 group_id 和 material_id
 - [ ] 新增 scene_as_builder.h：SceneASBuilder 类

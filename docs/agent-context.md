@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 5 第一小项：Context 补充加载 vkGetAccelerationStructureDeviceAddressKHR 函数指针
+Step 5 第二小项：SceneLoader::load() 新增 rt_supported 参数
 
 ---
 
