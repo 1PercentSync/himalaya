@@ -315,6 +315,19 @@ namespace himalaya::framework {
     };
 
     /**
+     * @brief Per-geometry RT info for closesthit/anyhit shader lookup (Set 0, Binding 5 SSBO element).
+     *
+     * std430 layout, 24 bytes per element, aligned to 8 (uint64_t).
+     * Shader reads via geometry_infos[gl_InstanceCustomIndexEXT + gl_GeometryIndexEXT].
+     */
+    struct GPUGeometryInfo {
+        uint64_t vertex_buffer_address; ///< offset  0 — device address of vertex buffer
+        uint64_t index_buffer_address;  ///< offset  8 — device address of index buffer
+        uint32_t material_buffer_offset; ///< offset 16 — index into MaterialBuffer SSBO
+        uint32_t _padding;              ///< offset 20 — pad to 24 bytes (8-byte alignment)
+    };
+
+    /**
      * @brief Per-instance GPU data (Set 0, Binding 3 SSBO element).
      *
      * std430 layout, 128 bytes per element, aligned to 16.
@@ -393,6 +406,10 @@ namespace himalaya::framework {
     static_assert(offsetof(GlobalUniformData, prev_view_projection) == 784);
     static_assert(offsetof(GlobalUniformData, frame_index) == 848);
     static_assert(offsetof(GlobalUniformData, ao_so_mode) == 852);
+    static_assert(sizeof(GPUGeometryInfo) == 24, "GPUGeometryInfo must be 24 bytes (std430)");
+    static_assert(offsetof(GPUGeometryInfo, vertex_buffer_address) == 0);
+    static_assert(offsetof(GPUGeometryInfo, index_buffer_address) == 8);
+    static_assert(offsetof(GPUGeometryInfo, material_buffer_offset) == 16);
     static_assert(sizeof(GPUDirectionalLight) == 32, "GPUDirectionalLight must be 32 bytes (std430)");
     static_assert(sizeof(GPUInstanceData) == 128, "GPUInstanceData must be 128 bytes (std430)");
     static_assert(offsetof(GPUInstanceData, normal_col0) == 64);
