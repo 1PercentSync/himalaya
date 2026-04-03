@@ -143,6 +143,26 @@ layout (set = 0, binding = 3) readonly buffer InstanceBuffer {
     GPUInstanceData instances[];
 };
 
+// ---- Set 0: RT-only bindings (guarded by HIMALAYA_RT) ----
+
+#ifdef HIMALAYA_RT
+
+/** Per-geometry RT info (std430, 24 bytes). Indexed by gl_InstanceCustomIndexEXT + gl_GeometryIndexEXT. */
+struct GeometryInfo {
+    uint64_t vertex_buffer_address;    // offset  0 — device address of vertex buffer
+    uint64_t index_buffer_address;     // offset  8 — device address of index buffer
+    uint     material_buffer_offset;   // offset 16 — index into MaterialBuffer SSBO
+    uint     _padding;                 // offset 20 — pad to 24 bytes
+};
+
+layout (set = 0, binding = 4) uniform accelerationStructureEXT tlas;
+
+layout (set = 0, binding = 5) readonly buffer GeometryInfoBuffer {
+    GeometryInfo geometry_infos[];
+};
+
+#endif // HIMALAYA_RT
+
 // ---- Set 1: Bindless arrays ----
 
 layout (set = 1, binding = 0) uniform sampler2D textures[];
