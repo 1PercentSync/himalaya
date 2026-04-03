@@ -1822,6 +1822,7 @@ public:
     /// 前提：mesh_instances 中同一 node 的 primitive 连续排列
     ///       （SceneLoader::build_mesh_instances() 保证）。
     /// materials 参数用于解析 Mesh::material_id → MaterialInstance::buffer_offset。
+    /// 重复调用时自动 destroy 旧资源再重建（同 MaterialSystem::upload_materials() 模式）。
     void build(rhi::Context& ctx, rhi::ResourceManager& rm,
                rhi::AccelerationStructureManager& as_mgr,
                std::span<const Mesh> meshes,
@@ -1837,7 +1838,8 @@ private:
     std::vector<rhi::BLASHandle> blas_handles_;
     rhi::TLASHandle tlas_handle_{};
     rhi::BufferHandle geometry_info_buffer_{};
-    rhi::AccelerationStructureManager* as_mgr_ = nullptr;
+    rhi::ResourceManager* resource_manager_ = nullptr;         ///< destroy() 时释放 geometry_info_buffer_
+    rhi::AccelerationStructureManager* as_mgr_ = nullptr;      ///< destroy() 时释放 BLAS/TLAS
 };
 
 }  // namespace himalaya::framework
