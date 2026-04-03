@@ -12,10 +12,9 @@ namespace himalaya::rhi {
         return (value + alignment - 1) & ~(alignment - 1);
     }
 
-    RTPipeline create_rt_pipeline(
-        VkDevice device, VmaAllocator allocator,
-        const RTPipelineDesc &desc,
-        const VkPhysicalDeviceRayTracingPipelinePropertiesKHR &rt_props) {
+    RTPipeline create_rt_pipeline(const Context &ctx, const RTPipelineDesc &desc) {
+        VkDevice device = ctx.device;
+        VmaAllocator allocator = ctx.allocator;
         // --- Shader stages ---
         // Order: raygen(0), miss(1), shadow_miss(2), closesthit(3), [anyhit(4)]
 
@@ -100,7 +99,7 @@ namespace himalaya::rhi {
         pipeline_info.layout = pipeline_layout;
 
         VkPipeline vk_pipeline = VK_NULL_HANDLE;
-        VK_CHECK(vkCreateRayTracingPipelinesKHR(device,
+        VK_CHECK(ctx.pfn_create_rt_pipelines(device,
             VK_NULL_HANDLE,
             VK_NULL_HANDLE,
             1,
@@ -110,9 +109,9 @@ namespace himalaya::rhi {
 
         // --- SBT construction ---
 
-        const uint32_t handle_size = rt_props.shaderGroupHandleSize;
-        const uint32_t handle_alignment = rt_props.shaderGroupHandleAlignment;
-        const uint32_t base_alignment = rt_props.shaderGroupBaseAlignment;
+        const uint32_t handle_size = ctx.rt_shader_group_handle_size;
+        const uint32_t handle_alignment = ctx.rt_shader_group_handle_alignment;
+        const uint32_t base_alignment = ctx.rt_shader_group_base_alignment;
         constexpr auto group_count = static_cast<uint32_t>(groups.size());
 
         // Each SBT entry is handle_size aligned up to handle_alignment
@@ -126,8 +125,8 @@ namespace himalaya::rhi {
 
         // Query all shader group handles
         std::vector<uint8_t> handles(handle_size * group_count);
-        VK_CHECK(vkGetRayTracingShaderGroupHandlesKHR(
-            device, vk_pipeline, 0, group_count,handles.size(), handles.data()));
+        VK_CHECK(ctx.pfn_get_rt_shader_group_handles(
+            device, vk_pipeline, 0, group_count, handles.size(), handles.data()));
 
         // Allocate SBT buffer (host-visible for direct write, needs device address)
         VkBufferCreateInfo sbt_buf_info{};

@@ -201,6 +201,7 @@ namespace himalaya::rhi {
     namespace {
         PFN_vkCmdBeginDebugUtilsLabelEXT pfn_begin_label = nullptr;
         PFN_vkCmdEndDebugUtilsLabelEXT pfn_end_label = nullptr;
+        PFN_vkCmdTraceRaysKHR pfn_trace_rays = nullptr;
     }
 
     // Loads extension function pointers via vkGetInstanceProcAddr.
@@ -235,15 +236,23 @@ namespace himalaya::rhi {
 #endif
     }
 
+    // Loads vkCmdTraceRaysKHR via vkGetDeviceProcAddr.
+    // vulkan-1.lib does not export VK_KHR_ray_tracing_pipeline command-level functions.
+    // ReSharper disable once CppParameterMayBeConst
+    void CommandBuffer::init_rt_functions(VkDevice device) {
+        pfn_trace_rays = reinterpret_cast<PFN_vkCmdTraceRaysKHR>(
+            vkGetDeviceProcAddr(device, "vkCmdTraceRaysKHR"));
+    }
+
     void CommandBuffer::trace_rays(const RTPipeline &rt_pipeline,
                                     const uint32_t width,
                                     const uint32_t height) const {
-        vkCmdTraceRaysKHR(cmd_,
-                          &rt_pipeline.raygen_region,
-                          &rt_pipeline.miss_region,
-                          &rt_pipeline.hit_region,
-                          &rt_pipeline.callable_region,
-                          width, height, 1);
+        pfn_trace_rays(cmd_,
+                       &rt_pipeline.raygen_region,
+                       &rt_pipeline.miss_region,
+                       &rt_pipeline.hit_region,
+                       &rt_pipeline.callable_region,
+                       width, height, 1);
     }
 
     void CommandBuffer::set_cull_mode(const VkCullModeFlags cull_mode) const {

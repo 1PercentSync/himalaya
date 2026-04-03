@@ -88,7 +88,7 @@ namespace himalaya::rhi {
             si.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR;
             si.pNext = nullptr;
 
-            vkGetAccelerationStructureBuildSizesKHR(
+            context_->pfn_get_as_build_sizes(
                 device,
                 VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR,
                 &bi,
@@ -124,7 +124,7 @@ namespace himalaya::rhi {
             as_ci.size = size_infos[i].accelerationStructureSize;
             as_ci.type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
 
-            VK_CHECK(vkCreateAccelerationStructureKHR(device, &as_ci, nullptr, &handles[i].as));
+            VK_CHECK(context_->pfn_create_as(device, &as_ci, nullptr, &handles[i].as));
 
             build_infos[i].dstAccelerationStructure = handles[i].as;
 
@@ -204,7 +204,7 @@ namespace himalaya::rhi {
             range_info_ptrs[i] = &all_range_infos[base];
         }
 
-        vkCmdBuildAccelerationStructuresKHR(
+        context_->pfn_cmd_build_as(
             context_->immediate_command_buffer,
             count,
             build_infos.data(),
@@ -284,7 +284,7 @@ namespace himalaya::rhi {
         VkAccelerationStructureBuildSizesInfoKHR size_info{};
         size_info.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR;
 
-        vkGetAccelerationStructureBuildSizesKHR(
+        context_->pfn_get_as_build_sizes(
             device,
             VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR,
             &build_info,
@@ -315,7 +315,7 @@ namespace himalaya::rhi {
         as_ci.size = size_info.accelerationStructureSize;
         as_ci.type = VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR;
 
-        VK_CHECK(vkCreateAccelerationStructureKHR(device, &as_ci, nullptr, &handle.as));
+        VK_CHECK(context_->pfn_create_as(device, &as_ci, nullptr, &handle.as));
 
         context_->set_debug_name(VK_OBJECT_TYPE_ACCELERATION_STRUCTURE_KHR,
                                  reinterpret_cast<uint64_t>(handle.as), "TLAS");
@@ -356,7 +356,7 @@ namespace himalaya::rhi {
         range.primitiveCount = instance_count;
         const auto *range_ptr = &range;
 
-        vkCmdBuildAccelerationStructuresKHR(context_->immediate_command_buffer, 1, &build_info, &range_ptr);
+        context_->pfn_cmd_build_as(context_->immediate_command_buffer, 1, &build_info, &range_ptr);
 
         // Register temporary buffers for cleanup at end_immediate()
         context_->push_staging_buffer(inst_buffer, inst_allocation);
@@ -373,7 +373,7 @@ namespace himalaya::rhi {
         assert(context_ && "AccelerationStructureManager not initialized");
 
         if (handle.as != VK_NULL_HANDLE) {
-            vkDestroyAccelerationStructureKHR(context_->device, handle.as, nullptr);
+            context_->pfn_destroy_as(context_->device, handle.as, nullptr);
             handle.as = VK_NULL_HANDLE;
         }
         if (handle.buffer != VK_NULL_HANDLE) {
@@ -387,7 +387,7 @@ namespace himalaya::rhi {
         assert(context_ && "AccelerationStructureManager not initialized");
 
         if (handle.as != VK_NULL_HANDLE) {
-            vkDestroyAccelerationStructureKHR(context_->device, handle.as, nullptr);
+            context_->pfn_destroy_as(context_->device, handle.as, nullptr);
             handle.as = VK_NULL_HANDLE;
         }
         if (handle.buffer != VK_NULL_HANDLE) {

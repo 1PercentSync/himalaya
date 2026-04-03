@@ -57,6 +57,24 @@ namespace himalaya::rhi {
 
         pfn_set_debug_name_ = reinterpret_cast<PFN_vkSetDebugUtilsObjectNameEXT>(
             vkGetInstanceProcAddr(instance, "vkSetDebugUtilsObjectNameEXT"));
+
+        // Load RT extension function pointers via vkGetDeviceProcAddr.
+        // vulkan-1.lib does not export KHR ray tracing / acceleration structure symbols.
+        if (rt_supported) {
+            pfn_create_as = reinterpret_cast<PFN_vkCreateAccelerationStructureKHR>(
+                vkGetDeviceProcAddr(device, "vkCreateAccelerationStructureKHR"));
+            pfn_destroy_as = reinterpret_cast<PFN_vkDestroyAccelerationStructureKHR>(
+                vkGetDeviceProcAddr(device, "vkDestroyAccelerationStructureKHR"));
+            pfn_get_as_build_sizes = reinterpret_cast<PFN_vkGetAccelerationStructureBuildSizesKHR>(
+                vkGetDeviceProcAddr(device, "vkGetAccelerationStructureBuildSizesKHR"));
+            pfn_cmd_build_as = reinterpret_cast<PFN_vkCmdBuildAccelerationStructuresKHR>(
+                vkGetDeviceProcAddr(device, "vkCmdBuildAccelerationStructuresKHR"));
+            pfn_create_rt_pipelines = reinterpret_cast<PFN_vkCreateRayTracingPipelinesKHR>(
+                vkGetDeviceProcAddr(device, "vkCreateRayTracingPipelinesKHR"));
+            pfn_get_rt_shader_group_handles = reinterpret_cast<PFN_vkGetRayTracingShaderGroupHandlesKHR>(
+                vkGetDeviceProcAddr(device, "vkGetRayTracingShaderGroupHandlesKHR"));
+            CommandBuffer::init_rt_functions(device);
+        }
     }
 
     void Context::destroy() {

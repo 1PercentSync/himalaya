@@ -163,6 +163,27 @@ namespace himalaya::rhi {
         /** @brief AS: required alignment for scratch buffer offsets in batched builds. */
         uint32_t rt_min_scratch_offset_alignment = 0;
 
+        // ---- RT extension function pointers (loaded via vkGetDeviceProcAddr) ----
+        // These are VK_NULL_HANDLE when rt_supported is false.
+
+        /** @brief vkCreateAccelerationStructureKHR function pointer. */
+        PFN_vkCreateAccelerationStructureKHR pfn_create_as = nullptr;
+
+        /** @brief vkDestroyAccelerationStructureKHR function pointer. */
+        PFN_vkDestroyAccelerationStructureKHR pfn_destroy_as = nullptr;
+
+        /** @brief vkGetAccelerationStructureBuildSizesKHR function pointer. */
+        PFN_vkGetAccelerationStructureBuildSizesKHR pfn_get_as_build_sizes = nullptr;
+
+        /** @brief vkCmdBuildAccelerationStructuresKHR function pointer. */
+        PFN_vkCmdBuildAccelerationStructuresKHR pfn_cmd_build_as = nullptr;
+
+        /** @brief vkCreateRayTracingPipelinesKHR function pointer. */
+        PFN_vkCreateRayTracingPipelinesKHR pfn_create_rt_pipelines = nullptr;
+
+        /** @brief vkGetRayTracingShaderGroupHandlesKHR function pointer. */
+        PFN_vkGetRayTracingShaderGroupHandlesKHR pfn_get_rt_shader_group_handles = nullptr;
+
         /** @brief Logical device. */
         VkDevice device = VK_NULL_HANDLE;
 

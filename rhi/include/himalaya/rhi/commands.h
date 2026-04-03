@@ -244,6 +244,16 @@ namespace himalaya::rhi {
         static void init_debug_functions(VkInstance instance);
 
         /**
+         * @brief Loads RT extension function pointers for trace_rays().
+         *
+         * Must be called once after device creation when RT is supported.
+         * vulkan-1.lib does not export vkCmdTraceRaysKHR.
+         *
+         * @param device Logical device with VK_KHR_ray_tracing_pipeline enabled.
+         */
+        static void init_rt_functions(VkDevice device);
+
+        /**
          * @brief Begins a named debug label region for GPU profiler grouping.
          *
          * No-op in release builds (VK_EXT_debug_utils not enabled).

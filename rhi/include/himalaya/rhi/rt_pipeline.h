@@ -11,6 +11,7 @@
 #include <vk_mem_alloc.h>
 
 namespace himalaya::rhi {
+    class Context;
 
     /**
      * @brief Description for creating a ray tracing pipeline.
@@ -98,15 +99,11 @@ namespace himalaya::rhi {
      * calls vkCreateRayTracingPipelinesKHR, queries shader group handles via
      * vkGetRayTracingShaderGroupHandlesKHR, and writes them into an aligned SBT buffer.
      *
-     * @param device    Logical device.
-     * @param allocator VMA allocator for SBT buffer allocation.
-     * @param desc      Pipeline configuration (shader modules, layouts, push constants).
-     * @param rt_props  RT pipeline properties (handle size, alignment requirements).
+     * @param ctx  Vulkan context providing device, allocator, RT properties, and
+     *             dynamically loaded RT function pointers.
+     * @param desc Pipeline configuration (shader modules, layouts, push constants).
      * @return Created pipeline with pre-computed SBT regions.
      */
-    [[nodiscard]] RTPipeline create_rt_pipeline(
-        VkDevice device, VmaAllocator allocator,
-        const RTPipelineDesc &desc,
-        const VkPhysicalDeviceRayTracingPipelinePropertiesKHR &rt_props);
+    [[nodiscard]] RTPipeline create_rt_pipeline(const Context &ctx, const RTPipelineDesc &desc);
 
 } // namespace himalaya::rhi
