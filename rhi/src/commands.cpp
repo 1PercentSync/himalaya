@@ -111,10 +111,11 @@ namespace himalaya::rhi {
                                 nullptr);
     }
 
-    void CommandBuffer::bind_compute_descriptor_sets(const VkPipelineLayout layout,
-                                                      const uint32_t first_set,
-                                                      const VkDescriptorSet *sets,
-                                                      const uint32_t count) const {
+    // ReSharper disable once CppParameterMayBeConst
+    void CommandBuffer::bind_compute_descriptor_sets(VkPipelineLayout layout,
+                                                     const uint32_t first_set,
+                                                     const VkDescriptorSet *sets,
+                                                     const uint32_t count) const {
         vkCmdBindDescriptorSets(cmd_,
                                 VK_PIPELINE_BIND_POINT_COMPUTE,
                                 layout,
@@ -148,7 +149,8 @@ namespace himalaya::rhi {
     }
 
     void CommandBuffer::push_storage_image(const ResourceManager &rm,
-                                           const VkPipelineLayout layout,
+                                           // ReSharper disable once CppParameterMayBeConst
+                                           VkPipelineLayout layout,
                                            const uint32_t set,
                                            const uint32_t binding,
                                            const ImageHandle image) const {
@@ -171,7 +173,8 @@ namespace himalaya::rhi {
     }
 
     void CommandBuffer::push_sampled_image(const ResourceManager &rm,
-                                           const VkPipelineLayout layout,
+                                           // ReSharper disable once CppParameterMayBeConst
+                                           VkPipelineLayout layout,
                                            const uint32_t set,
                                            const uint32_t binding,
                                            const ImageHandle image,
@@ -244,6 +247,37 @@ namespace himalaya::rhi {
     void CommandBuffer::init_rt_functions(VkDevice device) {
         pfn_trace_rays = reinterpret_cast<PFN_vkCmdTraceRaysKHR>(
             vkGetDeviceProcAddr(device, "vkCmdTraceRaysKHR"));
+    }
+
+    void CommandBuffer::bind_rt_pipeline(const RTPipeline &rt_pipeline) const {
+        vkCmdBindPipeline(cmd_, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, rt_pipeline.pipeline);
+    }
+
+    // ReSharper disable once CppParameterMayBeConst
+    void CommandBuffer::bind_rt_descriptor_sets(VkPipelineLayout layout,
+                                                const uint32_t first_set,
+                                                const VkDescriptorSet *sets,
+                                                const uint32_t count) const {
+        vkCmdBindDescriptorSets(cmd_,
+                                VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR,
+                                layout,
+                                first_set,
+                                count,
+                                sets,
+                                0,
+                                nullptr);
+    }
+
+    // ReSharper disable once CppParameterMayBeConst
+    void CommandBuffer::push_rt_descriptor_set(VkPipelineLayout layout,
+                                               const uint32_t set,
+                                               const std::span<const VkWriteDescriptorSet> writes) const {
+        vkCmdPushDescriptorSet(cmd_,
+                               VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR,
+                               layout,
+                               set,
+                               static_cast<uint32_t>(writes.size()),
+                               writes.data());
     }
 
     void CommandBuffer::trace_rays(const RTPipeline &rt_pipeline,

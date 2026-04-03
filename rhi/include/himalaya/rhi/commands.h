@@ -301,6 +301,35 @@ namespace himalaya::rhi {
         // --- Ray Tracing ---
 
         /**
+         * @brief Binds an RT pipeline for subsequent trace_rays calls.
+         * @param rt_pipeline RT pipeline to bind.
+         */
+        void bind_rt_pipeline(const RTPipeline &rt_pipeline) const;
+
+        /**
+         * @brief Binds descriptor sets to the RT pipeline.
+         * @param layout    Pipeline layout that the sets are compatible with.
+         * @param first_set Index of the first descriptor set to bind.
+         * @param sets      Pointer to an array of descriptor sets.
+         * @param count     Number of descriptor sets to bind.
+         */
+        void bind_rt_descriptor_sets(VkPipelineLayout layout, uint32_t first_set,
+                                     const VkDescriptorSet *sets, uint32_t count) const;
+
+        /**
+         * @brief Pushes descriptors to the RT pipeline without pre-allocated descriptor sets.
+         *
+         * Vulkan 1.4 core (promoted from VK_KHR_push_descriptor).
+         * Used for per-frame RT pass Set 3 (e.g. accumulation buffer).
+         *
+         * @param layout Pipeline layout compatible with the pushed descriptors.
+         * @param set    Descriptor set index to push to.
+         * @param writes Descriptor write operations.
+         */
+        void push_rt_descriptor_set(VkPipelineLayout layout, uint32_t set,
+                                    std::span<const VkWriteDescriptorSet> writes) const;
+
+        /**
          * @brief Records a ray tracing dispatch using pre-built SBT regions.
          * @param rt_pipeline RT pipeline containing the SBT region addresses.
          * @param width       Launch width (typically render target width).
