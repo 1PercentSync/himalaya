@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 4 第四小项：DescriptorManager Set 0 layout 条件扩展 binding 4/5 + pool 容量扩展
+Step 4 下一小项：DescriptorManager 新增 write_set0_tlas()
 
 ---
 

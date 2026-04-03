@@ -41,11 +41,11 @@
 - [x] BufferUsage 新增 ShaderDeviceAddress + ResourceManager 映射
 - [x] ResourceManager 新增 get_buffer_device_address()
 - [x] scene_data.h 新增 GPUGeometryInfo 结构体（std430 24B：vertex_buffer_address u64 + index_buffer_address u64 + material_buffer_offset u32 + _padding u32）+ static_assert 守卫
-- [ ] DescriptorManager::init() 从 context_->rt_supported 读取 RT 状态，Set 0 layout 条件扩展 binding 4/5（PARTIALLY_BOUND）+ descriptor pool 容量扩展（新增 AS + SSBO 描述符）
-- [ ] Set 0 bindings 0-2 stageFlags 条件追加 RT stages（RAYGEN | CLOSEST_HIT | MISS | ANY_HIT），binding 3 不变
+- [x] DescriptorManager::init() 从 context_->rt_supported 读取 RT 状态，Set 0 layout 条件扩展 binding 4/5（PARTIALLY_BOUND）+ descriptor pool 容量扩展（新增 AS + SSBO 描述符）
+- [x] Set 0 bindings 0-2 stageFlags 条件追加 RT stages（RAYGEN | CLOSEST_HIT | MISS | ANY_HIT），binding 3 不变
 - [x] get_global_set_layouts() 重命名为 get_graphics_set_layouts() + get_compute_set_layouts() 重命名为 get_dispatch_set_layouts()
 - [ ] DescriptorManager 新增 write_set0_tlas()
-- [ ] Set 1（bindless textures）layout binding stage flags 添加 `CLOSEST_HIT_BIT_KHR` + `ANY_HIT_BIT_KHR` + `MISS_BIT_KHR`（RT shader 需要采样纹理）
+- [x] Set 1（bindless textures）layout binding stage flags 添加 `CLOSEST_HIT_BIT_KHR` + `ANY_HIT_BIT_KHR` + `MISS_BIT_KHR`（RT shader 需要采样纹理）
 - [ ] Mesh 结构体新增 group_id（glTF source mesh index）+ material_id（primitive 固有材质）
 - [ ] CommandBuffer 新增 RT command wrappers：bind_rt_pipeline()、bind_rt_descriptor_sets()、push_rt_descriptor_set()（Step 7 ReferenceViewPass 录制需要）
 
