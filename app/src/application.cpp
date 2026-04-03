@@ -36,13 +36,15 @@ namespace himalaya::app {
     // ---- Init / Destroy ----
 
     void Application::init() {
-        spdlog::set_level(kDefaultLogLevel);
+        // Start at info so load_config() diagnostics are visible,
+        // then apply the persisted level (or fall back to default warn).
+        spdlog::set_level(spdlog::level::info);
 
         config_ = load_config();
 
-        if (!config_.log_level.empty()) {
-            spdlog::set_level(spdlog::level::from_str(config_.log_level));
-        }
+        spdlog::set_level(config_.log_level.empty()
+            ? kDefaultLogLevel
+            : spdlog::level::from_str(config_.log_level));
 
         glfwInit();
         glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
