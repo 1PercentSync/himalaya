@@ -22,7 +22,7 @@ Step 4: RHI/Framework 层 RT 基础设施（BufferUsage、Descriptor 扩展、GP
     ↓
 Step 5: Scene AS Builder + Renderer 集成（SceneLoader 变更 + AS 构建 + bindings.glsl）
     ↓
-Step 6a: pt_common.glsl + C++ 基础設施（工具函数库 + ShaderCompiler + blue noise + GlobalUBO）
+Step 6a: pt_common.glsl + C++ 基础设施（工具函数库 + ShaderCompiler + blue noise + GlobalUBO）
     ↓
 Step 6b: RT shader 文件（raygen/closesthit/miss/anyhit，消费 pt_common.glsl）
     ↓
@@ -231,7 +231,7 @@ PT 工具函数库 + ShaderCompiler RT 支持 + blue noise + GlobalUBO 扩展。
     - `GL_EXT_shader_explicit_arithmetic_types_int64`：GeometryInfo 中的 uint64_t
     - `GL_EXT_nonuniform_qualifier`：bindless 纹理索引（现有 forward.frag 已用）
   - Ray payload 结构定义：
-    - `PrimaryPayload`（location 0）：`vec3 color`（本次 bounce 辐射度）、`vec3 next_origin`（下一条光线起点）、`vec3 next_direction`（下一条光线方向）、`vec3 throughput_update`（路径吞吐量乘数，含 Russian Roulette 补偿）、`float hit_distance`（命中距离，miss 时 -1 标记终止）
+    - `PrimaryPayload`（location 0，56B）：`vec3 color`（本次 bounce 辐射度）、`vec3 next_origin`（下一条光线起点）、`vec3 next_direction`（下一条光线方向）、`vec3 throughput_update`（路径吞吐量乘数，含 Russian Roulette 补偿）、`float hit_distance`（命中距离，miss 时 -1 标记终止）、`uint bounce`（当前 bounce 索引，raygen 设置，OIDN 辅助通道 bounce 0 判断用）
     - `ShadowPayload`（location 1）：`uint visible`（shadow_miss 设为 1，初始值 0 = 遮挡）
   - Vertex / Index buffer_reference layout 定义（匹配 Vertex 结构体：position vec3、normal vec3、uv0 vec2、tangent vec4、uv1 vec2，stride = 56 bytes）
   - Sobol 低差异序列生成（128 维 32-bit 方向数表嵌入 shader 常量数组，16 KB；超出 128 维时 fallback 到 PCG hash）+ Cranley-Patterson rotation（从 blue noise 纹理采样 per-pixel 偏移）
@@ -507,13 +507,14 @@ RT 纹理 mip 选择。架构决策见 `milestone-1/m1-rt-decisions.md`「Textur
 Reference View Pass (RT Pipeline)
   输入: TLAS (Set 0 binding 4), Geometry Info (Set 0 binding 5),
         Env Alias Table (Set 0 binding 6),
+        Emissive Triangles (Set 0 binding 7), Emissive Alias Table (Set 0 binding 8),
         GlobalUBO, LightBuffer, MaterialBuffer (Set 0 binding 0-2),
         Bindless textures/cubemaps (Set 1),
-        Accumulation Buffer (Set 3 push descriptor, storage image)
-  输出: Accumulation Buffer (running average 累积)
+        Accumulation Buffer + Aux Albedo + Aux Normal (Set 3 push descriptor binding 0/1/2)
+  输出: Accumulation Buffer (running average 累积) + Aux Albedo/Normal (bounce 0 写入)
     ↓
 [可选] OIDN Denoise (CPU 中转)
-  输入: Accumulation Buffer (readback)
+  输入: Accumulation Buffer + Aux Albedo + Aux Normal (readback)
   输出: Denoised Buffer (upload)
     ↓
 Tonemapping Pass
