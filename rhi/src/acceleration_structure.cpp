@@ -369,6 +369,34 @@ namespace himalaya::rhi {
         return handle;
     }
 
+    void AccelerationStructureManager::destroy_blas(BLASHandle &handle) {
+        assert(context_ && "AccelerationStructureManager not initialized");
+
+        if (handle.as != VK_NULL_HANDLE) {
+            vkDestroyAccelerationStructureKHR(context_->device, handle.as, nullptr);
+            handle.as = VK_NULL_HANDLE;
+        }
+        if (handle.buffer != VK_NULL_HANDLE) {
+            vmaDestroyBuffer(context_->allocator, handle.buffer, handle.allocation);
+            handle.buffer = VK_NULL_HANDLE;
+            handle.allocation = VK_NULL_HANDLE;
+        }
+    }
+
+    void AccelerationStructureManager::destroy_tlas(TLASHandle &handle) {
+        assert(context_ && "AccelerationStructureManager not initialized");
+
+        if (handle.as != VK_NULL_HANDLE) {
+            vkDestroyAccelerationStructureKHR(context_->device, handle.as, nullptr);
+            handle.as = VK_NULL_HANDLE;
+        }
+        if (handle.buffer != VK_NULL_HANDLE) {
+            vmaDestroyBuffer(context_->allocator, handle.buffer, handle.allocation);
+            handle.buffer = VK_NULL_HANDLE;
+            handle.allocation = VK_NULL_HANDLE;
+        }
+    }
+
     void AccelerationStructureManager::destroy() {
         context_ = nullptr;
     }
