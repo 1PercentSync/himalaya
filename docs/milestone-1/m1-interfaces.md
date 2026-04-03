@@ -319,7 +319,7 @@ public:
     VkDescriptorSet get_set2(uint32_t frame_index) const;
 
     // 返回三个 Set 的 layout（Set 0 + Set 1 + Set 2），用于 graphics pipeline 创建
-    std::array<VkDescriptorSetLayout, 3> get_global_set_layouts() const;
+    std::array<VkDescriptorSetLayout, 3> get_graphics_set_layouts() const;
 };
 ```
 
@@ -1318,10 +1318,10 @@ public:
     void update_render_target(uint32_t frame_index, uint32_t binding,
                               ImageHandle image, SamplerHandle sampler) const;
 
-    // 返回 per-frame compute pipeline 的 descriptor set layouts
+    // 返回 compute / RT pipeline 的 descriptor set layouts
     // = {set0_layout, set1_layout, set2_layout, set3_push_layout}
     // 封装 Set 0-2 全局 layout + 调用方提供的 Set 3 push descriptor layout
-    std::vector<VkDescriptorSetLayout> get_compute_set_layouts(
+    std::vector<VkDescriptorSetLayout> get_dispatch_set_layouts(
         VkDescriptorSetLayout set3_push_layout) const;
 
     // ... 其余接口不变 ...
@@ -1366,7 +1366,7 @@ Pipeline create_compute_pipeline(VkDevice device, const ComputePipelineDesc& des
 
 两种使用模式：
 - **IBL init compute**（阶段三）：完全自定义 `descriptor_set_layouts`（push descriptor Set 0），不使用全局 Set
-- **Per-frame compute**（阶段五起）：通过 `dm.get_compute_set_layouts(set3_push)` 获取 `{Set 0, Set 1, Set 2, Set 3(push)}`，Set 0-2 与 graphics 共享，Set 3 per-pass 自定义
+- **Per-frame compute / RT**（阶段五起）：通过 `dm.get_dispatch_set_layouts(set3_push)` 获取 `{Set 0, Set 1, Set 2, Set 3(push)}`，Set 0-2 与 graphics 共享，Set 3 per-pass 自定义
 
 #### AOConfig（阶段五引入）
 
@@ -1939,11 +1939,7 @@ public:
     /// 写入 Set 0 binding 4（TLAS descriptor）。仅 rt_supported 时有效。
     void write_set0_tlas(const rhi::TLASHandle& tlas);
 
-    /// 返回 RT pipeline 的 descriptor set layouts。
-    /// = {set0_layout, set1_layout, set2_layout, set3_push_layout}
-    /// set3_push_layout 由调用方提供。
-    std::vector<VkDescriptorSetLayout> get_rt_set_layouts(
-        VkDescriptorSetLayout set3_push_layout) const;
+    // RT pipeline 复用 get_dispatch_set_layouts(set3_push_layout)，不再需要独立方法。
 };
 ```
 
