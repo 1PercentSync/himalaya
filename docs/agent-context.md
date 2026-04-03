@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 5 第三小项：SceneLoader::load_meshes() 填充 group_id 和 material_id
+Step 5 第四小项：新增 scene_as_builder.h：SceneASBuilder 类
 
 ---
 
