@@ -54,6 +54,9 @@ namespace himalaya::rhi {
         create_allocator();
         create_frame_data();
         create_immediate_pool();
+
+        pfn_set_debug_name_ = reinterpret_cast<PFN_vkSetDebugUtilsObjectNameEXT>(
+            vkGetInstanceProcAddr(instance, "vkSetDebugUtilsObjectNameEXT"));
     }
 
     void Context::destroy() {
@@ -609,6 +612,18 @@ namespace himalaya::rhi {
         // ReSharper restore CppParameterMayBeConst
         assert(immediate_active_ && "push_staging_buffer requires an active immediate scope");
         staging_buffers_.push_back({buffer, allocation});
+    }
+
+    void Context::set_debug_name(const VkObjectType type, const uint64_t handle, const char *name) const {
+        if (!pfn_set_debug_name_) {
+            return;
+        }
+        VkDebugUtilsObjectNameInfoEXT info{};
+        info.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT;
+        info.objectType = type;
+        info.objectHandle = handle;
+        info.pObjectName = name;
+        pfn_set_debug_name_(device, &info);
     }
 
     // Sums usage and budget across all device-local heaps.

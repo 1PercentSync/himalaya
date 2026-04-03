@@ -471,21 +471,6 @@ namespace himalaya::rhi {
         /** @brief Vulkan context (device, allocator, queues). */
         Context *context_ = nullptr;
 
-        /** @brief vkSetDebugUtilsObjectNameEXT function pointer (null if extension unavailable). */
-        PFN_vkSetDebugUtilsObjectNameEXT pfn_set_debug_name_ = nullptr;
-
-        /**
-         * @brief Assigns a debug name to a Vulkan object via VK_EXT_debug_utils.
-         *
-         * No-op if the extension function pointer was not loaded (release builds
-         * where VK_EXT_debug_utils is not enabled).
-         *
-         * @param type   Vulkan object type enum.
-         * @param handle Raw Vulkan handle cast to uint64_t.
-         * @param name   Null-terminated name string.
-         */
-        void set_debug_name(VkObjectType type, uint64_t handle, const char *name) const;
-
         // ---- Pool slot allocation ----
 
         /**

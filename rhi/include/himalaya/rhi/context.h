@@ -235,6 +235,20 @@ namespace himalaya::rhi {
          */
         [[nodiscard]] bool is_immediate_active() const { return immediate_active_; }
 
+        // --- Debug naming ---
+
+        /**
+         * @brief Assigns a debug name to a Vulkan object via VK_EXT_debug_utils.
+         *
+         * Names are visible in GPU debuggers (RenderDoc, Nsight) and validation
+         * layer output. No-op when the debug_utils extension is not available.
+         *
+         * @param type   Vulkan object type enum.
+         * @param handle Raw Vulkan handle cast to uint64_t.
+         * @param name   Null-terminated name string.
+         */
+        void set_debug_name(VkObjectType type, uint64_t handle, const char *name) const;
+
         /**
          * @brief Registers a staging buffer for deferred cleanup at end_immediate().
          *
@@ -267,6 +281,9 @@ namespace himalaya::rhi {
 
         /** @brief Creates the immediate command pool for one-shot blocking GPU operations. */
         void create_immediate_pool();
+
+        /** @brief vkSetDebugUtilsObjectNameEXT function pointer (null if unavailable). */
+        PFN_vkSetDebugUtilsObjectNameEXT pfn_set_debug_name_ = nullptr;
 
         /** @brief Whether an immediate command scope is currently active. */
         bool immediate_active_ = false;

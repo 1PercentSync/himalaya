@@ -9,19 +9,7 @@
 namespace himalaya::rhi {
     void ResourceManager::init(Context *context) {
         context_ = context;
-        pfn_set_debug_name_ = reinterpret_cast<PFN_vkSetDebugUtilsObjectNameEXT>(
-            vkGetInstanceProcAddr(context_->instance, "vkSetDebugUtilsObjectNameEXT"));
         spdlog::info("Resource manager initialized");
-    }
-
-    void ResourceManager::set_debug_name(const VkObjectType type, const uint64_t handle, const char *name) const {
-        if (!pfn_set_debug_name_) return;
-        VkDebugUtilsObjectNameInfoEXT info{};
-        info.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT;
-        info.objectType = type;
-        info.objectHandle = handle;
-        info.pObjectName = name;
-        pfn_set_debug_name_(context_->device, &info);
     }
 
     void ResourceManager::destroy() {
@@ -221,7 +209,7 @@ namespace himalaya::rhi {
             &slot.allocation_info));
         slot.desc = desc;
 
-        set_debug_name(VK_OBJECT_TYPE_BUFFER, reinterpret_cast<uint64_t>(slot.buffer), debug_name);
+        context_->set_debug_name(VK_OBJECT_TYPE_BUFFER, reinterpret_cast<uint64_t>(slot.buffer), debug_name);
 
         return {index, slot.generation};
     }
@@ -315,9 +303,9 @@ namespace himalaya::rhi {
 
         VK_CHECK(vkCreateImageView(context_->device, &view_info, nullptr, &slot.view));
 
-        set_debug_name(VK_OBJECT_TYPE_IMAGE, reinterpret_cast<uint64_t>(slot.image), debug_name);
+        context_->set_debug_name(VK_OBJECT_TYPE_IMAGE, reinterpret_cast<uint64_t>(slot.image), debug_name);
         const std::string view_name = std::string(debug_name) + " [View]";
-        set_debug_name(VK_OBJECT_TYPE_IMAGE_VIEW, reinterpret_cast<uint64_t>(slot.view), view_name.c_str());
+        context_->set_debug_name(VK_OBJECT_TYPE_IMAGE_VIEW, reinterpret_cast<uint64_t>(slot.view), view_name.c_str());
 
         return {index, slot.generation};
     }
@@ -412,7 +400,7 @@ namespace himalaya::rhi {
         VK_CHECK(vkCreateSampler(context_->device, &sampler_info, nullptr, &slot.sampler));
         slot.desc = desc;
 
-        set_debug_name(VK_OBJECT_TYPE_SAMPLER, reinterpret_cast<uint64_t>(slot.sampler), debug_name);
+        context_->set_debug_name(VK_OBJECT_TYPE_SAMPLER, reinterpret_cast<uint64_t>(slot.sampler), debug_name);
 
         return {index, slot.generation};
     }
@@ -466,7 +454,7 @@ namespace himalaya::rhi {
         VkImageView view = VK_NULL_HANDLE;
         VK_CHECK(vkCreateImageView(context_->device, &view_info, nullptr, &view));
 
-        set_debug_name(VK_OBJECT_TYPE_IMAGE_VIEW, reinterpret_cast<uint64_t>(view), debug_name);
+        context_->set_debug_name(VK_OBJECT_TYPE_IMAGE_VIEW, reinterpret_cast<uint64_t>(view), debug_name);
 
         return view;
     }
