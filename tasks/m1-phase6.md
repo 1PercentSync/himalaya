@@ -28,11 +28,11 @@
 
 ## Step 3：RT Pipeline + SBT + trace_rays
 
-- [ ] 新增 rt_pipeline.h：RTPipelineDesc（含可选 anyhit module）、RTPipeline 类型
-- [ ] create_rt_pipeline()：shader group 创建（hit group = closesthit + anyhit）+ vkCreateRayTracingPipelinesKHR
-- [ ] SBT 构建（vkGetRayTracingShaderGroupHandlesKHR → 对齐写入 SBT buffer，1 hit group entry 含 chit + ahit handle）
-- [ ] RTPipeline::destroy()
-- [ ] CommandBuffer 新增 trace_rays(const RTPipeline&, width, height)
+- [x] 新增 rt_pipeline.h：RTPipelineDesc（含可选 anyhit module）、RTPipeline 类型
+- [x] create_rt_pipeline()：shader group 创建（hit group = closesthit + anyhit）+ vkCreateRayTracingPipelinesKHR
+- [x] SBT 构建（vkGetRayTracingShaderGroupHandlesKHR → 对齐写入 SBT buffer，1 hit group entry 含 chit + ahit handle）
+- [x] RTPipeline::destroy()
+- [x] CommandBuffer 新增 trace_rays(const RTPipeline&, width, height)
 
 ## Step 4：RHI/Framework RT 基础设施
 

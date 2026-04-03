@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段六 — RT 基础设施 + PT 参考视图（规划完成，待实现）
-- **进度**：Step 2 完成，Step 3 待开始
+- **进度**：Step 3 完成，Step 4 待开始
 
 ### 下一个任务
 
-Step 3 第一小项：新增 rt_pipeline.h — RTPipelineDesc（含可选 anyhit module）、RTPipeline 类型
+Step 4 第一小项：BufferUsage 新增 ShaderDeviceAddress + ResourceManager 映射
 
 ---
 
