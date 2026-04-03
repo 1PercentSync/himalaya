@@ -62,6 +62,23 @@ namespace himalaya::framework {
 
         /** @brief Number of indices in the index buffer. */
         uint32_t index_count = 0;
+
+        /**
+         * @brief glTF source mesh index for BLAS grouping.
+         *
+         * All primitives of the same glTF mesh share the same group_id
+         * and are merged into one multi-geometry BLAS.
+         */
+        uint32_t group_id = 0;
+
+        /**
+         * @brief Material index into material_instances array.
+         *
+         * Identifies the primitive's material for alpha mode queries
+         * (opaque vs alpha-test) during AS construction, and for
+         * populating GPUGeometryInfo::material_buffer_offset.
+         */
+        uint32_t material_id = 0;
     };
 
     /**
