@@ -309,9 +309,18 @@ Blend 物体使用概率性命中判定：以概率 `alpha` 接受命中（close
 
 Primary ray 和 shadow ray 使用同一个 any-hit shader，无需区分射线类型。半透明窗户自然按 alpha 比例透光。Closest-hit 中不需要对 Blend 物体做特殊处理——stochastic 决策已在 any-hit 中完成，命中被接受时表面当作完整表面正常着色，不乘 alpha（概率已隐含权重）。
 
-**M1 局限性**：Stochastic alpha 只处理薄表面 alpha 混合（`AlphaMode::Blend`），不处理体积介质的折射/透射/衰减。玻璃等需要 IOR、transmission 参数的物体在 M1 中表现为按 alpha 概率穿透的薄膜，无折射效果。
+**M1 局限性**：Stochastic alpha 是 **alpha coverage** 近似——把 `AlphaMode::Blend` 的 alpha 值当作薄表面覆盖率，概率性地决定射线是否"穿过空隙"。这与真实的光学透射（折射、体积衰减）是完全不同的物理概念。M1 中玻璃等物体表现为按 alpha 概率穿透的薄膜，无折射效果。
 
-**M2 演进**：解析 `KHR_materials_transmission` + `KHR_materials_volume` 扩展，closest-hit 中对有 transmission 参数的材质实现 Snell 折射 + Fresnel + Beer 衰减。Stochastic alpha 与折射正交共存——stochastic 在 any-hit 层决定"射线是否穿过"，折射在 closest-hit 层决定"穿过后的方向和衰减"。无 transmission 参数的 Blend 物体仍走 stochastic alpha。
+**M2 演进**：引入 **physical transmission** 路径——解析 `KHR_materials_transmission` + `KHR_materials_volume` 扩展，closest-hit 中对有 transmission 参数的材质实现 Snell 折射 + Fresnel + Beer 衰减。两者正交共存但语义完全不同：
+
+| | Alpha coverage（M1） | Physical transmission（M2） |
+|---|---|---|
+| 控制层 | any-hit shader | closest-hit shader |
+| 语义 | 表面覆盖率（有多少射线"穿过空隙"） | 光学透射（射线穿过介质时的方向改变和能量衰减） |
+| 材质参数 | `alpha_mode` + `base_color.a` | `transmission_factor` + `IOR` + `attenuation_color/distance` |
+| 适用场景 | 纱帘、铁丝网、树叶 | 玻璃、水面、宝石 |
+
+有 transmission 参数的材质走 physical transmission 路径；无 transmission 参数的 `AlphaMode::Blend` 物体仍走 stochastic alpha coverage。
 
 ### Any-hit 随机数生成
 
