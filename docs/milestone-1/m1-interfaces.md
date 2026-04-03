@@ -2001,9 +2001,10 @@ public:
     /// 创建 OIDN device（GPU 优先 fallback CPU）+ RT filter + 持久 staging buffers。
     void init(rhi::Context& ctx, rhi::ResourceManager& rm);
 
-    /// Vulkan readback → OIDN filter execute → Vulkan upload。
+    /// Vulkan readback（beauty + albedo + normal）→ OIDN filter execute（辅助通道配置）→ Vulkan upload。
     /// 阻塞操作（GPU denoise + CPU readback），对参考视图可接受。
-    void denoise(rhi::ImageHandle accumulation, rhi::ImageHandle output);
+    void denoise(rhi::ImageHandle accumulation, rhi::ImageHandle albedo,
+                 rhi::ImageHandle normal, rhi::ImageHandle output);
 
     void on_resize();
     void destroy();
@@ -2024,6 +2025,12 @@ public:
 
     /// 写入 Set 0 binding 6（Env Alias Table SSBO）。仅 rt_supported 时有效。
     void write_set0_env_alias_table(rhi::BufferHandle buffer, uint64_t size);
+
+    /// 写入 Set 0 binding 7（EmissiveTriangleBuffer SSBO）。仅 rt_supported 时有效。Step 12 新增。
+    void write_set0_emissive_triangles(rhi::BufferHandle buffer, uint64_t size);
+
+    /// 写入 Set 0 binding 8（EmissiveAliasTable SSBO）。仅 rt_supported 时有效。Step 12 新增。
+    void write_set0_emissive_alias_table(rhi::BufferHandle buffer, uint64_t size);
 
     // RT pipeline 复用 get_dispatch_set_layouts(set3_push_layout)，不再需要独立方法。
 };
@@ -2081,24 +2088,30 @@ layout(set = 0, binding = 6) readonly buffer EnvAliasTable {
 
 ```glsl
 layout(push_constant) uniform PTPushConstants {
-    uint max_bounces;       // offset  0
-    uint sample_count;      // offset  4
-    uint frame_seed;        // offset  8
-    uint blue_noise_index;  // offset 12 — bindless textures[] index
-};  // total: 16 bytes
+    uint  max_bounces;       // offset  0
+    uint  sample_count;      // offset  4
+    uint  frame_seed;        // offset  8
+    uint  blue_noise_index;  // offset 12 — bindless textures[] index
+    float max_clamp;         // offset 16 — firefly clamping threshold (0 = disabled)
+    // Step 12: uint emissive_light_count  // offset 20 (0 = skip NEE emissive)
+    // Step 13: float lod_bias             // offset 24 (Ray Cones LOD offset, default 0.0)
+};  // Step 6: 20 bytes, Step 12: 24 bytes, Step 13: 28 bytes
 ```
 
 #### PrimaryPayload 布局（阶段六）
 
 ```glsl
-struct PrimaryPayload {             // location 0, 56 bytes
+struct PrimaryPayload {             // location 0
     vec3  color;                    // 本次 bounce 辐射度
     vec3  next_origin;              // 下一条光线起点
     vec3  next_direction;           // 下一条光线方向
     vec3  throughput_update;        // 路径吞吐量乘数（含 Russian Roulette 补偿）
     float hit_distance;             // 命中距离（miss 时 -1 标记终止）
-    float env_mis_weight;           // BRDF 采样方向的 env MIS 权重（closesthit 预计算）
-};
+    uint  bounce;                   // 当前 bounce 索引（raygen 设置，OIDN aux bounce 0 判断用）
+    // Step 11: float env_mis_weight     // BRDF 采样方向的 env MIS 权重
+    // Step 12: float last_brdf_pdf      // 上一个 bounce 的 BRDF PDF（emissive MIS 用）
+    // Step 13: float cone_spread        // Ray Cone 扩展角
+};  // Step 6: 56B, Step 11: 60B, Step 12: 64B, Step 13: 68B
 ```
 
 #### DebugUIContext / DebugUIActions PT 扩展（阶段六）
@@ -2113,6 +2126,7 @@ struct DebugUIContext {
     uint32_t pt_sample_count;                   ///< 当前累积采样数（只读）
     uint32_t& pt_target_samples;                ///< 目标采样数（读写，0 = 无限）
     uint32_t& pt_max_bounces;                   ///< 最大 bounce 数（读写，默认 8，范围 1-32）
+    float& pt_max_clamp;                        ///< Firefly clamping 阈值（读写，默认 10.0，0 = 关闭）
     float pt_elapsed_time;                      ///< 累积耗时秒（只读）
     bool& denoise_enabled;                      ///< 降噪功能开关（读写）
     bool& auto_denoise;                         ///< 自动降噪开关（读写）

@@ -166,7 +166,7 @@
 
 - [ ] pt_common.glsl 新增 Ray Cone 工具函数（init_cone、propagate_cone、compute_lod）
 - [ ] pt_common.glsl 新增 `compute_texel_density()`：从三角形顶点位置 + UV 运行时算 world/UV 面积比
-- [ ] reference_view.rgen：初始化 cone spread（FOV / screen_height）+ 循环内设 `payload.cone_spread`
+- [ ] reference_view.rgen：初始化 cone spread（`atan(2 × tan(fov/2) / screen_height)`）+ 循环内设 `payload.cone_spread`
 - [ ] closesthit.rchit：propagate cone + compute LOD + 所有材质纹理 `texture()` → `textureLod(tex, uv, lod + lod_bias)`（~5-6 处）
 - [ ] anyhit.rahit：alpha 纹理 `texture()` → `textureLod()`（~1 处）
 - [ ] PrimaryPayload 新增 `float cone_spread` 字段（64B → 68B）

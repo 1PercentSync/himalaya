@@ -362,7 +362,7 @@ PT 路径的 RG 编排极简：仅 Reference View Pass + Tonemapping Pass + ImGu
 
 #### 设计要点
 
-Staging buffer 大小 = width × height × 16 bytes（RGBA32F），持久分配避免每次降噪重建。OIDN "RT" filter 是通用路径追踪降噪器。辅助通道（albedo、normal）可选——先不传（仅 beauty input），后续可添加以提升降噪质量。
+Staging buffer 大小 = width × height × 16 bytes（RGBA32F），持久分配避免每次降噪重建（beauty + albedo + normal 各一组）。OIDN "RT" filter 配置 albedo + normal 辅助通道（Step 6 closesthit bounce 0 输出，Step 7 管理辅助 image），显著提升低采样数降噪质量。
 
 OIDN 降噪是阻塞操作（GPU denoise + CPU readback），会造成一帧的卡顿。对参考视图可接受（非每帧执行）。
 
@@ -420,7 +420,7 @@ IBL alias table 构建 + closesthit NEE 环境光 + MIS 权重。架构决策见
 - pt_common.glsl 新增 `mis_power_heuristic(float pdf_a, float pdf_b)` 函数
 - closesthit.rchit 新增 NEE 环境光步骤：alias table 采样 → shadow ray → MIS 加权贡献
 - closesthit.rchit BRDF 采样后：预计算 `env_mis_weight`，写入 PrimaryPayload
-- PrimaryPayload 新增 `float env_mis_weight` 字段（52B → 56B）
+- PrimaryPayload 新增 `float env_mis_weight` 字段（56B → 60B）
 - reference_view.rgen：miss 返回的 env color 乘以 payload 中的 `env_mis_weight`
 - miss.rmiss：不变（仍返回 raw env color，MIS 权重由 raygen 应用）
 - IBL fallback cubemap 时跳过 alias table 构建（无 HDR 环境，env importance sampling 退化为纯 BRDF miss）
