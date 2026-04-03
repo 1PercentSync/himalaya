@@ -58,9 +58,9 @@
 - [x] SceneASBuilder::build()：按 group_id 分组构建 multi-geometry BLAS（根据材质 alpha_mode 设置 BLASGeometry::opaque）+ 按 (group_id, transform) 去重构建 TLAS + Geometry Info SSBO 构建（按 group 连续排列，customIndex = group base offset）。遍历 Mesh 时跳过 vertex_count == 0 或 index_count < 3 的 primitive（glTF 不保证所有 primitive 为有效三角形）
 - [x] Renderer：场景加载后调用 SceneASBuilder::build() + 写入 Set 0 binding 4/5
 - [x] bindings.glsl 新增 GeometryInfo struct（含 uint64_t，需 GL_EXT_shader_explicit_arithmetic_types_int64）+ Set 0 binding 4（accelerationStructureEXT）+ binding 5（GeometryInfoBuffer）
-- [ ] AppConfig 新增 `log_level` 字段（`std::string`，默认空）+ config.cpp 序列化/反序列化（JSON key `"log_level"`，字符串格式如 `"warn"`、`"info"`；空/缺失 = 默认 `warn`）
-- [ ] Application::init() 加载 config 后应用 log_level（非空时用 `spdlog::level::from_str()` 解析，空时保持默认 `warn`），替代硬编码 `kLogLevel` 作为唯一初始化来源
-- [ ] DebugUI log level 变更通知 Application：DebugUIActions 新增 `log_level_changed` 标志 + `new_log_level`，Application::update() 检测到变更后更新 `config_.log_level` 并调用 `save_config()`
+- [x] AppConfig 新增 `log_level` 字段（`std::string`，默认空）+ config.cpp 序列化/反序列化（JSON key `"log_level"`，字符串格式如 `"warn"`、`"info"`；空/缺失 = 默认 `warn`）
+- [x] Application::init() 加载 config 后应用 log_level（非空时用 `spdlog::level::from_str()` 解析，空时保持默认 `warn`），替代硬编码 `kLogLevel` 作为唯一初始化来源
+- [x] DebugUI log level 变更通知 Application：DebugUIActions 新增 `log_level_changed` 标志 + `new_log_level`，Application::update() 检测到变更后更新 `config_.log_level` 并调用 `save_config()`
 
 ## Step 6：PT 核心 shader
 

@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段六 — RT 基础设施 + PT 参考视图（规划完成，待实现）
-- **进度**：Step 5 进行中（RT 集成已完成，log level 持久化待实现）
+- **进度**：Step 5 已完成，Step 6 待开始
 
 ### 下一个任务
 
-Step 5 log level 持久化第一小项：AppConfig 新增 `log_level` 字段 + config.cpp 序列化/反序列化
+Step 6 第一小项：新增 shaders/rt/pt_common.glsl — GLSL 扩展声明
 
 ---
 
