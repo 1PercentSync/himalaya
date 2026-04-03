@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 4 第一小项：BufferUsage 新增 ShaderDeviceAddress + ResourceManager 映射
+Step 4 第四小项：DescriptorManager Set 0 layout 条件扩展 binding 4/5 + pool 容量扩展
 
 ---
 
