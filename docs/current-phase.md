@@ -141,10 +141,11 @@ RT 所需的底层类型扩展和 Descriptor 扩展，为 Step 5 的 SceneASBuil
   - `uint32_t _padding`（offset 20）
 - `DescriptorManager` 扩展：
   - `init()` 内部从 `context_->rt_supported` 读取 RT 状态（不加额外参数）
-  - `rt_supported = true` 时 Set 0 layout 新增 binding 4（`VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR`）+ binding 5（SSBO，GeometryInfoBuffer），descriptor pool 容量相应扩展（新增 AS + SSBO 描述符，per frame in flight）
+  - `rt_supported = true` 时 Set 0 layout 新增 binding 4（`VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR`）+ binding 5（SSBO，GeometryInfoBuffer），descriptor pool 容量相应扩展（新增 AS + SSBO 描述符，per frame in flight）。Binding 4/5 使用 `PARTIALLY_BOUND` flag（Step 5 写入前无需有效 descriptor）
+  - `rt_supported = true` 时 Set 0 bindings 0-2 的 stageFlags 追加 RT shader stages（`RAYGEN_BIT | CLOSEST_HIT_BIT | MISS_BIT | ANY_HIT_BIT`），binding 3（InstanceBuffer）不变（RT shader 不访问）
   - 新增 `write_set0_tlas(TLASHandle)` + `write_set0_buffer` 复用写 binding 5
   - `get_compute_set_layouts()` 重命名为 `get_dispatch_set_layouts()`（compute 和 RT pipeline 共用）
-  - Set 1（bindless textures）layout binding stage flags 添加 `VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR | VK_SHADER_STAGE_MISS_BIT_KHR`（RT shader 需要采样 bindless 纹理数组）
+  - Set 1（bindless textures）layout binding stage flags 添加 `VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR | VK_SHADER_STAGE_ANY_HIT_BIT_KHR | VK_SHADER_STAGE_MISS_BIT_KHR`（RT shader 需要采样 bindless 纹理数组）
 - `Mesh` 结构体新增 `group_id`（glTF source mesh index）+ `material_id`（primitive 固有材质，material_instances 索引）
 
 **验证**：编译通过，新增类型和 API 可用但无调用方
@@ -482,5 +483,8 @@ shaders/
 | Sobol + Blue Noise | Sobol 低差异序列（预计算方向数表嵌入 shader 常量）+ Cranley-Patterson rotation（per-pixel blue noise 偏移）。Blue noise 128×128 R8Unorm 单通道，像素数据从公开数据集嵌入代码，不同维度通过空间偏移派生 |
 | Ray Payload | 模式 A：closesthit 完成全部着色计算。PrimaryPayload(loc 0): color + next_origin + next_direction + throughput_update + hit_distance（52B）。ShadowPayload(loc 1): visible uint（4B） |
 | GeometryInfo | GPUGeometryInfo std430 24B：vertex_buffer_address(u64) + index_buffer_address(u64) + material_buffer_offset(u32) + _padding(u32)。Shader 端 GLSL 同布局 |
+| Set 0 RT stage flags | `rt_supported = true` 时 bindings 0-2 追加 `RAYGEN_BIT \| CLOSEST_HIT_BIT \| MISS_BIT \| ANY_HIT_BIT`（RT shader 访问 GlobalUBO/LightBuffer/MaterialBuffer）。Binding 3（InstanceBuffer）不追加（RT shader 不访问）。Binding 4/5 新增时直接带 RT stages |
+| Set 0 binding 4/5 PARTIALLY_BOUND | 新增的 AS（binding 4）和 SSBO（binding 5）使用 `VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT`，允许 Step 5 写入前 descriptor 未初始化。不需要 `UPDATE_AFTER_BIND` pool flag，`PARTIALLY_BOUND` 仅需 Vulkan 1.2 核心 `descriptorBindingPartiallyBound` feature |
+| Set 1 RT stage flags | `rt_supported = true` 时 bindless 纹理/cubemap 的 stageFlags 追加 `CLOSEST_HIT_BIT \| ANY_HIT_BIT \| MISS_BIT`（closesthit/anyhit 采样材质纹理，miss 采样 IBL cubemap） |
 | RT shader 热重载 | RTPipeline 封装绑定 pipeline + SBT 生命周期，rebuild_pipelines() 走 destroy + create 全量重建 |
 | RT 函数加载 | vulkan-1.lib 不导出 KHR RT/AS 符号。Context 通过 `vkGetDeviceProcAddr` 加载 6 个 device-level 函数指针（create/destroy/build AS、create RT pipeline、get shader group handles），CommandBuffer 同模式加载 `vkCmdTraceRaysKHR`（匿名命名空间，`init_rt_functions(VkDevice)` 初始化） |
