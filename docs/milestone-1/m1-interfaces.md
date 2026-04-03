@@ -1116,6 +1116,21 @@ public:
 
 `upload_buffer()` 等方法为录制模式：在活跃的 begin/end_immediate scope 内调用时，只录制 copy 命令到内部 command buffer，不自行 submit。staging buffer 由 Context 收集，`end_immediate()` submit + wait 完成后统一销毁。scope 外调用 `upload_buffer()` 会 assert 失败。
 
+### Layer 0 — Debug Naming（rhi/context.h）
+
+`VK_EXT_debug_utils` 对象命名由 Context 统一提供，所有 RHI 模块（ResourceManager、AccelerationStructureManager 等）通过 `context->set_debug_name()` 调用。
+
+```cpp
+class Context {
+public:
+    /// 为 Vulkan 对象设置调试名称（RenderDoc / Validation Layer 可见）。
+    /// debug_utils 不可用时静默跳过。
+    void set_debug_name(VkObjectType type, uint64_t handle, const char* name) const;
+};
+```
+
+函数指针 `vkSetDebugUtilsObjectNameEXT` 在 `Context::init()` 中通过 `vkGetInstanceProcAddr` 加载并缓存。
+
 ---
 
 ### Shader 端 — 全局绑定布局（shaders/common/bindings.glsl）
