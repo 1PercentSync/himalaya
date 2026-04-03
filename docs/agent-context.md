@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 4 下一小项：DescriptorManager 新增 write_set0_tlas()
+Step 4 下一小项：Mesh 结构体新增 group_id + material_id
 
 ---
 
