@@ -147,6 +147,7 @@ RT 所需的底层类型扩展和 Descriptor 扩展，为 Step 5 的 SceneASBuil
   - `get_compute_set_layouts()` 重命名为 `get_dispatch_set_layouts()`（compute 和 RT pipeline 共用）
   - Set 1（bindless textures）layout binding stage flags 添加 `VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR | VK_SHADER_STAGE_ANY_HIT_BIT_KHR | VK_SHADER_STAGE_MISS_BIT_KHR`（RT shader 需要采样 bindless 纹理数组）
 - `Mesh` 结构体新增 `group_id`（glTF source mesh index）+ `material_id`（primitive 固有材质，material_instances 索引）
+- `CommandBuffer` 新增 RT command wrappers：`bind_rt_pipeline(const RTPipeline&)`、`bind_rt_descriptor_sets(VkPipelineLayout, first_set, sets, count)`、`push_rt_descriptor_set(VkPipelineLayout, set, writes)`（Step 7 ReferenceViewPass 录制需要完整的 RT 命令封装，避免通过 `handle()` 逃逸到原始 Vulkan）
 
 **验证**：编译通过，新增类型和 API 可用但无调用方
 
@@ -156,12 +157,13 @@ RT 所需的底层类型扩展和 Descriptor 扩展，为 Step 5 的 SceneASBuil
 
 SceneLoader 变更 + SceneASBuilder 实现 + Renderer 集成 + bindings.glsl 扩展。
 
+- `Context` 补充加载 `vkGetAccelerationStructureDeviceAddressKHR` 函数指针 + 新增 `pfn_get_as_device_address` 公有字段（SceneASBuilder 构建 TLAS instance 需要获取 BLAS device address）
 - `SceneLoader::load()` 新增 `bool rt_supported` 参数：`true` 时 vertex/index buffer 创建额外加 `ShaderDeviceAddress` flag
 - `SceneLoader::load_meshes()` 填充 `group_id` 和 `material_id`
 - 新增 `framework/scene_as_builder.h`：
   - `SceneASBuilder` 类：
     - `build(Context&, ResourceManager&, AccelerationStructureManager&, std::span<const Mesh>, std::span<const MeshInstance>, std::span<const MaterialInstance>)`：
-      1. 按 `Mesh::group_id` 分组 → 每组收集 BLASGeometry 列表（根据 `Mesh::material_id` → `MaterialInstance::alpha_mode` 设置 `BLASGeometry::opaque`）→ 组装 BLASBuildInfo（multi-geometry）
+      1. 按 `Mesh::group_id` 分组 → 每组收集 BLASGeometry 列表（跳过 `vertex_count == 0` 或 `index_count < 3` 的 primitive——glTF 不保证所有 primitive 为有效三角形；根据 `Mesh::material_id` → `MaterialInstance::alpha_mode` 设置 `BLASGeometry::opaque`）→ 组装 BLASBuildInfo（multi-geometry）
       2. 调用 `AccelerationStructureManager::build_blas()` 批量构建（每 group 一个 BLAS）
       3. 构建 Geometry Info SSBO（按 group 连续排列，per-geometry：vertex/index buffer address、material buffer_offset）
       4. 按 `(group_id, transform)` 去重 mesh_instances → 组装 `VkAccelerationStructureInstanceKHR` 数组（customIndex = 该 group 在 Geometry Info 中的 base offset）
@@ -432,13 +434,13 @@ rhi/
 ├── include/himalaya/rhi/
 │   ├── context.h                  # [Step 1] rt_supported + RT 属性存储 + RT 函数指针
 │   ├── resources.h                # [Step 4] BufferUsage::ShaderDeviceAddress
-│   ├── commands.h                 # [Step 3] trace_rays() + init_rt_functions()
+│   ├── commands.h                 # [Step 3] trace_rays() + init_rt_functions() ; [Step 4] RT bind/descriptor/push wrappers
 │   ├── descriptors.h              # [Step 4] Set 0 layout 条件扩展 + write_set0_tlas()
 │   └── shader.h                   # [Step 6] RT shader stage 支持
 ├── src/
-│   ├── context.cpp                # [Step 1] 设备选择 + RT 扩展启用 + RT 函数指针加载
+│   ├── context.cpp                # [Step 1] 设备选择 + RT 扩展启用 + RT 函数指针加载 ; [Step 5] 补充 pfn_get_as_device_address
 │   ├── resources.cpp              # [Step 4] ShaderDeviceAddress 映射 + get_buffer_device_address
-│   ├── commands.cpp               # [Step 3] trace_rays 实现
+│   ├── commands.cpp               # [Step 3] trace_rays 实现 ; [Step 4] RT bind/descriptor/push 实现
 │   ├── descriptors.cpp            # [Step 4] Set 0 layout 条件扩展 + TLAS descriptor 写入
 │   └── shader.cpp                 # [Step 6] RT stage 编译支持
 framework/
