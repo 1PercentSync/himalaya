@@ -26,6 +26,7 @@ namespace himalaya::rhi {
         StorageBuffer = 1 << 3,
         TransferSrc = 1 << 4,
         TransferDst = 1 << 5,
+        ShaderDeviceAddress = 1 << 6,
     };
 
     /** @brief Bitwise OR for BufferUsage flags. */
