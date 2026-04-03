@@ -113,7 +113,7 @@ RHI 层新增 RT Pipeline 创建和命令录制。
   - `RTPipelineDesc`：RT pipeline 描述（raygen/miss/closesthit/anyhit shader modules、max recursion depth、descriptor set layouts、push constant ranges）
   - `RTPipeline`：持有 VkPipeline + VkPipelineLayout + SBT buffer（raygen/miss/hit regions）
   - `create_rt_pipeline(const Context&, const RTPipelineDesc&)` → `RTPipeline`
-  - `RTPipeline::destroy(VkDevice)`
+  - `RTPipeline::destroy(VkDevice, VmaAllocator)`
 - `rt_pipeline.cpp`：实现 shader group 创建、`vkCreateRayTracingPipelinesKHR`、SBT 构建（`vkGetRayTracingShaderGroupHandlesKHR` → 对齐写入 SBT buffer）
 - `commands.h` 新增 `trace_rays(const RTPipeline&, uint32_t width, uint32_t height)` 方法
 - `commands.cpp`：实现 `vkCmdTraceRaysKHR`（从 RTPipeline 读取 SBT region 信息）
@@ -429,13 +429,13 @@ shaders/rt/
 ```
 rhi/
 ├── include/himalaya/rhi/
-│   ├── context.h                  # [Step 1] rt_supported + RT 属性存储
+│   ├── context.h                  # [Step 1] rt_supported + RT 属性存储 + RT 函数指针
 │   ├── resources.h                # [Step 4] BufferUsage::ShaderDeviceAddress
-│   ├── commands.h                 # [Step 3] trace_rays()
+│   ├── commands.h                 # [Step 3] trace_rays() + init_rt_functions()
 │   ├── descriptors.h              # [Step 4] Set 0 layout 条件扩展 + write_set0_tlas()
 │   └── shader.h                   # [Step 6] RT shader stage 支持
 ├── src/
-│   ├── context.cpp                # [Step 1] 设备选择 + RT 扩展启用
+│   ├── context.cpp                # [Step 1] 设备选择 + RT 扩展启用 + RT 函数指针加载
 │   ├── resources.cpp              # [Step 4] ShaderDeviceAddress 映射 + get_buffer_device_address
 │   ├── commands.cpp               # [Step 3] trace_rays 实现
 │   ├── descriptors.cpp            # [Step 4] Set 0 layout 条件扩展 + TLAS descriptor 写入
