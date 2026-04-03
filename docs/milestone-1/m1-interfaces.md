@@ -1225,6 +1225,16 @@ layout(set = 0, binding = 5) readonly buffer GeometryInfoBuffer {
     // Indexed by: gl_InstanceCustomIndexEXT + gl_GeometryIndexEXT
 };
 
+// Set 0, Binding 6: Env Alias Table（阶段六 Step 11 引入，env importance sampling 用）
+// EnvAliasEntry struct 定义在 bindings.glsl HIMALAYA_RT 区域内
+layout(set = 0, binding = 6) readonly buffer EnvAliasTable {
+    float total_luminance;
+    uint  entry_count;
+    EnvAliasEntry entries[];
+};
+
+#endif // HIMALAYA_RT
+
 // Set 1: 持久纹理资产（Bindless 数组）
 layout(set = 1, binding = 0) uniform sampler2D textures[];
 layout(set = 1, binding = 1) uniform samplerCube cubemaps[];
@@ -1268,6 +1278,7 @@ Graphics pipeline 共享统一 layout `{Set 0, Set 1, Set 2}`。Compute pipeline
 | Per-instance 数据 | 每帧一次（cull 后填充） | Set 0, Binding 3 (SSBO) | 模型矩阵、材质 index（instancing 用）|
 | TLAS | 场景加载时 | Set 0, Binding 4 (AS) | 场景加速结构（阶段六引入，RT shader 专用） |
 | 几何信息 | 场景加载时 | Set 0, Binding 5 (SSBO) | per-geometry vertex/index address + material（阶段六引入） |
+| Env Alias Table | IBL 加载时 | Set 0, Binding 6 (SSBO) | env importance sampling alias table + total_luminance（阶段六 Step 11 引入） |
 | Per-draw 数据 | 每次绘制（仅 shadow） | Push Constant | cascade index |
 | Compute pass 私有 I/O | 每次 dispatch | Set 3 (Push Descriptor) | storage image 输出、pass-specific 输入（阶段五引入） |
 
@@ -1953,7 +1964,82 @@ public:
     /// 写入 Set 0 binding 4（TLAS descriptor）。仅 rt_supported 时有效。
     void write_set0_tlas(const rhi::TLASHandle& tlas);
 
+    /// 写入 Set 0 binding 6（Env Alias Table SSBO）。仅 rt_supported 时有效。
+    void write_set0_env_alias_table(rhi::BufferHandle buffer, uint64_t size);
+
     // RT pipeline 复用 get_dispatch_set_layouts(set3_push_layout)，不再需要独立方法。
+};
+```
+
+#### IBL 扩展（阶段六 Step 11）
+
+```cpp
+class IBL {
+public:
+    // ... 已有接口 ...
+
+    /// Alias table buffer handle（Set 0 binding 6 写入用）。无 HDR 时 invalid。
+    [[nodiscard]] rhi::BufferHandle alias_table_buffer() const;
+
+    /// 环境贴图总亮度（PDF 归一化用）。无 HDR 时 0。
+    [[nodiscard]] float total_luminance() const;
+
+    /// Alias table 半分辨率宽度（= equirect_width / 2, clamped to 1024）。
+    [[nodiscard]] uint32_t alias_table_width() const;
+
+    /// Alias table 半分辨率高度（= equirect_height / 2, clamped to 512）。
+    [[nodiscard]] uint32_t alias_table_height() const;
+};
+```
+
+#### Env Alias Table GPU 结构体（阶段六 Step 11）
+
+Set 0 binding 6 SSBO 布局。头部嵌入元数据，后跟 entry 数组。
+
+```cpp
+/// Single alias table entry (std430, 8 bytes).
+struct EnvAliasEntry {
+    float prob;       ///< Vose probability threshold [0, 1]
+    uint32_t alias;   ///< Alternative pixel index
+};
+```
+
+GLSL 端（`bindings.glsl`，`#ifdef HIMALAYA_RT` 守卫内）：
+
+```glsl
+struct EnvAliasEntry {
+    float prob;
+    uint  alias;
+};
+
+layout(set = 0, binding = 6) readonly buffer EnvAliasTable {
+    float total_luminance;      // 环境贴图总亮度（sin(theta) 加权）
+    uint  entry_count;          // alias_table_width × alias_table_height
+    EnvAliasEntry entries[];
+};
+```
+
+#### PT Push Constants 布局（阶段六）
+
+```glsl
+layout(push_constant) uniform PTPushConstants {
+    uint max_bounces;       // offset  0
+    uint sample_count;      // offset  4
+    uint frame_seed;        // offset  8
+    uint blue_noise_index;  // offset 12 — bindless textures[] index
+};  // total: 16 bytes
+```
+
+#### PrimaryPayload 布局（阶段六）
+
+```glsl
+struct PrimaryPayload {             // location 0, 56 bytes
+    vec3  color;                    // 本次 bounce 辐射度
+    vec3  next_origin;              // 下一条光线起点
+    vec3  next_direction;           // 下一条光线方向
+    vec3  throughput_update;        // 路径吞吐量乘数（含 Russian Roulette 补偿）
+    float hit_distance;             // 命中距离（miss 时 -1 标记终止）
+    float env_mis_weight;           // BRDF 采样方向的 env MIS 权重（closesthit 预计算）
 };
 ```
 

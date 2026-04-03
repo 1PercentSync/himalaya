@@ -119,3 +119,21 @@
 - [ ] Path Tracing collapsing header：状态信息 + Max Bounces + Target Samples + Reset 按钮
 - [ ] OIDN collapsing header：Denoise 开关 + Show Denoised/Raw 切换 + Auto Denoise + Interval + Denoise Now 按钮 + 上次降噪采样数
 - [ ] Application 响应 PT actions
+
+## Step 11：Environment Map Importance Sampling
+
+- [ ] IBL 新增 `build_env_alias_table(float* rgb_data, int w, int h)`：半分辨率（1024×512）下采样 luminance×sin(theta) + Vose's algorithm 构建 alias table（CPU O(N)），上传 SSBO（GPU_ONLY + TransferDst），计算 total_luminance
+- [ ] IBL alias table 二进制缓存（key = `hdr_hash + "_alias_table"`）
+- [ ] IBL 新增 getter：alias_table_buffer()、total_luminance()、alias_table_width()、alias_table_height()
+- [ ] IBL fallback 时跳过 alias table 构建（无 HDR 环境）
+- [ ] DescriptorManager：Set 0 layout 条件新增 binding 6（SSBO，`PARTIALLY_BOUND`，RT stages，`rt_supported` 守卫）+ descriptor pool 容量扩展
+- [ ] DescriptorManager 新增 `write_set0_env_alias_table(BufferHandle, uint64_t size)`
+- [ ] Renderer：IBL init 后调用 write_set0_env_alias_table() 写入 binding 6
+- [ ] bindings.glsl `#ifdef HIMALAYA_RT` 新增 `EnvAliasEntry` struct + `EnvAliasTable` buffer（binding 6）
+- [ ] pt_common.glsl 新增 `sample_env_alias_table()` 函数（2 rand → pixel index → equirect UV → 方向 → IBL rotation）
+- [ ] pt_common.glsl 新增 `env_pdf()` 函数（方向 → IBL cubemap luminance → PDF）
+- [ ] pt_common.glsl 新增 `mis_power_heuristic(float pdf_a, float pdf_b)` 函数
+- [ ] PrimaryPayload 新增 `float env_mis_weight` 字段（52B → 56B）
+- [ ] closesthit.rchit 新增 NEE 环境光：alias table 采样 → shadow ray → MIS 加权贡献
+- [ ] closesthit.rchit BRDF 采样后预计算 env_mis_weight 写入 PrimaryPayload
+- [ ] reference_view.rgen：miss 返回 env color × payload.env_mis_weight
