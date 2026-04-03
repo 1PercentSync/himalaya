@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 6 第一小项：新增 shaders/rt/pt_common.glsl — GLSL 扩展声明
+Step 6a 第一小项：ShaderCompiler 扩展支持 RT shader stage
 
 ---
 

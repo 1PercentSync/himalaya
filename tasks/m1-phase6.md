@@ -62,8 +62,12 @@
 - [x] Application::init() 加载 config 后应用 log_level（非空时用 `spdlog::level::from_str()` 解析，空时保持默认 `warn`），替代硬编码 `kLogLevel` 作为唯一初始化来源
 - [x] DebugUI log level 变更通知 Application：DebugUIActions 新增 `log_level_changed` 标志 + `new_log_level`，Application::update() 检测到变更后更新 `config_.log_level` 并调用 `save_config()`
 
-## Step 6：PT 核心 shader
+## Step 6a：pt_common.glsl + C++ 基础设施
 
+- [ ] ShaderCompiler 扩展：支持 RT shader stage（raygen、closesthit、anyhit、miss），shaderc target vulkan_1_4
+- [ ] GlobalUniformData 新增 inv_view（mat4，offset 864），总大小 864→928 bytes + static_assert 更新
+- [ ] bindings.glsl GlobalUBO 新增 inv_view 字段
+- [ ] 新增 `app/include/himalaya/app/blue_noise_data.h`：128×128 R8Unorm blue noise 像素数据（`constexpr uint8_t[16384]`，数据源 Calinou/free-blue-noise-textures CC0）+ Renderer 初始化时上传 GPU 注册到 bindless 数组
 - [ ] 新增 shaders/rt/pt_common.glsl：GLSL 扩展声明（GL_EXT_ray_tracing、GL_EXT_buffer_reference/2、GL_EXT_shader_explicit_arithmetic_types_int64、GL_EXT_nonuniform_qualifier）
 - [ ] pt_common.glsl：Ray Payload 定义（PrimaryPayload loc 0 56B 含 bounce 字段 + ShadowPayload loc 1）
 - [ ] pt_common.glsl：Vertex / Index buffer_reference layout 定义（匹配 Vertex 结构体 56B）
@@ -73,16 +77,15 @@
 - [ ] pt_common.glsl：Multi-lobe BRDF 选择（Fresnel 估计概率选 diffuse/specular lobe + PDF 补偿）
 - [ ] pt_common.glsl：Sobol 128 维 32-bit 方向数表（16 KB shader 常量）+ 超出 128 维 PCG hash fallback + Cranley-Patterson rotation
 - [ ] pt_common.glsl：cosine-weighted hemisphere sampling + GGX VNDF importance sampling（Heitz 2018，新增 `sample_ggx_vndf()` + `pdf_ggx_vndf()`；`#include "common/brdf.glsl"` 复用评估函数，不修改 brdf.glsl）
-- [ ] pt_common.glsl：Russian Roulette（bounce ≥ 2）+ MIS power heuristic（balance heuristic，Step 6 定义函数，方向光不调用，Step 11 env sampling 使用）
-- [ ] 新增 `app/include/himalaya/app/blue_noise_data.h`：128×128 R8Unorm blue noise 像素数据（`constexpr uint8_t[16384]`，数据源 Calinou/free-blue-noise-textures CC0）+ Renderer 初始化时上传 GPU 注册到 bindless 数组
-- [ ] GlobalUniformData 新增 inv_view（mat4，offset 864），总大小 864→928 bytes + static_assert 更新
-- [ ] bindings.glsl GlobalUBO 新增 inv_view 字段
+- [ ] pt_common.glsl：Russian Roulette（bounce ≥ 2）+ MIS power heuristic（balance heuristic，Step 6a 定义函数，方向光不调用，Step 11 env sampling 使用）
+
+## Step 6b：RT shader 文件
+
 - [ ] 新增 shaders/rt/reference_view.rgen：从 GlobalUBO inv_view/inv_projection 计算 primary ray（Sobol dims 0-1 subpixel jitter）+ 路径追踪主循环（设 payload.bounce）+ firefly clamping（bounce > 0 min(contribution, max_clamp)）+ accumulation 写入。Push constant 20B：max_bounces + sample_count + frame_seed + blue_noise_index + max_clamp
 - [ ] 新增 shaders/rt/closesthit.rchit：geometry_infos 索引 + 顶点插值（含 tangent）+ normal mapping（`#include "common/normal.glsl"`）+ shading normal 一致性 + emissive 贡献（所有 bounce）+ OIDN aux 输出（bounce 0 imageStore albedo + normal）+ NEE 方向光（ray origin offset）+ multi-lobe BRDF 采样，写入 PrimaryPayload
 - [ ] 新增 shaders/rt/miss.rmiss：IBL cubemap 环境采样，写入 PrimaryPayload（color = 环境辐射度，hit_distance = -1）
 - [ ] 新增 shaders/rt/shadow_miss.rmiss：写入 ShadowPayload（visible = 1）
 - [ ] 新增 shaders/rt/anyhit.rahit：alpha test（Mask: texel_alpha < cutoff → ignoreIntersectionEXT）+ stochastic alpha（Blend: PCG hash rand() >= alpha → ignoreIntersectionEXT）
-- [ ] ShaderCompiler 扩展：支持 RT shader stage（raygen、closesthit、anyhit、miss），shaderc target vulkan_1_4
 
 ## Step 7：Reference View Pass
 
@@ -142,18 +145,21 @@
 - [ ] closesthit.rchit BRDF 采样后预计算 env_mis_weight 写入 PrimaryPayload
 - [ ] reference_view.rgen：miss 返回 env color × payload.env_mis_weight
 
-## Step 12：Area Light NEE
+## Step 12a：EmissiveLightBuilder + 基础设施
 
+- [ ] GPUMaterialData `_padding`（offset 76）→ `uint double_sided`，SceneLoader 填充 doubleSided
+- [ ] forward.frag emissive 贡献对齐 doubleSided + gl_FrontFacing 检查
 - [ ] 新增 emissive_light_builder.h/.cpp：EmissiveLightBuilder 类（build / destroy / getters）
 - [ ] build()：遍历 mesh primitive 识别 emissive（`any(emissive_factor > 0)`），收集世界空间顶点/UV/面积/emission，计算 power = luminance(emissive_factor) × area
 - [ ] Power-weighted alias table 构建（Vose's algorithm，复用 Step 11 逻辑）
 - [ ] EmissiveTriangleBuffer SSBO 上传（96B/entry：v0/v1/v2 + emission + area + material_index + uv0/uv1/uv2）
 - [ ] EmissiveAliasTable SSBO 上传（header + `{float prob, uint alias}` 8B/entry）
 - [ ] 无 emissive 场景跳过构建（emissive_count() 返回 0）
-- [ ] GPUMaterialData `_padding`（offset 76）→ `uint double_sided`，SceneLoader 填充 doubleSided
-- [ ] forward.frag emissive 贡献对齐 doubleSided + gl_FrontFacing 检查
 - [ ] DescriptorManager：Set 0 binding 7（EmissiveTriangleBuffer）+ binding 8（EmissiveAliasTable），`PARTIALLY_BOUND`，`rt_supported` 守卫
 - [ ] Renderer：场景加载后调用 EmissiveLightBuilder::build() + 写入 Set 0 binding 7/8
+
+## Step 12b：Shader NEE Emissive + MIS
+
 - [ ] bindings.glsl `#ifdef HIMALAYA_RT` 新增 `EmissiveTriangle` struct + binding 7/8 声明
 - [ ] Push constant 新增 `uint emissive_light_count`（20B → 24B，0 = 跳过 NEE emissive）
 - [ ] pt_common.glsl 新增三角形均匀采样（重心坐标）+ emissive alias table 采样 + light PDF 计算

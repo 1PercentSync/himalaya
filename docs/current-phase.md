@@ -22,19 +22,23 @@ Step 4: RHI/Framework 层 RT 基础设施（BufferUsage、Descriptor 扩展、GP
     ↓
 Step 5: Scene AS Builder + Renderer 集成（SceneLoader 变更 + AS 构建 + bindings.glsl）
     ↓
-Step 6: PT 核心 shader（raygen/miss/closesthit，共享 pt_common.glsl）
+Step 6a: pt_common.glsl + C++ 基础設施（工具函数库 + ShaderCompiler + blue noise + GlobalUBO）
     ↓
-Step 7: Reference View Pass + accumulation buffer
+Step 6b: RT shader 文件（raygen/closesthit/miss/anyhit，消费 pt_common.glsl）
+    ↓
+Step 7: Reference View Pass + accumulation buffer + OIDN 辅助 image
     ↓
 Step 8: 独立渲染路径 + 模式切换
     ↓
-Step 9: OIDN 集成
+Step 9: OIDN 集成（辅助通道配置）
     ↓
 Step 10: ImGui PT 面板 + 调参
     ↓
 Step 11: Environment Map Importance Sampling（alias table 构建 + NEE 环境光 + MIS）
     ↓
-Step 12: Area Light NEE（emissive alias table + NEE 面光源 + MIS）
+Step 12a: EmissiveLightBuilder + 基础设施（C++ 构建 + descriptor + doubleSided）
+    ↓
+Step 12b: Shader NEE Emissive + MIS（alias table 采样 + MIS 权重）
     ↓
 Step 13: Texture LOD（Ray Cones + lod_bias 调参）
 ```
@@ -48,13 +52,15 @@ Step 13: Texture LOD（Ray Cones + lod_bias 调参）
 | 3 | RT Pipeline + SBT + trace_rays | 编译通过，无调用方 |
 | 4 | RHI/Framework RT 基础设施 | 编译通过，新增类型和 API 可用但无调用方 |
 | 5 | Scene AS Builder + Renderer 集成 | 场景加载后日志输出 BLAS/TLAS 构建信息，无 validation 报错 |
-| 6 | PT 核心 shader | shader 编译通过（shaderc RT target），无运行时调用 |
+| 6a | pt_common.glsl + C++ 基础设施 | ShaderCompiler RT stage 可用，pt_common.glsl 无语法错误（空 rgen include 测试） |
+| 6b | RT shader 文件 | 全部 RT shader 通过 shaderc 编译，无编译错误 |
 | 7 | Reference View Pass | RenderDoc: accumulation buffer 逐帧亮度增加，静止时收敛 |
 | 8 | 独立渲染路径 + 模式切换 | ImGui 切换光栅化 ↔ PT，两种模式正确显示，切换后缓存有效 |
 | 9 | OIDN 集成 | 降噪后画面明显干净，自动/手动触发均工作 |
 | 10 | ImGui PT 面板 | 所有控件功能正常，参数调整实时生效 |
 | 11 | Env Map Importance Sampling | 高亮度 HDR 下 PT 前 60 帧收敛明显加速，无萤火虫噪点 |
-| 12 | Area Light NEE | emissive 表面照亮周围，比纯 BRDF 命中收敛明显加速 |
+| 12a | EmissiveLightBuilder + 基础设施 | 日志输出 emissive triangle 数量 + descriptor 写入无 validation 报错 |
+| 12b | Shader NEE Emissive + MIS | emissive 表面照亮周围，比纯 BRDF 命中收敛明显加速 |
 | 13 | Texture LOD (Ray Cones) | RenderDoc: 远处表面纹理采样 mip > 0，带宽下降 |
 
 ---
@@ -214,9 +220,9 @@ if (context_.rt_supported) {
 
 ---
 
-### Step 6：PT 核心 shader
+### Step 6a：pt_common.glsl + C++ 基础设施
 
-编写路径追踪 shader 并验证编译。
+PT 工具函数库 + ShaderCompiler RT 支持 + blue noise + GlobalUBO 扩展。
 
 - 新增 `shaders/rt/pt_common.glsl`：
   - 声明 RT shader 所需 GLSL 扩展（供其他 RT shader include）：
@@ -237,6 +243,16 @@ if (context_.rt_supported) {
   - 顶点属性插值工具（从 GeometryInfo 读 buffer address + gl_PrimitiveID 计算重心坐标，通过 buffer_reference 读取并插值 position/normal/tangent/UV）
   - Ray origin offset（Wächter & Binder，Ray Tracing Gems Ch.6）工具函数
   - Shading normal 一致性修正（clamp 到几何法线半球）
+- `ShaderCompiler` 扩展：支持 RT shader stage（raygen、closesthit、anyhit、miss），shaderc target 设为 `shaderc_env_version_vulkan_1_4`
+
+**验证**：ShaderCompiler RT stage 可用，pt_common.glsl 无语法错误（通过 include 到空 rgen 编译测试）
+
+---
+
+### Step 6b：RT shader 文件
+
+编写路径追踪 shader 并验证编译。消费 Step 6a 的 pt_common.glsl 工具库。
+
 - 新增 `shaders/rt/reference_view.rgen`：
   - 从 GlobalUBO 的 `inv_view` 和 `inv_projection` 计算 primary ray（pixel → world ray direction）
   - **Subpixel jitter**：Sobol dims 0-1 像素偏移（PT 抗锯齿），per-bounce 维度从 dim 2 开始
@@ -267,9 +283,8 @@ if (context_.rt_supported) {
   - Mask：`texel_alpha < alpha_cutoff` → `ignoreIntersectionEXT`
   - Blend：PCG hash 生成随机数 `r`，`r >= texel_alpha` → `ignoreIntersectionEXT`（stochastic alpha）
   - PCG hash 种子：`gl_LaunchIDEXT` + `frame_seed`（push constant）+ `gl_PrimitiveID` + `gl_GeometryIndexEXT`
-- `ShaderCompiler` 扩展：支持 RT shader stage（raygen、closesthit、anyhit、miss），shaderc target 设为 `shaderc_env_version_vulkan_1_4`
 
-**验证**：所有 RT shader 通过 shaderc 编译，无编译错误
+**验证**：全部 RT shader 通过 shaderc 编译，无编译错误
 
 #### 设计要点
 
@@ -429,18 +444,27 @@ IBL alias table 构建 + closesthit NEE 环境光 + MIS 权重。架构决策见
 
 ---
 
-### Step 12：Area Light NEE
+### Step 12a：EmissiveLightBuilder + 基础设施
 
-Emissive 面光源 importance sampling + MIS。架构决策见 `milestone-1/m1-rt-decisions.md`「Area Light NEE」。
+C++ 侧 emissive 面光源数据构建 + descriptor 扩展。架构决策见 `milestone-1/m1-rt-decisions.md`「Area Light NEE」。
 
+- GPUMaterialData `_padding`（offset 76）→ `uint double_sided`（从 glTF `doubleSided` 填充）
+- forward.frag emissive 贡献对齐 doubleSided 检查
 - 新增 `framework/emissive_light_builder.h` / `.cpp`：
   - `EmissiveLightBuilder` 类：
     - `build(Context&, ResourceManager&, meshes, mesh_instances, materials)`：遍历 mesh primitive 识别 emissive（`any(emissive_factor > 0)`），收集世界空间顶点/UV/面积，计算 `luminance(emissive_factor) × area` 功率，Vose's algorithm 构建 power-weighted alias table，上传 EmissiveTriangleBuffer SSBO + EmissiveAliasTable SSBO
     - `destroy()`、`emissive_count()`、`triangle_buffer()`、`alias_table_buffer()` getter
-- GPUMaterialData `_padding`（offset 76）→ `uint double_sided`（从 glTF `doubleSided` 填充）
-- forward.frag emissive 贡献对齐 doubleSided 检查
 - DescriptorManager：Set 0 layout 条件新增 binding 7（EmissiveTriangleBuffer SSBO）+ binding 8（EmissiveAliasTable SSBO），`PARTIALLY_BOUND`，`rt_supported` 守卫
 - Renderer：场景加载后调用 EmissiveLightBuilder::build() + 写入 Set 0 binding 7/8
+
+**验证**：日志输出 emissive triangle 数量 + descriptor 写入无 validation 报错
+
+---
+
+### Step 12b：Shader NEE Emissive + MIS
+
+Shader 侧 emissive NEE 采样 + MIS 权重计算。
+
 - bindings.glsl `#ifdef HIMALAYA_RT` 新增 `EmissiveTriangle` struct + binding 7/8 声明
 - Push constant 新增 `uint emissive_light_count`（20B → 24B，0 = 跳过 NEE emissive）
 - pt_common.glsl 新增三角形均匀采样（重心坐标）+ emissive alias table 采样 + light PDF 计算
