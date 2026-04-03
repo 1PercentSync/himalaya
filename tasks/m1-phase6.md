@@ -68,13 +68,13 @@
 - [ ] pt_common.glsl：Ray Payload 定义（PrimaryPayload loc 0 + ShadowPayload loc 1）
 - [ ] pt_common.glsl：Vertex / Index buffer_reference layout 定义（匹配 Vertex 结构体 56B）
 - [ ] pt_common.glsl：顶点属性插值工具（GeometryInfo → buffer_reference 读取 → 重心坐标插值 position/normal/UV）
-- [ ] pt_common.glsl：Sobol 低差异序列（预计算方向数表嵌入常量数组）+ Cranley-Patterson rotation
-- [ ] pt_common.glsl：cosine-weighted hemisphere sampling + GGX importance sampling（复用 common/brdf.glsl）
-- [ ] pt_common.glsl：Russian Roulette（bounce ≥ 2）+ MIS power heuristic（balance heuristic）
-- [ ] 嵌入预生成 128×128 R8Unorm blue noise 纹理（公开数据集）+ Renderer 初始化时上传 GPU 注册到 bindless 数组
+- [ ] pt_common.glsl：Sobol 128 维 32-bit 方向数表（16 KB shader 常量）+ 超出 128 维 PCG hash fallback + Cranley-Patterson rotation
+- [ ] pt_common.glsl：cosine-weighted hemisphere sampling + GGX VNDF importance sampling（Heitz 2018，新增 `sample_ggx_vndf()` + `pdf_ggx_vndf()`；`#include "common/brdf.glsl"` 复用评估函数，不修改 brdf.glsl）
+- [ ] pt_common.glsl：Russian Roulette（bounce ≥ 2）+ MIS power heuristic（balance heuristic，Step 6 定义函数，方向光不调用，Step 11 env sampling 使用）
+- [ ] 新增 `app/include/himalaya/app/blue_noise_data.h`：128×128 R8Unorm blue noise 像素数据（`constexpr uint8_t[16384]`，数据源 Calinou/free-blue-noise-textures CC0）+ Renderer 初始化时上传 GPU 注册到 bindless 数组
 - [ ] GlobalUniformData 新增 inv_view（mat4，offset 864），总大小 864→928 bytes + static_assert 更新
 - [ ] bindings.glsl GlobalUBO 新增 inv_view 字段
-- [ ] 新增 shaders/rt/reference_view.rgen：从 GlobalUBO inv_view/inv_projection 计算 primary ray + 路径追踪主循环 + accumulation 写入。Push constant 12B：max_bounces + sample_count + frame_seed
+- [ ] 新增 shaders/rt/reference_view.rgen：从 GlobalUBO inv_view/inv_projection 计算 primary ray + 路径追踪主循环 + accumulation 写入。Push constant 16B：max_bounces + sample_count + frame_seed + blue_noise_index
 - [ ] 新增 shaders/rt/closesthit.rchit：geometry_infos 索引 + 顶点插值 + 材质采样 + NEE + MIS + BRDF 采样，写入 PrimaryPayload
 - [ ] 新增 shaders/rt/miss.rmiss：IBL cubemap 环境采样，写入 PrimaryPayload（color = 环境辐射度，hit_distance = -1）
 - [ ] 新增 shaders/rt/shadow_miss.rmiss：写入 ShadowPayload（visible = 1）
@@ -132,7 +132,7 @@
 - [ ] bindings.glsl `#ifdef HIMALAYA_RT` 新增 `EnvAliasEntry` struct + `EnvAliasTable` buffer（binding 6）
 - [ ] pt_common.glsl 新增 `sample_env_alias_table()` 函数（2 rand → pixel index → equirect UV → 方向 → IBL rotation）
 - [ ] pt_common.glsl 新增 `env_pdf()` 函数（方向 → IBL cubemap luminance → PDF）
-- [ ] pt_common.glsl 新增 `mis_power_heuristic(float pdf_a, float pdf_b)` 函数
+- [ ] closesthit.rchit + reference_view.rgen 调用 `mis_power_heuristic()`（Step 6 已定义）计算 env MIS 权重
 - [ ] PrimaryPayload 新增 `float env_mis_weight` 字段（52B → 56B）
 - [ ] closesthit.rchit 新增 NEE 环境光：alias table 采样 → shadow ray → MIS 加权贡献
 - [ ] closesthit.rchit BRDF 采样后预计算 env_mis_weight 写入 PrimaryPayload
