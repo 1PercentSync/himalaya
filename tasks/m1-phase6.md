@@ -33,6 +33,8 @@
 - [x] SBT 构建（vkGetRayTracingShaderGroupHandlesKHR → 对齐写入 SBT buffer，1 hit group entry 含 chit + ahit handle）
 - [x] RTPipeline::destroy()
 - [x] CommandBuffer 新增 trace_rays(const RTPipeline&, width, height)
+- [x] RT 扩展函数通过 vkGetDeviceProcAddr 动态加载（Context 6 个 + CommandBuffer 1 个）
+- [x] create_rt_pipeline() 签名简化为 (const Context&, const RTPipelineDesc&)
 
 ## Step 4：RHI/Framework RT 基础设施
 
@@ -40,7 +42,8 @@
 - [ ] ResourceManager 新增 get_buffer_device_address()
 - [ ] scene_data.h 新增 GPUGeometryInfo 结构体（std430 24B：vertex_buffer_address u64 + index_buffer_address u64 + material_buffer_offset u32 + _padding u32）+ static_assert 守卫
 - [ ] DescriptorManager::init() 从 context_->rt_supported 读取 RT 状态，Set 0 layout 条件扩展 binding 4/5 + descriptor pool 容量扩展（新增 AS + SSBO 描述符）
-- [ ] DescriptorManager 新增 write_set0_tlas() + get_compute_set_layouts() 重命名为 get_dispatch_set_layouts()
+- [x] get_global_set_layouts() 重命名为 get_graphics_set_layouts() + get_compute_set_layouts() 重命名为 get_dispatch_set_layouts()
+- [ ] DescriptorManager 新增 write_set0_tlas()
 - [ ] Set 1（bindless textures）layout binding stage flags 添加 `CLOSEST_HIT_BIT_KHR` + `MISS_BIT_KHR`（RT shader 需要采样纹理）
 - [ ] Mesh 结构体新增 group_id（glTF source mesh index）+ material_id（primitive 固有材质）
 
