@@ -22,9 +22,9 @@
 - [x] AccelerationStructureManager：build_blas() 单次 vkCmdBuild 并行构建全部（PREFER_FAST_TRACE），每个 BLASBuildInfo 支持 1..N geometries
 - [x] BLASGeometry 新增 `opaque` 字段 + build_blas() per-geometry opacity flag（`OPAQUE_BIT` / `NO_DUPLICATE_ANY_HIT_INVOCATION_BIT`）
 - [x] AccelerationStructureManager：build_tlas()（TLAS instance geometry flags = 0，不覆盖 BLAS per-geometry 设置）
-- [ ] AccelerationStructureManager：destroy_blas()、destroy_tlas()
-- [ ] Scratch buffer 管理：分配大 scratch = 各 BLAS scratch 之和（对齐到 minAccelerationStructureScratchOffsetAlignment），构建完成后释放
-- [ ] 顶点格式硬编码：vertexFormat = R32G32B32_SFLOAT (offset 0)、indexType = UINT32
+- [x] AccelerationStructureManager：destroy_blas()、destroy_tlas()
+- [x] Scratch buffer 管理：分配大 scratch = 各 BLAS scratch 之和（对齐到 minAccelerationStructureScratchOffsetAlignment），构建完成后释放
+- [x] 顶点格式硬编码：vertexFormat = R32G32B32_SFLOAT (offset 0)、indexType = UINT32
 
 ## Step 3：RT Pipeline + SBT + trace_rays
 
