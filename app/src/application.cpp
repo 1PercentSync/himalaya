@@ -86,7 +86,8 @@ namespace himalaya::app {
                 descriptor_manager_,
                 renderer_.material_system(),
                 renderer_.default_textures(),
-                renderer_.default_sampler());
+                renderer_.default_sampler(),
+                context_.rt_supported);
             context_.end_immediate();
 
             if (!scene_ok) {
@@ -151,7 +152,7 @@ namespace himalaya::app {
             const bool ok = scene_loader_.load(
                 path, resource_manager_, descriptor_manager_,
                 renderer_.material_system(), renderer_.default_textures(),
-                renderer_.default_sampler());
+                renderer_.default_sampler(), context_.rt_supported);
             context_.end_immediate();
 
             if (!ok) {

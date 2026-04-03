@@ -221,9 +221,11 @@ namespace himalaya::app {
                            rhi::DescriptorManager &descriptor_manager,
                            framework::MaterialSystem &material_system,
                            const framework::DefaultTextures &default_textures,
-                           const rhi::SamplerHandle default_sampler) {
+                           const rhi::SamplerHandle default_sampler,
+                           const bool rt_supported) {
         resource_manager_ = &resource_manager;
         descriptor_manager_ = &descriptor_manager;
+        rt_supported_ = rt_supported;
 
         spdlog::info("Loading scene: {}", path);
 
@@ -380,16 +382,20 @@ namespace himalaya::app {
                                         " [Prim " +
                                         std::to_string(meshes_.size()) +
                                         "]";
+                auto vb_usage = rhi::BufferUsage::VertexBuffer | rhi::BufferUsage::TransferDst;
+                auto ib_usage = rhi::BufferUsage::IndexBuffer | rhi::BufferUsage::TransferDst;
+                if (rt_supported_) {
+                    vb_usage = vb_usage | rhi::BufferUsage::ShaderDeviceAddress;
+                    ib_usage = ib_usage | rhi::BufferUsage::ShaderDeviceAddress;
+                }
                 auto vb = resource_manager_->create_buffer({
                                                                .size = vb_size,
-                                                               .usage = rhi::BufferUsage::VertexBuffer |
-                                                                        rhi::BufferUsage::TransferDst,
+                                                               .usage = vb_usage,
                                                                .memory = rhi::MemoryUsage::GpuOnly,
                                                            }, (prim_label + " VB").c_str());
                 auto ib = resource_manager_->create_buffer({
                                                                .size = ib_size,
-                                                               .usage = rhi::BufferUsage::IndexBuffer |
-                                                                        rhi::BufferUsage::TransferDst,
+                                                               .usage = ib_usage,
                                                                .memory = rhi::MemoryUsage::GpuOnly,
                                                            }, (prim_label + " IB").c_str());
 

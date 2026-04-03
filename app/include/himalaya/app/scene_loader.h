@@ -53,6 +53,7 @@ namespace himalaya::app {
          * @param material_system    Material system for SSBO upload.
          * @param default_textures   Default textures for missing material slots.
          * @param default_sampler    Fallback sampler for textures without a glTF sampler.
+         * @param rt_supported       When true, vertex/index buffers get ShaderDeviceAddress usage.
          * @return true on success, false on failure (scene remains empty).
          */
         bool load(const std::string &path,
@@ -60,7 +61,8 @@ namespace himalaya::app {
                   rhi::DescriptorManager &descriptor_manager,
                   framework::MaterialSystem &material_system,
                   const framework::DefaultTextures &default_textures,
-                  rhi::SamplerHandle default_sampler);
+                  rhi::SamplerHandle default_sampler,
+                  bool rt_supported);
 
         /**
          * @brief Destroys all loaded resources (buffers, images, samplers, bindless entries).
@@ -102,6 +104,9 @@ namespace himalaya::app {
 
         /** @brief Descriptor manager for bindless unregistration in destroy(). */
         rhi::DescriptorManager *descriptor_manager_ = nullptr;
+
+        /** @brief Whether RT is supported (vertex/index buffers need ShaderDeviceAddress). */
+        bool rt_supported_ = false;
 
         // ---- Loaded scene data ----
 
