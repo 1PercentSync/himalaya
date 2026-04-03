@@ -232,10 +232,35 @@ namespace himalaya::rhi {
                               static_cast<uint32_t>(std::size(kRequiredDeviceExtensions)));
     }
 
-    // Checks whether the device supports all RT extensions in kRTDeviceExtensions
+    // Checks whether the device supports all RT extensions and their required features.
+    // Extensions can theoretically be present while features report VK_FALSE.
     // ReSharper disable once CppParameterMayBeConst
     static bool has_rt_extensions(VkPhysicalDevice dev) {
-        return has_extensions(dev, kRTDeviceExtensions, std::size(kRTDeviceExtensions));
+        if (!has_extensions(dev, kRTDeviceExtensions,
+                            static_cast<uint32_t>(std::size(kRTDeviceExtensions)))) {
+            return false;
+        }
+
+        VkPhysicalDeviceAccelerationStructureFeaturesKHR as_features{};
+        as_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR;
+
+        VkPhysicalDeviceRayTracingPipelineFeaturesKHR rt_features{};
+        rt_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR;
+        rt_features.pNext = &as_features;
+
+        VkPhysicalDeviceRayQueryFeaturesKHR rq_features{};
+        rq_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR;
+        rq_features.pNext = &rt_features;
+
+        VkPhysicalDeviceFeatures2 features2{};
+        features2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+        features2.pNext = &rq_features;
+
+        vkGetPhysicalDeviceFeatures2(dev, &features2);
+
+        return as_features.accelerationStructure
+            && rt_features.rayTracingPipeline
+            && rq_features.rayQuery;
     }
 
     // Checks whether the device supports all Vulkan features required by the renderer.

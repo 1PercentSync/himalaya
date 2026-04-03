@@ -179,7 +179,7 @@ namespace himalaya::rhi {
         result.sbt_allocation = sbt_allocation;
 
         result.raygen_region.deviceAddress = sbt_address;
-        result.raygen_region.stride = handle_size_aligned;
+        result.raygen_region.stride = raygen_region_size;
         result.raygen_region.size = raygen_region_size;
 
         result.miss_region.deviceAddress = sbt_address + raygen_region_size;

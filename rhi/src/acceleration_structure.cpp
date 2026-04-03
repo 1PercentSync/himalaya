@@ -210,6 +210,23 @@ namespace himalaya::rhi {
             build_infos.data(),
             range_info_ptrs.data());
 
+        // Barrier: BLAS builds must complete before any subsequent TLAS build
+        // reads the acceleration structure data. Without this, build_tlas()
+        // recorded into the same command buffer would have a data race.
+        VkMemoryBarrier2 as_barrier{};
+        as_barrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2;
+        as_barrier.srcStageMask = VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR;
+        as_barrier.srcAccessMask = VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR;
+        as_barrier.dstStageMask = VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR;
+        as_barrier.dstAccessMask = VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR;
+
+        VkDependencyInfo dep_info{};
+        dep_info.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+        dep_info.memoryBarrierCount = 1;
+        dep_info.pMemoryBarriers = &as_barrier;
+
+        vkCmdPipelineBarrier2(context_->immediate_command_buffer, &dep_info);
+
         // Register scratch buffer for cleanup at end_immediate()
         context_->push_staging_buffer(scratch_buffer, scratch_allocation);
 

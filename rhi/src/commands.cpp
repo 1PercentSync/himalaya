@@ -4,6 +4,8 @@
 #include <himalaya/rhi/resources.h>
 #include <himalaya/rhi/rt_pipeline.h>
 
+#include <cassert>
+
 namespace himalaya::rhi {
     // ReSharper disable once CppParameterMayBeConst
     CommandBuffer::CommandBuffer(VkCommandBuffer cmd) : cmd_(cmd) {
@@ -247,6 +249,7 @@ namespace himalaya::rhi {
     void CommandBuffer::trace_rays(const RTPipeline &rt_pipeline,
                                     const uint32_t width,
                                     const uint32_t height) const {
+        assert(pfn_trace_rays && "trace_rays called but init_rt_functions was not invoked");
         pfn_trace_rays(cmd_,
                        &rt_pipeline.raygen_region,
                        &rt_pipeline.miss_region,
