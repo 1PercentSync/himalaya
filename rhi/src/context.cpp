@@ -1,4 +1,5 @@
 #include <himalaya/rhi/context.h>
+#include <himalaya/rhi/commands.h>
 #include <himalaya/rhi/descriptors.h>
 
 #include <algorithm>
