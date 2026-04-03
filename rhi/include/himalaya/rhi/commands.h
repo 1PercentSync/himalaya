@@ -15,6 +15,7 @@
 namespace himalaya::rhi {
     class ResourceManager;
     struct Pipeline;
+    struct RTPipeline;
 
     /**
      * @brief Thin wrapper around VkCommandBuffer for convenient command recording.
@@ -286,6 +287,16 @@ namespace himalaya::rhi {
          * @param slope_factor    Scalar factor applied to fragment's slope in depth bias calculation.
          */
         void set_depth_bias(float constant_factor, float clamp, float slope_factor) const;
+
+        // --- Ray Tracing ---
+
+        /**
+         * @brief Records a ray tracing dispatch using pre-built SBT regions.
+         * @param rt_pipeline RT pipeline containing the SBT region addresses.
+         * @param width       Launch width (typically render target width).
+         * @param height      Launch height (typically render target height).
+         */
+        void trace_rays(const RTPipeline &rt_pipeline, uint32_t width, uint32_t height) const;
 
         /** @brief Returns the underlying Vulkan command buffer handle. */
         [[nodiscard]] VkCommandBuffer handle() const { return cmd_; }

@@ -2,6 +2,7 @@
 #include <himalaya/rhi/context.h>
 #include <himalaya/rhi/pipeline.h>
 #include <himalaya/rhi/resources.h>
+#include <himalaya/rhi/rt_pipeline.h>
 
 namespace himalaya::rhi {
     // ReSharper disable once CppParameterMayBeConst
@@ -232,6 +233,17 @@ namespace himalaya::rhi {
             pfn_end_label(cmd_);
         }
 #endif
+    }
+
+    void CommandBuffer::trace_rays(const RTPipeline &rt_pipeline,
+                                    const uint32_t width,
+                                    const uint32_t height) const {
+        vkCmdTraceRaysKHR(cmd_,
+                          &rt_pipeline.raygen_region,
+                          &rt_pipeline.miss_region,
+                          &rt_pipeline.hit_region,
+                          &rt_pipeline.callable_region,
+                          width, height, 1);
     }
 
     void CommandBuffer::set_cull_mode(const VkCullModeFlags cull_mode) const {
