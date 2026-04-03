@@ -386,8 +386,10 @@ namespace himalaya::app {
                 auto vb_usage = rhi::BufferUsage::VertexBuffer | rhi::BufferUsage::TransferDst;
                 auto ib_usage = rhi::BufferUsage::IndexBuffer | rhi::BufferUsage::TransferDst;
                 if (rt_supported_) {
-                    vb_usage = vb_usage | rhi::BufferUsage::ShaderDeviceAddress;
-                    ib_usage = ib_usage | rhi::BufferUsage::ShaderDeviceAddress;
+                    vb_usage = vb_usage | rhi::BufferUsage::ShaderDeviceAddress
+                                        | rhi::BufferUsage::AccelStructBuildInput;
+                    ib_usage = ib_usage | rhi::BufferUsage::ShaderDeviceAddress
+                                        | rhi::BufferUsage::AccelStructBuildInput;
                 }
                 auto vb = resource_manager_->create_buffer({
                                                                .size = vb_size,
