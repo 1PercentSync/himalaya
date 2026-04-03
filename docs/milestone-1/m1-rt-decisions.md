@@ -81,6 +81,15 @@ Closest-hit shader 通过 `geometry_infos[gl_InstanceCustomIndexEXT + gl_Geometr
 
 `instanceCustomIndex` = 该 BLAS 在 Geometry Info buffer 中的 base offset。Closesthit shader 用 `geometry_infos[gl_InstanceCustomIndexEXT + gl_GeometryIndexEXT]` 索引。
 
+### Per-geometry opacity 标记
+
+Multi-geometry BLAS 内每个 geometry 独立设置 opacity flag：
+
+- **Opaque geometry**（`AlphaMode::Opaque`）：`VK_GEOMETRY_OPAQUE_BIT_KHR`——硬件跳过 any-hit shader，三角形命中即确认
+- **Non-opaque geometry**（`AlphaMode::Mask` / `Blend`）：`VK_GEOMETRY_NO_DUPLICATE_ANY_HIT_INVOCATION_BIT_KHR`——硬件调用 any-hit shader 执行 alpha test / stochastic alpha，且保证每个 primitive 最多调用一次
+
+SceneASBuilder 构建 `BLASGeometry` 时根据对应 primitive 的材质 `alpha_mode` 设置 `BLASGeometry::opaque` 字段，`build_blas()` 据此选择 geometry flag。TLAS instance geometry 的 `flags` 设为 0（不设 `OPAQUE_BIT`），不覆盖 BLAS 层 per-geometry 设置。TLAS instance 的 `VkAccelerationStructureInstanceKHR::flags` 也不设 `FORCE_OPAQUE` / `FORCE_NO_OPAQUE`，opacity 语义完全由 BLAS geometry 层决定。
+
 ### 生命周期
 
 - **BLAS**：场景加载时 per unique mesh group 构建一次，`PREFER_FAST_TRACE`（不带 `ALLOW_UPDATE`），场景销毁时释放
@@ -275,13 +284,59 @@ raygen shader 的 push constant 仅包含 PT 特有参数（12 字节）：`max_
 
 ---
 
+## Non-opaque 几何体处理
+
+RT 管线通过 any-hit shader 处理 `AlphaMode::Mask` 和 `AlphaMode::Blend` 几何体。
+
+### Any-hit shader
+
+单一 any-hit shader（`shaders/rt/anyhit.rahit`）处理所有 non-opaque 几何体，与 closest-hit 共用同一个 hit group。数据访问路径与 closest-hit 相同：
+
+1. `geometry_infos[gl_InstanceCustomIndexEXT + gl_GeometryIndexEXT]` → 获取 vertex/index buffer address + `material_buffer_offset`
+2. 通过 `gl_PrimitiveID` + 重心坐标从 buffer reference 插值 UV
+3. `MaterialBuffer[material_buffer_offset]` → 读取 `alpha_mode`、`alpha_cutoff`、`base_color_factor.a`、`base_color_tex`
+4. 采样 `base_color_tex` 获取纹素 alpha
+
+行为：
+- **Mask**：`texel_alpha < alpha_cutoff` → `ignoreIntersectionEXT`（标准 alpha test）
+- **Blend**：`rand() >= texel_alpha` → `ignoreIntersectionEXT`（stochastic alpha）
+
+Opaque geometry 被 `VK_GEOMETRY_OPAQUE_BIT_KHR` 硬件级跳过，不进入 any-hit。GeometryInfo 不扩展——any-hit 通过 `material_buffer_offset` 间接读取 MaterialBuffer 获取 alpha 参数，一次 SSBO 寻址相对于纹理采样开销可忽略。
+
+### Stochastic alpha
+
+Blend 物体使用概率性命中判定：以概率 `alpha` 接受命中（closest-hit 正常着色），以概率 `1-alpha` 拒绝命中（射线穿透继续前进）。数学上等价于 alpha blending 的期望：`E[贡献] = alpha × 表面着色 + (1-alpha) × 背后场景`。
+
+Primary ray 和 shadow ray 使用同一个 any-hit shader，无需区分射线类型。半透明窗户自然按 alpha 比例透光。Closest-hit 中不需要对 Blend 物体做特殊处理——stochastic 决策已在 any-hit 中完成，命中被接受时表面当作完整表面正常着色，不乘 alpha（概率已隐含权重）。
+
+**M1 局限性**：Stochastic alpha 只处理薄表面 alpha 混合（`AlphaMode::Blend`），不处理体积介质的折射/透射/衰减。玻璃等需要 IOR、transmission 参数的物体在 M1 中表现为按 alpha 概率穿透的薄膜，无折射效果。
+
+**M2 演进**：解析 `KHR_materials_transmission` + `KHR_materials_volume` 扩展，closest-hit 中对有 transmission 参数的材质实现 Snell 折射 + Fresnel + Beer 衰减。Stochastic alpha 与折射正交共存——stochastic 在 any-hit 层决定"射线是否穿过"，折射在 closest-hit 层决定"穿过后的方向和衰减"。无 transmission 参数的 Blend 物体仍走 stochastic alpha。
+
+### Any-hit 随机数生成
+
+Any-hit shader 无法访问 raygen 的采样序列状态（Vulkan spec 限制 any-hit 不能读写调用方 payload），使用 PCG 哈希生成独立随机数：
+
+```
+seed = gl_LaunchIDEXT.x ^ (gl_LaunchIDEXT.y * 1973) ^ (frame_seed * 277) ^ (gl_PrimitiveID * 5039) ^ (gl_GeometryIndexEXT * 3571)
+r = pcg_hash(seed) / float(0xFFFFFFFF)
+```
+
+- `gl_LaunchIDEXT`：不同像素不同种子
+- `frame_seed`（push constant）：帧间变化
+- `gl_PrimitiveID` + `gl_GeometryIndexEXT`：同一射线穿过多个半透明面时每次调用不同种子
+
+纯 ALU 运算，无额外资源访问。对累积收敛的参考视图和烘焙器，哈希质量足够。
+
+---
+
 ## 实现细节备注
 
 以下为实现时直接采用的标准做法，不需要额外决策：
 
 | 项 | 方案 |
 |----|------|
-| SBT 结构 | 1 raygen + 1 miss（环境光）+ 1 shadow miss + 1 closest-hit |
+| SBT 结构 | 1 raygen + 1 miss（环境光）+ 1 shadow miss + 1 hit group（closest-hit + any-hit） |
 | Buffer Device Address | Vulkan 1.2 核心，Geometry Info 存 VkDeviceAddress |
 | Miss shader 环境采样 | 读 GlobalUBO skybox_cubemap_index，采样 Set 1 cubemaps[] |
 | Shadow ray（NEE） | 单独 miss group，miss = 未遮挡 |

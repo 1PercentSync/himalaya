@@ -147,7 +147,9 @@ shaders/
 │   ├── lightmap_baker.rgen      # Lightmap 烘焙 raygen shader（阶段七）
 │   ├── probe_baker.rgen         # Probe 烘焙 raygen shader（阶段七）
 │   ├── closesthit.rchit         # 通用 closest-hit shader（材质采样 + NEE）
-│   └── miss.rmiss               # Miss shader（环境光 / IBL 采样）
+│   ├── anyhit.rahit             # Alpha test + stochastic alpha（Mask/Blend 几何体）
+│   ├── miss.rmiss               # Miss shader（环境光 / IBL 采样）
+│   └── shadow_miss.rmiss        # Shadow miss shader（未遮挡标记）
 ```
 
 - `shaders/common/bindings.glsl` 定义全局绑定布局，所有 shader 通过 `#include` 引用，确保绑定一致性
@@ -1670,6 +1672,7 @@ struct BLASGeometry {
     uint32_t vertex_count;
     uint32_t index_count;
     uint32_t vertex_stride;  ///< sizeof(Vertex)
+    bool opaque;             ///< true → OPAQUE_BIT (skip any-hit), false → NO_DUPLICATE_ANY_HIT_INVOCATION_BIT
 };
 
 /// BLAS 构建输入（1..N geometries，支持 multi-geometry BLAS）
@@ -1715,6 +1718,7 @@ struct RTPipelineDesc {
     VkShaderModule miss = VK_NULL_HANDLE;        ///< 环境 miss
     VkShaderModule shadow_miss = VK_NULL_HANDLE; ///< shadow miss
     VkShaderModule closesthit = VK_NULL_HANDLE;
+    VkShaderModule anyhit = VK_NULL_HANDLE;      ///< alpha test + stochastic alpha (VK_NULL_HANDLE = no any-hit)
     uint32_t max_recursion_depth = 1;
     std::span<const VkDescriptorSetLayout> descriptor_set_layouts;
     std::span<const VkPushConstantRange> push_constant_ranges;

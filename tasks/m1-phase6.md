@@ -20,16 +20,17 @@
 
 - [x] 新增 acceleration_structure.h：BLASHandle、TLASHandle、BLASGeometry、BLASBuildInfo（multi-geometry：`span<const BLASGeometry> geometries`）类型
 - [x] AccelerationStructureManager：build_blas() 单次 vkCmdBuild 并行构建全部（PREFER_FAST_TRACE），每个 BLASBuildInfo 支持 1..N geometries
-- [ ] AccelerationStructureManager：build_tlas()
+- [ ] BLASGeometry 新增 `opaque` 字段 + build_blas() per-geometry opacity flag（`OPAQUE_BIT` / `NO_DUPLICATE_ANY_HIT_INVOCATION_BIT`）
+- [ ] AccelerationStructureManager：build_tlas()（TLAS instance geometry flags = 0，不覆盖 BLAS per-geometry 设置）
 - [ ] AccelerationStructureManager：destroy_blas()、destroy_tlas()
 - [ ] Scratch buffer 管理：分配大 scratch = 各 BLAS scratch 之和（对齐到 minAccelerationStructureScratchOffsetAlignment），构建完成后释放
 - [ ] 顶点格式硬编码：vertexFormat = R32G32B32_SFLOAT (offset 0)、indexType = UINT32
 
 ## Step 3：RT Pipeline + SBT + trace_rays
 
-- [ ] 新增 rt_pipeline.h：RTPipelineDesc、RTPipeline 类型
-- [ ] create_rt_pipeline()：shader group 创建 + vkCreateRayTracingPipelinesKHR
-- [ ] SBT 构建（vkGetRayTracingShaderGroupHandlesKHR → 对齐写入 SBT buffer）
+- [ ] 新增 rt_pipeline.h：RTPipelineDesc（含可选 anyhit module）、RTPipeline 类型
+- [ ] create_rt_pipeline()：shader group 创建（hit group = closesthit + anyhit）+ vkCreateRayTracingPipelinesKHR
+- [ ] SBT 构建（vkGetRayTracingShaderGroupHandlesKHR → 对齐写入 SBT buffer，1 hit group entry 含 chit + ahit handle）
 - [ ] RTPipeline::destroy()
 - [ ] CommandBuffer 新增 trace_rays(const RTPipeline&, width, height)
 
@@ -48,7 +49,7 @@
 - [ ] SceneLoader::load() 新增 rt_supported 参数，true 时 vertex/index buffer 额外加 ShaderDeviceAddress flag
 - [ ] SceneLoader::load_meshes() 填充 group_id 和 material_id
 - [ ] 新增 scene_as_builder.h：SceneASBuilder 类
-- [ ] SceneASBuilder::build()：按 group_id 分组构建 multi-geometry BLAS + 按 (group_id, transform) 去重构建 TLAS + Geometry Info SSBO 构建（按 group 连续排列，customIndex = group base offset）
+- [ ] SceneASBuilder::build()：按 group_id 分组构建 multi-geometry BLAS（根据材质 alpha_mode 设置 BLASGeometry::opaque）+ 按 (group_id, transform) 去重构建 TLAS + Geometry Info SSBO 构建（按 group 连续排列，customIndex = group base offset）
 - [ ] Renderer：场景加载后调用 SceneASBuilder::build() + 写入 Set 0 binding 4/5
 - [ ] bindings.glsl 新增 GeometryInfo struct（含 uint64_t，需 GL_EXT_shader_explicit_arithmetic_types_int64）+ Set 0 binding 4（accelerationStructureEXT）+ binding 5（GeometryInfoBuffer）
 
@@ -68,7 +69,8 @@
 - [ ] 新增 shaders/rt/closesthit.rchit：geometry_infos 索引 + 顶点插值 + 材质采样 + NEE + MIS + BRDF 采样，写入 PrimaryPayload
 - [ ] 新增 shaders/rt/miss.rmiss：IBL cubemap 环境采样，写入 PrimaryPayload（color = 环境辐射度，hit_distance = -1）
 - [ ] 新增 shaders/rt/shadow_miss.rmiss：写入 ShadowPayload（visible = 1）
-- [ ] ShaderCompiler 扩展：支持 RT shader stage（raygen、closesthit、miss），shaderc target vulkan_1_4
+- [ ] 新增 shaders/rt/anyhit.rahit：alpha test（Mask: texel_alpha < cutoff → ignoreIntersectionEXT）+ stochastic alpha（Blend: PCG hash rand() >= alpha → ignoreIntersectionEXT）
+- [ ] ShaderCompiler 扩展：支持 RT shader stage（raygen、closesthit、anyhit、miss），shaderc target vulkan_1_4
 
 ## Step 7：Reference View Pass
 
