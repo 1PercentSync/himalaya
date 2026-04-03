@@ -273,7 +273,8 @@ namespace himalaya::app {
         MeshLoadResult result;
         result.prim_offsets.reserve(gltf.meshes.size() + 1);
 
-        for (const auto &gltf_mesh: gltf.meshes) {
+        for (size_t mesh_idx = 0; mesh_idx < gltf.meshes.size(); ++mesh_idx) {
+            const auto &gltf_mesh = gltf.meshes[mesh_idx];
             result.prim_offsets.push_back(static_cast<uint32_t>(meshes_.size()));
             for (const auto &primitive: gltf_mesh.primitives) {
                 // Position (required by glTF spec)
@@ -402,22 +403,26 @@ namespace himalaya::app {
                 resource_manager_->upload_buffer(vb, vertices.data(), vb_size);
                 resource_manager_->upload_buffer(ib, indices.data(), ib_size);
 
+                // Material index is required before push (used for group_id/material_id)
+                if (!primitive.materialIndex.has_value()) {
+                    throw std::runtime_error("Mesh '" + std::string(gltf_mesh.name)
+                                             + "' primitive has no material (required by renderer)");
+                }
+                const auto prim_material_id = static_cast<uint32_t>(*primitive.materialIndex);
+
                 meshes_.push_back({
                     .vertex_buffer = vb,
                     .index_buffer = ib,
                     .vertex_count = static_cast<uint32_t>(vertices.size()),
                     .index_count = static_cast<uint32_t>(indices.size()),
+                    .group_id = static_cast<uint32_t>(mesh_idx),
+                    .material_id = prim_material_id,
                 });
 
                 buffers_.push_back(vb);
                 buffers_.push_back(ib);
 
-                // Track per-primitive metadata for node traversal
-                if (!primitive.materialIndex.has_value()) {
-                    throw std::runtime_error("Mesh '" + std::string(gltf_mesh.name)
-                                             + "' primitive has no material (required by renderer)");
-                }
-                result.material_ids.push_back(static_cast<uint32_t>(*primitive.materialIndex));
+                result.material_ids.push_back(prim_material_id);
                 result.local_bounds.push_back({local_min, local_max});
             }
         }
