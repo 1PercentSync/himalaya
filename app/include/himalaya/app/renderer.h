@@ -8,8 +8,10 @@
 #include <himalaya/framework/ibl.h>
 #include <himalaya/framework/material_system.h>
 #include <himalaya/framework/render_graph.h>
+#include <himalaya/framework/scene_as_builder.h>
 #include <himalaya/framework/scene_data.h>
 #include <himalaya/framework/texture.h>
+#include <himalaya/rhi/acceleration_structure.h>
 #include <himalaya/passes/ao_spatial_pass.h>
 #include <himalaya/passes/ao_temporal_pass.h>
 #include <himalaya/passes/contact_shadows_pass.h>
@@ -178,6 +180,22 @@ namespace himalaya::app {
         void handle_shadow_resolution_changed(uint32_t new_resolution);
 
         /**
+         * @brief Builds scene acceleration structures for RT path.
+         *
+         * Must be called within a Context::begin_immediate() / end_immediate() scope.
+         * Builds BLAS, TLAS, and Geometry Info SSBO, then writes Set 0 binding 4/5.
+         * Safe to call multiple times (auto-destroys previous AS).
+         * No-op if RT is not supported.
+         *
+         * @param meshes    All loaded meshes.
+         * @param instances All scene mesh instances.
+         * @param materials All loaded material instances.
+         */
+        void build_scene_as(std::span<const framework::Mesh> meshes,
+                            std::span<const framework::MeshInstance> instances,
+                            std::span<const framework::MaterialInstance> materials);
+
+        /**
          * @brief Recompiles all shaders from disk and rebuilds every pipeline.
          *
          * Waits for GPU idle, then calls rebuild_pipelines() on each pass.
@@ -277,6 +295,12 @@ namespace himalaya::app {
 
         /** @brief Contact shadows compute pass (screen-space ray march). */
         passes::ContactShadowsPass contact_shadows_pass_{};
+
+        /** @brief Acceleration structure manager (RT, initialized when rt_supported). */
+        rhi::AccelerationStructureManager as_manager_{};
+
+        /** @brief Scene acceleration structure builder (RT, builds BLAS/TLAS/GeometryInfo). */
+        framework::SceneASBuilder scene_as_builder_{};
 
         /** @brief HDR color buffer (R16G16B16A16F, 1x, managed, auto-rebuilt on resize). */
         framework::RGManagedHandle managed_hdr_color_;

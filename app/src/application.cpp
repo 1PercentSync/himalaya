@@ -93,6 +93,15 @@ namespace himalaya::app {
             if (!scene_ok) {
                 error_message_ = "Failed to load scene: " + config_.scene_path;
             }
+
+            // Build RT acceleration structures if supported
+            if (scene_ok && context_.rt_supported) {
+                context_.begin_immediate();
+                renderer_.build_scene_as(scene_loader_.meshes(),
+                                         scene_loader_.mesh_instances(),
+                                         scene_loader_.material_instances());
+                context_.end_immediate();
+            }
         }
 
         update_shadow_config_from_scene();
@@ -159,6 +168,15 @@ namespace himalaya::app {
                 error_message_ = "Failed to load scene: " + path;
             } else {
                 error_message_.clear();
+            }
+
+            // Build RT acceleration structures if supported
+            if (ok && context_.rt_supported) {
+                context_.begin_immediate();
+                renderer_.build_scene_as(scene_loader_.meshes(),
+                                         scene_loader_.mesh_instances(),
+                                         scene_loader_.material_instances());
+                context_.end_immediate();
             }
         }
 

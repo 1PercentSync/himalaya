@@ -222,20 +222,34 @@ namespace himalaya::app {
 
         // GTAO raw output (RGBA8: RGB=bent normal, A=AO): written by GTAO compute, read by AO Spatial
         managed_ao_noisy_ = render_graph_.create_managed_image("AO Noisy", {
-                                                                    .size_mode = framework::RGSizeMode::Relative,
-                                                                    .width_scale = 1.0f,
-                                                                    .height_scale = 1.0f,
-                                                                    .width = 0,
-                                                                    .height = 0,
-                                                                    .format = rhi::Format::R8G8B8A8Unorm,
-                                                                    .usage = rhi::ImageUsage::Storage |
-                                                                             rhi::ImageUsage::Sampled,
-                                                                    .sample_count = 1,
-                                                                    .mip_levels = 1,
-                                                                }, false);
+                                                                   .size_mode = framework::RGSizeMode::Relative,
+                                                                   .width_scale = 1.0f,
+                                                                   .height_scale = 1.0f,
+                                                                   .width = 0,
+                                                                   .height = 0,
+                                                                   .format = rhi::Format::R8G8B8A8Unorm,
+                                                                   .usage = rhi::ImageUsage::Storage |
+                                                                            rhi::ImageUsage::Sampled,
+                                                                   .sample_count = 1,
+                                                                   .mip_levels = 1,
+                                                               }, false);
 
         // AO spatially denoised (RGBA8): written by AO Spatial, read by AO Temporal
         managed_ao_blurred_ = render_graph_.create_managed_image("AO Blurred", {
+                                                                     .size_mode = framework::RGSizeMode::Relative,
+                                                                     .width_scale = 1.0f,
+                                                                     .height_scale = 1.0f,
+                                                                     .width = 0,
+                                                                     .height = 0,
+                                                                     .format = rhi::Format::R8G8B8A8Unorm,
+                                                                     .usage = rhi::ImageUsage::Storage |
+                                                                              rhi::ImageUsage::Sampled,
+                                                                     .sample_count = 1,
+                                                                     .mip_levels = 1,
+                                                                 }, false);
+
+        // AO temporal-filtered output (RGBA8, temporal): written by AO Temporal, sampled via Set 2
+        managed_ao_filtered_ = render_graph_.create_managed_image("AO Filtered", {
                                                                       .size_mode = framework::RGSizeMode::Relative,
                                                                       .width_scale = 1.0f,
                                                                       .height_scale = 1.0f,
@@ -246,32 +260,19 @@ namespace himalaya::app {
                                                                                rhi::ImageUsage::Sampled,
                                                                       .sample_count = 1,
                                                                       .mip_levels = 1,
-                                                                  }, false);
-
-        // AO temporal-filtered output (RGBA8, temporal): written by AO Temporal, sampled via Set 2
-        managed_ao_filtered_ = render_graph_.create_managed_image("AO Filtered", {
-                                                                       .size_mode = framework::RGSizeMode::Relative,
-                                                                       .width_scale = 1.0f,
-                                                                       .height_scale = 1.0f,
-                                                                       .width = 0,
-                                                                       .height = 0,
-                                                                       .format = rhi::Format::R8G8B8A8Unorm,
-                                                                       .usage = rhi::ImageUsage::Storage |
-                                                                                rhi::ImageUsage::Sampled,
-                                                                       .sample_count = 1,
-                                                                       .mip_levels = 1,
-                                                                   }, true);
+                                                                  }, true);
 
         // Contact shadow mask (R8): written by Contact Shadows compute, sampled via Set 2
         managed_contact_shadow_mask_ = render_graph_.create_managed_image("Contact Shadow Mask", {
-                                                                              .size_mode = framework::RGSizeMode::Relative,
+                                                                              .size_mode =
+                                                                              framework::RGSizeMode::Relative,
                                                                               .width_scale = 1.0f,
                                                                               .height_scale = 1.0f,
                                                                               .width = 0,
                                                                               .height = 0,
                                                                               .format = rhi::Format::R8Unorm,
                                                                               .usage = rhi::ImageUsage::Storage |
-                                                                                       rhi::ImageUsage::Sampled,
+                                                                                  rhi::ImageUsage::Sampled,
                                                                               .sample_count = 1,
                                                                               .mip_levels = 1,
                                                                           }, false);
@@ -337,7 +338,8 @@ namespace himalaya::app {
                                                                       }, false);
 
             managed_msaa_roughness_ = render_graph_.create_managed_image("MSAA Roughness", {
-                                                                             .size_mode = framework::RGSizeMode::Relative,
+                                                                             .size_mode =
+                                                                             framework::RGSizeMode::Relative,
                                                                              .width_scale = 1.0f,
                                                                              .height_scale = 1.0f,
                                                                              .width = 0,
@@ -409,6 +411,11 @@ namespace himalaya::app {
                                                              }, "Default Sampler");
 
         material_system_.init(resource_manager_, descriptor_manager_);
+
+        // --- RT acceleration structure manager (conditional on hardware support) ---
+        if (ctx_->rt_supported) {
+            as_manager_.init(ctx_);
+        }
 
         // --- Default textures (needs immediate scope for staging upload) ---
         ctx_->begin_immediate();
@@ -553,6 +560,8 @@ namespace himalaya::app {
     }
 
     void Renderer::destroy() {
+        scene_as_builder_.destroy();
+        as_manager_.destroy();
         ibl_.destroy();
         material_system_.destroy();
         shadow_pass_.destroy();
@@ -609,6 +618,26 @@ namespace himalaya::app {
         render_graph_.destroy_managed_image(managed_normal_);
         render_graph_.destroy_managed_image(managed_roughness_);
         unregister_swapchain_images();
+    }
+
+    // ---- RT acceleration structure ----
+
+    void Renderer::build_scene_as(const std::span<const framework::Mesh> meshes,
+                                  const std::span<const framework::MeshInstance> instances,
+                                  const std::span<const framework::MaterialInstance> materials) {
+        if (!ctx_->rt_supported) {
+            return;
+        }
+
+        scene_as_builder_.build(*ctx_, *resource_manager_, as_manager_, meshes, instances, materials);
+
+        // Write TLAS to Set 0 binding 4 (all frames)
+        descriptor_manager_->write_set0_tlas(scene_as_builder_.tlas_handle());
+
+        // Write Geometry Info SSBO to Set 0 binding 5 (all frames)
+        const auto geo_buf = scene_as_builder_.geometry_info_buffer();
+        const auto &buf_data = resource_manager_->get_buffer(geo_buf);
+        descriptor_manager_->write_set0_buffer(5, geo_buf, buf_data.desc.size);
     }
 
     // ---- Environment reload ----
@@ -716,7 +745,8 @@ namespace himalaya::app {
                                                                           .mip_levels = 1,
                                                                       }, false);
             managed_msaa_roughness_ = render_graph_.create_managed_image("MSAA Roughness", {
-                                                                             .size_mode = framework::RGSizeMode::Relative,
+                                                                             .size_mode =
+                                                                             framework::RGSizeMode::Relative,
                                                                              .width_scale = 1.0f,
                                                                              .height_scale = 1.0f,
                                                                              .width = 0, .height = 0,
@@ -865,9 +895,9 @@ namespace himalaya::app {
 
             const float half_tan = std::tan(input.shadow_config.light_angular_diameter * 0.5f);
             const float two_half_tan = 2.0f * half_tan;
-            constexpr float kMinExtent = 1e-6f;
             const auto n = static_cast<int>(input.shadow_config.cascade_count);
             for (int i = 0; i < n; ++i) {
+                constexpr float kMinExtent = 1e-6f;
                 const float wx = std::max(cascades.cascade_width_x[i], kMinExtent);
                 const float wy = std::max(cascades.cascade_width_y[i], kMinExtent);
                 ubo_data.cascade_light_size_uv[i] = two_half_tan / wx;
