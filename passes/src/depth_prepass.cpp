@@ -80,10 +80,12 @@ namespace himalaya::passes {
         }
 
         // All shaders compiled successfully — safe to destroy old pipelines
-        if (opaque_pipeline_.pipeline != VK_NULL_HANDLE)
+        if (opaque_pipeline_.pipeline != VK_NULL_HANDLE) {
             opaque_pipeline_.destroy(ctx_->device);
-        if (mask_pipeline_.pipeline != VK_NULL_HANDLE)
+        }
+        if (mask_pipeline_.pipeline != VK_NULL_HANDLE) {
             mask_pipeline_.destroy(ctx_->device);
+        }
 
         // ReSharper disable once CppLocalVariableMayBeConst
         VkShaderModule vert_module = rhi::create_shader_module(ctx_->device, vert_spirv);

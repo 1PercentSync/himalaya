@@ -71,8 +71,9 @@ namespace himalaya::framework {
             splits[i] = config.split_lambda * c_log + (1.0f - config.split_lambda) * c_lin;
         }
 
-        for (uint32_t i = 0; i < n; ++i)
+        for (uint32_t i = 0; i < n; ++i) {
             result.cascade_splits[static_cast<int>(i)] = splits[i + 1];
+        }
 
         // --- Light-space basis (shared across all cascades) ---
         const glm::vec3 ref = std::abs(light_dir.y) < 0.999f
@@ -120,8 +121,9 @@ namespace himalaya::framework {
 
             // Sub-frustum center — light-view origin for numerical precision
             glm::vec3 center(0.0f);
-            for (const auto &corner: corners)
+            for (const auto &corner: corners) {
                 center += corner;
+            }
             center *= (1.0f / 8.0f);
 
             // Light-view matrix centered on this cascade's sub-frustum

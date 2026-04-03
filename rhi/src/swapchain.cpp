@@ -20,10 +20,12 @@ namespace himalaya::rhi {
         vkQueueWaitIdle(context.graphics_queue);
 
         // Destroy old image views and semaphores; keep old swapchain for driver recycling
-        for (const auto sem: render_finished_semaphores)
+        for (const auto sem: render_finished_semaphores) {
             vkDestroySemaphore(context.device, sem, nullptr);
-        for (const auto view: image_views)
+        }
+        for (const auto view: image_views) {
             vkDestroyImageView(context.device, view, nullptr);
+        }
         render_finished_semaphores.clear();
         image_views.clear();
         images.clear();

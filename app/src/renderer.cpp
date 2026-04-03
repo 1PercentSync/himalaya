@@ -588,14 +588,18 @@ namespace himalaya::app {
         resource_manager_->destroy_sampler(nearest_clamp_sampler_);
         resource_manager_->destroy_sampler(linear_clamp_sampler_);
 
-        if (managed_msaa_color_.valid())
+        if (managed_msaa_color_.valid()) {
             render_graph_.destroy_managed_image(managed_msaa_color_);
-        if (managed_msaa_depth_.valid())
+        }
+        if (managed_msaa_depth_.valid()) {
             render_graph_.destroy_managed_image(managed_msaa_depth_);
-        if (managed_msaa_normal_.valid())
+        }
+        if (managed_msaa_normal_.valid()) {
             render_graph_.destroy_managed_image(managed_msaa_normal_);
-        if (managed_msaa_roughness_.valid())
+        }
+        if (managed_msaa_roughness_.valid()) {
             render_graph_.destroy_managed_image(managed_msaa_roughness_);
+        }
         render_graph_.destroy_managed_image(managed_ao_noisy_);
         render_graph_.destroy_managed_image(managed_ao_blurred_);
         render_graph_.destroy_managed_image(managed_ao_filtered_);
@@ -993,18 +997,22 @@ namespace himalaya::app {
         framework::RGResourceId msaa_depth_resource;
         framework::RGResourceId msaa_normal_resource;
         framework::RGResourceId msaa_roughness_resource;
-        if (managed_msaa_color_.valid())
+        if (managed_msaa_color_.valid()) {
             msaa_color_resource = render_graph_.use_managed_image(
                 managed_msaa_color_, VK_IMAGE_LAYOUT_UNDEFINED);
-        if (managed_msaa_depth_.valid())
+        }
+        if (managed_msaa_depth_.valid()) {
             msaa_depth_resource = render_graph_.use_managed_image(
                 managed_msaa_depth_, VK_IMAGE_LAYOUT_UNDEFINED);
-        if (managed_msaa_normal_.valid())
+        }
+        if (managed_msaa_normal_.valid()) {
             msaa_normal_resource = render_graph_.use_managed_image(
                 managed_msaa_normal_, VK_IMAGE_LAYOUT_UNDEFINED);
-        if (managed_msaa_roughness_.valid())
+        }
+        if (managed_msaa_roughness_.valid()) {
             msaa_roughness_resource = render_graph_.use_managed_image(
                 managed_msaa_roughness_, VK_IMAGE_LAYOUT_UNDEFINED);
+        }
 
         // Phase 5 AO/Contact Shadow resources
         const auto ao_noisy_resource = render_graph_.use_managed_image(
