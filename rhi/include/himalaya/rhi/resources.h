@@ -300,6 +300,16 @@ namespace himalaya::rhi {
          */
         [[nodiscard]] const Buffer &get_buffer(BufferHandle handle) const;
 
+        /**
+         * @brief Returns the device address of a buffer.
+         *
+         * The buffer must have been created with BufferUsage::ShaderDeviceAddress.
+         *
+         * @param handle Buffer handle (must be valid and current generation).
+         * @return GPU virtual address usable in shader device address operations.
+         */
+        [[nodiscard]] VkDeviceAddress get_buffer_device_address(BufferHandle handle) const;
+
         // ---- Image operations ----
 
         /**

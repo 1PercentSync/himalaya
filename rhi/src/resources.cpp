@@ -239,6 +239,17 @@ namespace himalaya::rhi {
         return buffers_[handle.index];
     }
 
+    VkDeviceAddress ResourceManager::get_buffer_device_address(const BufferHandle handle) const {
+        const auto &buf = get_buffer(handle);
+        assert(has_flag(buf.desc.usage, BufferUsage::ShaderDeviceAddress)
+            && "Buffer must have ShaderDeviceAddress usage");
+
+        VkBufferDeviceAddressInfo info{};
+        info.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+        info.buffer = buf.buffer;
+        return vkGetBufferDeviceAddress(context_->device, &info);
+    }
+
     // ---- Image operations ----
 
     ImageHandle ResourceManager::create_image(const ImageDesc &desc, const char *debug_name) {
