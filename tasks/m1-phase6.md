@@ -46,7 +46,7 @@
 - [x] get_global_set_layouts() 重命名为 get_graphics_set_layouts() + get_compute_set_layouts() 重命名为 get_dispatch_set_layouts()
 - [x] DescriptorManager 新增 write_set0_tlas()
 - [x] Set 1（bindless textures）layout binding stage flags 添加 `CLOSEST_HIT_BIT_KHR` + `ANY_HIT_BIT_KHR` + `MISS_BIT_KHR`（RT shader 需要采样纹理）
-- [ ] Mesh 结构体新增 group_id（glTF source mesh index）+ material_id（primitive 固有材质）
+- [x] Mesh 结构体新增 group_id（glTF source mesh index）+ material_id（primitive 固有材质）
 - [ ] CommandBuffer 新增 RT command wrappers：bind_rt_pipeline()、bind_rt_descriptor_sets()、push_rt_descriptor_set()（Step 7 ReferenceViewPass 录制需要）
 
 ## Step 5：Scene AS Builder + Renderer 集成

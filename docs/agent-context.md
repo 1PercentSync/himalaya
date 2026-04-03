@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 4 下一小项：Mesh 结构体新增 group_id + material_id
+Step 4 下一小项：CommandBuffer 新增 RT command wrappers（bind_rt_pipeline / bind_rt_descriptor_sets / push_rt_descriptor_set）
 
 ---
 
