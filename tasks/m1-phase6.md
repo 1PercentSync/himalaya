@@ -65,17 +65,20 @@
 ## Step 6：PT 核心 shader
 
 - [ ] 新增 shaders/rt/pt_common.glsl：GLSL 扩展声明（GL_EXT_ray_tracing、GL_EXT_buffer_reference/2、GL_EXT_shader_explicit_arithmetic_types_int64、GL_EXT_nonuniform_qualifier）
-- [ ] pt_common.glsl：Ray Payload 定义（PrimaryPayload loc 0 + ShadowPayload loc 1）
+- [ ] pt_common.glsl：Ray Payload 定义（PrimaryPayload loc 0 56B 含 bounce 字段 + ShadowPayload loc 1）
 - [ ] pt_common.glsl：Vertex / Index buffer_reference layout 定义（匹配 Vertex 结构体 56B）
-- [ ] pt_common.glsl：顶点属性插值工具（GeometryInfo → buffer_reference 读取 → 重心坐标插值 position/normal/UV）
+- [ ] pt_common.glsl：顶点属性插值工具（GeometryInfo → buffer_reference 读取 → 重心坐标插值 position/normal/tangent/UV）
+- [ ] pt_common.glsl：Ray origin offset 工具函数（Wächter & Binder，Ray Tracing Gems Ch.6）
+- [ ] pt_common.glsl：Shading normal 一致性修正（clamp 到几何法线半球）
+- [ ] pt_common.glsl：Multi-lobe BRDF 选择（Fresnel 估计概率选 diffuse/specular lobe + PDF 补偿）
 - [ ] pt_common.glsl：Sobol 128 维 32-bit 方向数表（16 KB shader 常量）+ 超出 128 维 PCG hash fallback + Cranley-Patterson rotation
 - [ ] pt_common.glsl：cosine-weighted hemisphere sampling + GGX VNDF importance sampling（Heitz 2018，新增 `sample_ggx_vndf()` + `pdf_ggx_vndf()`；`#include "common/brdf.glsl"` 复用评估函数，不修改 brdf.glsl）
 - [ ] pt_common.glsl：Russian Roulette（bounce ≥ 2）+ MIS power heuristic（balance heuristic，Step 6 定义函数，方向光不调用，Step 11 env sampling 使用）
 - [ ] 新增 `app/include/himalaya/app/blue_noise_data.h`：128×128 R8Unorm blue noise 像素数据（`constexpr uint8_t[16384]`，数据源 Calinou/free-blue-noise-textures CC0）+ Renderer 初始化时上传 GPU 注册到 bindless 数组
 - [ ] GlobalUniformData 新增 inv_view（mat4，offset 864），总大小 864→928 bytes + static_assert 更新
 - [ ] bindings.glsl GlobalUBO 新增 inv_view 字段
-- [ ] 新增 shaders/rt/reference_view.rgen：从 GlobalUBO inv_view/inv_projection 计算 primary ray + 路径追踪主循环 + accumulation 写入。Push constant 16B：max_bounces + sample_count + frame_seed + blue_noise_index
-- [ ] 新增 shaders/rt/closesthit.rchit：geometry_infos 索引 + 顶点插值 + 材质采样 + NEE + MIS + BRDF 采样，写入 PrimaryPayload
+- [ ] 新增 shaders/rt/reference_view.rgen：从 GlobalUBO inv_view/inv_projection 计算 primary ray（Sobol dims 0-1 subpixel jitter）+ 路径追踪主循环（设 payload.bounce）+ firefly clamping（bounce > 0 min(contribution, max_clamp)）+ accumulation 写入。Push constant 20B：max_bounces + sample_count + frame_seed + blue_noise_index + max_clamp
+- [ ] 新增 shaders/rt/closesthit.rchit：geometry_infos 索引 + 顶点插值（含 tangent）+ normal mapping（`#include "common/normal.glsl"`）+ shading normal 一致性 + emissive 贡献（所有 bounce）+ OIDN aux 输出（bounce 0 imageStore albedo + normal）+ NEE 方向光（ray origin offset）+ multi-lobe BRDF 采样，写入 PrimaryPayload
 - [ ] 新增 shaders/rt/miss.rmiss：IBL cubemap 环境采样，写入 PrimaryPayload（color = 环境辐射度，hit_distance = -1）
 - [ ] 新增 shaders/rt/shadow_miss.rmiss：写入 ShadowPayload（visible = 1）
 - [ ] 新增 shaders/rt/anyhit.rahit：alpha test（Mask: texel_alpha < cutoff → ignoreIntersectionEXT）+ stochastic alpha（Blend: PCG hash rand() >= alpha → ignoreIntersectionEXT）
@@ -86,7 +89,8 @@
 - [ ] RGStage 枚举新增 RayTracing + RG barrier 映射（VK_PIPELINE_STAGE_2_RAY_TRACING_SHADER_BIT_KHR）
 - [ ] 新增 reference_view_pass.h/.cpp：setup / record / destroy / rebuild_pipelines / on_resize
 - [ ] Accumulation buffer 创建（RGBA32F，Relative 1.0x，Storage）
-- [ ] record()：RG pass 注册 + push descriptors + trace_rays dispatch
+- [ ] OIDN 辅助 image 创建（aux albedo + aux normal，RGBA32F，同尺寸）+ getter
+- [ ] record()：RG pass 注册 + push descriptors（Set 3 binding 0/1/2：accumulation + aux albedo + aux normal）+ trace_rays dispatch
 - [ ] Accumulation 逻辑：running average（mix(old, new, 1/(n+1))），sample_count=0 覆写
 - [ ] reset_accumulation() + sample_count() getter + accumulation_image() getter
 
@@ -104,8 +108,8 @@
 - [ ] 手动集成 OIDN 预编译库（官方 release，含 CUDA GPU 支持），修改 framework/CMakeLists.txt 链接库 + DLL 拷贝
 - [ ] 新增 denoiser.h/.cpp：Denoiser 类（init / denoise / destroy / on_resize）
 - [ ] OIDN device 创建（GPU 优先 fallback CPU）+ RT filter 创建
-- [ ] 持久 staging buffer 分配（readback + upload）
-- [ ] denoise()：Vulkan readback → OIDN filter execute → Vulkan upload
+- [ ] 持久 staging buffer 分配（readback + upload，beauty + albedo + normal 各一组）
+- [ ] denoise()：Vulkan readback（accumulation + aux albedo + aux normal）→ OIDN filter execute（辅助通道配置）→ Vulkan upload
 - [ ] Renderer 新增 denoised buffer（RGBA32F managed image）
 - [ ] 降噪状态管理：denoise_enabled / auto_denoise / interval / last_denoised_sample_count / show_denoised
 - [ ] 自动触发逻辑（每 N 采样）+ 手动触发（DebugUIActions）
@@ -113,10 +117,10 @@
 
 ## Step 10：ImGui PT 面板
 
-- [ ] DebugUIContext 新增 PT 字段（render_mode、rt_supported、sample_count、target_samples、max_bounces、elapsed_time、denoise 控件）
+- [ ] DebugUIContext 新增 PT 字段（render_mode、rt_supported、sample_count、target_samples、max_bounces、max_clamp、elapsed_time、denoise 控件）
 - [ ] DebugUIActions 新增 pt_reset_requested + pt_denoise_requested
 - [ ] Rendering section 新增渲染模式 combo（仅 rt_supported 时显示 PT 选项）
-- [ ] Path Tracing collapsing header：状态信息 + Max Bounces + Target Samples + Reset 按钮
+- [ ] Path Tracing collapsing header：状态信息 + Max Bounces + Firefly Clamp slider（0=关闭，默认 10.0）+ Target Samples + Reset 按钮
 - [ ] OIDN collapsing header：Denoise 开关 + Show Denoised/Raw 切换 + Auto Denoise + Interval + Denoise Now 按钮 + 上次降噪采样数
 - [ ] Application 响应 PT actions
 
@@ -133,7 +137,38 @@
 - [ ] pt_common.glsl 新增 `sample_env_alias_table()` 函数（2 rand → pixel index → equirect UV → 方向 → IBL rotation）
 - [ ] pt_common.glsl 新增 `env_pdf()` 函数（方向 → IBL cubemap luminance → PDF）
 - [ ] closesthit.rchit + reference_view.rgen 调用 `mis_power_heuristic()`（Step 6 已定义）计算 env MIS 权重
-- [ ] PrimaryPayload 新增 `float env_mis_weight` 字段（52B → 56B）
+- [ ] PrimaryPayload 新增 `float env_mis_weight` 字段（56B → 60B）
 - [ ] closesthit.rchit 新增 NEE 环境光：alias table 采样 → shadow ray → MIS 加权贡献
 - [ ] closesthit.rchit BRDF 采样后预计算 env_mis_weight 写入 PrimaryPayload
 - [ ] reference_view.rgen：miss 返回 env color × payload.env_mis_weight
+
+## Step 12：Area Light NEE
+
+- [ ] 新增 emissive_light_builder.h/.cpp：EmissiveLightBuilder 类（build / destroy / getters）
+- [ ] build()：遍历 mesh primitive 识别 emissive（`any(emissive_factor > 0)`），收集世界空间顶点/UV/面积/emission，计算 power = luminance(emissive_factor) × area
+- [ ] Power-weighted alias table 构建（Vose's algorithm，复用 Step 11 逻辑）
+- [ ] EmissiveTriangleBuffer SSBO 上传（96B/entry：v0/v1/v2 + emission + area + material_index + uv0/uv1/uv2）
+- [ ] EmissiveAliasTable SSBO 上传（header + `{float prob, uint alias}` 8B/entry）
+- [ ] 无 emissive 场景跳过构建（emissive_count() 返回 0）
+- [ ] GPUMaterialData `_padding`（offset 76）→ `uint double_sided`，SceneLoader 填充 doubleSided
+- [ ] forward.frag emissive 贡献对齐 doubleSided + gl_FrontFacing 检查
+- [ ] DescriptorManager：Set 0 binding 7（EmissiveTriangleBuffer）+ binding 8（EmissiveAliasTable），`PARTIALLY_BOUND`，`rt_supported` 守卫
+- [ ] Renderer：场景加载后调用 EmissiveLightBuilder::build() + 写入 Set 0 binding 7/8
+- [ ] bindings.glsl `#ifdef HIMALAYA_RT` 新增 `EmissiveTriangle` struct + binding 7/8 声明
+- [ ] Push constant 新增 `uint emissive_light_count`（20B → 24B，0 = 跳过 NEE emissive）
+- [ ] pt_common.glsl 新增三角形均匀采样（重心坐标）+ emissive alias table 采样 + light PDF 计算
+- [ ] closesthit.rchit 新增 NEE emissive：alias table 采样 → 三角形采样点 → shadow ray（tMax = `distance * (1-1e-4)`）→ MIS 加权。Emissive 双面跟随 double_sided
+- [ ] closesthit.rchit BRDF 采样后写入 `payload.last_brdf_pdf`
+- [ ] closesthit.rchit 命中 emissive 表面时（bounce > 0）：读 last_brdf_pdf + 算 light_pdf → MIS 权重。Bounce 0 直视权重 1.0
+- [ ] PrimaryPayload 新增 `float last_brdf_pdf` 字段（60B → 64B）
+
+## Step 13：Texture LOD（Ray Cones）
+
+- [ ] pt_common.glsl 新增 Ray Cone 工具函数（init_cone、propagate_cone、compute_lod）
+- [ ] pt_common.glsl 新增 `compute_texel_density()`：从三角形顶点位置 + UV 运行时算 world/UV 面积比
+- [ ] reference_view.rgen：初始化 cone spread（FOV / screen_height）+ 循环内设 `payload.cone_spread`
+- [ ] closesthit.rchit：propagate cone + compute LOD + 所有材质纹理 `texture()` → `textureLod(tex, uv, lod + lod_bias)`（~5-6 处）
+- [ ] anyhit.rahit：alpha 纹理 `texture()` → `textureLod()`（~1 处）
+- [ ] PrimaryPayload 新增 `float cone_spread` 字段（64B → 68B）
+- [ ] Push constant 新增 `float lod_bias`（24B → 28B，默认 0.0）
+- [ ] Step 10 ImGui 面板新增 LOD Bias slider

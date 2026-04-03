@@ -51,7 +51,8 @@ framework/
 │   ├── shadow.h                 # CSM cascade 计算（PSSM 分割、正交投影、texel snapping）
 │   ├── imgui_backend.h          # ImGui 集成
 │   ├── color_utils.h            # 色温 → 线性 RGB 转换
-│   └── scene_as_builder.h       # 场景加速结构构建器（阶段六引入）
+│   ├── scene_as_builder.h       # 场景加速结构构建器（阶段六引入）
+│   └── emissive_light_builder.h # Emissive 面光源采样构建器（阶段六 Step 12 引入）
 └── src/
     └── ...
 ```
@@ -485,6 +486,31 @@ struct GPUInstanceData {
 struct PushConstantData {
     uint32_t cascade_index;                     //  4 bytes — shadow.vert 使用
 };
+
+// Emissive 三角形 — std430 layout, 96 bytes per element（阶段六 Step 12 引入）
+// 对应 shader: Set 0, Binding 7 (EmissiveTriangleBuffer SSBO)
+struct EmissiveTriangle {
+    glm::vec3 v0;                               // offset  0 — 世界空间顶点 (+4B pad)
+    glm::vec3 v1;                               // offset 16 (+4B pad)
+    glm::vec3 v2;                               // offset 32 (+4B pad)
+    glm::vec3 emission;                         // offset 48 — raw emissive_factor
+    float area;                                 // offset 60 — 预计算世界空间三角形面积
+    uint32_t material_index;                    // offset 64 — MaterialBuffer 索引
+    glm::vec2 uv0;                              // offset 72 — 纹理坐标（NEE 采样点插值用）(+4B pad to vec2 align)
+    glm::vec2 uv1;                              // offset 80
+    glm::vec2 uv2;                              // offset 88
+};  // total: 96 bytes
+
+// PT Push Constants — 逐步演进（阶段六 raygen/closesthit/anyhit 共用）
+// Step 6:  20B — max_bounces(u32) + sample_count(u32) + frame_seed(u32) + blue_noise_index(u32) + max_clamp(f32)
+// Step 12: 24B — + emissive_light_count(u32)
+// Step 13: 28B — + lod_bias(f32)
+
+// PrimaryPayload — 逐步演进（raygen ↔ closesthit 通信）
+// Step 6:  56B — color(12) + next_origin(12) + next_direction(12) + throughput_update(12) + hit_distance(4) + bounce(4)
+// Step 11: 60B — + env_mis_weight(4)
+// Step 12: 64B — + last_brdf_pdf(4)
+// Step 13: 68B — + cone_spread(4)
 ```
 
 ---
@@ -1851,6 +1877,38 @@ private:
     rhi::BufferHandle geometry_info_buffer_{};
     rhi::ResourceManager* resource_manager_ = nullptr;         ///< destroy() 时释放 geometry_info_buffer_
     rhi::AccelerationStructureManager* as_mgr_ = nullptr;      ///< destroy() 时释放 BLAS/TLAS
+};
+
+}  // namespace himalaya::framework
+```
+
+#### EmissiveLightBuilder（阶段六 Step 12）
+
+```cpp
+namespace himalaya::framework {
+
+class EmissiveLightBuilder {
+public:
+    /// 从场景数据构建 emissive 三角形列表 + alias table。
+    /// 遍历 meshes，识别 emissive_factor > 0 的 primitive，
+    /// 收集世界空间顶点、面积、功率，构建 power-weighted alias table。
+    /// 无 emissive 三角形时跳过构建（emissive_count() 返回 0）。
+    void build(rhi::Context& ctx, rhi::ResourceManager& rm,
+               std::span<const Mesh> meshes,
+               std::span<const MeshInstance> instances,
+               std::span<const MaterialInstance> materials);
+
+    void destroy();
+
+    [[nodiscard]] uint32_t emissive_count() const;             ///< 0 = 无 emissive
+    [[nodiscard]] rhi::BufferHandle triangle_buffer() const;   ///< Set 0 binding 7
+    [[nodiscard]] rhi::BufferHandle alias_table_buffer() const;///< Set 0 binding 8
+
+private:
+    rhi::BufferHandle triangle_buffer_{};
+    rhi::BufferHandle alias_table_buffer_{};
+    uint32_t emissive_count_ = 0;
+    rhi::ResourceManager* resource_manager_ = nullptr;
 };
 
 }  // namespace himalaya::framework

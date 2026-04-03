@@ -109,15 +109,18 @@
 - RHI 层 Command 扩展（`trace_rays()`、`build_acceleration_structure()`）
 - Scene AS Builder（Framework 层：输入 scene data → 构建 per-mesh BLAS + scene TLAS）
 - Set 0 扩展（binding 4: TLAS, binding 5: Geometry Info SSBO）
-- PT 核心 shader（raygen/miss/closesthit，NEE + MIS + Russian Roulette + cosine/GGX importance sampling + Sobol + Blue noise）
+- PT 核心 shader（raygen/miss/closesthit，NEE + MIS + Russian Roulette + cosine/GGX VNDF importance sampling + Sobol + Blue noise + multi-lobe BRDF 选择）
+- PT 着色质量基础（ray origin offset、normal mapping、subpixel jitter、emissive 贡献、firefly clamping、shading normal 一致性）
 - PT 参考视图 Pass（屏幕空间射线发射，accumulation buffer 跨帧累积，相机移动时重置）
-- OIDN GPU 集成（CPU 内存中转：Vulkan readback → OIDN GPU 降噪 → Vulkan upload）
+- OIDN GPU 集成（CPU 内存中转 + albedo/normal 辅助降噪通道）
 - 独立渲染路径（PT 参考视图模式：PT Pass → OIDN → Tonemapping → Swapchain）
-- ImGui 渲染模式切换（光栅化 ↔ PT 参考视图）
+- ImGui 渲染模式切换（光栅化 ↔ PT 参考视图）+ PT 参数面板
+- Area Light NEE（emissive 面光源 importance sampling + MIS，EmissiveLightBuilder）
+- Texture LOD（Ray Cones，纹理 mip 选择 + LOD bias 调参）
 
-**产出：** 能在 PT 参考视图模式下看到路径追踪渲染的画面。相机静止时画面逐渐收敛变清晰，OIDN 降噪提供即时预览。验证整个 RT 技术栈（AS 构建、RT Pipeline、PT 采样、降噪）端到端可用。
+**产出：** 能在 PT 参考视图模式下看到路径追踪渲染的画面。相机静止时画面逐渐收敛变清晰，OIDN 降噪提供即时预览。Emissive 表面正确照亮周围，纹理采样有合理的 LOD 选择。验证整个 RT 技术栈（AS 构建、RT Pipeline、PT 采样、降噪）端到端可用。
 
-**战略价值：** RT 基础设施（AS、RT Pipeline、PT 核心 shader）为阶段七的烘焙器和 M2 的实时 PT 直接复用。独立渲染路径架构为 M2 实时 PT 模式提供框架。
+**战略价值：** RT 基础设施（AS、RT Pipeline、PT 核心 shader）为阶段七的烘焙器和 M2 的实时 PT 直接复用。独立渲染路径架构为 M2 实时 PT 模式提供框架。Area light NEE 和 Ray Cones 同样为 M2 实时 PT 直接复用。
 
 ---
 
