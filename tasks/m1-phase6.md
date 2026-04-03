@@ -64,7 +64,7 @@
 
 ## Step 6a：pt_common.glsl + C++ 基础设施
 
-- [ ] ShaderCompiler 扩展：支持 RT shader stage（raygen、closesthit、anyhit、miss），shaderc target vulkan_1_4
+- [x] ShaderCompiler 扩展：支持 RT shader stage（raygen、closesthit、anyhit、miss），shaderc target vulkan_1_4
 - [ ] GlobalUniformData 新增 inv_view（mat4，offset 864），总大小 864→928 bytes + static_assert 更新
 - [ ] bindings.glsl GlobalUBO 新增 inv_view 字段
 - [ ] 新增 `app/include/himalaya/app/blue_noise_data.h`：128×128 R8Unorm blue noise 像素数据（`constexpr uint8_t[16384]`，从 `noise/HDR_L_0.png` 提取）+ Renderer 初始化时上传 GPU 注册到 bindless 数组

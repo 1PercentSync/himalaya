@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 6a 第一小项：ShaderCompiler 扩展支持 RT shader stage
+Step 6a 第二小项：GlobalUniformData 新增 inv_view
 
 ---
 
