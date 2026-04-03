@@ -74,6 +74,8 @@ namespace himalaya::rhi {
                 vkGetDeviceProcAddr(device, "vkCreateRayTracingPipelinesKHR"));
             pfn_get_rt_shader_group_handles = reinterpret_cast<PFN_vkGetRayTracingShaderGroupHandlesKHR>(
                 vkGetDeviceProcAddr(device, "vkGetRayTracingShaderGroupHandlesKHR"));
+            pfn_get_as_device_address = reinterpret_cast<PFN_vkGetAccelerationStructureDeviceAddressKHR>(
+                vkGetDeviceProcAddr(device, "vkGetAccelerationStructureDeviceAddressKHR"));
             CommandBuffer::init_rt_functions(device);
         }
     }

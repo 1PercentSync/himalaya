@@ -184,6 +184,9 @@ namespace himalaya::rhi {
         /** @brief vkGetRayTracingShaderGroupHandlesKHR function pointer. */
         PFN_vkGetRayTracingShaderGroupHandlesKHR pfn_get_rt_shader_group_handles = nullptr;
 
+        /** @brief vkGetAccelerationStructureDeviceAddressKHR function pointer. */
+        PFN_vkGetAccelerationStructureDeviceAddressKHR pfn_get_as_device_address = nullptr;
+
         /** @brief Logical device. */
         VkDevice device = VK_NULL_HANDLE;
 
