@@ -129,6 +129,9 @@ layout (set = 0, binding = 0) uniform GlobalUBO {
     mat4 prev_view_projection;              // offset 784 — temporal reprojection (current world → prev UV)
     uint frame_index;                       // offset 848 — monotonically increasing frame counter (temporal noise)
     uint ao_so_mode;                        // offset 852 — 0 = Lagarde, 1 = GTSO (bent normal)
+    // 8 bytes implicit pad (vec4 alignment)
+    // ---- Phase 6 fields ----
+    mat4 inv_view;                          // offset 864 — inverse view matrix (PT raygen primary ray)
 } global;
 
 layout (set = 0, binding = 1) readonly buffer LightBuffer {

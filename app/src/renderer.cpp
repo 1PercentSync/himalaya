@@ -857,6 +857,9 @@ namespace himalaya::app {
         ubo_data.frame_index = frame_counter_;
         ubo_data.ao_so_mode = input.ao_config.use_gtso ? 1u : 0u;
 
+        // --- Phase 6 matrices ---
+        ubo_data.inv_view = glm::inverse(input.camera.view);
+
         // --- Shadow fields ---
         ubo_data.shadow_normal_offset = input.shadow_config.normal_offset;
         ubo_data.shadow_texel_size = 1.0f / static_cast<float>(shadow_pass_.resolution());
