@@ -12,6 +12,7 @@ target_sources(himalaya_framework PRIVATE
         src/imgui_backend.cpp
         src/material_system.cpp
         src/mesh.cpp
+        src/scene_as_builder.cpp
         src/render_graph.cpp
         src/shadow.cpp
         src/stb_impl.cpp
