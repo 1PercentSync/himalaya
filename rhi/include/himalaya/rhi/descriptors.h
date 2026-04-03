@@ -30,7 +30,8 @@ namespace himalaya::rhi {
      * @brief Manages descriptor set layouts, descriptor pools, and bindless texture registration.
      *
      * Owns three descriptor set layouts:
-     * - Set 0: per-frame global data (GlobalUBO + LightBuffer + MaterialBuffer + InstanceBuffer)
+     * - Set 0: per-frame global data (GlobalUBO + LightBuffer + MaterialBuffer + InstanceBuffer;
+     *          RT adds: TLAS binding 4, GeometryInfoBuffer binding 5)
      * - Set 1: bindless arrays (binding 0: sampler2D[], binding 1: samplerCube[])
      * - Set 2: render target intermediates (8 named bindings, PARTIALLY_BOUND)
      *
@@ -214,7 +215,7 @@ namespace himalaya::rhi {
 
         // ---- Layouts ----
 
-        /** @brief Set 0: GlobalUBO (0) + LightBuffer (1) + MaterialBuffer (2) + InstanceBuffer (3). */
+        /** @brief Set 0: GlobalUBO (0) + LightBuffer (1) + MaterialBuffer (2) + InstanceBuffer (3); RT adds TLAS (4) + GeometryInfoBuffer (5). */
         VkDescriptorSetLayout set0_layout_ = VK_NULL_HANDLE;
 
         /** @brief Set 1: bindless sampler2D array (binding 0) + samplerCube array (binding 1). */

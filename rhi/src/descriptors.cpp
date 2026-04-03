@@ -226,7 +226,8 @@ namespace himalaya::rhi {
                                               const BufferHandle buffer,
                                               const uint64_t range) const {
         assert(frame_index < kMaxFramesInFlight && "Frame index out of range");
-        assert(binding <= (context_->rt_supported ? 5u : 3u) && "Set 0 binding out of range");
+        assert((binding <= 3 || (context_->rt_supported && binding == 5))
+            && "Set 0 binding out of range (binding 4 is AS type, use write_set0_tlas)");
 
         const auto &buf = resource_manager_->get_buffer(buffer);
 
@@ -389,9 +390,16 @@ namespace himalaya::rhi {
 
         // --- Set 1: bindless arrays (binding 0 = sampler2D[], binding 1 = samplerCube[]) ---
         // Both bindings: PARTIALLY_BOUND + UPDATE_AFTER_BIND, fixed upper bound
+        // RT stages: closesthit/anyhit sample material textures, miss samples IBL cubemap.
+        // Raygen does not sample bindless textures (only reads GlobalUBO + writes accumulation).
+        const VkShaderStageFlags kBindlessRtStages = rt
+                                                         ? (VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR |
+                                                            VK_SHADER_STAGE_ANY_HIT_BIT_KHR |
+                                                            VK_SHADER_STAGE_MISS_BIT_KHR)
+                                                         : 0;
         const VkShaderStageFlags kBindlessStages = VK_SHADER_STAGE_FRAGMENT_BIT |
                                                    VK_SHADER_STAGE_COMPUTE_BIT |
-                                                   kRtStages;
+                                                   kBindlessRtStages;
 
         const VkDescriptorSetLayoutBinding set1_bindings[] = {
             {
