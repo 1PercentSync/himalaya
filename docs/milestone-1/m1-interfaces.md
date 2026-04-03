@@ -1751,10 +1751,23 @@ struct RTPipeline {
 
 #### CommandBuffer RT 扩展（阶段六）
 
+与 compute 对称的 RT 绑定方法，使用 `VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR`。Step 7 ReferenceViewPass 录制时使用，避免通过 `handle()` 逃逸到原始 Vulkan。
+
 ```cpp
 class CommandBuffer {
 public:
     // ... 已有接口 ...
+
+    /// 绑定 RT pipeline。
+    void bind_rt_pipeline(const RTPipeline& rt_pipeline) const;
+
+    /// 绑定预分配 descriptor sets 到 RT pipeline（Set 0-2）。
+    void bind_rt_descriptor_sets(VkPipelineLayout layout, uint32_t first_set,
+                                 const VkDescriptorSet* sets, uint32_t count) const;
+
+    /// Push descriptors 到 RT pipeline（Set 3 per-pass I/O）。
+    void push_rt_descriptor_set(VkPipelineLayout layout, uint32_t set,
+                                std::span<const VkWriteDescriptorSet> writes) const;
 
     /// 录制 ray trace dispatch。
     void trace_rays(const RTPipeline& rt_pipeline, uint32_t width, uint32_t height) const;
