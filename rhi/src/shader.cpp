@@ -92,6 +92,10 @@ namespace himalaya::rhi {
             case ShaderStage::Vertex: return shaderc_glsl_vertex_shader;
             case ShaderStage::Fragment: return shaderc_glsl_fragment_shader;
             case ShaderStage::Compute: return shaderc_glsl_compute_shader;
+            case ShaderStage::RayGen: return shaderc_glsl_raygen_shader;
+            case ShaderStage::ClosestHit: return shaderc_glsl_closesthit_shader;
+            case ShaderStage::AnyHit: return shaderc_glsl_anyhit_shader;
+            case ShaderStage::Miss: return shaderc_glsl_miss_shader;
         }
         std::abort();
     }
@@ -100,13 +104,13 @@ namespace himalaya::rhi {
     static std::string make_cache_key(const std::string &source, const ShaderStage stage) {
         char prefix;
         switch (stage) {
-            case ShaderStage::Vertex: prefix = 'V';
-                break;
-            case ShaderStage::Fragment: prefix = 'F';
-                break;
-            case ShaderStage::Compute: prefix = 'C';
-                break;
-            default: std::abort();
+            case ShaderStage::Vertex: prefix = 'V'; break;
+            case ShaderStage::Fragment: prefix = 'F'; break;
+            case ShaderStage::Compute: prefix = 'C'; break;
+            case ShaderStage::RayGen: prefix = 'R'; break;
+            case ShaderStage::ClosestHit: prefix = 'H'; break;
+            case ShaderStage::AnyHit: prefix = 'A'; break;
+            case ShaderStage::Miss: prefix = 'M'; break;
         }
         return prefix + source;
     }

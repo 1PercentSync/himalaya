@@ -79,6 +79,10 @@ namespace himalaya::rhi {
         Vertex,
         Fragment,
         Compute,
+        RayGen,
+        ClosestHit,
+        AnyHit,
+        Miss,
     };
 
     /**
