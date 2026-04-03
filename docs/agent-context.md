@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段六 — RT 基础设施 + PT 参考视图（规划完成，待实现）
-- **进度**：Step 3 完成，Step 4 待开始
+- **进度**：Step 4 完成，Step 5 待开始
 
 ### 下一个任务
 
-Step 4 下一小项：CommandBuffer 新增 RT command wrappers（bind_rt_pipeline / bind_rt_descriptor_sets / push_rt_descriptor_set）
+Step 5 第一小项：Context 补充加载 vkGetAccelerationStructureDeviceAddressKHR 函数指针
 
 ---
 
