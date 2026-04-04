@@ -11,7 +11,8 @@
 #include <spdlog/spdlog.h>
 
 namespace himalaya::framework {
-    void Denoiser::init(const rhi::Context &ctx, rhi::ResourceManager &rm,const uint32_t width, const uint32_t height) {
+    void Denoiser::init(const rhi::Context &ctx, rhi::ResourceManager &rm, const uint32_t width,
+                        const uint32_t height) {
         device_ = ctx.device;
         rm_ = &rm;
         width_ = width;
@@ -81,29 +82,98 @@ namespace himalaya::framework {
         semaphore_value_ = 0;
     }
 
-    void Denoiser::request_denoise(const uint32_t /*accumulation_generation*/) {
-        // TODO: Step 9 — Denoiser::request_denoise()
+    void Denoiser::request_denoise(const uint32_t accumulation_generation) {
+        trigger_generation_ = accumulation_generation;
+        pending_signal_value_ = ++semaphore_value_;
+        state_.store(DenoiseState::ReadbackPending, std::memory_order_release);
     }
 
     void Denoiser::launch_processing() {
-        // TODO: Step 9 — Denoiser::launch_processing()
+        state_.store(DenoiseState::Processing, std::memory_order_release);
+
+        // Capture by value what the thread needs; pointers to persistent resources are safe.
+        // ReSharper disable once CppLocalVariableMayBeConst
+        VkDevice vk_device = device_;
+        // ReSharper disable once CppLocalVariableMayBeConst
+        VkSemaphore semaphore = timeline_semaphore_;
+        const uint64_t wait_value = pending_signal_value_;
+        const uint32_t w = width_;
+        const uint32_t h = height_;
+
+        auto *beauty_buf = static_cast<oidn::BufferRef *>(oidn_beauty_buf_);
+        auto *albedo_buf = static_cast<oidn::BufferRef *>(oidn_albedo_buf_);
+        auto *normal_buf = static_cast<oidn::BufferRef *>(oidn_normal_buf_);
+        const auto *output_buf = static_cast<oidn::BufferRef *>(oidn_output_buf_);
+        auto *filter = static_cast<oidn::FilterRef *>(oidn_filter_);
+        auto *oidn_dev = static_cast<oidn::DeviceRef *>(oidn_device_);
+
+        // Mapped pointers for Vulkan staging buffers (persistently mapped by VMA)
+        const void *readback_beauty_ptr = rm_->get_buffer(readback_beauty_).allocation_info.pMappedData;
+        const void *readback_albedo_ptr = rm_->get_buffer(readback_albedo_).allocation_info.pMappedData;
+        const void *readback_normal_ptr = rm_->get_buffer(readback_normal_).allocation_info.pMappedData;
+        void *upload_ptr = rm_->get_buffer(upload_).allocation_info.pMappedData;
+
+        std::atomic<DenoiseState> *state_ptr = &state_;
+
+        thread_ = std::jthread([=](const std::stop_token &) {
+            // Wait for GPU readback copy to complete
+            VkSemaphoreWaitInfo wait_info{};
+            wait_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO;
+            wait_info.semaphoreCount = 1;
+            wait_info.pSemaphores = &semaphore;
+            wait_info.pValues = &wait_value;
+            vkWaitSemaphores(vk_device, &wait_info, UINT64_MAX);
+
+            const size_t beauty_size = static_cast<size_t>(w) * h * 16;
+            const size_t aux_size = static_cast<size_t>(w) * h * 8;
+
+            // Copy Vulkan staging → OIDN buffers
+            beauty_buf->write(0, beauty_size, readback_beauty_ptr);
+            albedo_buf->write(0, aux_size, readback_albedo_ptr);
+            normal_buf->write(0, aux_size, readback_normal_ptr);
+
+            // Execute OIDN filter
+            filter->execute();
+            oidn_dev->sync();
+
+            // Check for errors
+            const char *error_msg = nullptr;
+            if (const auto error = oidn_dev->getError(error_msg); error != oidn::Error::None) {
+                spdlog::error("OIDN filter failed: {} ({})",
+                              error_msg ? error_msg : "unknown",
+                              static_cast<int>(error));
+                state_ptr->store(DenoiseState::Idle, std::memory_order_release);
+                return;
+            }
+
+            // Copy OIDN output → Vulkan upload staging
+            output_buf->read(0, beauty_size, upload_ptr);
+
+            state_ptr->store(DenoiseState::UploadPending, std::memory_order_release);
+        });
     }
 
-    bool Denoiser::poll_upload_ready(const uint32_t /*current_generation*/) {
-        // TODO: Step 9 — Denoiser::poll_upload_ready()
-        return false;
+    bool Denoiser::poll_upload_ready(const uint32_t current_generation) {
+        if (state_.load(std::memory_order_acquire) != DenoiseState::UploadPending) {
+            return false;
+        }
+        if (current_generation != trigger_generation_) {
+            // Accumulation was reset — discard stale result
+            state_.store(DenoiseState::Idle, std::memory_order_release);
+            return false;
+        }
+        return true;
     }
 
     void Denoiser::complete_upload() {
-        // TODO: Step 9 — Denoiser::complete_upload()
+        state_.store(DenoiseState::Idle, std::memory_order_release);
     }
 
     DenoiseState Denoiser::state() const {
         return state_.load(std::memory_order_acquire);
     }
 
-    void Denoiser::on_resize(rhi::ResourceManager &rm,
-                             const uint32_t width, const uint32_t height) {
+    void Denoiser::on_resize(rhi::ResourceManager &rm, const uint32_t width, const uint32_t height) {
         join_and_idle();
 
         width_ = width;
