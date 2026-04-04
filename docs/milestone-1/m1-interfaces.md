@@ -2011,18 +2011,87 @@ Push constants: `PTPushConstants`（见「PT Push Constants 布局」）。
 ```cpp
 namespace himalaya::framework {
 
+/// Denoise pipeline state machine.
+enum class DenoiseState : uint8_t {
+    Idle,             ///< Ready to accept a new denoise request.
+    ReadbackPending,  ///< Request accepted; caller must register RG readback pass this frame.
+    Processing,       ///< Background thread running (wait semaphore + OIDN execute).
+    UploadPending,    ///< Background thread done; caller must register RG upload pass next frame.
+};
+
+/// Async OIDN denoiser — zero main-thread blocking.
+///
+/// Lifecycle: init() → [request/launch/poll/complete cycle] → destroy().
+/// Readback and upload are RG Transfer Passes (caller-registered).
+/// OIDN execution runs on a per-request std::jthread background thread.
+/// Timeline semaphore synchronizes readback completion → background thread.
 class Denoiser {
 public:
-    /// 创建 OIDN device（GPU 优先 fallback CPU）+ RT filter + 持久 staging buffers。
+    /// Create OIDN device (GPU preferred, CPU fallback), RT filter,
+    /// persistent staging buffers, and timeline semaphore.
     void init(rhi::Context& ctx, rhi::ResourceManager& rm);
 
-    /// Vulkan readback（beauty + albedo + normal）→ OIDN filter execute（辅助通道配置）→ Vulkan upload。
-    /// 阻塞操作（GPU denoise + CPU readback），对参考视图可接受。
-    void denoise(rhi::ImageHandle accumulation, rhi::ImageHandle albedo,
-                 rhi::ImageHandle normal, rhi::ImageHandle output);
+    /// Request a denoise operation. Records the accumulation_generation for
+    /// later discard detection. State: Idle → ReadbackPending.
+    /// Caller must register the readback copy pass in this frame's RG and
+    /// signal the timeline semaphore on submit.
+    void request_denoise(uint32_t accumulation_generation);
 
-    void on_resize();
+    /// Launch the background thread. State: ReadbackPending → Processing.
+    /// Called after the RG containing the readback pass has been submitted.
+    void launch_processing();
+
+    /// Check if the background thread has finished and the result is still valid.
+    /// If UploadPending and generation matches: returns true (caller registers upload pass).
+    /// If UploadPending and generation mismatch: discards result, state → Idle, returns false.
+    /// If not UploadPending: returns false.
+    [[nodiscard]] bool poll_upload_ready(uint32_t current_generation);
+
+    /// Called after the upload pass executes. State: UploadPending → Idle.
+    void complete_upload();
+
+    /// Current state (for UI display and trigger guard checks).
+    [[nodiscard]] DenoiseState state() const;
+
+    /// Timeline semaphore handle (caller adds to frame submit's signal list).
+    [[nodiscard]] VkSemaphore timeline_semaphore() const;
+
+    /// Next signal value for the timeline semaphore (caller uses in VkTimelineSemaphoreSubmitInfo).
+    [[nodiscard]] uint64_t next_signal_value() const;
+
+    /// Readback staging buffer handles (caller uses in RG readback copy pass).
+    [[nodiscard]] rhi::BufferHandle readback_beauty() const;
+    [[nodiscard]] rhi::BufferHandle readback_albedo() const;
+    [[nodiscard]] rhi::BufferHandle readback_normal() const;
+
+    /// Upload staging buffer handle (caller uses in RG upload pass).
+    [[nodiscard]] rhi::BufferHandle upload_staging() const;
+
+    /// Join background thread + rebuild staging buffers for new resolution.
+    void on_resize(uint32_t width, uint32_t height);
+
+    /// Join background thread + release all resources (OIDN device, filter,
+    /// staging buffers, timeline semaphore).
     void destroy();
+
+private:
+    std::jthread thread_;                          ///< Per-request background thread.
+    std::atomic<DenoiseState> state_{DenoiseState::Idle};
+    uint32_t trigger_generation_ = 0;              ///< Generation recorded at request time.
+    uint64_t semaphore_value_ = 0;                 ///< Monotonically increasing signal value.
+
+    // OIDN resources
+    // ... oidn::DeviceRef, oidn::FilterRef, oidn::BufferRef (beauty/albedo/normal/output)
+
+    // Vulkan resources
+    VkSemaphore timeline_semaphore_ = VK_NULL_HANDLE;
+    rhi::BufferHandle readback_beauty_;            ///< HOST_VISIBLE, persistent.
+    rhi::BufferHandle readback_albedo_;
+    rhi::BufferHandle readback_normal_;
+    rhi::BufferHandle upload_staging_;              ///< HOST_VISIBLE, persistent.
+
+    rhi::Context* ctx_ = nullptr;
+    rhi::ResourceManager* rm_ = nullptr;
 };
 
 }  // namespace himalaya::framework
@@ -2146,8 +2215,9 @@ struct DebugUIContext {
     bool& denoise_enabled;                      ///< 降噪功能开关（读写）
     bool& auto_denoise;                         ///< 自动降噪开关（读写）
     uint32_t& auto_denoise_interval;            ///< 自动降噪间隔（每 N 采样，读写）
-    bool& show_denoised;                        ///< 显示降噪/原始切换（读写）
-    uint32_t last_denoised_sample_count;        ///< 上次降噪时采样数（只读）
+    bool& show_denoised;                        ///< 显示降噪/原始切换（读写，false = Show Raw 暂停降噪）
+    uint32_t last_denoised_sample_count;        ///< 触发时采样数（只读）
+    framework::DenoiseState denoise_state;      ///< 当前降噪状态（只读，控制 UI 按钮灰掉）
 };
 
 struct DebugUIActions {
@@ -2155,7 +2225,7 @@ struct DebugUIActions {
 
     // --- 阶段六新增 ---
     bool pt_reset_requested = false;            ///< 重置累积按钮
-    bool pt_denoise_requested = false;          ///< 手动降噪按钮
+    bool pt_denoise_requested = false;          ///< 手动降噪按钮（state != Idle || sample_count == 0 || !denoise_enabled || !show_denoised 时灰掉）
 };
 ```
 

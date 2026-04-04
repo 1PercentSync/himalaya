@@ -60,6 +60,33 @@ Closest-hit shader 通过 `geometry_infos[gl_InstanceCustomIndexEXT + gl_Geometr
 
 选择 CPU 中转而非 VK_KHR_external_memory 零拷贝的理由：M1 的烘焙器是离线的，参考视图降噪不需要每帧执行（每隔 N 次采样触发一次），CPU 中转延迟完全可接受。省去外部内存互操作的复杂度。
 
+**异步执行**：降噪完全不阻塞主线程。三段操作分离执行：
+
+1. **Readback**：RG 内 Transfer Pass（与渲染命令同一 submit，GPU 流水线化）
+2. **OIDN 执行**：`std::jthread` 后台线程（`vkWaitSemaphores` 等待 readback 完成 → memcpy → `oidnExecuteFilter()` → memcpy）
+3. **Upload**：下一帧 RG 内 Transfer Pass（后台线程完成后，主线程检测并注册）
+
+选择 RG 内 Transfer Pass 而非 immediate scope（`begin_immediate` / `end_immediate`）的理由：immediate scope 用 `vkQueueWaitIdle` 阻塞主线程。RG 内 copy 与渲染命令一起提交，CPU 零等待。选择 RG upload 而非后台线程自行 submit 的理由：避免引入 queue mutex（`vkQueueSubmit` 同一 queue 需外部同步），后台线程自行 submit 会侵入 Context 基础设施，收益仅是少一帧延迟（秒级降噪间隔中完全无感）。
+
+**Timeline Semaphore 同步**：Denoiser 持有一个 Vulkan timeline semaphore（1.2 核心，项目目标 1.4）。降噪帧的 `vkQueueSubmit` 额外 signal 该 semaphore，后台线程 `vkWaitSemaphores` 纯 CPU 等待。选择 timeline semaphore 而非复用 per-frame fence 的理由：per-frame fence 在下一帧 `begin_frame()` 被 wait + reset，后台线程与主线程竞态。timeline semaphore 的 wait 不消耗/不 reset 信号值，多方可安全并发等待。
+
+**线程模型**：按需 `std::jthread`，每次降噪创建新线程，完成后自然结束。降噪频率极低（秒级），线程创建开销可忽略。不用持久线程 + condition_variable（省去 CV 通知和空闲管理的复杂度）。`std::jthread` 析构自动 `request_stop` + `join`，赋值 `thread_ = {}` 即安全终止。
+
+**Accumulation generation**：`uint32_t accumulation_generation_`（Renderer 侧，单调递增），每次 accumulation 重置时 +1。降噪触发时记录当前 generation，upload 时比对。不匹配 → 结果过期，丢弃（跳过 upload pass，状态 → Idle）。统一覆盖所有丢弃场景（相机移动、IBL 旋转、resize、场景加载、`max_bounces`/`firefly_clamp` 变更导致的重置）。
+
+**状态机**：
+
+```
+Idle → ReadbackPending → Processing → UploadPending → Idle
+```
+
+- `Idle`：可触发降噪
+- `ReadbackPending`：已请求，同帧 RG 注册 readback copy pass（帧内瞬态，不跨帧）
+- `Processing`：后台线程执行中（wait semaphore + OIDN）
+- `UploadPending`：后台线程完成，等下一帧 RG 注册 upload pass
+
+**Resize / Destroy / 场景加载安全**：`on_resize()`、`destroy()`、场景加载前 join 后台线程。`oidnExecuteFilter()` 不可中断，最坏等待 20-50ms，发生在本身就阻塞的操作中（`vkQueueWaitIdle` / 资源重建），用户无感。
+
 **OIDNBuffer**：OIDN 2.x GPU 模式要求使用 `OIDNBuffer` 对象传递图像数据（GPU 无法访问系统 malloc 内存）。Denoiser 创建持久 `OIDNBuffer`（beauty + albedo + normal + output），Vulkan readback 后 `memcpy` 到 OIDNBuffer，执行后从 OIDNBuffer `memcpy` 到 upload staging buffer。
 
 **像素格式与零转换**：
@@ -69,8 +96,6 @@ Closest-hit shader 通过 `geometry_infos[gl_InstanceCustomIndexEXT + gl_Geometr
 - Output（RGBA32F）→ `OIDN_FORMAT_FLOAT3`，pixelByteStride=16
 
 三种输入无需任何 CPU 端格式转换。Aux albedo 原始设计为 R8G8B8A8Unorm（Step 7），Step 9 实现前升级为 R16G16B16A16Sfloat（half 精度高于 R8 的 256 级，零质量损失；VRAM 增加从 4→8 bytes/pixel，1080p 下约 +8MB 可忽略）。两张 aux 统一格式简化 readback 和 OIDN 配置。
-
-**降噪频率**：参考视图不必每帧降噪，可配置为每 N 次采样后触发一次 OIDN，或由用户手动触发。
 
 ---
 
@@ -181,15 +206,30 @@ PT 参考视图仅经过 Tonemapping → Swapchain，不走其他后处理（Blo
 
 ## OIDN 降噪触发
 
-- 每累积 **N 个采样**自动触发一次（N 可配置，默认 64）
-- ImGui 提供自动触发开关，关闭自动时允许手动触发
-- 降噪结果写入单独的 denoised buffer，不覆盖 accumulation buffer（累积继续进行）
+降噪触发守卫（全部满足才触发）：
+- `denoiser_.state() == Idle`（无正在执行的降噪）
+- `denoise_enabled_`（功能开关开启）
+- `show_denoised_`（非 Show Raw 模式——Show Raw 暂停所有降噪触发）
+- `sample_count > 0`（有有效采样数据）
+
+触发方式：
+- **自动**：`auto_denoise_ && (sample_count - last_denoised_sample_count_ >= interval)`
+- **手动**：`DebugUIActions::pt_denoise_requested`
+
+`last_denoised_sample_count_` 记录**触发时**的 sample count（非完成时）。降噪执行期间若 sample count 已超过下一个间隔点 → 跳过（状态 ≠ Idle）。完成后以触发时的值为基准重新计算，可能立即再次触发（补偿等待期间错过的更新）。
+
+降噪结果写入单独的 denoised buffer，不覆盖 accumulation buffer（累积继续进行）。
 
 ---
 
 ## 参考视图输出显示
 
-默认显示 OIDN 降噪后结果。ImGui 开关可切换为显示原始累积结果（用于观察真实噪点状况）。降噪功能关闭时自然显示原始累积。
+Tonemapping 输入选择：`show_denoised_ && denoise_enabled_ && denoised_generation_ == accumulation_generation_` → 导入 denoised buffer，否则导入 accumulation buffer。
+
+- **Show Denoised**（默认）：显示最近一次降噪结果（如有），降噪完成时画面瞬间更新
+- **Show Raw**：显示原始累积画面（带噪点），**同时暂停所有降噪触发**（自动和手动均不执行）。切回 Show Denoised 后恢复计时
+- **denoise_enabled 关闭**：显示原始累积，进行中的降噪静默完成但结果不显示。重新开启时旧结果通过 generation 比对决定是否可用
+- **模式切换（PT → 光栅化 → PT 同位置）**：denoised buffer 保留，切回后仍可显示（generation 匹配）。仅 accumulation 重置才导致 denoised 结果失效
 
 ---
 

@@ -115,18 +115,27 @@
 - [x] DebugUI：PT checkbox 移至面板顶部（VSync 旁），IBL rotation 变化触发 accumulation reset
 - [x] DebugUI：Camera/Scene/Environment/Shadow/AO/Contact Shadows 栏默认收起
 
-## Step 9：OIDN 集成
+## Step 9：OIDN 集成（异步降噪）
 
 - [ ] PT managed images 补 TransferSrc usage（accumulation + aux albedo + aux normal），readback 需要 VK_IMAGE_USAGE_TRANSFER_SRC_BIT
 - [x] 手动集成 OIDN 预编译库（官方 release，含 CUDA GPU 支持），修改 framework/CMakeLists.txt 链接库 + DLL 拷贝
-- [ ] 新增 denoiser.h/.cpp：Denoiser 类（init / denoise / destroy / on_resize）
-- [ ] OIDN device 创建（GPU 优先 fallback CPU）+ RT filter 创建
-- [ ] 持久 staging buffer 分配（readback + upload，beauty + albedo + normal 各一组）
-- [ ] denoise()：Vulkan readback（accumulation + aux albedo + aux normal）→ OIDN filter execute（辅助通道配置）→ Vulkan upload
-- [ ] Renderer 新增 denoised buffer（RGBA32F managed image）
-- [ ] 降噪状态管理：denoise_enabled / auto_denoise / interval / last_denoised_sample_count / show_denoised
-- [ ] 自动触发逻辑（每 N 采样）+ 手动触发（DebugUIActions）
-- [ ] Tonemapping 输入切换（denoised buffer 或 accumulation buffer）
+- [ ] 新增 denoiser.h/.cpp：DenoiseState 枚举（Idle / ReadbackPending / Processing / UploadPending）+ Denoiser 类
+- [ ] Denoiser::init()：OIDN device 创建（GPU 优先 fallback CPU）+ RT filter + 持久 staging buffers（readback beauty/albedo/normal + upload）+ timeline semaphore 创建
+- [ ] Denoiser::request_denoise(generation)：记录 trigger_generation，状态 → ReadbackPending
+- [ ] Denoiser::launch_processing()：启动 std::jthread 后台线程（vkWaitSemaphores → memcpy → oidnExecuteFilter → memcpy → 状态 → UploadPending），状态 → Processing
+- [ ] Denoiser::poll_upload_ready(current_generation)：UploadPending + generation 匹配 → true；不匹配 → 丢弃，状态 → Idle
+- [ ] Denoiser::complete_upload()：状态 → Idle
+- [ ] Denoiser::on_resize()：join 线程 + 重建 staging buffers
+- [ ] Denoiser::destroy()：join 线程 + 释放所有资源（OIDN device/filter、staging buffers、timeline semaphore）
+- [ ] Renderer 新增 denoised buffer（RGBA32F managed image，TransferDst | Sampled）
+- [ ] Renderer 新增 accumulation_generation_（uint32_t，accumulation 重置时 +1）+ denoised_generation_
+- [ ] 降噪状态管理（Renderer 侧）：denoise_enabled / auto_denoise / interval / last_denoised_sample_count（触发时值）/ show_denoised
+- [ ] 降噪触发守卫：state==Idle && denoise_enabled && show_denoised && sample_count>0 && (自动间隔 || 手动请求)
+- [ ] render_path_tracing() RG 编排：ReadbackPending → 注册 Readback Copy Pass + signal timeline semaphore + launch_processing()
+- [ ] render_path_tracing() RG 编排：poll_upload_ready() → 注册 Upload Pass + complete_upload() + 更新 denoised_generation_
+- [ ] Tonemapping 输入切换：show_denoised && denoise_enabled && denoised_generation==accumulation_generation → denoised buffer，否则 accumulation
+- [ ] accumulation 重置触发点补充 generation++：相机移动、IBL 旋转、max_bounces 变更、firefly_clamp 变更
+- [ ] 场景加载前 join denoiser 线程
 
 ## Step 10：ImGui PT 面板
 
@@ -134,7 +143,7 @@
 - [ ] DebugUIActions 新增 pt_reset_requested + pt_denoise_requested
 - [ ] Rendering section 新增渲染模式 combo（仅 rt_supported 时显示 PT 选项）
 - [ ] Path Tracing collapsing header：状态信息 + Max Bounces + Firefly Clamp slider（0=关闭，默认 10.0）+ Target Samples + Reset 按钮
-- [ ] OIDN collapsing header：Denoise 开关 + Show Denoised/Raw 切换 + Auto Denoise + Interval + Denoise Now 按钮 + 上次降噪采样数
+- [ ] OIDN collapsing header：Denoise 开关 + Show Denoised/Raw 切换（Show Raw 暂停降噪）+ Auto Denoise + Interval + Denoise Now 按钮（state!=Idle || sample_count==0 || !show_denoised 时灰掉）+ 上次降噪采样数 + 降噪状态文字（Idle/Denoising...）
 - [ ] Application 响应 PT actions
 
 ## Step 11：Environment Map Importance Sampling

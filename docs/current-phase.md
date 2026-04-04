@@ -348,39 +348,58 @@ PT 路径的 RG 编排极简：仅 Reference View Pass + Tonemapping Pass + ImGu
 
 ### Step 9：OIDN 集成
 
-集成 Intel Open Image Denoise GPU 降噪。
+集成 Intel Open Image Denoise GPU 降噪。异步执行，主线程零阻塞。
 
 - 手动集成 OIDN 预编译库（官方 release 包含 headers + lib + dll，CUDA GPU 支持内置；vcpkg 无端口）。需修改 `framework/CMakeLists.txt` 添加头文件路径和链接库，OIDN DLL 拷贝到构建输出目录
+- PT managed images 补 `TransferSrc` usage（accumulation + aux albedo + aux normal），readback copy 需要 `VK_IMAGE_USAGE_TRANSFER_SRC_BIT`
 - 新增 `framework/denoiser.h` / `.cpp`：
+  - `DenoiseState` 枚举：`Idle`、`ReadbackPending`、`Processing`、`UploadPending`
   - `Denoiser` 类：
-    - `init(Context&, ResourceManager&)`：创建 OIDN device（GPU 优先，fallback CPU）、创建 filter（"RT" filter，beauty + albedo + normal 辅助输入）、分配 staging buffers（readback + upload，持久不重建；beauty + albedo + normal 各一组）
-    - `denoise(ImageHandle accumulation, ImageHandle albedo, ImageHandle normal, ImageHandle output)`：
-      1. Readback accumulation + albedo + normal → CPU staging buffers
-      2. 设置 OIDN filter input/output 指针（beauty + albedo + normal 辅助通道）
-      3. `oidnExecuteFilter()`（OIDN 内部 upload 到 GPU 执行降噪）
-      4. 读取 OIDN 输出到 CPU staging
-      5. Upload CPU staging → output image（`vkCmdCopyBufferToImage`）
-    - `destroy()`：释放 OIDN device、filter、staging buffers
-    - `on_resize()`：重建 staging buffers
-- Renderer 新增 denoised buffer（RGBA32F managed image，与 accumulation buffer 同尺寸）
-- 降噪状态管理：
+    - `init(Context&, ResourceManager&)`：创建 OIDN device（GPU 优先，fallback CPU）、创建 filter（"RT" filter，beauty + albedo + normal 辅助输入）、分配持久 staging buffers（readback + upload，beauty + albedo + normal 各一组）、创建 timeline semaphore（降噪帧 GPU 完成通知）
+    - `request_denoise(uint32_t accumulation_generation)`：请求降噪，记录当前 `accumulation_generation`，状态 → `ReadbackPending`。调用方需在同帧的 RG 中注册 readback copy pass
+    - `launch_processing()`：启动 `std::jthread` 后台线程，状态 → `Processing`。后台线程流程：`vkWaitSemaphores`（等待 readback copy 完成）→ `memcpy` staging → OIDNBuffer → `oidnExecuteFilter()` → `memcpy` OIDNBuffer → upload staging → 状态 → `UploadPending`
+    - `poll_upload_ready(uint32_t current_generation)`：检查 `UploadPending` 状态。generation 匹配 → 返回 true（调用方注册 upload pass）；generation 不匹配 → 丢弃结果，状态 → `Idle`，返回 false
+    - `complete_upload()`：upload pass 执行后调用，状态 → `Idle`
+    - `state()`：返回当前 `DenoiseState`
+    - `destroy()`：join 后台线程 + 释放 OIDN device、filter、staging buffers、timeline semaphore
+    - `on_resize()`：join 后台线程 + 重建 staging buffers
+  - Timeline semaphore：Denoiser 持有一个 `VkSemaphore`（timeline 类型）+ 单调递增 signal value。降噪帧的 `vkQueueSubmit` 额外 signal 此 semaphore，后台线程 `vkWaitSemaphores` 等待
+  - 后台线程使用 `std::jthread`，每次降噪按需创建，完成后线程自然结束。`on_resize()` 和 `destroy()` 开头 join（`thread_ = {};`）。场景加载前也需 join
+- Renderer 新增 denoised buffer（RGBA32F managed image，与 accumulation buffer 同尺寸，`TransferDst | Sampled` usage）
+- Renderer 新增 `accumulation_generation_`（`uint32_t`，单调递增，每次 accumulation 重置时 +1）
+- 降噪状态管理（Renderer 侧）：
   - `denoise_enabled_`（降噪功能开关）
   - `auto_denoise_`（自动触发开关）
   - `auto_denoise_interval_`（每 N 个采样触发）
-  - `last_denoised_sample_count_`（上次降噪时的采样数）
-  - `show_denoised_`（显示降噪结果还是原始累积）
-- 降噪触发逻辑（Renderer 每帧检查）：
-  - 自动：`auto_denoise_ && (sample_count - last_denoised >= interval)` → 触发
-  - 手动：通过 DebugUIActions 标记触发
-- Tonemapping 输入切换：`show_denoised_ && denoise_enabled_` 时导入 denoised buffer 为 hdr_color，否则导入 accumulation buffer
+  - `last_denoised_sample_count_`（触发时的采样数，非完成时）
+  - `show_denoised_`（显示降噪结果还是原始累积；true = 显示降噪，false = Show Raw）
+  - `denoised_generation_`（上次成功 upload 的降噪结果对应的 generation，显示时比对）
+- 降噪触发守卫（Renderer `render_path_tracing()` 每帧检查）：
+  - 前置条件：`denoiser_.state() == Idle && denoise_enabled_ && show_denoised_ && sample_count > 0`
+  - 自动：`auto_denoise_ && (sample_count - last_denoised >= interval)`
+  - 手动：`DebugUIActions::pt_denoise_requested`
+- `render_path_tracing()` RG 编排：
+  - `denoiser_.state() == ReadbackPending` 时：在 Reference View Pass 之后注册 Readback Copy Pass（Transfer stage，读 accumulation + aux，写 staging buffer），帧 submit 附带 signal timeline semaphore，调用 `denoiser_.launch_processing()`
+  - `denoiser_.poll_upload_ready(accumulation_generation_)` 返回 true 时：注册 Upload Pass（Transfer stage，读 staging buffer，写 denoised image），执行后调用 `denoiser_.complete_upload()`，更新 `denoised_generation_`
+- Tonemapping 输入切换：`show_denoised_ && denoise_enabled_ && denoised_generation_ == accumulation_generation_` 时导入 denoised buffer 为 hdr_color，否则导入 accumulation buffer
 
-**验证**：降噪后画面明显干净（对比原始累积），自动触发按间隔正常工作，手动按钮即时触发，resize 后降噪正常
+**验证**：降噪后画面明显干净（对比原始累积），降噪期间 UI 不卡顿（PT 继续累积），自动触发按间隔正常工作，手动按钮即时触发，降噪中移动相机后结果被丢弃，resize 后降噪正常
 
 #### 设计要点
 
-OIDN 2.4.1 预编译库手动集成到 `third_party/oidn/`（include/lib/bin），C++11 wrapper API。GPU 模式使用 `OIDNBuffer` 传递数据。Aux albedo 格式从 R8G8B8A8Unorm 升级为 R16G16B16A16Sfloat（与 aux normal 统一），配合 OIDN `HALF3` + pixelByteStride=8 实现零 CPU 格式转换。Beauty 使用 `FLOAT3` + pixelByteStride=16。Staging buffer 持久分配（beauty = width×height×16B，aux 各 width×height×8B），避免每次降噪重分配。OIDN "RT" filter 配置 albedo + normal 辅助通道，显著提升低采样数降噪质量。
+**异步架构**：降噪完全不阻塞主线程。Readback（GPU image → staging buffer）和 Upload（staging buffer → GPU image）均通过 RG 内 Transfer Pass 完成，与渲染命令一起提交，GPU 流水线化执行。OIDN `oidnExecuteFilter()` 在 `std::jthread` 后台线程执行（CPU 等待 CUDA GPU 降噪完成）。状态机 `Idle → ReadbackPending → Processing → UploadPending → Idle` 驱动全流程。
 
-OIDN 降噪是阻塞操作（GPU denoise + CPU readback），会造成一帧的卡顿。对参考视图可接受（非每帧执行）。
+**Timeline Semaphore 同步**：Denoiser 持有一个 Vulkan timeline semaphore（1.2 核心，项目目标 1.4）。降噪帧 submit 额外 signal 该 semaphore，后台线程 `vkWaitSemaphores` 纯 CPU 等待（不碰 queue、不需要 mutex）。避免了复用 per-frame fence 的竞态和引入 queue mutex 的架构侵入。
+
+**Accumulation generation**：`uint32_t accumulation_generation_` 单调递增，每次 accumulation 重置（相机移动、IBL 旋转、resize、参数变更）时 +1。降噪触发时记录 generation，upload 时比对。不匹配 → 结果过期，丢弃。统一覆盖所有"结果是否还有效"的判断。
+
+**Show Raw 暂停降噪**：`show_denoised_ == false`（Show Raw）时自动降噪不触发、手动按钮灰掉。切回 Show Denoised 后自动降噪恢复计时，若已超过间隔则下一帧立即触发。
+
+**降噪间隔跳过**：降噪执行期间若 sample count 已累积到下一个间隔点，跳过（状态 ≠ Idle 不触发）。完成后以触发时 `last_denoised_sample_count_` 为基准重新计算，可能立即再次触发，补偿等待期间错过的更新。
+
+**模式切换保留**：PT → 光栅化不丢弃降噪结果（accumulation 和 denoised buffer 均保留）。切回 PT 同位置时降噪结果仍可用（generation 匹配）。仅 accumulation 重置才丢弃。
+
+OIDN 2.4.1 预编译库手动集成到 `third_party/oidn/`（include/lib/bin），C++11 wrapper API。GPU 模式使用 `OIDNBuffer` 传递数据。Aux albedo 格式从 R8G8B8A8Unorm 升级为 R16G16B16A16Sfloat（与 aux normal 统一），配合 OIDN `HALF3` + pixelByteStride=8 实现零 CPU 格式转换。Beauty 使用 `FLOAT3` + pixelByteStride=16。Staging buffer 持久分配（beauty = width×height×16B，aux 各 width×height×8B），避免每次降噪重分配。OIDN "RT" filter 配置 albedo + normal 辅助通道，显著提升低采样数降噪质量。
 
 ---
 
@@ -633,7 +652,9 @@ shaders/
 | OIDN 版本与集成 | OIDN 2.4.1，预编译库 `third_party/oidn/`（include/lib/bin），C++11 wrapper API（`oidn.hpp`）。GPU 模式要求 `OIDNBuffer`（GPU 无法访问系统 malloc 内存）。OIDN device 创建使用 `OIDN_DEVICE_TYPE_DEFAULT`（GPU 优先 fallback CPU） |
 | OIDN 像素格式 | Beauty（RGBA32F）→ FLOAT3 pixelStride=16，Aux Albedo/Normal（RGBA16F）→ HALF3 pixelStride=8，Output（RGBA32F）→ FLOAT3 pixelStride=16。零 CPU 格式转换 |
 | OIDN staging | 持久分配 Vulkan staging buffer：beauty readback = width×height×16B，aux readback 各 width×height×8B，upload = width×height×16B。另有持久 OIDNBuffer（beauty+albedo+normal+output）用于 OIDN GPU 数据传递 |
-| 模式切换缓存 | accumulation buffer 和 sample count 在模式切换时不清零。VP 矩阵变化触发重置，模式切换不触发 |
+| OIDN 异步执行 | 完全不阻塞主线程。状态机 `Idle → ReadbackPending → Processing → UploadPending → Idle`。Readback/Upload 走 RG 内 Transfer Pass（GPU 流水线化）。`oidnExecuteFilter()` 在 `std::jthread` 后台线程执行。Timeline semaphore（Vulkan 1.2 核心）同步 readback 完成通知。`accumulation_generation_` 单调计数器判断结果是否过期（统一覆盖相机移动/IBL 旋转/resize/参数变更所有丢弃场景） |
+| OIDN 降噪行为 | Show Raw 时暂停自动/手动降噪触发。降噪执行期间 sample count 超过下一间隔 → 跳过，完成后以触发时 `last_denoised_sample_count_` 为基准补偿。PT → 光栅化不丢弃结果（generation 匹配时切回仍可用）。`on_resize()`/`destroy()`/场景加载前 join 后台线程 |
+| 模式切换缓存 | accumulation buffer、sample count 和 denoised buffer 在模式切换时不清零不丢弃。VP 矩阵变化触发 accumulation 重置 + generation++，模式切换不触发 |
 | 渲染路径组织 | render() 拆分为 fill_common_gpu_data() + render_rasterization() + render_path_tracing() 私有方法，不引入新抽象 |
 | BLAS 批量构建 | 单次 `vkCmdBuildAccelerationStructuresKHR` 调用传入全部 BLAS，GPU 并行构建。Scratch buffer = 所有 BLAS scratch size 之和（各段对齐到 `minAccelerationStructureScratchOffsetAlignment`），构建后释放 |
 | 顶点格式硬编码 | `VkAccelerationStructureGeometryTrianglesDataKHR` 的 `vertexFormat` = `R32G32B32_SFLOAT`（Vertex::position offset 0），`indexType` = `UINT32`，Vertex stride = 56 bytes。统一顶点格式，AccelerationStructureManager 内部硬编码 |
