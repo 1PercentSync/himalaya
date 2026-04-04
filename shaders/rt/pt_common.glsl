@@ -273,4 +273,96 @@ float rand_pt(uint dim, uint sample_index, ivec2 pixel,
     return fract(s + offset);
 }
 
+// ---- Cosine-Weighted Hemisphere Sampling ----
+
+/**
+ * Samples a direction on the upper hemisphere with cosine-weighted distribution.
+ *
+ * PDF = cos(theta) / PI. Used for diffuse lobe (Lambertian BRDF).
+ * Returns a tangent-space direction (z = up = normal).
+ *
+ * @param xi Two uniform random numbers in [0, 1).
+ * @return Tangent-space direction (normalized, z >= 0).
+ */
+vec3 sample_cosine_hemisphere(vec2 xi) {
+    float phi = TWO_PI * xi.x;
+    float cos_theta = sqrt(xi.y);
+    float sin_theta = sqrt(1.0 - xi.y);
+    return vec3(cos(phi) * sin_theta, sin(phi) * sin_theta, cos_theta);
+}
+
+/**
+ * PDF of cosine-weighted hemisphere sampling.
+ *
+ * @param NdotL Clamped dot(N, sampled_direction).
+ * @return Probability density.
+ */
+float pdf_cosine_hemisphere(float NdotL) {
+    return NdotL * INV_PI;
+}
+
+// ---- GGX VNDF Importance Sampling (Heitz 2018) ----
+
+/**
+ * Samples the GGX visible normal distribution function.
+ *
+ * Produces half vectors weighted by the masking function G1, yielding
+ * zero-weight samples only when the microfacet is back-facing.
+ * Reference: Heitz, "Sampling the GGX Distribution of Visible Normals" (JCGT 2018).
+ *
+ * @param Ve        View direction in tangent space (z = normal), must be normalized.
+ * @param roughness Linear roughness [0, 1] (squared internally to alpha).
+ * @param xi        Two uniform random numbers in [0, 1).
+ * @return Sampled half vector in tangent space (normalized).
+ */
+vec3 sample_ggx_vndf(vec3 Ve, float roughness, vec2 xi) {
+    float alpha = roughness * roughness;
+
+    // Transform view to hemisphere configuration (isotropic: alpha_x = alpha_y)
+    vec3 Vh = normalize(vec3(alpha * Ve.x, alpha * Ve.y, Ve.z));
+
+    // Orthonormal basis around Vh
+    float len2 = Vh.x * Vh.x + Vh.y * Vh.y;
+    vec3 T1 = len2 > 0.0 ? vec3(-Vh.y, Vh.x, 0.0) / sqrt(len2) : vec3(1.0, 0.0, 0.0);
+    vec3 T2 = cross(Vh, T1);
+
+    // Parameterization of the projected area (uniform disk → hemisphere cap)
+    float r = sqrt(xi.x);
+    float phi = TWO_PI * xi.y;
+    float t1 = r * cos(phi);
+    float t2 = r * sin(phi);
+    float s = 0.5 * (1.0 + Vh.z);
+    t2 = (1.0 - s) * sqrt(1.0 - t1 * t1) + s * t2;
+
+    // Reproject onto hemisphere
+    vec3 Nh = t1 * T1 + t2 * T2 + sqrt(max(0.0, 1.0 - t1 * t1 - t2 * t2)) * Vh;
+
+    // Transform back to ellipsoid configuration
+    return normalize(vec3(alpha * Nh.x, alpha * Nh.y, max(0.0, Nh.z)));
+}
+
+/**
+ * PDF of GGX VNDF sampling in solid angle measure.
+ *
+ * PDF_h = D(H) * G1(V) * VdotH / NdotV (visible normal PDF).
+ * Converted to incident direction PDF: PDF_i = PDF_h / (4 * VdotH).
+ * Simplifies to: D(H) * V_SmithGGX_single(NdotV) / (4 * NdotV),
+ * but the direct form below avoids computing G1 separately.
+ *
+ * @param NdotH     Clamped dot(N, H).
+ * @param NdotV     Clamped dot(N, V).
+ * @param VdotH     Clamped dot(V, H).
+ * @param roughness Linear roughness [0, 1].
+ * @return Probability density for the sampled incident direction.
+ */
+float pdf_ggx_vndf(float NdotH, float NdotV, float VdotH, float roughness) {
+    float D = D_GGX(NdotH, roughness);
+    // Smith G1 masking for GGX (single direction)
+    float alpha = roughness * roughness;
+    float a2 = alpha * alpha;
+    float G1 = 2.0 * NdotV / (NdotV + sqrt(a2 + (1.0 - a2) * NdotV * NdotV));
+    // VNDF PDF in half-vector measure, then Jacobian to incident direction
+    return (D * G1) / (4.0 * NdotV);
+}
+
 #endif // PT_COMMON_GLSL
