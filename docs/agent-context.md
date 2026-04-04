@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 6a 第九小项：pt_common.glsl Ray origin offset 工具函数
+Step 6a 第十小项：pt_common.glsl Shading normal 一致性修正
 
 ---
 

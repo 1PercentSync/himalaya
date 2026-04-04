@@ -72,7 +72,7 @@
 - [x] pt_common.glsl：Ray Payload 定义（PrimaryPayload loc 0 56B 含 bounce 字段 + ShadowPayload loc 1）
 - [x] pt_common.glsl：Vertex / Index buffer_reference layout 定义（匹配 Vertex 结构体 56B）
 - [x] pt_common.glsl：顶点属性插值工具（GeometryInfo → buffer_reference 读取 → 重心坐标插值 position/normal/tangent/UV）
-- [ ] pt_common.glsl：Ray origin offset 工具函数（Wächter & Binder，Ray Tracing Gems Ch.6）
+- [x] pt_common.glsl：Ray origin offset 工具函数（Wächter & Binder，Ray Tracing Gems Ch.6）
 - [ ] pt_common.glsl：Shading normal 一致性修正（clamp 到几何法线半球）
 - [ ] pt_common.glsl：Multi-lobe BRDF 选择（Fresnel 估计概率选 diffuse/specular lobe + PDF 补偿）
 - [ ] pt_common.glsl：Sobol 128 维 32-bit 方向数表（16 KB shader 常量，从 `noise/new-joe-kuo-6.21201` 生成）+ 超出 128 维 PCG hash fallback + Cranley-Patterson rotation
