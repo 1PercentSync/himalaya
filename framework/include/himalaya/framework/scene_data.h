@@ -255,7 +255,7 @@ namespace himalaya::framework {
     /**
      * @brief Per-frame global uniform data (Set 0, Binding 0).
      *
-     * std140 layout, 848 bytes (53 × 16) aligned to 16.
+     * std140 layout, 928 bytes (58 × 16) aligned to 16.
      */
     struct GlobalUniformData {
         glm::mat4 view; ///< offset   0
