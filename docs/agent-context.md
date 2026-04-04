@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 6a 第七小项：pt_common.glsl Vertex/Index buffer_reference layout
+Step 6a 第八小项：pt_common.glsl 顶点属性插值工具
 
 ---
 
