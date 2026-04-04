@@ -86,6 +86,7 @@ namespace himalaya::framework {
         trigger_generation_ = accumulation_generation;
         pending_signal_value_ = ++semaphore_value_;
         state_.store(DenoiseState::ReadbackPending, std::memory_order_release);
+        spdlog::info("OIDN: denoise requested (gen={})", accumulation_generation);
     }
 
     void Denoiser::launch_processing() {
@@ -149,6 +150,7 @@ namespace himalaya::framework {
             // Copy OIDN output → Vulkan upload staging
             output_buf->read(0, beauty_size, upload_ptr);
 
+            spdlog::info("OIDN: filter complete, upload pending");
             state_ptr->store(DenoiseState::UploadPending, std::memory_order_release);
         });
     }
@@ -159,6 +161,8 @@ namespace himalaya::framework {
         }
         if (current_generation != trigger_generation_) {
             // Accumulation was reset — discard stale result
+            spdlog::info("OIDN: discarding stale result (gen {} vs current {})",
+                         trigger_generation_, current_generation);
             state_.store(DenoiseState::Idle, std::memory_order_release);
             return false;
         }
@@ -166,6 +170,7 @@ namespace himalaya::framework {
     }
 
     void Denoiser::complete_upload() {
+        spdlog::info("OIDN: upload complete, displaying denoised result");
         state_.store(DenoiseState::Idle, std::memory_order_release);
     }
 
