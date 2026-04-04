@@ -355,7 +355,7 @@ PT 路径的 RG 编排极简：仅 Reference View Pass + Tonemapping Pass + ImGu
 - 新增 `framework/denoiser.h` / `.cpp`：
   - `DenoiseState` 枚举：`Idle`、`ReadbackPending`、`Processing`、`UploadPending`
   - `Denoiser` 类：
-    - `init(Context&, ResourceManager&)`：创建 OIDN device（GPU 优先，fallback CPU）、commit 后查询实际设备类型（`device.get<DeviceType>("type")`）并 log（GPU → info，CPU → warn 提示 ~25x 性能降级）、创建 filter（"RT" filter，beauty + albedo + normal 辅助输入）、分配持久 staging buffers（readback + upload，beauty + albedo + normal 各一组）、创建 timeline semaphore（降噪帧 GPU 完成通知）
+    - `init(Context&, ResourceManager&)`：创建 OIDN device（GPU 优先，fallback CPU）、commit 后查询实际设备类型（`device.get<DeviceType>("type")`）并 log（GPU → info，CPU → warn 提示 ~25x 性能降级）、创建 filter（"RT" filter，HDR，cleanAux，beauty + albedo + normal 辅助输入）、分配持久 staging buffers（readback + upload，beauty + albedo + normal 各一组）、创建 timeline semaphore（降噪帧 GPU 完成通知）
     - `request_denoise(uint32_t accumulation_generation)`：请求降噪，记录当前 `accumulation_generation`，状态 → `ReadbackPending`。调用方需在同帧的 RG 中注册 readback copy pass
     - `launch_processing()`：启动 `std::jthread` 后台线程，状态 → `Processing`。后台线程流程：`vkWaitSemaphores`（等待 readback copy 完成）→ `memcpy` staging → OIDNBuffer → `oidnExecuteFilter()` → `memcpy` OIDNBuffer → upload staging → 状态 → `UploadPending`
     - `poll_upload_ready(uint32_t current_generation)`：检查 `UploadPending` 状态。generation 匹配 → 返回 true（调用方注册 upload pass）；generation 不匹配 → 丢弃结果，状态 → `Idle`，返回 false
@@ -410,7 +410,7 @@ PT 路径的 RG 编排极简：仅 Reference View Pass + Tonemapping Pass + ImGu
 
 **Denoised buffer 首帧安全**：`denoised_generation_` 初始为 `UINT32_MAX`，永远不等于任何 `accumulation_generation_`（从 0 起递增），保证首帧必定 fallback 到 accumulation buffer。仅在 upload 成功后 `denoised_generation_` 更新为当前 `accumulation_generation_`。
 
-OIDN 2.4.1 预编译库手动集成到 `third_party/oidn/`（include/lib/bin），C++11 wrapper API。GPU 模式使用 `OIDNBuffer` 传递数据。Aux albedo 格式从 R8G8B8A8Unorm 升级为 R16G16B16A16Sfloat（与 aux normal 统一），配合 OIDN `HALF3` + pixelByteStride=8 实现零 CPU 格式转换。Beauty 使用 `FLOAT3` + pixelByteStride=16。Staging buffer 持久分配（beauty = width×height×16B，aux 各 width×height×8B），避免每次降噪重分配。OIDN "RT" filter 配置 albedo + normal 辅助通道，显著提升低采样数降噪质量。
+OIDN 2.4.1 预编译库手动集成到 `third_party/oidn/`（include/lib/bin），C++11 wrapper API。GPU 模式使用 `OIDNBuffer` 传递数据。Aux albedo 格式从 R8G8B8A8Unorm 升级为 R16G16B16A16Sfloat（与 aux normal 统一），配合 OIDN `HALF3` + pixelByteStride=8 实现零 CPU 格式转换。Beauty 使用 `FLOAT3` + pixelByteStride=16。Staging buffer 持久分配（beauty = width×height×16B，aux 各 width×height×8B），避免每次降噪重分配。OIDN "RT" filter 配置 `hdr=true`、`cleanAux=true`（bounce 0 aux 无噪声）、`quality=High`，albedo + normal 辅助通道显著提升低采样数降噪质量。
 
 ---
 

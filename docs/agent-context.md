@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 9 第四小项：Denoiser::init()（OIDN device + filter + staging buffers + timeline semaphore）
+Step 9 第五小项：Denoiser::request_denoise()（记录 generation，状态 → ReadbackPending）
 
 ---
 

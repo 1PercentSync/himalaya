@@ -122,14 +122,14 @@
 - [x] 手动集成 OIDN 预编译库（官方 release，多厂商 GPU 支持：CUDA/HIP/SYCL + CPU fallback），修改 framework/CMakeLists.txt 链接库 + DLL 拷贝
 - [x] OIDN 运行时 DLL 拷贝到可执行文件目录（app/CMakeLists.txt POST_BUILD，已配置 glob 全部 DLL）
 - [x] 新增 denoiser.h/.cpp：DenoiseState 枚举（Idle / ReadbackPending / Processing / UploadPending）+ Denoiser 类
-- [ ] Denoiser::init()：OIDN device 创建（GPU 优先 fallback CPU）+ RT filter + 持久 staging buffers（readback beauty/albedo/normal + upload）+ timeline semaphore 创建
+- [x] Denoiser::init()：OIDN device 创建（GPU 优先 fallback CPU）+ RT filter（hdr, cleanAux, High）+ 持久 staging buffers（readback beauty/albedo/normal + upload）+ timeline semaphore 创建
 - [ ] Denoiser::request_denoise(generation)：记录 trigger_generation，状态 → ReadbackPending
 - [ ] Denoiser::launch_processing()：启动 std::jthread 后台线程（vkWaitSemaphores → memcpy → oidnExecuteFilter → memcpy → 状态 → UploadPending），状态 → Processing
 - [ ] Denoiser::poll_upload_ready(current_generation)：UploadPending + generation 匹配 → true；不匹配 → 丢弃，状态 → Idle
 - [ ] Denoiser::complete_upload()：状态 → Idle
-- [ ] Denoiser::on_resize()：join 线程 + 强制 state→Idle + 重建 staging buffers
-- [ ] Denoiser::destroy()：join 线程 + 强制 state→Idle + 释放所有资源（OIDN device/filter、staging buffers、timeline semaphore）
-- [ ] Denoiser::abort()：join 线程 + 强制 state→Idle（场景加载前调用）
+- [x] Denoiser::on_resize()：join 线程 + 强制 state→Idle + 重建 staging buffers + OIDN buffers
+- [x] Denoiser::destroy()：join 线程 + 强制 state→Idle + 释放所有资源（OIDN device/filter、staging buffers、timeline semaphore）
+- [x] Denoiser::abort()：join 线程 + 强制 state→Idle（场景加载前调用）
 - [ ] 后台线程 oidnExecuteFilter 失败处理：spdlog::error + state→Idle（跳过 upload）
 - [ ] Renderer 新增 denoised buffer（RGBA32F managed image，TransferDst | Sampled）
 - [ ] Renderer 新增 accumulation_generation_（uint32_t，accumulation 重置时 +1）+ denoised_generation_
