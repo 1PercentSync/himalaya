@@ -338,6 +338,15 @@ namespace himalaya::app {
         /** @brief MSAA roughness buffer (R8Unorm, Nx, ColorAttachment); invalid when sample_count == 1. */
         framework::RGManagedHandle managed_msaa_roughness_;
 
+        /** @brief PT accumulation buffer (RGBA32F, Relative 1.0x, Storage); created when rt_supported. */
+        framework::RGManagedHandle managed_pt_accumulation_;
+
+        /** @brief PT OIDN auxiliary albedo (RGBA32F, Relative 1.0x, Storage); created when rt_supported. */
+        framework::RGManagedHandle managed_pt_aux_albedo_;
+
+        /** @brief PT OIDN auxiliary normal (RGBA32F, Relative 1.0x, Storage); created when rt_supported. */
+        framework::RGManagedHandle managed_pt_aux_normal_;
+
         /** @brief Current MSAA sample count (1 = no MSAA, default 4x). */
         uint32_t current_sample_count_ = 4;
 

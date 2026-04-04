@@ -295,6 +295,47 @@ namespace himalaya::app {
                                                                     .mip_levels = 1,
                                                                 }, false);
 
+        // --- Phase 6 PT resources (only when RT is supported) ---
+
+        if (ctx_->rt_supported) {
+            managed_pt_accumulation_ = render_graph_.create_managed_image(
+                "PT Accumulation", {
+                    .size_mode = framework::RGSizeMode::Relative,
+                    .width_scale = 1.0f,
+                    .height_scale = 1.0f,
+                    .width = 0,
+                    .height = 0,
+                    .format = rhi::Format::R32G32B32A32Sfloat,
+                    .usage = rhi::ImageUsage::Storage,
+                    .sample_count = 1,
+                    .mip_levels = 1,
+                }, false);
+            managed_pt_aux_albedo_ = render_graph_.create_managed_image(
+                "PT Aux Albedo", {
+                    .size_mode = framework::RGSizeMode::Relative,
+                    .width_scale = 1.0f,
+                    .height_scale = 1.0f,
+                    .width = 0,
+                    .height = 0,
+                    .format = rhi::Format::R8G8B8A8Unorm,
+                    .usage = rhi::ImageUsage::Storage,
+                    .sample_count = 1,
+                    .mip_levels = 1,
+                }, false);
+            managed_pt_aux_normal_ = render_graph_.create_managed_image(
+                "PT Aux Normal", {
+                    .size_mode = framework::RGSizeMode::Relative,
+                    .width_scale = 1.0f,
+                    .height_scale = 1.0f,
+                    .width = 0,
+                    .height = 0,
+                    .format = rhi::Format::R16G16B16A16Sfloat,
+                    .usage = rhi::ImageUsage::Storage,
+                    .sample_count = 1,
+                    .mip_levels = 1,
+                }, false);
+        }
+
         // Fall back to the highest supported sample count if the default isn't available
         while (current_sample_count_ > 1 &&
                !(ctx_->msaa_sample_counts & current_sample_count_)) {
@@ -650,6 +691,15 @@ namespace himalaya::app {
         }
         if (managed_msaa_roughness_.valid()) {
             render_graph_.destroy_managed_image(managed_msaa_roughness_);
+        }
+        if (managed_pt_accumulation_.valid()) {
+            render_graph_.destroy_managed_image(managed_pt_accumulation_);
+        }
+        if (managed_pt_aux_albedo_.valid()) {
+            render_graph_.destroy_managed_image(managed_pt_aux_albedo_);
+        }
+        if (managed_pt_aux_normal_.valid()) {
+            render_graph_.destroy_managed_image(managed_pt_aux_normal_);
         }
         render_graph_.destroy_managed_image(managed_ao_noisy_);
         render_graph_.destroy_managed_image(managed_ao_blurred_);
