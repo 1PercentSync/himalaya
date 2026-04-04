@@ -90,7 +90,7 @@
 
 ## Step 7：Reference View Pass
 
-- [ ] RGStage 枚举新增 RayTracing + RG barrier 映射（与 Compute 逻辑一致，stage 换为 RAY_TRACING_SHADER_BIT_KHR）
+- [x] RGStage 枚举新增 RayTracing + RG barrier 映射（与 Compute 逻辑一致，stage 换为 RAY_TRACING_SHADER_BIT_KHR）
 - [ ] 新增 reference_view_pass.h/.cpp：setup / record / destroy / rebuild_pipelines / on_resize
 - [ ] Accumulation buffer 创建（RGBA32F，Relative 1.0x，Storage）
 - [ ] OIDN 辅助 image 创建（aux albedo + aux normal，RGBA32F，同尺寸）+ getter

@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 6b 全部完成（5/5 RT shader），下一步进入 Step 7 第一小项
+Step 7 第一小项完成（RGStage::RayTracing），下一步：reference_view_pass.h/.cpp 骨架
 
 ---
 
