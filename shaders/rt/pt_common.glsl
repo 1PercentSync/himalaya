@@ -37,4 +37,23 @@ struct ShadowPayload {
     uint visible;             // 0 = occluded (default), 1 = visible (set by shadow_miss)
 };
 
+// ---- Buffer References (device address access to vertex/index data) ----
+
+/** Vertex buffer reference matching C++ Vertex struct (56 bytes stride). */
+layout(buffer_reference, std430, buffer_reference_align = 4) readonly buffer VertexBuffer {
+    vec3 position;    // offset  0
+    vec3 normal;      // offset 12
+    vec2 uv0;         // offset 24
+    vec4 tangent;     // offset 32
+    vec2 uv1;         // offset 48
+};                    // stride 56
+
+/** Index buffer reference (uint32 indices). */
+layout(buffer_reference, std430, buffer_reference_align = 4) readonly buffer IndexBuffer {
+    uint indices[];
+};
+
+/** @brief Vertex stride in bytes (sizeof(Vertex)). */
+const uint VERTEX_STRIDE = 56;
+
 #endif // PT_COMMON_GLSL
