@@ -16,6 +16,7 @@
 #extension GL_EXT_buffer_reference2                  : require
 #extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
 #extension GL_EXT_nonuniform_qualifier               : require
+#extension GL_EXT_scalar_block_layout                : require
 
 #include "common/brdf.glsl"
 
@@ -42,7 +43,7 @@ struct ShadowPayload {
 // ---- Buffer References (device address access to vertex/index data) ----
 
 /** Vertex buffer reference matching C++ Vertex struct (56 bytes stride). */
-layout(buffer_reference, std430, buffer_reference_align = 4) readonly buffer VertexBuffer {
+layout(buffer_reference, scalar, buffer_reference_align = 4) readonly buffer VertexBuffer {
     vec3 position;    // offset  0
     vec3 normal;      // offset 12
     vec2 uv0;         // offset 24
