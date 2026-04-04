@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 6a 第五小项：新增 shaders/rt/pt_common.glsl（GLSL 扩展声明）
+Step 6a 第六小项：pt_common.glsl Ray Payload 定义
 
 ---
 
