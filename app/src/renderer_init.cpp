@@ -530,7 +530,12 @@ namespace himalaya::app {
 
     bool Renderer::reload_environment(const std::string &hdr_path) {
         ibl_.destroy();
-        return ibl_.init(*ctx_, *resource_manager_, *descriptor_manager_, shader_compiler_, hdr_path);
+        const bool ok = ibl_.init(*ctx_, *resource_manager_, *descriptor_manager_, shader_compiler_, hdr_path);
+
+        // Environment change invalidates accumulated PT samples
+        reference_view_pass_.reset_accumulation();
+
+        return ok;
     }
 
     // ---- MSAA switching ----
