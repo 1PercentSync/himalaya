@@ -560,6 +560,8 @@ namespace himalaya::app {
 
         // Environment change invalidates accumulated PT samples
         reference_view_pass_.reset_accumulation();
+        ++accumulation_generation_;
+        last_denoised_sample_count_ = 0;
 
         return ok;
     }
@@ -694,6 +696,9 @@ namespace himalaya::app {
         if (ctx_->rt_supported) {
             denoiser_.on_resize(*resource_manager_,
                                 swapchain_->extent.width, swapchain_->extent.height);
+            reference_view_pass_.reset_accumulation();
+            ++accumulation_generation_;
+            last_denoised_sample_count_ = 0;
         }
     }
 

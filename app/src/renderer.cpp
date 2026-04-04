@@ -202,4 +202,11 @@ namespace himalaya::app {
     framework::Denoiser::SemaphoreSignal Renderer::pending_denoise_signal() const {
         return denoiser_.pending_denoise_signal();
     }
+
+    void Renderer::abort_denoise() {
+        denoiser_.abort();
+        reference_view_pass_.reset_accumulation();
+        ++accumulation_generation_;
+        last_denoised_sample_count_ = 0;
+    }
 } // namespace himalaya::app

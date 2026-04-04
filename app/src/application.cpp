@@ -161,6 +161,7 @@ namespace himalaya::app {
     void Application::switch_scene(const std::string &path) {
         vkQueueWaitIdle(context_.graphics_queue);
 
+        renderer_.abort_denoise();
         scene_loader_.destroy();
 
         if (!path.empty()) {

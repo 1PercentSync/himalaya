@@ -245,6 +245,9 @@ namespace himalaya::app {
         /** @brief Returns timeline semaphore signal info for the current denoise frame (null if none). */
         [[nodiscard]] framework::Denoiser::SemaphoreSignal pending_denoise_signal() const;
 
+        /** @brief Aborts any in-progress denoise and resets accumulation generation. */
+        void abort_denoise();
+
     private:
         // --- Subsystem references (non-owning, set during init) ---
 
