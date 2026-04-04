@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 8 第三小项：Renderer::render() 拆分为私有方法
+Step 8 第三小项已完成（render 拆分为 fill_common_gpu_data / render_rasterization / render_path_tracing），renderer.cpp 拆分为四个文件后继续第四小项
 
 ---
 
