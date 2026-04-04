@@ -531,6 +531,7 @@ namespace himalaya::app {
         const RenderInput input{
             .image_index = image_index_,
             .frame_index = context_.frame_index,
+            .render_mode = framework::RenderMode::Rasterization,
             .camera = camera_,
             .lights = scene_render_data_.directional_lights,
             .cull_result = cull_result_,

@@ -60,6 +60,9 @@ namespace himalaya::app {
         /** @brief Current frame-in-flight index (0 or 1). */
         uint32_t frame_index;
 
+        /** @brief Active rendering mode (rasterization or path tracing). */
+        framework::RenderMode render_mode;
+
         /** @brief Camera state (position, matrices). */
         const framework::Camera &camera;
 
