@@ -14,6 +14,7 @@ namespace himalaya::framework {
     void Denoiser::init(const rhi::Context &ctx, rhi::ResourceManager &rm, const uint32_t width,
                         const uint32_t height) {
         device_ = ctx.device;
+        allocator_ = ctx.allocator;
         rm_ = &rm;
         width_ = width;
         height_ = height;
@@ -109,10 +110,25 @@ namespace himalaya::framework {
         auto *oidn_dev = static_cast<oidn::DeviceRef *>(oidn_device_);
 
         // Mapped pointers for Vulkan staging buffers (persistently mapped by VMA)
-        const void *readback_beauty_ptr = rm_->get_buffer(readback_beauty_).allocation_info.pMappedData;
-        const void *readback_albedo_ptr = rm_->get_buffer(readback_albedo_).allocation_info.pMappedData;
-        const void *readback_normal_ptr = rm_->get_buffer(readback_normal_).allocation_info.pMappedData;
-        void *upload_ptr = rm_->get_buffer(upload_).allocation_info.pMappedData;
+        const auto &rb_beauty_data = rm_->get_buffer(readback_beauty_);
+        const auto &rb_albedo_data = rm_->get_buffer(readback_albedo_);
+        const auto &rb_normal_data = rm_->get_buffer(readback_normal_);
+        const auto &upload_data = rm_->get_buffer(upload_);
+
+        const void *readback_beauty_ptr = rb_beauty_data.allocation_info.pMappedData;
+        const void *readback_albedo_ptr = rb_albedo_data.allocation_info.pMappedData;
+        const void *readback_normal_ptr = rb_normal_data.allocation_info.pMappedData;
+        void *upload_ptr = upload_data.allocation_info.pMappedData;
+
+        // VMA allocator + allocations for cache coherency operations.
+        // vmaInvalidateAllocation / vmaFlushAllocation are pure CPU cache ops,
+        // safe to call from any thread without external synchronization.
+        // ReSharper disable once CppLocalVariableMayBeConst
+        VmaAllocator vma = allocator_;
+        VmaAllocation rb_beauty_alloc = rb_beauty_data.allocation;
+        VmaAllocation rb_albedo_alloc = rb_albedo_data.allocation;
+        VmaAllocation rb_normal_alloc = rb_normal_data.allocation;
+        VmaAllocation upload_alloc = upload_data.allocation;
 
         std::atomic<DenoiseState> *state_ptr = &state_;
 
@@ -124,6 +140,14 @@ namespace himalaya::framework {
             wait_info.pSemaphores = &semaphore;
             wait_info.pValues = &wait_value;
             vkWaitSemaphores(vk_device, &wait_info, UINT64_MAX);
+
+            // Invalidate readback buffers for CPU cache coherency.
+            // GpuToCpu memory may be HOST_CACHED but not HOST_COHERENT
+            // (e.g. AMD discrete GPUs). Without invalidation, CPU may read
+            // stale cache lines after GPU writes. No-op on coherent memory.
+            vmaInvalidateAllocation(vma, rb_beauty_alloc, 0, VK_WHOLE_SIZE);
+            vmaInvalidateAllocation(vma, rb_albedo_alloc, 0, VK_WHOLE_SIZE);
+            vmaInvalidateAllocation(vma, rb_normal_alloc, 0, VK_WHOLE_SIZE);
 
             const size_t beauty_size = static_cast<size_t>(w) * h * 16;
             const size_t aux_size = static_cast<size_t>(w) * h * 8;
@@ -149,6 +173,12 @@ namespace himalaya::framework {
 
             // Copy OIDN output → Vulkan upload staging
             output_buf->read(0, beauty_size, upload_ptr);
+
+            // Flush upload buffer for CPU cache coherency.
+            // CpuToGpu memory may not be HOST_COHERENT on all platforms.
+            // Flush ensures CPU writes are visible to the GPU before the
+            // next frame's upload pass reads the buffer. No-op on coherent memory.
+            vmaFlushAllocation(vma, upload_alloc, 0, VK_WHOLE_SIZE);
 
             spdlog::info("OIDN: filter complete, upload pending");
             state_ptr->store(DenoiseState::UploadPending, std::memory_order_release);

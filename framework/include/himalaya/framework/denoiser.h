@@ -190,6 +190,7 @@ namespace himalaya::framework {
 
         // ---- Vulkan resources ----
         VkDevice device_ = VK_NULL_HANDLE;
+        VmaAllocator allocator_ = VK_NULL_HANDLE;
         VkSemaphore timeline_semaphore_ = VK_NULL_HANDLE;
         uint64_t semaphore_value_ = 0;
 
