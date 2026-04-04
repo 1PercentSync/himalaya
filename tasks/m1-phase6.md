@@ -100,7 +100,7 @@
 ## Step 8：独立渲染路径 + 模式切换
 
 - [x] scene_data.h 新增 RenderMode 枚举（Rasterization、PathTracing）（uint8_t）
-- [ ] RenderInput 新增 render_mode 字段
+- [x] RenderInput 新增 render_mode 字段
 - [ ] Renderer::render() 拆分为私有方法：fill_common_gpu_data() + render_rasterization() + render_path_tracing()，按 render_mode switch
 - [ ] PT 路径：RG clear → accumulation + swapchain import → Reference View → Tonemapping → ImGui → present
 - [ ] VP 矩阵比较 + reset_accumulation() 触发

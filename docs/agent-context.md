@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 8 第二小项：RenderInput 新增 render_mode 字段
+Step 8 第三小项：Renderer::render() 拆分为私有方法
 
 ---
 
