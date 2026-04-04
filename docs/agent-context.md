@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 6b 前两项（reference_view.rgen + closesthit.rchit）完成，下一步：新增 shaders/rt/miss.rmiss
+Step 6b 前三项完成（rgen + rchit + miss），下一步：新增 shaders/rt/shadow_miss.rmiss
 
 ---
 
