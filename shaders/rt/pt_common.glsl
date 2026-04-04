@@ -17,6 +17,8 @@
 #extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
 #extension GL_EXT_nonuniform_qualifier               : require
 
+#include "common/brdf.glsl"
+
 // ---- Ray Payloads ----
 
 /**
@@ -161,6 +163,25 @@ vec3 ensure_normal_consistency(vec3 n_shading, vec3 n_geo) {
         return reflect(n_shading, n_geo);
     }
     return n_shading;
+}
+
+// ---- Multi-lobe BRDF Selection ----
+
+/**
+ * Computes the probability of choosing the specular lobe over diffuse.
+ *
+ * Based on Fresnel reflectance luminance at the given view angle.
+ * Higher metallic / grazing angles bias toward specular; dielectrics
+ * at normal incidence bias toward diffuse.
+ *
+ * @param NdotV Clamped dot(N, V).
+ * @param F0    Reflectance at normal incidence.
+ * @return Probability of selecting specular lobe [0, 1].
+ */
+float specular_probability(float NdotV, vec3 F0) {
+    vec3 F = F_Schlick(NdotV, F0);
+    float spec_weight = F.r * 0.2126 + F.g * 0.7152 + F.b * 0.0722; // luminance
+    return clamp(spec_weight, 0.01, 0.99); // avoid zero probability (division by selection prob)
 }
 
 #endif // PT_COMMON_GLSL
