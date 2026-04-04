@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 6a 第四小项：新增 blue_noise_data.h
+Step 6a 第五小项：新增 shaders/rt/pt_common.glsl（GLSL 扩展声明）
 
 ---
 
