@@ -258,6 +258,7 @@ PT 工具函数库 + ShaderCompiler RT 支持 + blue noise + GlobalUBO 扩展。
   - **Subpixel jitter**：Sobol dims 0-1 像素偏移（PT 抗锯齿），per-bounce 维度从 dim 2 开始
   - 路径追踪主循环（max bounce 从 push constant 读取）
   - 每 bounce：设置 `payload.bounce = i` → traceRayEXT → closesthit/miss → 累积贡献
+  - **Russian Roulette**（raygen 侧）：bounce >= 2 前用累积 throughput 做 RR 决策，存活时 throughput /= survival_prob。closesthit 返回纯 BRDF 权重，不含 RR 修正
   - **Firefly clamping**：bounce > 0 的贡献 `min(contribution, max_clamp)`（bounce 0 不 clamp）
   - Running average 写入 accumulation buffer（`imageStore`，sample_count 加权）
 - 新增 `shaders/rt/closesthit.rchit`：
@@ -621,7 +622,7 @@ shaders/
 | SBT layout | raygen(1) + miss(2: env + shadow) + hit(1: closesthit)。entry 对齐到 `shaderGroupHandleAlignment`，region 对齐到 `shaderGroupBaseAlignment` |
 | NEE 方向光 | 暴力遍历 LightBuffer 方向光，无 Light BVH。方向光为 delta 分布，MIS 权重恒为 1，不需要 MIS。Shadow ray 使用 `gl_RayFlagsTerminateOnFirstHitEXT \| gl_RayFlagsSkipClosestHitShaderEXT` |
 | NEE 环境光 | Alias table importance sampling（1024×512，`{float32 prob, uint32 alias}`，Set 0 binding 6 SSBO）。total_luminance 嵌入 SSBO 头部。env-local 空间构建，shader 端旋转。MIS power heuristic 与 BRDF 采样组合 |
-| Russian Roulette | bounce ≥ 2 时启用，终止概率 = `1 - max(throughput.r, throughput.g, throughput.b)`，存活时 throughput 除以存活概率 |
+| Russian Roulette | **raygen 侧执行**。bounce ≥ 2 前用累积 throughput 做 RR 决策（`russian_roulette()` 取 max component，clamp [0.05, 0.95]），存活时 throughput /= survival_prob。closesthit 返回纯 BRDF 权重（`throughput_update`），不含 RR 修正。选择 raygen 侧是因为累积 throughput 比单次 BRDF 权重更准确反映路径贡献 |
 | OIDN staging | 持久分配 readback + upload staging buffer（width × height × 16 bytes），避免每次降噪重分配 |
 | 模式切换缓存 | accumulation buffer 和 sample count 在模式切换时不清零。VP 矩阵变化触发重置，模式切换不触发 |
 | 渲染路径组织 | render() 拆分为 fill_common_gpu_data() + render_rasterization() + render_path_tracing() 私有方法，不引入新抽象 |
@@ -630,7 +631,7 @@ shaders/
 | Sobol + Blue Noise | Sobol 128 维 32-bit 方向数表（SSBO Set 3 binding 3，16 KB，Joe & Kuo 标准方向数，源文件 `noise/new-joe-kuo-6.21201`），方向数嵌入 `app/include/himalaya/app/sobol_direction_data.h`（`constexpr uint32_t[4096]`，`[dim * 32 + bit]`），Renderer init 上传 GPU buffer。超出 128 维 fallback 到 PCG hash。Cranley-Patterson rotation（per-pixel blue noise 偏移）。Blue noise 128×128 R8Unorm 单通道，源文件 `noise/HDR_L_0.png`（Calinou/free-blue-noise-textures CC0），脚本转换后像素嵌入 `app/include/himalaya/app/blue_noise_data.h`（`constexpr uint8_t[]`），不同维度通过空间偏移派生。bindless index 通过 push constant 传递 |
 | GGX 采样 | VNDF sampling（Heitz 2018），pt_common.glsl 新增 `sample_ggx_vndf()` + `pdf_ggx_vndf()`，`#include "common/brdf.glsl"` 复用评估函数，不修改 brdf.glsl |
 | RT shader include 组织 | 各 RT shader 负责 `#define HIMALAYA_RT` + `#include "common/bindings.glsl"`，然后 `#include "rt/pt_common.glsl"`。pt_common.glsl 不 include bindings.glsl（由调用方负责），但 include `common/brdf.glsl` + `common/normal.glsl`。所有共享 .glsl 文件使用 `#ifndef` include guard（pt_common.glsl 用 `PT_COMMON_GLSL`） |
-| Ray Payload | 模式 A：closesthit 完成全部着色计算。PrimaryPayload(loc 0) 演进：Step 6 56B（+bounce）→ Step 11 60B（+env_mis_weight）→ Step 12 64B（+last_brdf_pdf）→ Step 13 68B（+cone_spread）。ShadowPayload(loc 1): visible uint（4B） |
+| Ray Payload | 模式 A：closesthit 完成全部着色计算，返回纯 BRDF 权重（throughput_update 不含 RR），raygen 负责 RR 和路径累积。PrimaryPayload(loc 0) 演进：Step 6 56B（+bounce）→ Step 11 60B（+env_mis_weight）→ Step 12 64B（+last_brdf_pdf）→ Step 13 68B（+cone_spread）。ShadowPayload(loc 1): visible uint（4B） |
 | GeometryInfo | GPUGeometryInfo std430 24B：vertex_buffer_address(u64) + index_buffer_address(u64) + material_buffer_offset(u32) + _padding(u32)。Shader 端 GLSL 同布局 |
 | Set 0 RT stage flags | `rt_supported = true` 时 bindings 0-2 追加 `RAYGEN_BIT \| CLOSEST_HIT_BIT \| MISS_BIT \| ANY_HIT_BIT`（RT shader 访问 GlobalUBO/LightBuffer/MaterialBuffer）。Binding 3（InstanceBuffer）不追加（RT shader 不访问）。Binding 4/5 新增时直接带 RT stages |
 | Set 0 binding 4/5 PARTIALLY_BOUND | 新增的 AS（binding 4）和 SSBO（binding 5）使用 `VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT`，允许 Step 5 写入前 descriptor 未初始化。不需要 `UPDATE_AFTER_BIND` pool flag，`PARTIALLY_BOUND` 仅需 Vulkan 1.2 核心 `descriptorBindingPartiallyBound` feature |

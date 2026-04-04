@@ -29,7 +29,7 @@ struct PrimaryPayload {
     vec3  color;              // Radiance contribution from this bounce
     vec3  next_origin;        // Next ray origin (offset from surface)
     vec3  next_direction;     // Next ray direction (BRDF sampled)
-    vec3  throughput_update;  // Path throughput multiplier (includes Russian Roulette)
+    vec3  throughput_update;  // Path throughput multiplier (raw BRDF weight; raygen applies RR separately)
     float hit_distance;       // Hit distance (-1 = miss, terminates path)
     uint  bounce;             // Current bounce index (set by raygen, read by closesthit)
 };
