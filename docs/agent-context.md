@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 7 第二小项完成（reference_view_pass.h/.cpp），下一步：Renderer 侧 managed images 创建
+Step 7 第三小项完成（managed images 创建），下一步：record() RG 注册 + push descriptors + trace_rays
 
 ---
 
