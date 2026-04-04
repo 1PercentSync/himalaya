@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 6a 全部完成，下一步进入 Step 6b 第一小项：新增 shaders/rt/reference_view.rgen
+Step 6b 第一小项（reference_view.rgen）完成，下一步：新增 shaders/rt/closesthit.rchit
 
 ---
 
