@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 6a 第十三小项：pt_common.glsl Sobol SSBO 声明 + sobol_sample() + pcg_hash() + rand_pt()（Cranley-Patterson rotation）
+Step 6a 第十四小项：pt_common.glsl cosine-weighted hemisphere sampling + GGX VNDF importance sampling
 
 ---
 
