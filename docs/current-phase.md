@@ -400,6 +400,16 @@ PT 路径的 RG 编排极简：仅 Reference View Pass + Tonemapping Pass + ImGu
 
 **模式切换保留**：PT → 光栅化不丢弃降噪结果（accumulation 和 denoised buffer 均保留）。切回 PT 同位置时降噪结果仍可用（generation 匹配）。仅 accumulation 重置才丢弃。
 
+**内存序**：`state_` 的 store 使用 `memory_order_release`，load 使用 `memory_order_acquire`，确保后台线程的 staging buffer 写入（memcpy）对主线程可见。
+
+**OIDN 错误处理**：`oidnExecuteFilter()` 失败时（CUDA OOM 等），后台线程 log error + 状态 → Idle（跳过 upload），不 crash。`Denoiser::last_error()` 返回错误信息供 UI 显示，下次成功请求时清除。
+
+**auto_denoise_interval 最小值**：UI slider 限制最小值 ≥ 4，防止极端值（interval=1）导致连续降噪循环。
+
+**on_resize / destroy / 场景加载状态重置**：join 后台线程后强制 `state_ → Idle`，丢弃任何 UploadPending 结果。resize 会触发 accumulation 重置 + generation++，间接保证 generation 比对失效，但显式设 Idle 避免旧尺寸 staging buffer 被 upload 到新尺寸 denoised buffer 的尺寸不匹配。场景加载前调用 `Denoiser::abort()`（join + Idle），调用方同步做 accumulation 重置 + generation++。
+
+**Denoised buffer 首帧安全**：启动时 `denoised_generation_ = 0`、`accumulation_generation_ = 0` 但 denoised buffer 无内容。generation 匹配但 `last_denoised_sample_count_ = 0` 意味着从未降噪过，Tonemapping 条件中隐含 `denoised_generation_ == accumulation_generation_` 只在成功 upload 后更新 `denoised_generation_`，因此首帧不会读到未初始化的 denoised buffer。
+
 OIDN 2.4.1 预编译库手动集成到 `third_party/oidn/`（include/lib/bin），C++11 wrapper API。GPU 模式使用 `OIDNBuffer` 传递数据。Aux albedo 格式从 R8G8B8A8Unorm 升级为 R16G16B16A16Sfloat（与 aux normal 统一），配合 OIDN `HALF3` + pixelByteStride=8 实现零 CPU 格式转换。Beauty 使用 `FLOAT3` + pixelByteStride=16。Staging buffer 持久分配（beauty = width×height×16B，aux 各 width×height×8B），避免每次降噪重分配。OIDN "RT" filter 配置 albedo + normal 辅助通道，显著提升低采样数降噪质量。
 
 ---

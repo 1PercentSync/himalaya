@@ -2037,6 +2037,15 @@ enum class DenoiseState : uint8_t {
 /// Readback and upload are RG Transfer Passes (caller-registered).
 /// OIDN execution runs on a per-request std::jthread background thread.
 /// Timeline semaphore synchronizes readback completion → background thread.
+///
+/// Memory ordering: state_ uses acquire/release semantics to ensure that
+/// staging buffer writes (memcpy in background thread) are visible to the
+/// main thread when it observes UploadPending. Background thread stores
+/// with memory_order_release, main thread loads with memory_order_acquire.
+///
+/// Error handling: if oidnExecuteFilter() fails, the background thread logs
+/// the error and sets state_ → Idle (skipping upload). last_error() returns
+/// a non-empty string for UI display, cleared on next successful request.
 class Denoiser {
 public:
     /// Create OIDN device (GPU preferred, CPU fallback), RT filter,
@@ -2050,7 +2059,8 @@ public:
     void request_denoise(uint32_t accumulation_generation);
 
     /// Launch the background thread. State: ReadbackPending → Processing.
-    /// Called after the RG containing the readback pass has been submitted.
+    /// Called in render() before submit — thread vkWaitSemaphores until GPU
+    /// finishes readback, so early launch just means a longer wait.
     void launch_processing();
 
     /// Check if the background thread has finished and the result is still valid.
@@ -2064,6 +2074,9 @@ public:
 
     /// Current state (for UI display and trigger guard checks).
     [[nodiscard]] DenoiseState state() const;
+
+    /// Last OIDN error message (empty = no error). Cleared on next request.
+    [[nodiscard]] const std::string& last_error() const;
 
     /// Timeline semaphore handle (caller adds to frame submit's signal list).
     [[nodiscard]] VkSemaphore timeline_semaphore() const;
@@ -2080,17 +2093,25 @@ public:
     [[nodiscard]] rhi::BufferHandle upload_staging() const;
 
     /// Join background thread + rebuild staging buffers for new resolution.
+    /// Forces state → Idle (discards any pending result — resize invalidates
+    /// staging buffer sizes, and accumulation reset + generation++ is
+    /// guaranteed by the caller).
     void on_resize(uint32_t width, uint32_t height);
 
     /// Join background thread + release all resources (OIDN device, filter,
-    /// staging buffers, timeline semaphore).
+    /// staging buffers, timeline semaphore). Forces state → Idle.
     void destroy();
+
+    /// Join background thread + force state → Idle. Called before scene load
+    /// (caller also does generation++ via accumulation reset).
+    void abort();
 
 private:
     std::jthread thread_;                          ///< Per-request background thread.
-    std::atomic<DenoiseState> state_{DenoiseState::Idle};
+    std::atomic<DenoiseState> state_{DenoiseState::Idle}; ///< release/acquire ordering.
     uint32_t trigger_generation_ = 0;              ///< Generation recorded at request time.
     uint64_t semaphore_value_ = 0;                 ///< Monotonically increasing signal value.
+    std::string last_error_;                        ///< OIDN error message (empty = ok).
 
     // OIDN resources
     // ... oidn::DeviceRef, oidn::FilterRef, oidn::BufferRef (beauty/albedo/normal/output)

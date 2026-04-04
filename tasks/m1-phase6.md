@@ -125,8 +125,11 @@
 - [ ] Denoiser::launch_processing()：启动 std::jthread 后台线程（vkWaitSemaphores → memcpy → oidnExecuteFilter → memcpy → 状态 → UploadPending），状态 → Processing
 - [ ] Denoiser::poll_upload_ready(current_generation)：UploadPending + generation 匹配 → true；不匹配 → 丢弃，状态 → Idle
 - [ ] Denoiser::complete_upload()：状态 → Idle
-- [ ] Denoiser::on_resize()：join 线程 + 重建 staging buffers
-- [ ] Denoiser::destroy()：join 线程 + 释放所有资源（OIDN device/filter、staging buffers、timeline semaphore）
+- [ ] Denoiser::on_resize()：join 线程 + 强制 state→Idle + 重建 staging buffers
+- [ ] Denoiser::destroy()：join 线程 + 强制 state→Idle + 释放所有资源（OIDN device/filter、staging buffers、timeline semaphore）
+- [ ] Denoiser::abort()：join 线程 + 强制 state→Idle（场景加载前调用）
+- [ ] Denoiser::last_error()：OIDN 错误信息 getter（空=无错误，下次请求时清除）
+- [ ] 后台线程 oidnExecuteFilter 失败处理：log error + state→Idle + 设 last_error_
 - [ ] Renderer 新增 denoised buffer（RGBA32F managed image，TransferDst | Sampled）
 - [ ] Renderer 新增 accumulation_generation_（uint32_t，accumulation 重置时 +1）+ denoised_generation_
 - [ ] 降噪状态管理（Renderer 侧）：denoise_enabled / auto_denoise / interval / last_denoised_sample_count（触发时值）/ show_denoised
@@ -135,7 +138,8 @@
 - [ ] render_path_tracing() RG 编排：poll_upload_ready() → 注册 Upload Pass + complete_upload() + 更新 denoised_generation_
 - [ ] Tonemapping 输入切换：show_denoised && denoise_enabled && denoised_generation==accumulation_generation → denoised buffer，否则 accumulation
 - [ ] accumulation 重置触发点补充 generation++：相机移动、IBL 旋转、max_bounces 变更、firefly_clamp 变更
-- [ ] 场景加载前 join denoiser 线程
+- [ ] 场景加载前调用 denoiser.abort()（join + Idle），配合 accumulation 重置 + generation++
+- [ ] Renderer::pending_denoise_signal() getter：返回 {VkSemaphore, uint64_t}，Application submit 前追加到 signalSemaphoreInfos
 
 ## Step 10：ImGui PT 面板
 
@@ -143,7 +147,7 @@
 - [ ] DebugUIActions 新增 pt_reset_requested + pt_denoise_requested
 - [ ] Rendering section 新增渲染模式 combo（仅 rt_supported 时显示 PT 选项）
 - [ ] Path Tracing collapsing header：状态信息 + Max Bounces + Firefly Clamp slider（0=关闭，默认 10.0）+ Target Samples + Reset 按钮
-- [ ] OIDN collapsing header：Denoise 开关 + Show Denoised/Raw 切换（Show Raw 暂停降噪）+ Auto Denoise + Interval + Denoise Now 按钮（state!=Idle || sample_count==0 || !show_denoised 时灰掉）+ 上次降噪采样数 + 降噪状态文字（Idle/Denoising...）
+- [ ] OIDN collapsing header：Denoise 开关 + Show Denoised/Raw 切换（Show Raw 暂停降噪）+ Auto Denoise + Interval（最小值 4）+ Denoise Now 按钮（state!=Idle || sample_count==0 || !show_denoised 时灰掉）+ 上次降噪采样数 + 降噪状态文字（Idle/Denoising...）+ 错误信息显示（last_error 非空时）
 - [ ] Application 响应 PT actions
 
 ## Step 11：Environment Map Importance Sampling

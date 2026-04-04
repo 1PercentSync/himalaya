@@ -93,7 +93,13 @@ Idle → ReadbackPending → Processing → UploadPending → Idle
 
 **launch_processing() 调用时机**：在 `render()` 内调用（submit 之前）。后台线程 `vkWaitSemaphores` 等待 GPU 完成 readback，早启动只是多等一会。比 post-submit hook 简单。
 
-**Resize / Destroy / 场景加载安全**：`on_resize()`、`destroy()`、场景加载前 join 后台线程。`oidnExecuteFilter()` 不可中断，最坏等待 20-50ms，发生在本身就阻塞的操作中（`vkQueueWaitIdle` / 资源重建），用户无感。
+**Resize / Destroy / 场景加载安全**：`on_resize()`、`destroy()` join 后台线程后强制 `state_ → Idle`，丢弃任何 UploadPending 结果（避免旧尺寸 staging → 新尺寸 denoised buffer 的尺寸不匹配）。场景加载前调用 `Denoiser::abort()`（join + Idle），调用方同步做 accumulation 重置 + generation++。`oidnExecuteFilter()` 不可中断，最坏等待 20-50ms，发生在本身就阻塞的操作中（`vkQueueWaitIdle` / 资源重建），用户无感。
+
+**内存序**：`state_` store 使用 `memory_order_release`，load 使用 `memory_order_acquire`，确保后台线程 staging buffer 写入对主线程可见。
+
+**OIDN 错误处理**：`oidnExecuteFilter()` 失败时后台线程 log error + `state_ → Idle`（跳过 upload），不 crash。`last_error()` 返回错误信息供 UI 显示，下次成功请求时清除。
+
+**auto_denoise_interval 最小值**：UI slider 最小值 ≥ 4，防止 interval=1 导致连续降噪循环（线程创建/销毁开销在极端情况下累积）。
 
 **OIDNBuffer**：OIDN 2.x GPU 模式要求使用 `OIDNBuffer` 对象传递图像数据（GPU 无法访问系统 malloc 内存）。Denoiser 创建持久 `OIDNBuffer`（beauty + albedo + normal + output），Vulkan readback 后 `memcpy` 到 OIDNBuffer，执行后从 OIDNBuffer `memcpy` 到 upload staging buffer。
 
