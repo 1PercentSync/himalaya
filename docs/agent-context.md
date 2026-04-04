@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 9 第三小项：新增 denoiser.h/.cpp（DenoiseState 枚举 + Denoiser 类）
+Step 9 第四小项：Denoiser::init()（OIDN device + filter + staging buffers + timeline semaphore）
 
 ---
 
