@@ -175,7 +175,7 @@ namespace himalaya::app {
                     .height_scale = 1.0f,
                     .width = 0,
                     .height = 0,
-                    .format = rhi::Format::R8G8B8A8Unorm,
+                    .format = rhi::Format::R16G16B16A16Sfloat,
                     .usage = rhi::ImageUsage::Storage | rhi::ImageUsage::TransferSrc,
                     .sample_count = 1,
                     .mip_levels = 1,

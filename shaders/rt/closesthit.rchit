@@ -29,7 +29,7 @@ layout(push_constant) uniform PushConstants {
 
 // ---- OIDN auxiliary images (push descriptor, Set 3) ----
 
-layout(set = 3, binding = 1, rgba8) uniform image2D aux_albedo_image;
+layout(set = 3, binding = 1, rgba16f) uniform image2D aux_albedo_image;
 layout(set = 3, binding = 2, rgba16f) uniform image2D aux_normal_image;
 
 // ---- Ray payloads ----
