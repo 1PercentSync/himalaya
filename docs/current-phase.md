@@ -303,16 +303,17 @@ Ray payload 采用模式 A（closesthit 内完成全部着色计算）：closest
 
 Pass 层实现 + accumulation 管理 + RG 扩展。
 
-- `RGStage` 枚举新增 `RayTracing`，RG barrier 计算映射到 `VK_PIPELINE_STAGE_2_RAY_TRACING_SHADER_BIT_KHR` + `VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT`
+- `RGStage` 枚举新增 `RayTracing`，RG barrier 计算映射与 Compute 逻辑一致（stage 换为 `VK_PIPELINE_STAGE_2_RAY_TRACING_SHADER_BIT_KHR`）：Read → `SHADER_READ_ONLY_OPTIMAL` + `SAMPLED_READ`，Write → `GENERAL` + `STORAGE_WRITE`，ReadWrite → `GENERAL` + `STORAGE_READ | STORAGE_WRITE`
 - 新增 `passes/reference_view_pass.h` / `.cpp`：
   - `ReferenceViewPass` 类：
     - `setup(Context&, ResourceManager&, DescriptorManager&, ShaderCompiler&)`：编译 RT shader、创建 RT pipeline、创建 accumulation buffer（RGBA32F，Relative 1.0x，Storage usage）、创建 OIDN 辅助 image（aux albedo + aux normal，RGBA32F，同尺寸）
-    - `record(RenderGraph&, const FrameContext&)`：注册 accumulation buffer 到 RG，添加 RT pass（push descriptors 绑定 accumulation buffer + aux albedo + aux normal（Set 3 binding 0/1/2），trace_rays dispatch）
+    - `record(RenderGraph&, const FrameContext&)`：注册 accumulation buffer（ReadWrite + RayTracing）+ aux albedo/normal（Write + RayTracing）到 RG，添加 RT pass（push descriptors 绑定 Set 3 binding 0/1/2/3：accumulation + aux albedo + aux normal + Sobol SSBO），push constants，trace_rays dispatch
     - `reset_accumulation()`：清零 sample count（下一帧 shader 覆写而非累积）
     - `sample_count()` getter
     - `accumulation_image()` getter（供 tonemapping 和 OIDN 读取）
     - `aux_albedo_image()` / `aux_normal_image()` getter（供 OIDN 辅助通道读取）
     - `rebuild_pipelines()`、`destroy()`、`on_resize()`
+  - Set 3 push descriptor layout 包含 4 个 binding：binding 0-2 storage image（accumulation + aux albedo + aux normal），binding 3 SSBO（Sobol 方向数表）。Push descriptor set 每次 push 替换整个 set，所以 4 个 binding 必须一起 push
   - Accumulation 逻辑：shader 端 `imageLoad` 读取旧值，`new_color = mix(old_color, current_sample, 1.0 / (sample_count + 1))`，`imageStore` 写回
   - Sample count 由 CPU 侧 pass 维护，通过 push constant 传给 shader
   - `reset_accumulation()` 将 sample count 归零（shader 端 `sample_count == 0` 时直接覆写）
@@ -621,6 +622,8 @@ shaders/
 | GlobalUBO inv_view | 阶段六新增 `inv_view`（mat4，view 矩阵的逆）供 PT raygen shader 计算 primary ray。Renderer `fill_common_gpu_data()` 填充。GlobalUniformData 总大小从 864 增至 928 bytes（+64 bytes inv_view，`_phase5_pad[2]` 保持不变，inv_view 紧接其后 offset 864，满足 mat4 16B 对齐） |
 | Multi-geometry BLAS | 同一 glTF mesh 的 primitive 合并为一个 BLAS 的多个 geometry。Mesh.group_id 标识分组，instanceCustomIndex = geometry info base offset，closesthit 用 `geometry_infos[customIndex + geometryIndex]` 索引 |
 | Accumulation buffer | RGBA32F，Relative 1.0x，Storage usage。running average：`new = mix(old, sample, 1/(n+1))`。sample_count=0 时直接覆写 |
+| RGStage::RayTracing | barrier 映射与 Compute 逻辑完全一致（Read → `SHADER_READ_ONLY_OPTIMAL` + `SAMPLED_READ`，Write → `GENERAL` + `STORAGE_WRITE`，ReadWrite → `GENERAL` + `STORAGE_READ \| STORAGE_WRITE`），stage 换为 `RAY_TRACING_SHADER_BIT_KHR`。RG 声明：accumulation = ReadWrite + RayTracing，aux albedo/normal = Write + RayTracing |
+| RT Set 3 Push Descriptor | 4 个 binding：0-2 storage image（accumulation + aux albedo + aux normal），3 SSBO（Sobol 方向数表）。Push descriptor set 每次 push 替换整个 set，Sobol buffer 不能提前绑定后跳过，必须与 image 一起 push |
 | SBT layout | raygen(1) + miss(2: env + shadow) + hit(1: closesthit)。entry 对齐到 `shaderGroupHandleAlignment`，region 对齐到 `shaderGroupBaseAlignment` |
 | NEE 方向光 | 暴力遍历 LightBuffer 方向光，无 Light BVH。方向光为 delta 分布，MIS 权重恒为 1，不需要 MIS。Shadow ray 使用 `gl_RayFlagsTerminateOnFirstHitEXT \| gl_RayFlagsSkipClosestHitShaderEXT` |
 | NEE 环境光 | Alias table importance sampling（1024×512，`{float32 prob, uint32 alias}`，Set 0 binding 6 SSBO）。total_luminance 嵌入 SSBO 头部。env-local 空间构建，shader 端旋转。MIS power heuristic 与 BRDF 采样组合 |
