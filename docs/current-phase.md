@@ -620,7 +620,7 @@ shaders/
 |------|------|
 | GlobalUBO inv_view | 阶段六新增 `inv_view`（mat4，view 矩阵的逆）供 PT raygen shader 计算 primary ray。Renderer `fill_common_gpu_data()` 填充。GlobalUniformData 总大小从 864 增至 928 bytes（+64 bytes inv_view，`_phase5_pad[2]` 保持不变，inv_view 紧接其后 offset 864，满足 mat4 16B 对齐） |
 | Multi-geometry BLAS | 同一 glTF mesh 的 primitive 合并为一个 BLAS 的多个 geometry。Mesh.group_id 标识分组，instanceCustomIndex = geometry info base offset，closesthit 用 `geometry_infos[customIndex + geometryIndex]` 索引 |
-| Accumulation buffer | RGBA32F，Relative 1.0x，Storage usage。Renderer 创建 managed image（与其他 pass 一致），通过 FrameContext.pt_accumulation 传递 RGResourceId。running average：`new = mix(old, sample, 1/(n+1))`。sample_count=0 时直接覆写 |
+| Accumulation buffer | RGBA32F，Relative 1.0x，Storage | Sampled usage（Step 8 Tonemapping 通过 Set 2 binding 0 采样）。Renderer 创建 managed image（与其他 pass 一致），通过 FrameContext.pt_accumulation 传递 RGResourceId。running average：`new = mix(old, sample, 1/(n+1))`。sample_count=0 时直接覆写 |
 | RGStage::RayTracing | barrier 映射与 Compute 逻辑完全一致（Read → `SHADER_READ_ONLY_OPTIMAL` + `SAMPLED_READ`，Write → `GENERAL` + `STORAGE_WRITE`，ReadWrite → `GENERAL` + `STORAGE_READ \| STORAGE_WRITE`），stage 换为 `RAY_TRACING_SHADER_BIT_KHR`。RG 声明：accumulation = ReadWrite + RayTracing，aux albedo/normal = Write + RayTracing |
 | RT Set 3 Push Descriptor | 4 个 binding：0-2 storage image（accumulation + aux albedo + aux normal），3 SSBO（Sobol 方向数表）。Push descriptor set 每次 push 替换整个 set，Sobol buffer 不能提前绑定后跳过，必须与 image 一起 push |
 | SBT layout | raygen(1) + miss(2: env + shadow) + hit(1: closesthit)。entry 对齐到 `shaderGroupHandleAlignment`，region 对齐到 `shaderGroupBaseAlignment` |
