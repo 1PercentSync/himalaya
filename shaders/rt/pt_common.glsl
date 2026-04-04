@@ -56,4 +56,54 @@ layout(buffer_reference, std430, buffer_reference_align = 4) readonly buffer Ind
 /** @brief Vertex stride in bytes (sizeof(Vertex)). */
 const uint VERTEX_STRIDE = 56;
 
+// ---- Vertex Attribute Interpolation ----
+
+/** Interpolated surface attributes at a hit point. */
+struct HitAttributes {
+    vec3 position;   // World-space position
+    vec3 normal;     // Object-space interpolated normal (not yet transformed)
+    vec2 uv0;        // Primary texture coordinates
+    vec4 tangent;    // Tangent with handedness in w
+    vec2 uv1;        // Secondary texture coordinates
+};
+
+/**
+ * Fetches and interpolates vertex attributes at the current hit point.
+ *
+ * Uses gl_PrimitiveID and barycentric coordinates from GL_EXT_ray_tracing
+ * built-in gl_HitTriangleVertexPositionsEXT is not used; instead reads
+ * vertex/index data via buffer_reference from GeometryInfo device addresses.
+ *
+ * @param geo       GeometryInfo for the hit geometry.
+ * @param bary      Barycentric coordinates (gl_HitAttributeEXT).
+ * @param primitive gl_PrimitiveID of the hit triangle.
+ * @return Interpolated vertex attributes.
+ */
+HitAttributes interpolate_hit(GeometryInfo geo, vec2 bary, int primitive) {
+    // Barycentric weights
+    float w0 = 1.0 - bary.x - bary.y;
+    float w1 = bary.x;
+    float w2 = bary.y;
+
+    // Fetch triangle indices
+    IndexBuffer ib = IndexBuffer(geo.index_buffer_address);
+    uint i0 = ib.indices[3 * primitive + 0];
+    uint i1 = ib.indices[3 * primitive + 1];
+    uint i2 = ib.indices[3 * primitive + 2];
+
+    // Fetch vertices via buffer_reference with byte offset
+    VertexBuffer v0 = VertexBuffer(geo.vertex_buffer_address + uint64_t(i0) * VERTEX_STRIDE);
+    VertexBuffer v1 = VertexBuffer(geo.vertex_buffer_address + uint64_t(i1) * VERTEX_STRIDE);
+    VertexBuffer v2 = VertexBuffer(geo.vertex_buffer_address + uint64_t(i2) * VERTEX_STRIDE);
+
+    HitAttributes hit;
+    hit.position = v0.position * w0 + v1.position * w1 + v2.position * w2;
+    hit.normal   = v0.normal   * w0 + v1.normal   * w1 + v2.normal   * w2;
+    hit.uv0      = v0.uv0     * w0 + v1.uv0     * w1 + v2.uv0     * w2;
+    hit.tangent  = v0.tangent  * w0 + v1.tangent  * w1 + v2.tangent  * w2;
+    hit.uv1      = v0.uv1     * w0 + v1.uv1     * w1 + v2.uv1     * w2;
+
+    return hit;
+}
+
 #endif // PT_COMMON_GLSL
