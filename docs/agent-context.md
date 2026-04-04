@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 6a 第十五小项（最后）：pt_common.glsl Russian Roulette + MIS power heuristic
+Step 6a 全部完成，下一步进入 Step 6b 第一小项：新增 shaders/rt/reference_view.rgen
 
 ---
 
