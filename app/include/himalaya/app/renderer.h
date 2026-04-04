@@ -5,6 +5,7 @@
  * @brief Rendering subsystem: pass orchestration, GPU data filling, resource ownership.
  */
 
+#include <himalaya/framework/denoiser.h>
 #include <himalaya/framework/ibl.h>
 #include <himalaya/framework/material_system.h>
 #include <himalaya/framework/render_graph.h>
@@ -348,11 +349,23 @@ namespace himalaya::app {
         /** @brief PT accumulation buffer (RGBA32F, Relative 1.0x, Storage); created when rt_supported. */
         framework::RGManagedHandle managed_pt_accumulation_;
 
-        /** @brief PT OIDN auxiliary albedo (R8G8B8A8Unorm, Relative 1.0x, Storage); created when rt_supported. */
+        /** @brief PT OIDN auxiliary albedo (R16G16B16A16Sfloat, Relative 1.0x, Storage | TransferSrc); created when rt_supported. */
         framework::RGManagedHandle managed_pt_aux_albedo_;
 
-        /** @brief PT OIDN auxiliary normal (R16G16B16A16Sfloat, Relative 1.0x, Storage); created when rt_supported. */
+        /** @brief PT OIDN auxiliary normal (R16G16B16A16Sfloat, Relative 1.0x, Storage | TransferSrc); created when rt_supported. */
         framework::RGManagedHandle managed_pt_aux_normal_;
+
+        /** @brief Denoised output buffer (RGBA32F, Relative 1.0x, TransferDst | Sampled); created when rt_supported. */
+        framework::RGManagedHandle managed_denoised_;
+
+        /** @brief OIDN asynchronous denoiser instance. */
+        framework::Denoiser denoiser_{};
+
+        /** @brief Monotonically increasing counter, incremented on every accumulation reset. */
+        uint32_t accumulation_generation_ = 0;
+
+        /** @brief Generation of the last successfully uploaded denoised result (UINT32_MAX = none). */
+        uint32_t denoised_generation_ = UINT32_MAX;
 
         /** @brief Current MSAA sample count (1 = no MSAA, default 4x). */
         uint32_t current_sample_count_ = 4;

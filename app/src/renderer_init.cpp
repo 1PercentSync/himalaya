@@ -192,6 +192,21 @@ namespace himalaya::app {
                     .sample_count = 1,
                     .mip_levels = 1,
                 }, false);
+            managed_denoised_ = render_graph_.create_managed_image(
+                "Denoised", {
+                    .size_mode = framework::RGSizeMode::Relative,
+                    .width_scale = 1.0f,
+                    .height_scale = 1.0f,
+                    .width = 0,
+                    .height = 0,
+                    .format = rhi::Format::R32G32B32A32Sfloat,
+                    .usage = rhi::ImageUsage::TransferDst | rhi::ImageUsage::Sampled,
+                    .sample_count = 1,
+                    .mip_levels = 1,
+                }, false);
+
+            denoiser_.init(*ctx_, *resource_manager_,
+                           swapchain_->extent.width, swapchain_->extent.height);
         }
 
         // Fall back to the highest supported sample count if the default isn't available
@@ -499,6 +514,10 @@ namespace himalaya::app {
         if (managed_pt_aux_normal_.valid()) {
             render_graph_.destroy_managed_image(managed_pt_aux_normal_);
         }
+        if (managed_denoised_.valid()) {
+            render_graph_.destroy_managed_image(managed_denoised_);
+        }
+        denoiser_.destroy();
         render_graph_.destroy_managed_image(managed_ao_noisy_);
         render_graph_.destroy_managed_image(managed_ao_blurred_);
         render_graph_.destroy_managed_image(managed_ao_filtered_);
@@ -671,6 +690,11 @@ namespace himalaya::app {
         update_normal_descriptor();
         update_ao_descriptor();
         update_contact_shadow_descriptor();
+
+        if (ctx_->rt_supported) {
+            denoiser_.on_resize(*resource_manager_,
+                                swapchain_->extent.width, swapchain_->extent.height);
+        }
     }
 
     // ---- Descriptor update helpers ----
