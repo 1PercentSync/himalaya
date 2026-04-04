@@ -75,7 +75,7 @@
 - [x] pt_common.glsl：Ray origin offset 工具函数（Wächter & Binder，Ray Tracing Gems Ch.6）
 - [x] pt_common.glsl：Shading normal 一致性修正（clamp 到几何法线半球）
 - [x] pt_common.glsl：Multi-lobe BRDF 选择（Fresnel 估计概率选 diffuse/specular lobe + PDF 补偿）
-- [ ] 新增 `app/include/himalaya/app/sobol_direction_data.h`：128 维 32-bit 方向数表（`constexpr uint32_t[4096]`，从 `noise/new-joe-kuo-6.21201` 生成）+ Renderer 初始化时上传 GPU SSBO
+- [x] 新增 `app/include/himalaya/app/sobol_direction_data.h`：128 维 32-bit 方向数表（`constexpr uint32_t[4096]`，从 `noise/new-joe-kuo-6.21201` 生成）+ Renderer 初始化时上传 GPU SSBO
 - [ ] pt_common.glsl：Sobol SSBO 声明（Set 3 binding 3）+ sobol_sample() + pcg_hash() + rand_pt()（Cranley-Patterson rotation）
 - [ ] pt_common.glsl：cosine-weighted hemisphere sampling + GGX VNDF importance sampling（Heitz 2018，新增 `sample_ggx_vndf()` + `pdf_ggx_vndf()`；`#include "common/brdf.glsl"` 复用评估函数，不修改 brdf.glsl）
 - [ ] pt_common.glsl：Russian Roulette（bounce ≥ 2）+ MIS power heuristic（balance heuristic，Step 6a 定义函数，方向光不调用，Step 11 env sampling 使用）
