@@ -4,6 +4,7 @@ target_sources(himalaya_framework PRIVATE
         src/cache.cpp
         src/camera.cpp
         src/color_utils.cpp
+        src/denoiser.cpp
         src/ktx2.cpp
         src/culling.cpp
         src/ibl.cpp
