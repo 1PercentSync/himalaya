@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 7 第一小项完成（RGStage::RayTracing），下一步：reference_view_pass.h/.cpp 骨架
+Step 7 第二小项完成（reference_view_pass.h/.cpp），下一步：Renderer 侧 managed images 创建
 
 ---
 
