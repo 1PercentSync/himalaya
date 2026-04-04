@@ -365,6 +365,9 @@ namespace himalaya::app {
         /** @brief Bindless index of the blue noise texture in Set 1 textures[]. */
         rhi::BindlessIndex blue_noise_bindless_;
 
+        /** @brief 128-dim Sobol direction number SSBO for PT quasi-random sampling (Set 3 binding 3, 16 KB). */
+        rhi::BufferHandle sobol_buffer_;
+
         /** @brief Per-frame GlobalUBO buffers (CpuToGpu, one per frame in flight). */
         std::array<rhi::BufferHandle, rhi::kMaxFramesInFlight> global_ubo_buffers_{};
 

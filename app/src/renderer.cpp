@@ -5,6 +5,7 @@
 
 #include <himalaya/app/renderer.h>
 #include <himalaya/app/blue_noise_data.h>
+#include <himalaya/app/sobol_direction_data.h>
 
 #include <himalaya/framework/culling.h>
 #include <himalaya/framework/frame_context.h>
@@ -496,6 +497,17 @@ namespace himalaya::app {
             blue_noise_image_, nearest_clamp_sampler_);
         spdlog::info("Blue noise texture registered (bindless={})", blue_noise_bindless_.index);
 
+        // --- Sobol direction number SSBO (128 dims × 32 bits, PT quasi-random sampling) ---
+        sobol_buffer_ = resource_manager_->create_buffer({
+            .size = sizeof(kSobolDirectionData),
+            .usage = rhi::BufferUsage::StorageBuffer | rhi::BufferUsage::TransferDst,
+            .memory = rhi::MemoryUsage::GpuOnly,
+        }, "Sobol Direction Numbers");
+        resource_manager_->upload_buffer(sobol_buffer_,
+                                         kSobolDirectionData,
+                                         sizeof(kSobolDirectionData));
+        spdlog::info("Sobol direction table uploaded ({} bytes)", sizeof(kSobolDirectionData));
+
         ctx_->end_immediate();
 
         // --- IBL precomputation (equirect → cubemap → irradiance/prefiltered/BRDF LUT) ---
@@ -610,6 +622,9 @@ namespace himalaya::app {
         // Blue noise texture: unregister from bindless, then destroy image
         descriptor_manager_->unregister_texture(blue_noise_bindless_);
         resource_manager_->destroy_image(blue_noise_image_);
+
+        // Sobol direction number SSBO
+        resource_manager_->destroy_buffer(sobol_buffer_);
 
         // Default textures: unregister from bindless, then destroy images
         descriptor_manager_->unregister_texture(default_textures_.white.bindless_index);
