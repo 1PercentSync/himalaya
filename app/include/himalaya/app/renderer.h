@@ -367,6 +367,21 @@ namespace himalaya::app {
         /** @brief Generation of the last successfully uploaded denoised result (UINT32_MAX = none). */
         uint32_t denoised_generation_ = UINT32_MAX;
 
+        /** @brief Denoise feature toggle (master switch). */
+        bool denoise_enabled_ = true;
+
+        /** @brief Automatic denoise trigger toggle. */
+        bool auto_denoise_ = true;
+
+        /** @brief Trigger denoise every N accumulated samples. */
+        uint32_t auto_denoise_interval_ = 64;
+
+        /** @brief Sample count at which the last denoise was triggered (for interval calculation). */
+        uint32_t last_denoised_sample_count_ = 0;
+
+        /** @brief Display denoised result (true) or raw accumulation (false). */
+        bool show_denoised_ = true;
+
         /** @brief Current MSAA sample count (1 = no MSAA, default 4x). */
         uint32_t current_sample_count_ = 4;
 
