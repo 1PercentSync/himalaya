@@ -650,7 +650,7 @@ shaders/
 | Emissive 策略 | 所有 bounce 加 emissive（物理正确）。Step 12 前无 MIS（直接贡献），Step 12 后 BRDF 命中 emissive 加 MIS 权重 |
 | Multi-lobe BRDF | Fresnel 估计概率（`luminance(F_Schlick(NdotV, F0))`）选 diffuse(cosine) / specular(GGX VNDF)。PDF 除以选择概率补偿 |
 | Firefly Clamping | 仅 bounce > 0（间接贡献）。`min(contribution, max_clamp)`。bounce 0 不产生萤火虫，直视 emissive 不应被压暗。max_clamp 默认 10.0，ImGui slider |
-| OIDN Aux Buffers | bounce 0 closesthit imageStore aux albedo（base_color × (1-metallic)，不含 emissive）+ aux normal（shading normal）。RGBA32F。Set 3 binding 1/2 push descriptor。Step 9 OIDN filter 配置辅助通道 |
+| OIDN Aux Buffers | bounce 0 closesthit imageStore aux albedo（base_color × (1-metallic)，不含 emissive，R8G8B8A8Unorm）+ aux normal（shading normal，R16G16B16A16Sfloat）。Set 3 binding 1/2 push descriptor。Step 9 OIDN readback 时需格式转换到 float32 |
 | Area Light NEE | EmissiveLightBuilder 构建 emissive triangle list + power-weighted alias table。Set 0 binding 7/8。MIS：NEE emissive + BRDF 命中 emissive 用 power heuristic 平衡。push constant `emissive_light_count`（0=skip）。双面跟随 glTF doubleSided |
 | EmissiveTriangle | std430 96B：v0/v1/v2(vec3) + emission(vec3, raw factor) + area(float) + material_index(uint) + uv0/uv1/uv2(vec2)。存 UV 以精确采样纹理 emissive |
 | Texture LOD | Ray Cones（Akenine-Möller 2021）。忽略表面曲率，运行时算纹理密度（不改 GeometryInfo），纯累积无 bias。`lod_bias` push constant 调参（默认 0.0）。PrimaryPayload `cone_spread` 跨 bounce 传递 |

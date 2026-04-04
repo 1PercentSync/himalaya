@@ -92,7 +92,7 @@
 
 - [x] RGStage 枚举新增 RayTracing + RG barrier 映射（与 Compute 逻辑一致，stage 换为 RAY_TRACING_SHADER_BIT_KHR）
 - [x] 新增 reference_view_pass.h/.cpp：setup / record / destroy / rebuild_pipelines + FrameContext 新增 pt_accumulation / pt_aux_albedo / pt_aux_normal
-- [ ] Accumulation buffer + OIDN 辅助 image 创建（Renderer 侧 managed images，RGBA32F，Relative 1.0x，Storage）
+- [ ] Accumulation buffer（RGBA32F）+ OIDN 辅助 image（aux albedo R8G8B8A8Unorm + aux normal R16G16B16A16Sfloat）创建（Renderer 侧 managed images，Relative 1.0x，Storage）
 - [ ] record()：从 FrameContext 获取 RGResourceId，RG pass 注册（accumulation ReadWrite + aux Write，均 RayTracing stage）+ push descriptors（Set 3 binding 0/1/2/3，4 个 binding 一起 push）+ trace_rays dispatch
 - [ ] Accumulation 逻辑：running average（mix(old, new, 1/(n+1))），sample_count=0 覆写
 - [ ] reset_accumulation() + sample_count() getter
