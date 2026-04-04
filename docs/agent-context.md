@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 6a 第六小项：pt_common.glsl Ray Payload 定义
+Step 6a 第七小项：pt_common.glsl Vertex/Index buffer_reference layout
 
 ---
 
