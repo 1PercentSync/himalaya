@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 6a 第十小项：pt_common.glsl Shading normal 一致性修正
+Step 6a 第十一小项：pt_common.glsl Multi-lobe BRDF 选择
 
 ---
 
