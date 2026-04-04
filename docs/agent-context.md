@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 9 下一小项：降噪触发守卫 + render_path_tracing() RG 编排（Readback/Upload Pass）
+Step 9 下一小项：accumulation 重置补 generation++ + 场景加载前 denoiser.abort()
 
 ---
 

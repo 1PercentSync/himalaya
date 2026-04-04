@@ -134,13 +134,14 @@
 - [x] Renderer 新增 denoised buffer（RGBA32F managed image，TransferDst | Sampled）+ Denoiser 实例 + init/destroy/on_resize 集成
 - [x] Renderer 新增 accumulation_generation_（uint32_t，accumulation 重置时 +1）+ denoised_generation_（初始 UINT32_MAX）
 - [x] 降噪状态管理（Renderer 侧）：denoise_enabled / auto_denoise / interval / last_denoised_sample_count（触发时值）/ show_denoised
-- [ ] 降噪触发守卫：state==Idle && denoise_enabled && show_denoised && sample_count>0 && (自动间隔 || 手动请求)
-- [ ] render_path_tracing() RG 编排：ReadbackPending → 注册 Readback Copy Pass + signal timeline semaphore + launch_processing()
-- [ ] render_path_tracing() RG 编排：poll_upload_ready() → 注册 Upload Pass + complete_upload() + 更新 denoised_generation_
-- [ ] Tonemapping 输入切换：show_denoised && denoise_enabled && denoised_generation==accumulation_generation → denoised buffer，否则 accumulation
+- [x] 降噪触发守卫：state==Idle && denoise_enabled && show_denoised && sample_count>0 && (自动间隔 || 手动请求)
+- [x] render_path_tracing() RG 编排：ReadbackPending → 注册 Readback Copy Pass + signal timeline semaphore + launch_processing()
+- [x] render_path_tracing() RG 编排：poll_upload_ready() → 注册 Upload Pass + complete_upload() + 更新 denoised_generation_
+- [x] Tonemapping 输入切换：show_denoised && denoise_enabled && denoised_generation==accumulation_generation → denoised buffer，否则 accumulation
+- [x] Renderer::pending_denoise_signal() getter + Application submit 前追加到 signalSemaphoreInfos
 - [ ] accumulation 重置触发点补充 generation++：相机移动、IBL 旋转、max_bounces 变更、firefly_clamp 变更
 - [ ] 场景加载前调用 denoiser.abort()（join + Idle），配合 accumulation 重置 + generation++
-- [ ] Renderer::pending_denoise_signal() getter：返回 {VkSemaphore, uint64_t}，Application submit 前追加到 signalSemaphoreInfos
+- [x] ~~Renderer::pending_denoise_signal()~~ （已合并到 RG 编排条目）
 
 ## Step 10：ImGui PT 面板
 
