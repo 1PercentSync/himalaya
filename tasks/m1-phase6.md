@@ -117,6 +117,7 @@
 
 ## Step 9：OIDN 集成
 
+- [ ] PT managed images 补 TransferSrc usage（accumulation + aux albedo + aux normal），readback 需要 VK_IMAGE_USAGE_TRANSFER_SRC_BIT
 - [ ] 手动集成 OIDN 预编译库（官方 release，含 CUDA GPU 支持），修改 framework/CMakeLists.txt 链接库 + DLL 拷贝
 - [ ] 新增 denoiser.h/.cpp：Denoiser 类（init / denoise / destroy / on_resize）
 - [ ] OIDN device 创建（GPU 优先 fallback CPU）+ RT filter 创建
