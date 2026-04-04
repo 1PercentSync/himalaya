@@ -1,0 +1,143 @@
+#version 460
+
+/**
+ * @file reference_view.rgen
+ * @brief Path tracing raygen shader — primary ray generation, bounce loop,
+ *        Russian Roulette, firefly clamping, and running-average accumulation.
+ *
+ * Computes one path-traced sample per pixel per frame. The accumulated result
+ * is a running average stored in the accumulation buffer (Set 3 binding 0).
+ *
+ * Push constants (20 bytes):
+ *   max_bounces      — maximum path depth
+ *   sample_count     — samples accumulated so far (0 = first frame, overwrite)
+ *   frame_seed       — per-frame temporal decorrelation seed
+ *   blue_noise_index — bindless index of the 128x128 blue noise texture
+ *   max_clamp        — firefly clamping threshold (0 = disabled)
+ */
+
+#define HIMALAYA_RT
+#include "common/bindings.glsl"
+#include "rt/pt_common.glsl"
+
+// ---- Push constants ----
+
+layout(push_constant) uniform PushConstants {
+    uint  max_bounces;
+    uint  sample_count;
+    uint  frame_seed;
+    uint  blue_noise_index;
+    float max_clamp;
+} pc;
+
+// ---- Accumulation buffer (push descriptor, Set 3 binding 0) ----
+
+layout(set = 3, binding = 0, rgba32f) uniform image2D accumulation_image;
+
+// ---- Ray payload (location 0 — PrimaryPayload) ----
+
+layout(location = 0) rayPayloadEXT PrimaryPayload payload;
+
+// ---- Sobol dimension allocation ----
+// dims 0-1: subpixel jitter (x, y)
+// per-bounce base = 2 + bounce * DIMS_PER_BOUNCE
+const uint DIMS_PER_BOUNCE = 4; // lobe_select, brdf_xi0, brdf_xi1, rr
+
+void main() {
+    const ivec2 pixel = ivec2(gl_LaunchIDEXT.xy);
+    const ivec2 size  = ivec2(gl_LaunchSizeEXT.xy);
+
+    // ---- Primary ray from inverse camera matrices ----
+    // Subpixel jitter via Sobol dims 0-1
+    float jitter_x = rand_pt(0, pc.sample_count, pixel, pc.frame_seed, pc.blue_noise_index);
+    float jitter_y = rand_pt(1, pc.sample_count, pixel, pc.frame_seed, pc.blue_noise_index);
+
+    // Pixel center + jitter → NDC → clip space
+    vec2 uv = (vec2(pixel) + vec2(jitter_x, jitter_y)) / vec2(size);
+    vec2 ndc = uv * 2.0 - 1.0;
+
+    // Unproject to world-space ray
+    vec4 clip_target = vec4(ndc, 1.0, 1.0); // far plane in reverse-Z (z=1 = far for Vulkan NDC)
+    vec4 view_target = global.inv_projection * clip_target;
+    view_target /= view_target.w;
+
+    vec3 ray_origin    = (global.inv_view * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
+    vec3 ray_direction = normalize((global.inv_view * vec4(view_target.xyz, 0.0)).xyz);
+
+    // ---- Path tracing loop ----
+    vec3 total_radiance = vec3(0.0);
+    vec3 throughput     = vec3(1.0);
+
+    vec3 origin    = ray_origin;
+    vec3 direction = ray_direction;
+
+    for (uint bounce = 0; bounce < pc.max_bounces; ++bounce) {
+        // Russian Roulette (bounce >= 2, based on accumulated throughput)
+        if (bounce >= 2u) {
+            uint rr_dim = 2u + bounce * DIMS_PER_BOUNCE + 3u;
+            float rr_rand = rand_pt(rr_dim, pc.sample_count, pixel,
+                                    pc.frame_seed, pc.blue_noise_index);
+            bool survive;
+            float rr_prob = russian_roulette(throughput, bounce, rr_rand, survive);
+            if (!survive) {
+                break;
+            }
+            throughput /= rr_prob;
+        }
+
+        // Trace primary/bounce ray
+        payload.bounce = bounce;
+        traceRayEXT(
+            tlas,                   // acceleration structure
+            gl_RayFlagsNoneEXT,     // ray flags
+            0xFF,                   // cull mask (hit everything)
+            0,                      // SBT offset (hit group 0)
+            0,                      // SBT stride
+            0,                      // miss index (environment miss)
+            origin,
+            0.001,                  // tMin
+            direction,
+            10000.0,                // tMax
+            0                       // payload location
+        );
+
+        // Accumulate radiance contribution from this bounce
+        vec3 contribution = throughput * payload.color;
+
+        // Firefly clamping: indirect bounces only (bounce > 0)
+        if (bounce > 0u && pc.max_clamp > 0.0) {
+            contribution = min(contribution, vec3(pc.max_clamp));
+        }
+
+        total_radiance += contribution;
+
+        // Miss: path terminated (hit_distance < 0)
+        if (payload.hit_distance < 0.0) {
+            break;
+        }
+
+        // Update throughput with BRDF weight from closesthit
+        throughput *= payload.throughput_update;
+
+        // Early termination if throughput is negligible
+        if (max(throughput.r, max(throughput.g, throughput.b)) < 1e-6) {
+            break;
+        }
+
+        // Advance ray for next bounce
+        origin    = payload.next_origin;
+        direction = payload.next_direction;
+    }
+
+    // ---- Running average accumulation ----
+    if (pc.sample_count == 0u) {
+        // First sample: overwrite
+        imageStore(accumulation_image, pixel, vec4(total_radiance, 1.0));
+    } else {
+        // Incremental running average: mix(old, new, 1/(n+1))
+        vec4 old_value = imageLoad(accumulation_image, pixel);
+        float weight = 1.0 / float(pc.sample_count + 1u);
+        vec3 result = mix(old_value.rgb, total_radiance, weight);
+        imageStore(accumulation_image, pixel, vec4(result, 1.0));
+    }
+}
