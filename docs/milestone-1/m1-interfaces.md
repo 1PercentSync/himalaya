@@ -2043,9 +2043,8 @@ enum class DenoiseState : uint8_t {
 /// main thread when it observes UploadPending. Background thread stores
 /// with memory_order_release, main thread loads with memory_order_acquire.
 ///
-/// Error handling: if oidnExecuteFilter() fails, the background thread logs
-/// the error and sets state_ → Idle (skipping upload). last_error() returns
-/// a non-empty string for UI display, cleared on next successful request.
+/// Error handling: if oidnExecuteFilter() fails, the background thread
+/// logs via spdlog::error and sets state_ → Idle (skipping upload).
 class Denoiser {
 public:
     /// Create OIDN device (GPU preferred, CPU fallback), RT filter,
@@ -2074,9 +2073,6 @@ public:
 
     /// Current state (for UI display and trigger guard checks).
     [[nodiscard]] DenoiseState state() const;
-
-    /// Last OIDN error message (empty = no error). Cleared on next request.
-    [[nodiscard]] const std::string& last_error() const;
 
     /// Timeline semaphore handle (caller adds to frame submit's signal list).
     [[nodiscard]] VkSemaphore timeline_semaphore() const;
@@ -2111,8 +2107,6 @@ private:
     std::atomic<DenoiseState> state_{DenoiseState::Idle}; ///< release/acquire ordering.
     uint32_t trigger_generation_ = 0;              ///< Generation recorded at request time.
     uint64_t semaphore_value_ = 0;                 ///< Monotonically increasing signal value.
-    std::string last_error_;                        ///< OIDN error message (empty = ok).
-
     // OIDN resources
     // ... oidn::DeviceRef, oidn::FilterRef, oidn::BufferRef (beauty/albedo/normal/output)
 
@@ -2249,7 +2243,7 @@ struct DebugUIContext {
     bool& auto_denoise;                         ///< 自动降噪开关（读写）
     uint32_t& auto_denoise_interval;            ///< 自动降噪间隔（每 N 采样，读写）
     bool& show_denoised;                        ///< 显示降噪/原始切换（读写，false = Show Raw 暂停降噪）
-    uint32_t last_denoised_sample_count;        ///< 触发时采样数（只读）
+    uint32_t last_denoised_sample_count;        ///< 触发时采样数（只读，0 = 从未降噪）
     framework::DenoiseState denoise_state;      ///< 当前降噪状态（只读，控制 UI 按钮灰掉）
 };
 

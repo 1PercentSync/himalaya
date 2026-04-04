@@ -99,7 +99,7 @@ Idle → ReadbackPending → Processing → UploadPending → Idle
 
 **OIDN 错误处理**：`oidnExecuteFilter()` 失败时后台线程 log error + `state_ → Idle`（跳过 upload），不 crash。`last_error()` 返回错误信息供 UI 显示，下次成功请求时清除。
 
-**auto_denoise_interval 最小值**：UI slider 最小值 ≥ 4，防止 interval=1 导致连续降噪循环（线程创建/销毁开销在极端情况下累积）。
+**auto_denoise_interval 最小值**：UI slider 最小值 ≥ 16（默认 64）。`interval ≥ 3 × OIDN_time / frame_time` 保证 ≤25% GPU 占用。有 RT core 的显卡上 OIDN/PT 算力比值大致稳定（~6:1），interval=16 约 21% GPU 占用。CPU fallback 场景 OIDN 执行极慢（实测 1080p ~307ms，9800X3D AVX-512），被自身执行时间节流。
 
 **OIDNBuffer**：OIDN 2.x GPU 模式要求使用 `OIDNBuffer` 对象传递图像数据（GPU 无法访问系统 malloc 内存）。Denoiser 创建持久 `OIDNBuffer`（beauty + albedo + normal + output），Vulkan readback 后 `memcpy` 到 OIDNBuffer，执行后从 OIDNBuffer `memcpy` 到 upload staging buffer。
 

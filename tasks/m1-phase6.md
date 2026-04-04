@@ -128,8 +128,7 @@
 - [ ] Denoiser::on_resize()：join 线程 + 强制 state→Idle + 重建 staging buffers
 - [ ] Denoiser::destroy()：join 线程 + 强制 state→Idle + 释放所有资源（OIDN device/filter、staging buffers、timeline semaphore）
 - [ ] Denoiser::abort()：join 线程 + 强制 state→Idle（场景加载前调用）
-- [ ] Denoiser::last_error()：OIDN 错误信息 getter（空=无错误，下次请求时清除）
-- [ ] 后台线程 oidnExecuteFilter 失败处理：log error + state→Idle + 设 last_error_
+- [ ] 后台线程 oidnExecuteFilter 失败处理：spdlog::error + state→Idle（跳过 upload）
 - [ ] Renderer 新增 denoised buffer（RGBA32F managed image，TransferDst | Sampled）
 - [ ] Renderer 新增 accumulation_generation_（uint32_t，accumulation 重置时 +1）+ denoised_generation_
 - [ ] 降噪状态管理（Renderer 侧）：denoise_enabled / auto_denoise / interval / last_denoised_sample_count（触发时值）/ show_denoised
@@ -147,7 +146,7 @@
 - [ ] DebugUIActions 新增 pt_reset_requested + pt_denoise_requested
 - [ ] Rendering section 新增渲染模式 combo（仅 rt_supported 时显示 PT 选项）
 - [ ] Path Tracing collapsing header：状态信息 + Max Bounces + Firefly Clamp slider（0=关闭，默认 10.0）+ Target Samples + Reset 按钮
-- [ ] OIDN collapsing header：Denoise 开关 + Show Denoised/Raw 切换（Show Raw 暂停降噪）+ Auto Denoise + Interval（最小值 4）+ Denoise Now 按钮（state!=Idle || sample_count==0 || !show_denoised 时灰掉）+ 上次降噪采样数 + 降噪状态文字（Idle/Denoising...）+ 错误信息显示（last_error 非空时）
+- [ ] OIDN collapsing header：Denoise 开关 + Show Denoised/Raw 切换（Show Raw 暂停降噪）+ Auto Denoise + Interval（最小值 16，默认 64）+ Denoise Now 按钮（state!=Idle || sample_count==0 || !show_denoised 时灰掉）+ 上次降噪采样数 + 降噪状态文字（Idle/Denoising...）
 - [ ] Application 响应 PT actions
 
 ## Step 11：Environment Map Importance Sampling
