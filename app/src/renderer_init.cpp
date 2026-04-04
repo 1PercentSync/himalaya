@@ -164,7 +164,7 @@ namespace himalaya::app {
                     .width = 0,
                     .height = 0,
                     .format = rhi::Format::R32G32B32A32Sfloat,
-                    .usage = rhi::ImageUsage::Storage | rhi::ImageUsage::Sampled,
+                    .usage = rhi::ImageUsage::Storage | rhi::ImageUsage::Sampled | rhi::ImageUsage::TransferSrc,
                     .sample_count = 1,
                     .mip_levels = 1,
                 }, false);
@@ -176,7 +176,7 @@ namespace himalaya::app {
                     .width = 0,
                     .height = 0,
                     .format = rhi::Format::R8G8B8A8Unorm,
-                    .usage = rhi::ImageUsage::Storage,
+                    .usage = rhi::ImageUsage::Storage | rhi::ImageUsage::TransferSrc,
                     .sample_count = 1,
                     .mip_levels = 1,
                 }, false);
@@ -188,7 +188,7 @@ namespace himalaya::app {
                     .width = 0,
                     .height = 0,
                     .format = rhi::Format::R16G16B16A16Sfloat,
-                    .usage = rhi::ImageUsage::Storage,
+                    .usage = rhi::ImageUsage::Storage | rhi::ImageUsage::TransferSrc,
                     .sample_count = 1,
                     .mip_levels = 1,
                 }, false);
