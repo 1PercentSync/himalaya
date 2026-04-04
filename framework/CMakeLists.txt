@@ -28,7 +28,16 @@ find_package(xxHash CONFIG REQUIRED)
 
 target_include_directories(himalaya_framework PRIVATE ${Stb_INCLUDE_DIR})
 
+# --- OIDN (prebuilt, manual integration) ---
+set(OIDN_ROOT "${CMAKE_SOURCE_DIR}/third_party/oidn")
+add_library(oidn SHARED IMPORTED)
+set_target_properties(oidn PROPERTIES
+        IMPORTED_IMPLIB "${OIDN_ROOT}/lib/OpenImageDenoise.lib"
+        IMPORTED_LOCATION "${OIDN_ROOT}/bin/OpenImageDenoise.dll"
+        INTERFACE_INCLUDE_DIRECTORIES "${OIDN_ROOT}/include"
+)
+
 target_link_libraries(himalaya_framework
         PUBLIC himalaya_rhi imgui::imgui
-        PRIVATE mikktspace::mikktspace xxHash::xxhash bc7enc
+        PRIVATE mikktspace::mikktspace xxHash::xxhash bc7enc oidn
 )

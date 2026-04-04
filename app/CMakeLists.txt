@@ -27,3 +27,12 @@ add_custom_command(TARGET himalaya_app POST_BUILD
         ${CMAKE_SOURCE_DIR}/shaders
         $<TARGET_FILE_DIR:himalaya_app>/shaders
 )
+
+# Copy OIDN runtime DLLs to build directory (all device backends + dependencies)
+set(OIDN_BIN_DIR "${CMAKE_SOURCE_DIR}/third_party/oidn/bin")
+file(GLOB OIDN_DLLS "${OIDN_BIN_DIR}/*.dll")
+add_custom_command(TARGET himalaya_app POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        ${OIDN_DLLS}
+        $<TARGET_FILE_DIR:himalaya_app>
+)
