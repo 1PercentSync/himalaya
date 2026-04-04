@@ -437,7 +437,9 @@ namespace himalaya::app {
     void Renderer::destroy() {
         scene_as_builder_.destroy();
         as_manager_.destroy();
-        reference_view_pass_.destroy();
+        if (ctx_->rt_supported) {
+            reference_view_pass_.destroy();
+        }
         ibl_.destroy();
         material_system_.destroy();
         shadow_pass_.destroy();
