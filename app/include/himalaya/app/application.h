@@ -155,6 +155,9 @@ namespace himalaya::app {
         /** @brief Constructed HDR Sun DirectionalLight (rebuilt each frame from coords + IBL yaw). */
         framework::DirectionalLight hdr_sun_light_{};
 
+        /** @brief Active rendering mode (Rasterization or PathTracing). */
+        framework::RenderMode render_mode_ = framework::RenderMode::Rasterization;
+
         /** @brief Debug render mode (0=Full PBR, 1-7=debug visualizations). */
         uint32_t debug_render_mode_ = 0;
 

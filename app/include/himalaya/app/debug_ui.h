@@ -18,6 +18,7 @@ namespace himalaya::framework {
     struct AOConfig;
     struct Camera;
     struct ContactShadowConfig;
+    enum class RenderMode : uint8_t;
     struct RenderFeatures;
     struct ShadowConfig;
 } // namespace himalaya::framework
@@ -112,6 +113,14 @@ namespace himalaya::app {
 
         /** @brief Original equirect image height (for UI max bounds). */
         uint32_t equirect_height;
+
+        // --- Render mode ---
+
+        /** @brief Active rendering mode (mutable — combo box changes it). */
+        framework::RenderMode &render_mode;
+
+        /** @brief Whether RT hardware is available (controls PT option visibility). */
+        bool rt_supported;
 
         // --- Render params (controls) ---
 

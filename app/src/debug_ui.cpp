@@ -7,7 +7,7 @@
 
 #include <himalaya/framework/cache.h>
 #include <himalaya/framework/camera.h>
-#include <himalaya/framework/scene_data.h>
+#include <himalaya/framework/scene_data.h>  // RenderMode
 #include <himalaya/rhi/context.h>
 #include <himalaya/rhi/swapchain.h>
 
@@ -164,6 +164,25 @@ namespace himalaya::app {
             actions.vsync_toggled = true;
         }
 
+        // Path Tracing toggle
+        {
+            bool pt_enabled = ctx.render_mode == framework::RenderMode::PathTracing;
+            if (ctx.rt_supported) {
+                if (ImGui::Checkbox("Path Tracing", &pt_enabled)) {
+                    ctx.render_mode = pt_enabled
+                                          ? framework::RenderMode::PathTracing
+                                          : framework::RenderMode::Rasterization;
+                }
+            } else {
+                ImGui::BeginDisabled();
+                ImGui::Checkbox("Path Tracing", &pt_enabled);
+                ImGui::EndDisabled();
+                if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
+                    ImGui::SetTooltip("Path Tracing requires RT hardware");
+                }
+            }
+        }
+
         // Error banner (dismissable)
         if (!ctx.error_message.empty()) {
             ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.4f, 0.4f, 1.0f));
@@ -188,7 +207,7 @@ namespace himalaya::app {
 
         // Camera section
         ImGui::Separator();
-        if (ImGui::CollapsingHeader("Camera", ImGuiTreeNodeFlags_DefaultOpen)) {
+        if (ImGui::CollapsingHeader("Camera")) {
             const auto &pos = ctx.camera.position;
             ImGui::Text("Pos: (%.2f, %.2f, %.2f)", pos.x, pos.y, pos.z);
             ImGui::Text("Yaw: %.1f%s  Pitch: %.1f%s",
@@ -216,7 +235,7 @@ namespace himalaya::app {
 
         // Scene section (file loading + statistics)
         ImGui::Separator();
-        if (ImGui::CollapsingHeader("Scene", ImGuiTreeNodeFlags_DefaultOpen)) {
+        if (ImGui::CollapsingHeader("Scene")) {
             // Current scene file
             if (ctx.scene_path.empty()) {
                 ImGui::TextDisabled("No scene loaded");
@@ -264,7 +283,7 @@ namespace himalaya::app {
 
         // Environment section
         ImGui::Separator();
-        if (ImGui::CollapsingHeader("Environment", ImGuiTreeNodeFlags_DefaultOpen)) {
+        if (ImGui::CollapsingHeader("Environment")) {
             if (ctx.env_path.empty()) {
                 ImGui::TextDisabled("No HDR loaded (fallback)");
             } else {
@@ -354,7 +373,7 @@ namespace himalaya::app {
         // Shadow section
         if (ctx.features.shadows) {
             ImGui::Separator();
-            if (ImGui::CollapsingHeader("Shadow", ImGuiTreeNodeFlags_DefaultOpen)) {
+            if (ImGui::CollapsingHeader("Shadow")) {
                 // Shadow Mode (PCF / PCSS)
                 constexpr const char *kModeLabels[] = {"PCF", "PCSS"};
                 auto mode_idx = static_cast<int>(ctx.shadow_config.shadow_mode);
@@ -477,7 +496,7 @@ namespace himalaya::app {
         // AO section
         if (ctx.features.ao) {
             ImGui::Separator();
-            if (ImGui::CollapsingHeader("Ambient Occlusion", ImGuiTreeNodeFlags_DefaultOpen)) {
+            if (ImGui::CollapsingHeader("Ambient Occlusion")) {
                 ImGui::SliderFloat("Radius", &ctx.ao_config.radius, 0.1f, 5.0f, "%.2f m");
 
                 // Directions combo (2/4/8)
@@ -512,7 +531,7 @@ namespace himalaya::app {
         // Contact Shadows section
         if (ctx.features.contact_shadows) {
             ImGui::Separator();
-            if (ImGui::CollapsingHeader("Contact Shadows", ImGuiTreeNodeFlags_DefaultOpen)) {
+            if (ImGui::CollapsingHeader("Contact Shadows")) {
                 // Step count combo (8/16/24/32)
                 constexpr uint32_t kStepCounts[] = {8, 16, 24, 32};
                 constexpr const char *kStepLabels[] = {"8", "16", "24", "32"};

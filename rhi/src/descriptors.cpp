@@ -391,9 +391,9 @@ namespace himalaya::rhi {
         // --- Set 1: bindless arrays (binding 0 = sampler2D[], binding 1 = samplerCube[]) ---
         // Both bindings: PARTIALLY_BOUND + UPDATE_AFTER_BIND, fixed upper bound
         // RT stages: closesthit/anyhit sample material textures, miss samples IBL cubemap.
-        // Raygen does not sample bindless textures (only reads GlobalUBO + writes accumulation).
         const VkShaderStageFlags kBindlessRtStages = rt
-                                                         ? (VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR |
+                                                         ? (VK_SHADER_STAGE_RAYGEN_BIT_KHR |
+                                                            VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR |
                                                             VK_SHADER_STAGE_ANY_HIT_BIT_KHR |
                                                             VK_SHADER_STAGE_MISS_BIT_KHR)
                                                          : 0;

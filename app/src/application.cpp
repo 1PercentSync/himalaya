@@ -423,6 +423,8 @@ namespace himalaya::app {
             .hdr_sun_cast_shadows = hdr_sun_cast_shadows_,
             .equirect_width = renderer_.ibl().equirect_width(),
             .equirect_height = renderer_.ibl().equirect_height(),
+            .render_mode = render_mode_,
+            .rt_supported = context_.rt_supported,
             .ibl_intensity = ibl_intensity_,
             .ev = ev_,
             .debug_render_mode = debug_render_mode_,
@@ -531,7 +533,7 @@ namespace himalaya::app {
         const RenderInput input{
             .image_index = image_index_,
             .frame_index = context_.frame_index,
-            .render_mode = framework::RenderMode::Rasterization,
+            .render_mode = render_mode_,
             .camera = camera_,
             .lights = scene_render_data_.directional_lights,
             .cull_result = cull_result_,

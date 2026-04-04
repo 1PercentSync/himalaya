@@ -500,6 +500,7 @@ namespace himalaya::rhi {
 
         if (rt_supported) {
             features_12.bufferDeviceAddress = VK_TRUE;
+            features_10.shaderInt64 = VK_TRUE;
             as_features.accelerationStructure = VK_TRUE;
             rt_pipeline_features.rayTracingPipeline = VK_TRUE;
             ray_query_features.rayQuery = VK_TRUE;

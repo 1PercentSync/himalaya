@@ -51,11 +51,15 @@ namespace himalaya::app {
         frame_ctx.frame_index = input.frame_index;
         frame_ctx.frame_number = frame_counter_;
 
-        // --- VP comparison for accumulation reset ---
-        if (input.camera.view_projection != prev_pt_view_projection_) {
+        // --- VP / IBL rotation comparison for accumulation reset ---
+        if (input.camera.view_projection != prev_pt_view_projection_ ||
+            input.ibl_rotation_sin != prev_pt_ibl_rotation_sin_ ||
+            input.ibl_rotation_cos != prev_pt_ibl_rotation_cos_) {
             reference_view_pass_.reset_accumulation();
         }
         prev_pt_view_projection_ = input.camera.view_projection;
+        prev_pt_ibl_rotation_sin_ = input.ibl_rotation_sin;
+        prev_pt_ibl_rotation_cos_ = input.ibl_rotation_cos;
 
         // --- Record passes ---
         reference_view_pass_.record(render_graph_, frame_ctx);

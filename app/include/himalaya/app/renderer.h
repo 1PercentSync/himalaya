@@ -433,6 +433,12 @@ namespace himalaya::app {
         /** @brief Cached VP matrix from the previous PT frame (accumulation reset detection). */
         glm::mat4 prev_pt_view_projection_{1.0f};
 
+        /** @brief Cached IBL rotation sin from the previous PT frame (accumulation reset detection). */
+        float prev_pt_ibl_rotation_sin_ = 0.0f;
+
+        /** @brief Cached IBL rotation cos from the previous PT frame (accumulation reset detection). */
+        float prev_pt_ibl_rotation_cos_ = 1.0f;
+
         // --- Private helpers ---
 
         /**
