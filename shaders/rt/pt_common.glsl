@@ -365,4 +365,49 @@ float pdf_ggx_vndf(float NdotH, float NdotV, float VdotH, float roughness) {
     return (D * G1) / (4.0 * NdotV);
 }
 
+// ---- Russian Roulette ----
+
+/**
+ * Evaluates Russian Roulette for path termination.
+ *
+ * Active for bounce >= 2. Survival probability is the max component of
+ * the current path throughput, clamped to [0.05, 0.95]. On survival the
+ * caller must divide throughput by the returned probability to remain
+ * unbiased.
+ *
+ * @param throughput Current path throughput (pre-RR).
+ * @param bounce     Current bounce index (0-based).
+ * @param rand_val   Uniform random number in [0, 1).
+ * @param[out] survive  True if the path survives.
+ * @return Survival probability (divide throughput by this on survival).
+ */
+float russian_roulette(vec3 throughput, uint bounce, float rand_val,
+                       out bool survive) {
+    if (bounce < 2u) {
+        survive = true;
+        return 1.0;
+    }
+    float p = clamp(max(throughput.r, max(throughput.g, throughput.b)), 0.05, 0.95);
+    survive = (rand_val < p);
+    return p;
+}
+
+// ---- MIS Power Heuristic ----
+
+/**
+ * Balance heuristic for multiple importance sampling (power = 2).
+ *
+ * Returns the MIS weight for strategy A given two PDFs.
+ * Defined in Step 6a; used from Step 11 (environment map sampling) onward.
+ * Directional light NEE uses weight 1.0 (delta distribution, no MIS).
+ *
+ * @param pdf_a PDF of strategy A (the one being weighted).
+ * @param pdf_b PDF of strategy B.
+ * @return MIS weight for strategy A.
+ */
+float mis_power_heuristic(float pdf_a, float pdf_b) {
+    float a2 = pdf_a * pdf_a;
+    return a2 / (a2 + pdf_b * pdf_b);
+}
+
 #endif // PT_COMMON_GLSL
