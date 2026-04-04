@@ -32,19 +32,21 @@ namespace himalaya::app {
         // sample_count==0 (first frame or after reset): shader overwrites entirely → UNDEFINED ok.
         // sample_count>0: shader does imageLoad for running average → must preserve.
         const bool accum_has_data = reference_view_pass_.sample_count() > 0;
-        const auto accum_resource = render_graph_.use_managed_image(
-            managed_pt_accumulation_, VK_IMAGE_LAYOUT_GENERAL, accum_has_data);
+        const auto accum_resource = render_graph_.use_managed_image(managed_pt_accumulation_,
+                                                                    VK_IMAGE_LAYOUT_GENERAL,
+                                                                    accum_has_data);
 
         // Update Set 2 binding 0 to point to accumulation buffer for Tonemapping sampling
         const auto accum_backing = render_graph_.get_managed_backing_image(managed_pt_accumulation_);
-        descriptor_manager_->update_render_target(input.frame_index, 0,
-                                                   accum_backing, default_sampler_);
+        descriptor_manager_->update_render_target(input.frame_index, 0, accum_backing, default_sampler_);
 
         // Aux images are fully overwritten each frame (bounce 0 imageStore)
-        const auto aux_albedo_resource = render_graph_.use_managed_image(
-            managed_pt_aux_albedo_, VK_IMAGE_LAYOUT_GENERAL, false);
-        const auto aux_normal_resource = render_graph_.use_managed_image(
-            managed_pt_aux_normal_, VK_IMAGE_LAYOUT_GENERAL, false);
+        const auto aux_albedo_resource = render_graph_.use_managed_image(managed_pt_aux_albedo_,
+                                                                         VK_IMAGE_LAYOUT_GENERAL,
+                                                                         false);
+        const auto aux_normal_resource = render_graph_.use_managed_image(managed_pt_aux_normal_,
+                                                                         VK_IMAGE_LAYOUT_GENERAL,
+                                                                         false);
 
         // --- Construct FrameContext ---
         framework::FrameContext frame_ctx{};
@@ -61,13 +63,161 @@ namespace himalaya::app {
             input.ibl_rotation_sin != prev_pt_ibl_rotation_sin_ ||
             input.ibl_rotation_cos != prev_pt_ibl_rotation_cos_) {
             reference_view_pass_.reset_accumulation();
+            ++accumulation_generation_;
+            last_denoised_sample_count_ = 0;
         }
         prev_pt_view_projection_ = input.camera.view_projection;
         prev_pt_ibl_rotation_sin_ = input.ibl_rotation_sin;
         prev_pt_ibl_rotation_cos_ = input.ibl_rotation_cos;
 
+        // --- Denoise trigger guard ---
+        if (const uint32_t sample_count = reference_view_pass_.sample_count();
+            denoiser_.state() == framework::DenoiseState::Idle &&
+            denoise_enabled_ && show_denoised_ && sample_count > 0) {
+            const bool auto_trigger = auto_denoise_ &&
+                                      (sample_count - last_denoised_sample_count_ >= auto_denoise_interval_);
+            // Manual trigger will be added in Step 10 (DebugUIActions::pt_denoise_requested)
+            if (auto_trigger) {
+                last_denoised_sample_count_ = sample_count;
+                denoiser_.request_denoise(accumulation_generation_);
+            }
+        }
+
+        // --- Upload pass (must come before Tonemapping reads denoised buffer) ---
+        if (denoiser_.poll_upload_ready(accumulation_generation_)) {
+            const auto denoised_resource = render_graph_.use_managed_image(managed_denoised_,
+                                                                           VK_IMAGE_LAYOUT_UNDEFINED,
+                                                                           false);
+
+            const std::array upload_resources = {
+                framework::RGResourceUsage{
+                    denoised_resource,
+                    framework::RGAccessType::Write,
+                    framework::RGStage::Transfer
+                },
+            };
+            render_graph_.add_pass("OIDN Upload",
+                                   upload_resources,
+                                   [this](const rhi::CommandBuffer &pass_cmd) {
+                                       const auto &denoised_img = resource_manager_->get_image(
+                                           render_graph_.get_managed_backing_image(managed_denoised_));
+                                       const auto &upload_buf = resource_manager_->get_buffer(
+                                           denoiser_.upload_buffer());
+
+                                       VkBufferImageCopy region{};
+                                       region.bufferOffset = 0;
+                                       region.bufferRowLength = 0;
+                                       region.bufferImageHeight = 0;
+                                       region.imageSubresource = {
+                                           VK_IMAGE_ASPECT_COLOR_BIT,
+                                           0,
+                                           0,
+                                           1
+                                       };
+                                       region.imageOffset = {0, 0, 0};
+                                       region.imageExtent = {denoiser_.width(), denoiser_.height(), 1};
+
+                                       vkCmdCopyBufferToImage(pass_cmd.handle(),
+                                                              upload_buf.buffer, denoised_img.image,
+                                                              VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                                                              1, &region);
+                                   });
+
+            denoiser_.complete_upload();
+            denoised_generation_ = accumulation_generation_;
+        }
+
+        // --- Tonemapping input: denoised buffer or raw accumulation ---
+        const bool use_denoised = show_denoised_ &&
+                                  denoise_enabled_ &&
+                                  denoised_generation_ == accumulation_generation_;
+        if (use_denoised) {
+            const auto denoised_resource = render_graph_.use_managed_image(
+                managed_denoised_, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, true);
+            frame_ctx.hdr_color = denoised_resource;
+
+            const auto denoised_backing = render_graph_.get_managed_backing_image(managed_denoised_);
+            descriptor_manager_->update_render_target(input.frame_index, 0,
+                                                      denoised_backing, default_sampler_);
+        }
+
         // --- Record passes ---
         reference_view_pass_.record(render_graph_, frame_ctx);
+
+        // --- Readback copy pass (after Reference View, before compile) ---
+        if (denoiser_.state() == framework::DenoiseState::ReadbackPending) {
+            const std::array readback_resources = {
+                framework::RGResourceUsage{
+                    accum_resource,
+                    framework::RGAccessType::Read,
+                    framework::RGStage::Transfer
+                },
+                framework::RGResourceUsage{
+                    aux_albedo_resource,
+                    framework::RGAccessType::Read,
+                    framework::RGStage::Transfer
+                },
+                framework::RGResourceUsage{
+                    aux_normal_resource,
+                    framework::RGAccessType::Read,
+                    framework::RGStage::Transfer
+                },
+            };
+            render_graph_.add_pass("OIDN Readback", readback_resources,
+                                   [this](const rhi::CommandBuffer &pass_cmd) {
+                                       const auto &accum_img = resource_manager_->get_image(
+                                           render_graph_.get_managed_backing_image(managed_pt_accumulation_));
+                                       const auto &albedo_img = resource_manager_->get_image(
+                                           render_graph_.get_managed_backing_image(managed_pt_aux_albedo_));
+                                       const auto &normal_img = resource_manager_->get_image(
+                                           render_graph_.get_managed_backing_image(managed_pt_aux_normal_));
+
+                                       const auto &rb_beauty = resource_manager_->get_buffer(
+                                           denoiser_.readback_beauty_buffer());
+                                       const auto &rb_albedo = resource_manager_->get_buffer(
+                                           denoiser_.readback_albedo_buffer());
+                                       const auto &rb_normal = resource_manager_->get_buffer(
+                                           denoiser_.readback_normal_buffer());
+
+                                       constexpr VkImageSubresourceLayers subresource = {
+                                           VK_IMAGE_ASPECT_COLOR_BIT,
+                                           0,
+                                           0,
+                                           1
+                                       };
+                                       const VkExtent3D extent = {denoiser_.width(), denoiser_.height(), 1};
+
+                                       VkBufferImageCopy region{};
+                                       region.bufferOffset = 0;
+                                       region.bufferRowLength = 0;
+                                       region.bufferImageHeight = 0;
+                                       region.imageSubresource = subresource;
+                                       region.imageOffset = {0, 0, 0};
+                                       region.imageExtent = extent;
+
+                                       vkCmdCopyImageToBuffer(pass_cmd.handle(),
+                                                              accum_img.image,
+                                                              VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                                                              rb_beauty.buffer,
+                                                              1,
+                                                              &region);
+                                       vkCmdCopyImageToBuffer(pass_cmd.handle(),
+                                                              albedo_img.image,
+                                                              VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                                                              rb_albedo.buffer,
+                                                              1,
+                                                              &region);
+                                       vkCmdCopyImageToBuffer(pass_cmd.handle(),
+                                                              normal_img.image,
+                                                              VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                                                              rb_normal.buffer,
+                                                              1,
+                                                              &region);
+                                   });
+
+            denoiser_.launch_processing();
+        }
+
         tonemapping_pass_.record(render_graph_, frame_ctx);
 
         // --- ImGui pass ---

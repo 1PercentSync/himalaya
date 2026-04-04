@@ -198,4 +198,8 @@ namespace himalaya::app {
     uint32_t Renderer::last_draw_call_count() const {
         return draw_call_count_;
     }
+
+    framework::Denoiser::SemaphoreSignal Renderer::pending_denoise_signal() const {
+        return denoiser_.pending_denoise_signal();
+    }
 } // namespace himalaya::app

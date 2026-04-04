@@ -13,6 +13,7 @@
 #include <himalaya/rhi/commands.h>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 
 #include <GLFW/glfw3.h>
@@ -566,10 +567,23 @@ namespace himalaya::app {
         wait_info.semaphore = frame.image_available_semaphore;
         wait_info.stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
 
+        // Signal semaphores: render-finished + optional denoise timeline
         VkSemaphoreSubmitInfo signal_info{};
         signal_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO;
         signal_info.semaphore = swapchain_.render_finished_semaphores[image_index_];
         signal_info.stageMask = VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT;
+
+        std::array<VkSemaphoreSubmitInfo, 2> signal_infos = {signal_info, {}};
+        uint32_t signal_count = 1;
+
+        const auto denoise_signal = renderer_.pending_denoise_signal();
+        if (denoise_signal.semaphore != VK_NULL_HANDLE) {
+            signal_infos[1].sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO;
+            signal_infos[1].semaphore = denoise_signal.semaphore;
+            signal_infos[1].value = denoise_signal.value;
+            signal_infos[1].stageMask = VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT;
+            signal_count = 2;
+        }
 
         VkSubmitInfo2 submit_info{};
         submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2;
@@ -577,8 +591,8 @@ namespace himalaya::app {
         submit_info.pWaitSemaphoreInfos = &wait_info;
         submit_info.commandBufferInfoCount = 1;
         submit_info.pCommandBufferInfos = &cmd_submit_info;
-        submit_info.signalSemaphoreInfoCount = 1;
-        submit_info.pSignalSemaphoreInfos = &signal_info;
+        submit_info.signalSemaphoreInfoCount = signal_count;
+        submit_info.pSignalSemaphoreInfos = signal_infos.data();
 
         VK_CHECK(vkQueueSubmit2(context_.graphics_queue, 1, &submit_info, frame.render_fence));
     }
