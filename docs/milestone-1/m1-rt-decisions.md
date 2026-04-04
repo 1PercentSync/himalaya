@@ -52,11 +52,23 @@ Closest-hit shader 通过 `geometry_infos[gl_InstanceCustomIndexEXT + gl_Geometr
 
 ## OIDN 集成
 
+**版本**：OIDN 2.4.1（2026-01 发布），预编译库手动集成到 `third_party/oidn/`（`include/` + `lib/` + `bin/`），vcpkg 无端口。OIDN 2.x 原生支持 CUDA/HIP/SYCL GPU 降噪，使用 C++11 wrapper API（`oidn.hpp`）。
+
 **数据流**：Vulkan readback → CPU 内存 → OIDN GPU 降噪 → CPU 内存 → Vulkan upload。
 
 "CPU 中转"指 Vulkan 与 OIDN 之间的数据通道走 CPU 内存，降噪计算本身在 GPU 上执行（CUDA/HIP/SYCL）。
 
 选择 CPU 中转而非 VK_KHR_external_memory 零拷贝的理由：M1 的烘焙器是离线的，参考视图降噪不需要每帧执行（每隔 N 次采样触发一次），CPU 中转延迟完全可接受。省去外部内存互操作的复杂度。
+
+**OIDNBuffer**：OIDN 2.x GPU 模式要求使用 `OIDNBuffer` 对象传递图像数据（GPU 无法访问系统 malloc 内存）。Denoiser 创建持久 `OIDNBuffer`（beauty + albedo + normal + output），Vulkan readback 后 `memcpy` 到 OIDNBuffer，执行后从 OIDNBuffer `memcpy` 到 upload staging buffer。
+
+**像素格式与零转换**：
+- Accumulation（RGBA32F）→ `OIDN_FORMAT_FLOAT3`，pixelByteStride=16（跳过 alpha）
+- Aux Albedo（R16G16B16A16Sfloat）→ `OIDN_FORMAT_HALF3`，pixelByteStride=8（跳过 alpha）
+- Aux Normal（R16G16B16A16Sfloat）→ `OIDN_FORMAT_HALF3`，pixelByteStride=8（跳过 alpha）
+- Output（RGBA32F）→ `OIDN_FORMAT_FLOAT3`，pixelByteStride=16
+
+三种输入无需任何 CPU 端格式转换。Aux albedo 原始设计为 R8G8B8A8Unorm（Step 7），Step 9 实现前升级为 R16G16B16A16Sfloat（half 精度高于 R8 的 256 级，零质量损失；VRAM 增加从 4→8 bytes/pixel，1080p 下约 +8MB 可忽略）。两张 aux 统一格式简化 readback 和 OIDN 配置。
 
 **降噪频率**：参考视图不必每帧降噪，可配置为每 N 次采样后触发一次 OIDN，或由用户手动触发。
 
@@ -496,8 +508,8 @@ raygen 累积前对 per-sample 贡献做 clamp：`sample_color = min(sample_colo
 
 closesthit bounce 0 时通过 imageStore 写入两张辅助 image（aux albedo + aux normal）：
 
-- **Albedo**：表面漫反射颜色（`base_color × (1 - metallic)`），不含 emissive 和光照结果。RGBA32F
-- **Normal**：shading normal（法线贴图后，非几何法线），世界空间。RGBA32F
+- **Albedo**：表面漫反射颜色（`base_color × (1 - metallic)`），不含 emissive 和光照结果。R16G16B16A16Sfloat（Step 9 从 R8G8B8A8Unorm 升级，配合 OIDN `HALF3` 零转换）
+- **Normal**：shading normal（法线贴图后，非几何法线），世界空间。R16G16B16A16Sfloat
 
 PrimaryPayload 新增 `uint bounce` 字段，raygen 在 traceRayEXT 前设置，closesthit 读取判断是否为 bounce 0。辅助 image 通过 Set 3 push descriptor binding 1/2 绑定（与 accumulation buffer 的 binding 0 同一 set）。
 

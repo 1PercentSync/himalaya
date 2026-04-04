@@ -378,7 +378,7 @@ PT 路径的 RG 编排极简：仅 Reference View Pass + Tonemapping Pass + ImGu
 
 #### 设计要点
 
-Staging buffer 大小 = width × height × 16 bytes（RGBA32F），持久分配避免每次降噪重建（beauty + albedo + normal 各一组）。OIDN "RT" filter 配置 albedo + normal 辅助通道（Step 6 closesthit bounce 0 输出，Step 7 管理辅助 image），显著提升低采样数降噪质量。
+OIDN 2.4.1 预编译库手动集成到 `third_party/oidn/`（include/lib/bin），C++11 wrapper API。GPU 模式使用 `OIDNBuffer` 传递数据。Aux albedo 格式从 R8G8B8A8Unorm 升级为 R16G16B16A16Sfloat（与 aux normal 统一），配合 OIDN `HALF3` + pixelByteStride=8 实现零 CPU 格式转换。Beauty 使用 `FLOAT3` + pixelByteStride=16。Staging buffer 持久分配（beauty = width×height×16B，aux 各 width×height×8B），避免每次降噪重分配。OIDN "RT" filter 配置 albedo + normal 辅助通道，显著提升低采样数降噪质量。
 
 OIDN 降噪是阻塞操作（GPU denoise + CPU readback），会造成一帧的卡顿。对参考视图可接受（非每帧执行）。
 
@@ -630,7 +630,9 @@ shaders/
 | NEE 方向光 | 暴力遍历 LightBuffer 方向光，无 Light BVH。方向光为 delta 分布，MIS 权重恒为 1，不需要 MIS。Shadow ray 使用 `gl_RayFlagsTerminateOnFirstHitEXT \| gl_RayFlagsSkipClosestHitShaderEXT` |
 | NEE 环境光 | Alias table importance sampling（1024×512，`{float32 prob, uint32 alias}`，Set 0 binding 6 SSBO）。total_luminance 嵌入 SSBO 头部。env-local 空间构建，shader 端旋转。MIS power heuristic 与 BRDF 采样组合 |
 | Russian Roulette | **raygen 侧执行**。bounce ≥ 2 前用累积 throughput 做 RR 决策（`russian_roulette()` 取 max component，clamp [0.05, 0.95]），存活时 throughput /= survival_prob。closesthit 返回纯 BRDF 权重（`throughput_update`），不含 RR 修正。选择 raygen 侧是因为累积 throughput 比单次 BRDF 权重更准确反映路径贡献 |
-| OIDN staging | 持久分配 readback + upload staging buffer（width × height × 16 bytes），避免每次降噪重分配 |
+| OIDN 版本与集成 | OIDN 2.4.1，预编译库 `third_party/oidn/`（include/lib/bin），C++11 wrapper API（`oidn.hpp`）。GPU 模式要求 `OIDNBuffer`（GPU 无法访问系统 malloc 内存）。OIDN device 创建使用 `OIDN_DEVICE_TYPE_DEFAULT`（GPU 优先 fallback CPU） |
+| OIDN 像素格式 | Beauty（RGBA32F）→ FLOAT3 pixelStride=16，Aux Albedo/Normal（RGBA16F）→ HALF3 pixelStride=8，Output（RGBA32F）→ FLOAT3 pixelStride=16。零 CPU 格式转换 |
+| OIDN staging | 持久分配 Vulkan staging buffer：beauty readback = width×height×16B，aux readback 各 width×height×8B，upload = width×height×16B。另有持久 OIDNBuffer（beauty+albedo+normal+output）用于 OIDN GPU 数据传递 |
 | 模式切换缓存 | accumulation buffer 和 sample count 在模式切换时不清零。VP 矩阵变化触发重置，模式切换不触发 |
 | 渲染路径组织 | render() 拆分为 fill_common_gpu_data() + render_rasterization() + render_path_tracing() 私有方法，不引入新抽象 |
 | BLAS 批量构建 | 单次 `vkCmdBuildAccelerationStructuresKHR` 调用传入全部 BLAS，GPU 并行构建。Scratch buffer = 所有 BLAS scratch size 之和（各段对齐到 `minAccelerationStructureScratchOffsetAlignment`），构建后释放 |
@@ -653,7 +655,7 @@ shaders/
 | Emissive 策略 | 所有 bounce 加 emissive（物理正确）。Step 12 前无 MIS（直接贡献），Step 12 后 BRDF 命中 emissive 加 MIS 权重 |
 | Multi-lobe BRDF | Fresnel 估计概率（`luminance(F_Schlick(NdotV, F0))`）选 diffuse(cosine) / specular(GGX VNDF)。PDF 除以选择概率补偿 |
 | Firefly Clamping | 仅 bounce > 0（间接贡献）。`min(contribution, max_clamp)`。bounce 0 不产生萤火虫，直视 emissive 不应被压暗。max_clamp 默认 10.0，ImGui slider |
-| OIDN Aux Buffers | bounce 0 closesthit imageStore aux albedo（base_color × (1-metallic)，不含 emissive，R8G8B8A8Unorm）+ aux normal（shading normal，R16G16B16A16Sfloat）。Set 3 binding 1/2 push descriptor。Step 9 OIDN readback 时需格式转换到 float32 |
+| OIDN Aux Buffers | bounce 0 closesthit imageStore aux albedo（base_color × (1-metallic)，不含 emissive，R16G16B16A16Sfloat）+ aux normal（shading normal，R16G16B16A16Sfloat）。Set 3 binding 1/2 push descriptor。两张 aux 统一 RGBA16F 格式，OIDN 直接读取 HALF3 + pixelStride=8，零格式转换 |
 | Area Light NEE | EmissiveLightBuilder 构建 emissive triangle list + power-weighted alias table。Set 0 binding 7/8。MIS：NEE emissive + BRDF 命中 emissive 用 power heuristic 平衡。push constant `emissive_light_count`（0=skip）。双面跟随 glTF doubleSided |
 | EmissiveTriangle | std430 96B：v0/v1/v2(vec3) + emission(vec3, raw factor) + area(float) + material_index(uint) + uv0/uv1/uv2(vec2)。存 UV 以精确采样纹理 emissive |
 | Texture LOD | Ray Cones（Akenine-Möller 2021）。忽略表面曲率，运行时算纹理密度（不改 GeometryInfo），纯累积无 bias。`lod_bias` push constant 调参（默认 0.0）。PrimaryPayload `cone_spread` 跨 bounce 传递 |

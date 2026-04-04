@@ -2000,8 +2000,8 @@ private:
 | Binding | 类型 | 资源 | 说明 |
 |---------|------|------|------|
 | 0 | `image2D` (storage, rgba32f) | accumulation buffer (output) | running average 累积 |
-| 1 | `image2D` (storage, rgba32f) | aux albedo (output) | OIDN 辅助通道（bounce 0 写入） |
-| 2 | `image2D` (storage, rgba32f) | aux normal (output) | OIDN 辅助通道（bounce 0 写入） |
+| 1 | `image2D` (storage, rgba16f) | aux albedo (output) | OIDN 辅助通道（bounce 0 写入） |
+| 2 | `image2D` (storage, rgba16f) | aux normal (output) | OIDN 辅助通道（bounce 0 写入） |
 | 3 | SSBO (readonly) | Sobol 方向数表 | 128 维 × 32 bit，16 KB，init 时上传 |
 
 Push constants: `PTPushConstants`（见「PT Push Constants 布局」）。
