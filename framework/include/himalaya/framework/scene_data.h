@@ -118,6 +118,18 @@ namespace himalaya::framework {
     // ---- Render Configuration ----
 
     /**
+     * @brief Top-level rendering mode selection.
+     *
+     * Controls which render path Renderer executes each frame:
+     * rasterization (full multi-pass pipeline) or path tracing
+     * (RT reference view + tonemapping).
+     */
+    enum class RenderMode : uint8_t {
+        Rasterization, ///< Multi-pass rasterization pipeline (default).
+        PathTracing,   ///< RT path-traced reference view with accumulation.
+    };
+
+    /**
      * @brief Runtime toggles for optional rendering effects.
      *
      * Application holds the instance, DebugUI modifies fields directly,
