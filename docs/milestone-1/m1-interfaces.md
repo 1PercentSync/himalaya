@@ -103,7 +103,10 @@ app/
 └── src/
     ├── main.cpp                 # 入口
     ├── application.cpp
-    ├── renderer.cpp
+    ├── renderer.cpp             # render() dispatch、fill_common_gpu_data()、accessors
+    ├── renderer_init.cpp        # init/destroy/resize/reload、descriptor helpers
+    ├── renderer_rasterization.cpp  # 光栅化渲染路径
+    ├── renderer_pt.cpp          # PT 渲染路径
     ├── scene_loader.cpp
     ├── camera_controller.cpp
     ├── debug_ui.cpp
@@ -1027,7 +1030,7 @@ public:
 };
 ```
 
-命名空间：`himalaya::app`。文件位置：`app/include/himalaya/app/renderer.h` + `app/src/renderer.cpp`。
+命名空间：`himalaya::app`。文件位置：`app/include/himalaya/app/renderer.h` + `app/src/renderer.cpp`（dispatch + GPU data fill）、`renderer_init.cpp`（lifecycle）、`renderer_rasterization.cpp`（光栅化路径）、`renderer_pt.cpp`（PT 路径）。
 
 #### SceneLoader 场景数据（app/scene_loader.h）
 

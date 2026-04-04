@@ -101,7 +101,7 @@
 
 - [x] scene_data.h 新增 RenderMode 枚举（Rasterization、PathTracing）（uint8_t）
 - [x] RenderInput 新增 render_mode 字段
-- [ ] Renderer::render() 拆分为私有方法：fill_common_gpu_data() + render_rasterization() + render_path_tracing()，按 render_mode switch
+- [x] Renderer::render() 拆分为私有方法：fill_common_gpu_data() + render_rasterization() + render_path_tracing()，按 render_mode switch。renderer.cpp 拆分为四个文件：renderer.cpp（dispatch + GPU data fill）、renderer_init.cpp（lifecycle）、renderer_rasterization.cpp（光栅化路径）、renderer_pt.cpp（PT 路径）
 - [ ] PT 路径：RG clear → accumulation + swapchain import → Reference View → Tonemapping → ImGui → present
 - [ ] VP 矩阵比较 + reset_accumulation() 触发
 - [ ] 模式切换不清零 accumulation（缓存保留）

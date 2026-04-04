@@ -603,7 +603,10 @@ app/
 │   └── application.h              # [Step 8] render_mode 状态
 ├── src/
 │   ├── scene_loader.cpp           # [Step 5] load_meshes() 填充 group_id/material_id + buffer flags
-│   ├── renderer.cpp               # [Step 5-9] AS 构建 + 渲染路径拆分 + OIDN ; [Step 11] env alias table ; [Step 12] emissive light builder
+│   ├── renderer.cpp               # [Step 5-8] render() dispatch、fill_common_gpu_data()、accessors
+│   ├── renderer_init.cpp          # [Step 5-9] init/destroy/resize/reload、descriptor helpers、AS 构建 ; [Step 11] env alias table ; [Step 12] emissive light builder
+│   ├── renderer_rasterization.cpp # [Step 8] 光栅化渲染路径（draw group 构建 + multi-pass pipeline）
+│   ├── renderer_pt.cpp            # [Step 8-9] PT 渲染路径（Reference View + Tonemapping + ImGui）; OIDN
 │   ├── config.cpp                 # [Step 5] log_level 序列化/反序列化
 │   ├── debug_ui.cpp               # [Step 5] log level 变更返回 action ; [Step 10] PT 面板绘制
 │   └── application.cpp            # [Step 5] log level 加载 + 变更持久化 ; [Step 8-10] 模式切换 + PT actions 响应
