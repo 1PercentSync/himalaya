@@ -226,15 +226,15 @@ namespace himalaya::app {
             VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 
         const auto hdr_color_resource = render_graph_.use_managed_image(
-            managed_hdr_color_, VK_IMAGE_LAYOUT_UNDEFINED);
+            managed_hdr_color_, VK_IMAGE_LAYOUT_UNDEFINED, false);
         const auto depth_resource = render_graph_.use_managed_image(
-            managed_depth_, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+            managed_depth_, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, false);
         const auto depth_prev_resource = render_graph_.get_history_image(managed_depth_);
 
         const auto normal_resource = render_graph_.use_managed_image(
-            managed_normal_, VK_IMAGE_LAYOUT_UNDEFINED);
+            managed_normal_, VK_IMAGE_LAYOUT_UNDEFINED, false);
         const auto roughness_resource = render_graph_.use_managed_image(
-            managed_roughness_, VK_IMAGE_LAYOUT_UNDEFINED);
+            managed_roughness_, VK_IMAGE_LAYOUT_UNDEFINED, false);
 
         framework::RGResourceId msaa_color_resource;
         framework::RGResourceId msaa_depth_resource;
@@ -242,30 +242,30 @@ namespace himalaya::app {
         framework::RGResourceId msaa_roughness_resource;
         if (managed_msaa_color_.valid()) {
             msaa_color_resource = render_graph_.use_managed_image(
-                managed_msaa_color_, VK_IMAGE_LAYOUT_UNDEFINED);
+                managed_msaa_color_, VK_IMAGE_LAYOUT_UNDEFINED, false);
         }
         if (managed_msaa_depth_.valid()) {
             msaa_depth_resource = render_graph_.use_managed_image(
-                managed_msaa_depth_, VK_IMAGE_LAYOUT_UNDEFINED);
+                managed_msaa_depth_, VK_IMAGE_LAYOUT_UNDEFINED, false);
         }
         if (managed_msaa_normal_.valid()) {
             msaa_normal_resource = render_graph_.use_managed_image(
-                managed_msaa_normal_, VK_IMAGE_LAYOUT_UNDEFINED);
+                managed_msaa_normal_, VK_IMAGE_LAYOUT_UNDEFINED, false);
         }
         if (managed_msaa_roughness_.valid()) {
             msaa_roughness_resource = render_graph_.use_managed_image(
-                managed_msaa_roughness_, VK_IMAGE_LAYOUT_UNDEFINED);
+                managed_msaa_roughness_, VK_IMAGE_LAYOUT_UNDEFINED, false);
         }
 
         const auto ao_noisy_resource = render_graph_.use_managed_image(
-            managed_ao_noisy_, VK_IMAGE_LAYOUT_UNDEFINED);
+            managed_ao_noisy_, VK_IMAGE_LAYOUT_UNDEFINED, false);
         const auto ao_blurred_resource = render_graph_.use_managed_image(
-            managed_ao_blurred_, VK_IMAGE_LAYOUT_UNDEFINED);
+            managed_ao_blurred_, VK_IMAGE_LAYOUT_UNDEFINED, false);
         const auto ao_filtered_resource = render_graph_.use_managed_image(
-            managed_ao_filtered_, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+            managed_ao_filtered_, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, false);
         const auto ao_history_resource = render_graph_.get_history_image(managed_ao_filtered_);
         const auto contact_shadow_resource = render_graph_.use_managed_image(
-            managed_contact_shadow_mask_, VK_IMAGE_LAYOUT_UNDEFINED);
+            managed_contact_shadow_mask_, VK_IMAGE_LAYOUT_UNDEFINED, false);
 
         // Per-frame temporal Set 2 updates
         {

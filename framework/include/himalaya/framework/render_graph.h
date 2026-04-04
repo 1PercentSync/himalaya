@@ -352,18 +352,22 @@ namespace himalaya::framework {
          * @brief Imports a managed image into the current frame's graph.
          *
          * Must be called every frame between clear() and compile() for each
-         * managed image that will be used by passes. The image starts with
-         * UNDEFINED initial layout (content not preserved across frames).
+         * managed image that will be used by passes.
          *
-         * @param handle       Managed image handle returned by create_managed_image().
-         * @param final_layout Layout to transition to after the last pass that uses it.
-         *                     UNDEFINED = no final transition (non-temporal images that are
-         *                     fully overwritten each frame).
-         *                     SHADER_READ_ONLY_OPTIMAL = temporal current images (ensures
-         *                     correct layout after swap to history next frame).
+         * @param handle           Managed image handle returned by create_managed_image().
+         * @param final_layout     Layout to transition to after the last pass that uses it.
+         *                         UNDEFINED = no final transition (non-temporal images that
+         *                         are fully overwritten each frame).
+         *                         SHADER_READ_ONLY_OPTIMAL = temporal current images (ensures
+         *                         correct layout after swap to history next frame).
+         * @param preserve_content If true, the image starts with GENERAL initial layout
+         *                         (previous frame content preserved). If false, starts with
+         *                         UNDEFINED (content may be discarded — suitable for images
+         *                         that are fully overwritten each frame).
          * @return Per-frame resource ID for use in pass resource declarations.
          */
-        RGResourceId use_managed_image(RGManagedHandle handle, VkImageLayout final_layout);
+        RGResourceId use_managed_image(RGManagedHandle handle, VkImageLayout final_layout,
+                                       bool preserve_content);
 
         /**
          * @brief Imports the history backing image of a temporal managed image.

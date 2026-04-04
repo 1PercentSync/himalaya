@@ -28,18 +28,23 @@ namespace himalaya::app {
             VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 
         // Use accumulation buffer as hdr_color for TonemappingPass
+        // Preserve content only when there are previous samples to accumulate on.
+        // sample_count==0 (first frame or after reset): shader overwrites entirely → UNDEFINED ok.
+        // sample_count>0: shader does imageLoad for running average → must preserve.
+        const bool accum_has_data = reference_view_pass_.sample_count() > 0;
         const auto accum_resource = render_graph_.use_managed_image(
-            managed_pt_accumulation_, VK_IMAGE_LAYOUT_GENERAL);
+            managed_pt_accumulation_, VK_IMAGE_LAYOUT_GENERAL, accum_has_data);
 
         // Update Set 2 binding 0 to point to accumulation buffer for Tonemapping sampling
         const auto accum_backing = render_graph_.get_managed_backing_image(managed_pt_accumulation_);
         descriptor_manager_->update_render_target(input.frame_index, 0,
                                                    accum_backing, default_sampler_);
 
+        // Aux images are fully overwritten each frame (bounce 0 imageStore)
         const auto aux_albedo_resource = render_graph_.use_managed_image(
-            managed_pt_aux_albedo_, VK_IMAGE_LAYOUT_GENERAL);
+            managed_pt_aux_albedo_, VK_IMAGE_LAYOUT_GENERAL, false);
         const auto aux_normal_resource = render_graph_.use_managed_image(
-            managed_pt_aux_normal_, VK_IMAGE_LAYOUT_GENERAL);
+            managed_pt_aux_normal_, VK_IMAGE_LAYOUT_GENERAL, false);
 
         // --- Construct FrameContext ---
         framework::FrameContext frame_ctx{};

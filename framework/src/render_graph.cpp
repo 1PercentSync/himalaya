@@ -317,17 +317,22 @@ namespace himalaya::framework {
     }
 
     RGResourceId RenderGraph::use_managed_image(const RGManagedHandle handle,
-                                                const VkImageLayout final_layout) {
+                                                const VkImageLayout final_layout,
+                                                const bool preserve_content) {
         assert(handle.valid() && handle.index < managed_images_.size() && "Invalid RGManagedHandle");
         const auto &managed = managed_images_[handle.index];
         assert(managed.backing.valid() && "Managed image has been destroyed");
 
-        // Import with UNDEFINED initial layout (content not preserved).
-        // final_layout: UNDEFINED = no final transition (non-temporal),
-        //               SHADER_READ_ONLY_OPTIMAL = temporal current (swap to history next frame).
+        // preserve_content=true: image retains data from the previous frame (GENERAL layout).
+        // preserve_content=false: content may be discarded (UNDEFINED layout — suitable for
+        // images that are fully overwritten each frame via clear/render).
+        const auto initial_layout = preserve_content
+                                        ? VK_IMAGE_LAYOUT_GENERAL
+                                        : VK_IMAGE_LAYOUT_UNDEFINED;
+
         return import_image(managed.debug_name,
                             managed.backing,
-                            VK_IMAGE_LAYOUT_UNDEFINED,
+                            initial_layout,
                             final_layout);
     }
 
