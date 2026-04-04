@@ -20,6 +20,7 @@
 #include <himalaya/passes/gtao_pass.h>
 #include <himalaya/passes/skybox_pass.h>
 #include <himalaya/passes/shadow_pass.h>
+#include <himalaya/passes/reference_view_pass.h>
 #include <himalaya/passes/tonemapping_pass.h>
 #include <himalaya/rhi/context.h>
 #include <himalaya/rhi/shader.h>
@@ -299,6 +300,9 @@ namespace himalaya::app {
         /** @brief Contact shadows compute pass (screen-space ray march). */
         passes::ContactShadowsPass contact_shadows_pass_{};
 
+        /** @brief PT reference view pass (RT pipeline dispatch + accumulation). */
+        passes::ReferenceViewPass reference_view_pass_{};
+
         /** @brief Acceleration structure manager (RT, initialized when rt_supported). */
         rhi::AccelerationStructureManager as_manager_{};
 
@@ -426,7 +430,28 @@ namespace himalaya::app {
         /** @brief Monotonically increasing frame counter for temporal noise variation. */
         uint32_t frame_counter_ = 0;
 
+        /** @brief Cached VP matrix from the previous PT frame (accumulation reset detection). */
+        glm::mat4 prev_pt_view_projection_{1.0f};
+
         // --- Private helpers ---
+
+        /**
+         * @brief Fills GlobalUBO and LightBuffer for the current frame.
+         *
+         * Shared by both rasterization and path tracing paths. Writes all UBO
+         * fields (including shadow cascade data) and the light SSBO.
+         */
+        void fill_common_gpu_data(const RenderInput &input) const;
+
+        /**
+         * @brief Rasterization render path: instancing, draw groups, full multi-pass pipeline.
+         */
+        void render_rasterization(rhi::CommandBuffer &cmd, const RenderInput &input);
+
+        /**
+         * @brief Path tracing render path: Reference View Pass + Tonemapping + ImGui.
+         */
+        void render_path_tracing(rhi::CommandBuffer &cmd, const RenderInput &input);
 
         /** @brief Updates Set 2 binding 0 with the current hdr_color backing image. */
         void update_hdr_color_descriptor() const;
