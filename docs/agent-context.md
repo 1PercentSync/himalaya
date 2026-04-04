@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 9 第二小项：Aux albedo 格式升级（R8G8B8A8Unorm → R16G16B16A16Sfloat）
+Step 9 第三小项：新增 denoiser.h/.cpp（DenoiseState 枚举 + Denoiser 类）
 
 ---
 
