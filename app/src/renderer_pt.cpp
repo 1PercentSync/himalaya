@@ -83,12 +83,22 @@ namespace himalaya::app {
             }
         }
 
-        // --- Upload pass (must come before Tonemapping reads denoised buffer) ---
-        if (denoiser_.poll_upload_ready(accumulation_generation_)) {
-            const auto denoised_resource = render_graph_.use_managed_image(managed_denoised_,
-                                                                           VK_IMAGE_LAYOUT_UNDEFINED,
-                                                                           false);
+        // --- Denoised buffer: single use_managed_image per frame ---
+        // GENERAL as consistent cross-frame "home" layout.
+        // RG transitions: Upload frame UNDEFINED→TRANSFER_DST→...→GENERAL,
+        //                 Display frame GENERAL→SHADER_READ_ONLY→GENERAL.
+        const bool uploading = denoiser_.poll_upload_ready(accumulation_generation_);
+        const bool want_display = show_denoised_ && denoise_enabled_;
+        const bool have_valid = denoised_generation_ == accumulation_generation_;
 
+        framework::RGResourceId denoised_resource{};
+        if (uploading || (want_display && have_valid)) {
+            denoised_resource = render_graph_.use_managed_image(
+                managed_denoised_, VK_IMAGE_LAYOUT_GENERAL, !uploading);
+        }
+
+        // --- Upload pass ---
+        if (uploading) {
             const std::array upload_resources = {
                 framework::RGResourceUsage{
                     denoised_resource,
@@ -128,12 +138,7 @@ namespace himalaya::app {
         }
 
         // --- Tonemapping input: denoised buffer or raw accumulation ---
-        const bool use_denoised = show_denoised_ &&
-                                  denoise_enabled_ &&
-                                  denoised_generation_ == accumulation_generation_;
-        if (use_denoised) {
-            const auto denoised_resource = render_graph_.use_managed_image(
-                managed_denoised_, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, true);
+        if (want_display && denoised_generation_ == accumulation_generation_ && denoised_resource.valid()) {
             frame_ctx.hdr_color = denoised_resource;
 
             const auto denoised_backing = render_graph_.get_managed_backing_image(managed_denoised_);
