@@ -55,13 +55,18 @@ void main() {
     // ---- Transform to world space ----
     vec3 world_pos = vec3(gl_ObjectToWorldEXT * vec4(hit.position, 1.0));
 
-    // Geometric normal: transpose(inverse(model)) = transpose(WorldToObject)
+    // Face normal (true geometric normal from triangle edges) for ray origin offset.
+    // Transform via normal matrix: transpose(inverse(model)) = transpose(WorldToObject).
     // GLSL: v * M = transpose(M) * v
-    vec3 N_geo = normalize(hit.normal * mat3(gl_WorldToObjectEXT));
+    vec3 N_face = normalize(hit.face_normal * mat3(gl_WorldToObjectEXT));
 
-    // Flip geometric normal to face the incoming ray (back-face handling)
-    if (dot(N_geo, gl_WorldRayDirectionEXT) > 0.0) {
-        N_geo = -N_geo;
+    // Interpolated vertex normal for shading (TBN, lighting)
+    vec3 N_interp = normalize(hit.normal * mat3(gl_WorldToObjectEXT));
+
+    // Flip both normals to face the incoming ray (back-face handling)
+    if (dot(N_face, gl_WorldRayDirectionEXT) > 0.0) {
+        N_face = -N_face;
+        N_interp = -N_interp;
     }
 
     // Tangent: transforms like a direction (model matrix, not normal matrix)
@@ -79,9 +84,9 @@ void main() {
 
     // ---- Normal mapping + consistency correction ----
     vec2 normal_rg = texture(textures[nonuniformEXT(mat.normal_tex)], hit.uv0).rg;
-    vec3 N_shading = get_shading_normal(N_geo, vec4(T_world, hit.tangent.w),
+    vec3 N_shading = get_shading_normal(N_interp, vec4(T_world, hit.tangent.w),
                                         normal_rg, mat.normal_scale);
-    N_shading = ensure_normal_consistency(N_shading, N_geo);
+    N_shading = ensure_normal_consistency(N_shading, N_face);
 
     // ---- PBR parameters ----
     vec3 F0 = mix(vec3(0.04), base_color.rgb, metallic);
@@ -102,7 +107,7 @@ void main() {
                     * mat.emissive_factor.rgb;
 
     // ---- Ray origin offset (shared by shadow rays and next bounce) ----
-    vec3 offset_pos = offset_ray_origin(world_pos, N_geo);
+    vec3 offset_pos = offset_ray_origin(world_pos, N_face);
 
     // ---- NEE: Directional lights (delta distribution, MIS weight = 1) ----
     vec3 nee_radiance = vec3(0.0);

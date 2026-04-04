@@ -63,11 +63,12 @@ const uint VERTEX_STRIDE = 56;
 
 /** Interpolated surface attributes at a hit point. */
 struct HitAttributes {
-    vec3 position;   // World-space position
-    vec3 normal;     // Object-space interpolated normal (not yet transformed)
-    vec2 uv0;        // Primary texture coordinates
-    vec4 tangent;    // Tangent with handedness in w
-    vec2 uv1;        // Secondary texture coordinates
+    vec3 position;    // Object-space interpolated position
+    vec3 normal;      // Object-space interpolated normal (for shading/TBN)
+    vec3 face_normal; // Object-space face normal (cross product of triangle edges)
+    vec2 uv0;         // Primary texture coordinates
+    vec4 tangent;     // Tangent with handedness in w
+    vec2 uv1;         // Secondary texture coordinates
 };
 
 /**
@@ -100,11 +101,12 @@ HitAttributes interpolate_hit(GeometryInfo geo, vec2 bary, int primitive) {
     VertexBuffer v2 = VertexBuffer(geo.vertex_buffer_address + uint64_t(i2) * VERTEX_STRIDE);
 
     HitAttributes hit;
-    hit.position = v0.position * w0 + v1.position * w1 + v2.position * w2;
-    hit.normal   = v0.normal   * w0 + v1.normal   * w1 + v2.normal   * w2;
-    hit.uv0      = v0.uv0     * w0 + v1.uv0     * w1 + v2.uv0     * w2;
-    hit.tangent  = v0.tangent  * w0 + v1.tangent  * w1 + v2.tangent  * w2;
-    hit.uv1      = v0.uv1     * w0 + v1.uv1     * w1 + v2.uv1     * w2;
+    hit.position    = v0.position * w0 + v1.position * w1 + v2.position * w2;
+    hit.normal      = v0.normal   * w0 + v1.normal   * w1 + v2.normal   * w2;
+    hit.face_normal = cross(v1.position - v0.position, v2.position - v0.position);
+    hit.uv0         = v0.uv0     * w0 + v1.uv0     * w1 + v2.uv0     * w2;
+    hit.tangent     = v0.tangent  * w0 + v1.tangent  * w1 + v2.tangent  * w2;
+    hit.uv1         = v0.uv1     * w0 + v1.uv1     * w1 + v2.uv1     * w2;
 
     return hit;
 }
