@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 9 下一小项：accumulation 重置补 generation++ + 场景加载前 denoiser.abort()
+Step 9 已完成，进入 Step 10 第一小项
 
 ---
 

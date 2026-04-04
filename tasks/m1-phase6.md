@@ -139,8 +139,8 @@
 - [x] render_path_tracing() RG 编排：poll_upload_ready() → 注册 Upload Pass + complete_upload() + 更新 denoised_generation_
 - [x] Tonemapping 输入切换：show_denoised && denoise_enabled && denoised_generation==accumulation_generation → denoised buffer，否则 accumulation
 - [x] Renderer::pending_denoise_signal() getter + Application submit 前追加到 signalSemaphoreInfos
-- [ ] accumulation 重置触发点补充 generation++：相机移动、IBL 旋转、max_bounces 变更、firefly_clamp 变更
-- [ ] 场景加载前调用 denoiser.abort()（join + Idle），配合 accumulation 重置 + generation++
+- [x] accumulation 重置触发点补充 generation++：相机移动、IBL 旋转、resize、环境重载（max_bounces/firefly_clamp 变更待 Step 10 DebugUI）
+- [x] 场景加载前调用 renderer.abort_denoise()（join + Idle + reset accumulation + generation++）
 - [x] ~~Renderer::pending_denoise_signal()~~ （已合并到 RG 编排条目）
 
 ## Step 10：ImGui PT 面板
