@@ -150,6 +150,9 @@ layout (set = 0, binding = 3) readonly buffer InstanceBuffer {
 
 #ifdef HIMALAYA_RT
 
+#extension GL_EXT_ray_tracing : require
+#extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
+
 /** Per-geometry RT info (std430, 24 bytes). Indexed by gl_InstanceCustomIndexEXT + gl_GeometryIndexEXT. */
 struct GeometryInfo {
     uint64_t vertex_buffer_address;    // offset  0 — device address of vertex buffer
