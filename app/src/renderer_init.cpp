@@ -521,6 +521,11 @@ namespace himalaya::app {
 
         scene_as_builder_.build(*ctx_, *resource_manager_, as_manager_, meshes, instances, materials);
 
+        // build() may return without creating AS if all primitives are degenerate
+        if (scene_as_builder_.tlas_handle().as == VK_NULL_HANDLE) {
+            return;
+        }
+
         descriptor_manager_->write_set0_tlas(scene_as_builder_.tlas_handle());
 
         const auto geo_buf = scene_as_builder_.geometry_info_buffer();
