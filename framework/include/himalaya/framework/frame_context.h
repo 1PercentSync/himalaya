@@ -74,6 +74,15 @@ namespace himalaya::framework {
         /** @brief Contact shadow mask (R8, Set 2 binding 4). */
         RGResourceId contact_shadow_mask;
 
+        /** @brief PT accumulation buffer (RGBA32F, Storage); invalid in rasterization mode. */
+        RGResourceId pt_accumulation;
+
+        /** @brief PT OIDN auxiliary albedo image (RGBA32F, Storage); invalid in rasterization mode. */
+        RGResourceId pt_aux_albedo;
+
+        /** @brief PT OIDN auxiliary normal image (RGBA32F, Storage); invalid in rasterization mode. */
+        RGResourceId pt_aux_normal;
+
         /** @brief Resolved roughness buffer (R8Unorm, 1x). */
         RGResourceId roughness;
 
