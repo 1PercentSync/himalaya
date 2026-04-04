@@ -117,7 +117,7 @@
 
 ## Step 9：OIDN 集成（异步降噪）
 
-- [ ] PT managed images 补 TransferSrc usage（accumulation + aux albedo + aux normal），readback 需要 VK_IMAGE_USAGE_TRANSFER_SRC_BIT
+- [x] PT managed images 补 TransferSrc usage（accumulation + aux albedo + aux normal），readback 需要 VK_IMAGE_USAGE_TRANSFER_SRC_BIT
 - [ ] Aux albedo 格式升级：R8G8B8A8Unorm → R16G16B16A16Sfloat（配合 OIDN HALF3 pixelByteStride=8 零 CPU 格式转换）。修改 renderer_init.cpp managed image format + closesthit.rchit image layout qualifier（rgba8 → rgba16f）
 - [x] 手动集成 OIDN 预编译库（官方 release，多厂商 GPU 支持：CUDA/HIP/SYCL + CPU fallback），修改 framework/CMakeLists.txt 链接库 + DLL 拷贝
 - [x] OIDN 运行时 DLL 拷贝到可执行文件目录（app/CMakeLists.txt POST_BUILD，已配置 glob 全部 DLL）

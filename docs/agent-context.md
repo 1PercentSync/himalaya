@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 9 第一小项：PT managed images 补 TransferSrc usage
+Step 9 第二小项：Aux albedo 格式升级（R8G8B8A8Unorm → R16G16B16A16Sfloat）
 
 ---
 
