@@ -149,7 +149,9 @@
 ## Step 12a：EmissiveLightBuilder + 基础设施
 
 - [ ] GPUMaterialData `_padding`（offset 76）→ `uint double_sided`，SceneLoader 填充 doubleSided
+- [ ] forward.frag：single-sided 材质背面 discard（`!gl_FrontFacing && double_sided == 0`）
 - [ ] forward.frag emissive 贡献对齐 doubleSided + gl_FrontFacing 检查
+- [ ] closesthit.rchit：single-sided 材质背面透传（命中背面且 `double_sided == 0` 时视为未命中，throughput 不变继续路径）
 - [ ] 新增 emissive_light_builder.h/.cpp：EmissiveLightBuilder 类（build / destroy / getters）
 - [ ] build()：遍历 mesh primitive 识别 emissive（`any(emissive_factor > 0)`），收集世界空间顶点/UV/面积/emission，计算 power = luminance(emissive_factor) × area
 - [ ] Power-weighted alias table 构建（Vose's algorithm，复用 Step 11 逻辑）
