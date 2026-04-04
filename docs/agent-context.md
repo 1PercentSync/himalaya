@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 6a 第八小项：pt_common.glsl 顶点属性插值工具
+Step 6a 第九小项：pt_common.glsl Ray origin offset 工具函数
 
 ---
 
