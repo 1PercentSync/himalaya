@@ -234,7 +234,7 @@ PT 工具函数库 + ShaderCompiler RT 支持 + blue noise + GlobalUBO 扩展。
     - `PrimaryPayload`（location 0，56B）：`vec3 color`（本次 bounce 辐射度）、`vec3 next_origin`（下一条光线起点）、`vec3 next_direction`（下一条光线方向）、`vec3 throughput_update`（路径吞吐量乘数，含 Russian Roulette 补偿）、`float hit_distance`（命中距离，miss 时 -1 标记终止）、`uint bounce`（当前 bounce 索引，raygen 设置，OIDN 辅助通道 bounce 0 判断用）
     - `ShadowPayload`（location 1）：`uint visible`（shadow_miss 设为 1，初始值 0 = 遮挡）
   - Vertex / Index buffer_reference layout 定义（匹配 `framework/include/himalaya/framework/mesh.h` Vertex 结构体：position vec3、normal vec3、uv0 vec2、tangent vec4、uv1 vec2，stride = 56 bytes，无 padding）
-  - Sobol 低差异序列生成（128 维 32-bit 方向数表嵌入 shader 常量数组，16 KB；超出 128 维时 fallback 到 PCG hash）+ Cranley-Patterson rotation（从 blue noise 纹理采样 per-pixel 偏移）
+  - Sobol 低差异序列生成（128 维 32-bit 方向数表上传 SSBO，Set 3 binding 3，16 KB；超出 128 维时 fallback 到 PCG hash）+ Cranley-Patterson rotation（从 blue noise 纹理采样 per-pixel 偏移）。方向数嵌入 `app/include/himalaya/app/sobol_direction_data.h`（`constexpr uint32_t[4096]`），Renderer init 上传 GPU buffer
   - Blue noise 纹理采样：128×128 R8Unorm 单通道纹理，像素数据从 Calinou/free-blue-noise-textures（CC0）嵌入 `app/include/himalaya/app/blue_noise_data.h`（`constexpr uint8_t[]`），Renderer 初始化时上传 GPU 注册到 bindless 数组。不同采样维度通过空间偏移从同一张纹理派生
   - cosine-weighted hemisphere sampling
   - GGX VNDF importance sampling（Heitz 2018 可见法线分布采样，新增 `sample_ggx_vndf()` + `pdf_ggx_vndf()`；`#include "common/brdf.glsl"` 复用 `D_GGX`、`V_SmithGGX`、`F_Schlick` 做 BRDF 评估）
@@ -549,7 +549,8 @@ framework/
     └── emissive_light_builder.cpp  # [Step 12]
 app/
 └── include/himalaya/app/
-    └── blue_noise_data.h           # [Step 6] 128×128 R8Unorm blue noise 像素数据（constexpr）
+    ├── blue_noise_data.h           # [Step 6] 128×128 R8Unorm blue noise 像素数据（constexpr）
+    └── sobol_direction_data.h      # [Step 6] 128 维 Sobol 方向数表（constexpr uint32_t[4096]）
 passes/
 ├── include/himalaya/passes/
 │   └── reference_view_pass.h      # [Step 7] PT 参考视图
@@ -626,7 +627,7 @@ shaders/
 | 渲染路径组织 | render() 拆分为 fill_common_gpu_data() + render_rasterization() + render_path_tracing() 私有方法，不引入新抽象 |
 | BLAS 批量构建 | 单次 `vkCmdBuildAccelerationStructuresKHR` 调用传入全部 BLAS，GPU 并行构建。Scratch buffer = 所有 BLAS scratch size 之和（各段对齐到 `minAccelerationStructureScratchOffsetAlignment`），构建后释放 |
 | 顶点格式硬编码 | `VkAccelerationStructureGeometryTrianglesDataKHR` 的 `vertexFormat` = `R32G32B32_SFLOAT`（Vertex::position offset 0），`indexType` = `UINT32`，Vertex stride = 56 bytes。统一顶点格式，AccelerationStructureManager 内部硬编码 |
-| Sobol + Blue Noise | Sobol 128 维 32-bit 方向数表（16 KB shader 常量，Joe & Kuo 标准方向数，源文件 `noise/new-joe-kuo-6.21201`），超出 128 维 fallback 到 PCG hash。Cranley-Patterson rotation（per-pixel blue noise 偏移）。Blue noise 128×128 R8Unorm 单通道，源文件 `noise/HDR_L_0.png`（Calinou/free-blue-noise-textures CC0），脚本转换后像素嵌入 `app/include/himalaya/app/blue_noise_data.h`（`constexpr uint8_t[]`），不同维度通过空间偏移派生。bindless index 通过 push constant 传递 |
+| Sobol + Blue Noise | Sobol 128 维 32-bit 方向数表（SSBO Set 3 binding 3，16 KB，Joe & Kuo 标准方向数，源文件 `noise/new-joe-kuo-6.21201`），方向数嵌入 `app/include/himalaya/app/sobol_direction_data.h`（`constexpr uint32_t[4096]`，`[dim * 32 + bit]`），Renderer init 上传 GPU buffer。超出 128 维 fallback 到 PCG hash。Cranley-Patterson rotation（per-pixel blue noise 偏移）。Blue noise 128×128 R8Unorm 单通道，源文件 `noise/HDR_L_0.png`（Calinou/free-blue-noise-textures CC0），脚本转换后像素嵌入 `app/include/himalaya/app/blue_noise_data.h`（`constexpr uint8_t[]`），不同维度通过空间偏移派生。bindless index 通过 push constant 传递 |
 | GGX 采样 | VNDF sampling（Heitz 2018），pt_common.glsl 新增 `sample_ggx_vndf()` + `pdf_ggx_vndf()`，`#include "common/brdf.glsl"` 复用评估函数，不修改 brdf.glsl |
 | RT shader include 组织 | 各 RT shader 负责 `#define HIMALAYA_RT` + `#include "common/bindings.glsl"`，然后 `#include "rt/pt_common.glsl"`。pt_common.glsl 不 include bindings.glsl（由调用方负责），但 include `common/brdf.glsl` + `common/normal.glsl`。所有共享 .glsl 文件使用 `#ifndef` include guard（pt_common.glsl 用 `PT_COMMON_GLSL`） |
 | Ray Payload | 模式 A：closesthit 完成全部着色计算。PrimaryPayload(loc 0) 演进：Step 6 56B（+bounce）→ Step 11 60B（+env_mis_weight）→ Step 12 64B（+last_brdf_pdf）→ Step 13 68B（+cone_spread）。ShadowPayload(loc 1): visible uint（4B） |
