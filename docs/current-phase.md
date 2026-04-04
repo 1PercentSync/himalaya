@@ -350,7 +350,7 @@ PT 路径的 RG 编排极简：仅 Reference View Pass + Tonemapping Pass + ImGu
 
 集成 Intel Open Image Denoise GPU 降噪。异步执行，主线程零阻塞。
 
-- 手动集成 OIDN 预编译库（官方 release 包含 headers + lib + dll，CUDA GPU 支持内置；vcpkg 无端口）。需修改 `framework/CMakeLists.txt` 添加头文件路径和链接库，OIDN DLL 拷贝到构建输出目录
+- 手动集成 OIDN 预编译库（官方 release 包含 headers + lib + dll，多厂商 GPU 支持内置：CUDA/HIP/SYCL + CPU fallback；vcpkg 无端口）。需修改 `framework/CMakeLists.txt` 添加头文件路径和链接库，OIDN DLL 拷贝到构建输出目录（`app/CMakeLists.txt` POST_BUILD glob 全部 DLL）
 - PT managed images 补 `TransferSrc` usage（accumulation + aux albedo + aux normal），readback copy 需要 `VK_IMAGE_USAGE_TRANSFER_SRC_BIT`
 - 新增 `framework/denoiser.h` / `.cpp`：
   - `DenoiseState` 枚举：`Idle`、`ReadbackPending`、`Processing`、`UploadPending`
@@ -388,7 +388,7 @@ PT 路径的 RG 编排极简：仅 Reference View Pass + Tonemapping Pass + ImGu
 
 #### 设计要点
 
-**异步架构**：降噪完全不阻塞主线程。Readback（GPU image → staging buffer）和 Upload（staging buffer → GPU image）均通过 RG 内 Transfer Pass 完成，与渲染命令一起提交，GPU 流水线化执行。OIDN `oidnExecuteFilter()` 在 `std::jthread` 后台线程执行（CPU 等待 CUDA GPU 降噪完成）。状态机 `Idle → ReadbackPending → Processing → UploadPending → Idle` 驱动全流程。
+**异步架构**：降噪完全不阻塞主线程。Readback（GPU image → staging buffer）和 Upload（staging buffer → GPU image）均通过 RG 内 Transfer Pass 完成，与渲染命令一起提交，GPU 流水线化执行。OIDN `oidnExecuteFilter()` 在 `std::jthread` 后台线程执行（CPU 等待 GPU 降噪完成）。状态机 `Idle → ReadbackPending → Processing → UploadPending → Idle` 驱动全流程。
 
 **Timeline Semaphore 同步**：Denoiser 持有一个 Vulkan timeline semaphore（1.2 核心，项目目标 1.4）。降噪帧 submit 额外 signal 该 semaphore，后台线程 `vkWaitSemaphores` 纯 CPU 等待（不碰 queue、不需要 mutex）。避免了复用 per-frame fence 的竞态和引入 queue mutex 的架构侵入。
 
@@ -402,7 +402,7 @@ PT 路径的 RG 编排极简：仅 Reference View Pass + Tonemapping Pass + ImGu
 
 **内存序**：`state_` 的 store 使用 `memory_order_release`，load 使用 `memory_order_acquire`，确保后台线程的 staging buffer 写入（memcpy）对主线程可见。
 
-**OIDN 错误处理**：`oidnExecuteFilter()` 失败时（CUDA OOM 等），后台线程 `spdlog::error` 记录 + 状态 → Idle（跳过 upload），不 crash。
+**OIDN 错误处理**：`oidnExecuteFilter()` 失败时（GPU OOM 等），后台线程 `spdlog::error` 记录 + 状态 → Idle（跳过 upload），不 crash。
 
 **auto_denoise_interval 最小值**：UI slider 限制最小值 ≥ 16（默认 64）。在有 RT core 的显卡上约 21% GPU 占用（OIDN/PT 算力比值大致稳定 ~6:1）。CPU fallback 场景 OIDN 执行极慢（实测 1080p ~307ms），被自身执行时间节流。
 
