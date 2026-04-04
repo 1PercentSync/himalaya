@@ -359,6 +359,12 @@ namespace himalaya::app {
         /** @brief Default 1x1 textures (white, flat normal, black). */
         framework::DefaultTextures default_textures_{};
 
+        /** @brief 128x128 R8Unorm blue noise texture for PT sampling (Cranley-Patterson rotation). */
+        rhi::ImageHandle blue_noise_image_;
+
+        /** @brief Bindless index of the blue noise texture in Set 1 textures[]. */
+        rhi::BindlessIndex blue_noise_bindless_;
+
         /** @brief Per-frame GlobalUBO buffers (CpuToGpu, one per frame in flight). */
         std::array<rhi::BufferHandle, rhi::kMaxFramesInFlight> global_ubo_buffers_{};
 

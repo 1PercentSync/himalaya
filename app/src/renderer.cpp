@@ -4,6 +4,7 @@
  */
 
 #include <himalaya/app/renderer.h>
+#include <himalaya/app/blue_noise_data.h>
 
 #include <himalaya/framework/culling.h>
 #include <himalaya/framework/frame_context.h>
@@ -412,21 +413,9 @@ namespace himalaya::app {
 
         material_system_.init(resource_manager_, descriptor_manager_);
 
-        // --- RT acceleration structure manager (conditional on hardware support) ---
-        if (ctx_->rt_supported) {
-            as_manager_.init(ctx_);
-        }
+        // --- Samplers (all created before immediate scope so they're available for texture registration) ---
 
-        // --- Default textures (needs immediate scope for staging upload) ---
-        ctx_->begin_immediate();
-        default_textures_ = framework::create_default_textures(
-            *resource_manager_, *descriptor_manager_, default_sampler_);
-        ctx_->end_immediate();
-
-        // --- IBL precomputation (equirect → cubemap → irradiance/prefiltered/BRDF LUT) ---
-        ibl_.init(*ctx_, *resource_manager_, *descriptor_manager_, shader_compiler_, hdr_path);
-
-        // --- Shadow comparison sampler (Reverse-Z: fragment depth >= shadow depth → lit) ---
+        // Shadow comparison sampler (Reverse-Z: fragment depth >= shadow depth → lit)
         shadow_comparison_sampler_ = resource_manager_->create_sampler({
                                                                            .mag_filter = rhi::Filter::Linear,
                                                                            .min_filter = rhi::Filter::Linear,
@@ -439,7 +428,7 @@ namespace himalaya::app {
                                                                            .compare_op = rhi::CompareOp::GreaterOrEqual,
                                                                        }, "Shadow Comparison Sampler");
 
-        // --- Shadow depth sampler for PCSS blocker search (raw depth reads) ---
+        // Shadow depth sampler for PCSS blocker search (raw depth reads)
         shadow_depth_sampler_ = resource_manager_->create_sampler({
                                                                       .mag_filter = rhi::Filter::Nearest,
                                                                       .min_filter = rhi::Filter::Nearest,
@@ -452,7 +441,7 @@ namespace himalaya::app {
                                                                       .compare_op = rhi::CompareOp::Never,
                                                                   }, "Shadow Depth Sampler");
 
-        // --- Nearest clamp sampler for screen-space depth/normal reads ---
+        // Nearest clamp sampler for screen-space depth/normal reads
         nearest_clamp_sampler_ = resource_manager_->create_sampler({
                                                                        .mag_filter = rhi::Filter::Nearest,
                                                                        .min_filter = rhi::Filter::Nearest,
@@ -465,7 +454,7 @@ namespace himalaya::app {
                                                                        .compare_op = rhi::CompareOp::Never,
                                                                    }, "Nearest Clamp Sampler");
 
-        // --- Linear clamp sampler for screen-space AO/contact shadow reads ---
+        // Linear clamp sampler for screen-space AO/contact shadow reads
         linear_clamp_sampler_ = resource_manager_->create_sampler({
                                                                       .mag_filter = rhi::Filter::Linear,
                                                                       .min_filter = rhi::Filter::Linear,
@@ -477,6 +466,40 @@ namespace himalaya::app {
                                                                       .compare_enable = false,
                                                                       .compare_op = rhi::CompareOp::Never,
                                                                   }, "Linear Clamp Sampler");
+
+        // --- RT acceleration structure manager (conditional on hardware support) ---
+        if (ctx_->rt_supported) {
+            as_manager_.init(ctx_);
+        }
+
+        // --- Default textures (needs immediate scope for staging upload) ---
+        ctx_->begin_immediate();
+        default_textures_ = framework::create_default_textures(
+            *resource_manager_, *descriptor_manager_, default_sampler_);
+
+        // --- Blue noise texture (128x128 R8Unorm, PT Cranley-Patterson rotation) ---
+        blue_noise_image_ = resource_manager_->create_image({
+            .width = 128,
+            .height = 128,
+            .depth = 1,
+            .mip_levels = 1,
+            .array_layers = 1,
+            .sample_count = 1,
+            .format = rhi::Format::R8Unorm,
+            .usage = rhi::ImageUsage::Sampled | rhi::ImageUsage::TransferDst,
+        }, "Blue Noise 128x128");
+        resource_manager_->upload_image(blue_noise_image_,
+                                        kBlueNoiseData,
+                                        sizeof(kBlueNoiseData),
+                                        VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT);
+        blue_noise_bindless_ = descriptor_manager_->register_texture(
+            blue_noise_image_, nearest_clamp_sampler_);
+        spdlog::info("Blue noise texture registered (bindless={})", blue_noise_bindless_.index);
+
+        ctx_->end_immediate();
+
+        // --- IBL precomputation (equirect → cubemap → irradiance/prefiltered/BRDF LUT) ---
+        ibl_.init(*ctx_, *resource_manager_, *descriptor_manager_, shader_compiler_, hdr_path);
 
         // --- Shadow pass ---
         shadow_pass_.setup(*ctx_,
@@ -583,6 +606,10 @@ namespace himalaya::app {
         for (const auto buf: instance_buffers_) {
             resource_manager_->destroy_buffer(buf);
         }
+
+        // Blue noise texture: unregister from bindless, then destroy image
+        descriptor_manager_->unregister_texture(blue_noise_bindless_);
+        resource_manager_->destroy_image(blue_noise_image_);
 
         // Default textures: unregister from bindless, then destroy images
         descriptor_manager_->unregister_texture(default_textures_.white.bindless_index);
