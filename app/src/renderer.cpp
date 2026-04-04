@@ -152,15 +152,16 @@ namespace himalaya::app {
     void Renderer::render(rhi::CommandBuffer &cmd, const RenderInput &input) {
         fill_common_gpu_data(input);
 
-        switch (input.render_mode) {
-            case framework::RenderMode::Rasterization:
-                // Restore Set 2 binding 0 to hdr_color (may have been switched to accumulation)
-                update_hdr_color_descriptor();
-                render_rasterization(cmd, input);
-                break;
-            case framework::RenderMode::PathTracing:
-                render_path_tracing(cmd, input);
-                break;
+        // Fall back to rasterization when PT is requested but no valid TLAS exists
+        // (all scene primitives degenerate, or scene not loaded yet).
+        const bool can_path_trace = input.render_mode == framework::RenderMode::PathTracing
+                                    && scene_as_builder_.tlas_handle().as != VK_NULL_HANDLE;
+
+        if (can_path_trace) {
+            render_path_tracing(cmd, input);
+        } else {
+            update_hdr_color_descriptor();
+            render_rasterization(cmd, input);
         }
 
         // Cache current VP for next frame's temporal reprojection
