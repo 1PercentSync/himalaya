@@ -10,6 +10,7 @@ target_sources(himalaya_passes PRIVATE
         src/shadow_pass.cpp
         src/skybox_pass.cpp
         src/tonemapping_pass.cpp
+        src/reference_view_pass.cpp
 )
 
 target_include_directories(himalaya_passes PUBLIC include)
