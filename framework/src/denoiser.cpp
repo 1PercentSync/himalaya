@@ -257,12 +257,13 @@ namespace himalaya::framework {
         rm_ = nullptr;
     }
 
-    Denoiser::SemaphoreSignal Denoiser::pending_denoise_signal() const {
-        if (pending_signal_value_ != 0 &&
-            state_.load(std::memory_order_acquire) == DenoiseState::ReadbackPending) {
-            return {timeline_semaphore_, pending_signal_value_};
+    Denoiser::SemaphoreSignal Denoiser::pending_denoise_signal() {
+        if (pending_signal_value_ == 0) {
+            return {};
         }
-        return {};
+        const auto signal = SemaphoreSignal{timeline_semaphore_, pending_signal_value_};
+        pending_signal_value_ = 0; // One-shot: signal exactly once per denoise request
+        return signal;
     }
 
     rhi::BufferHandle Denoiser::readback_beauty_buffer() const { return readback_beauty_; }

@@ -8,7 +8,6 @@
 #include <himalaya/rhi/resources.h>
 
 #include <atomic>
-#include <cstdint>
 #include <thread>
 #include <vulkan/vulkan.h>
 
@@ -73,7 +72,7 @@ namespace himalaya::framework {
          * @param width  Image width in pixels.
          * @param height Image height in pixels.
          */
-        void init(rhi::Context &ctx, rhi::ResourceManager &rm,
+        void init(const rhi::Context &ctx, rhi::ResourceManager &rm,
                   uint32_t width, uint32_t height);
 
         /**
@@ -151,13 +150,15 @@ namespace himalaya::framework {
          * @brief Returns timeline semaphore + signal value for the current denoise frame.
          *
          * The Application injects this into vkQueueSubmit2 signalSemaphoreInfos.
-         * Returns {VK_NULL_HANDLE, 0} when no denoise readback is pending.
+         * Returns {VK_NULL_HANDLE, 0} when no signal is needed.
+         * One-shot: clears the pending value after returning, ensuring the
+         * semaphore is signaled exactly once per denoise request.
          */
         struct SemaphoreSignal {
             VkSemaphore semaphore = VK_NULL_HANDLE;
             uint64_t value = 0;
         };
-        [[nodiscard]] SemaphoreSignal pending_denoise_signal() const;
+        SemaphoreSignal pending_denoise_signal();
 
         /** @brief Returns the readback staging buffer for beauty (RGBA32F). */
         [[nodiscard]] rhi::BufferHandle readback_beauty_buffer() const;

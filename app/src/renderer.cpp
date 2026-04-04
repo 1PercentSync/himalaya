@@ -199,7 +199,7 @@ namespace himalaya::app {
         return draw_call_count_;
     }
 
-    framework::Denoiser::SemaphoreSignal Renderer::pending_denoise_signal() const {
+    framework::Denoiser::SemaphoreSignal Renderer::pending_denoise_signal() {
         return denoiser_.pending_denoise_signal();
     }
 
