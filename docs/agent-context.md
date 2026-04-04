@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 6b 前四项完成（rgen + rchit + miss + shadow_miss），下一步：新增 shaders/rt/anyhit.rahit
+Step 6b 全部完成（5/5 RT shader），下一步进入 Step 7 第一小项
 
 ---
 

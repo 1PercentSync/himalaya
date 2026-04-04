@@ -86,7 +86,7 @@
 - [x] 新增 shaders/rt/closesthit.rchit：geometry_infos 索引 + 顶点插值（含 tangent）+ normal mapping（`#include "common/normal.glsl"`）+ shading normal 一致性 + emissive 贡献（所有 bounce）+ OIDN aux 输出（bounce 0 imageStore albedo + normal）+ NEE 方向光（ray origin offset）+ multi-lobe BRDF 采样，写入 PrimaryPayload
 - [x] 新增 shaders/rt/miss.rmiss：IBL cubemap 环境采样，写入 PrimaryPayload（color = 环境辐射度，hit_distance = -1）
 - [x] 新增 shaders/rt/shadow_miss.rmiss：写入 ShadowPayload（visible = 1）
-- [ ] 新增 shaders/rt/anyhit.rahit：alpha test（Mask: texel_alpha < cutoff → ignoreIntersectionEXT）+ stochastic alpha（Blend: PCG hash rand() >= alpha → ignoreIntersectionEXT）
+- [x] 新增 shaders/rt/anyhit.rahit：alpha test（Mask: texel_alpha < cutoff → ignoreIntersectionEXT）+ stochastic alpha（Blend: PCG hash rand() >= alpha → ignoreIntersectionEXT）
 
 ## Step 7：Reference View Pass
 
