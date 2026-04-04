@@ -184,4 +184,93 @@ float specular_probability(float NdotV, vec3 F0) {
     return clamp(spec_weight, 0.01, 0.99); // avoid zero probability (division by selection prob)
 }
 
+// ---- Sobol SSBO (Set 3, binding 3) ----
+
+/** 128-dimension × 32-bit Sobol direction numbers (16 KB, push descriptor). */
+layout(set = 3, binding = 3) readonly buffer SobolDirectionBuffer {
+    uint directions[];  // [dim * 32 + bit], 4096 entries
+} sobol_data;
+
+/** Number of Sobol dimensions in the table (fallback to PCG hash beyond this). */
+const uint SOBOL_DIMS = 128;
+
+// ---- PCG Hash ----
+
+/**
+ * PCG hash (single-state, XSH-RR variant).
+ *
+ * Used as fallback random source when the sampling dimension exceeds the
+ * Sobol table (>= 128). Also used by anyhit stochastic alpha.
+ *
+ * @param v Input seed.
+ * @return Hashed 32-bit value.
+ */
+uint pcg_hash(uint v) {
+    uint state = v * 747796405u + 2891336453u;
+    uint word  = ((state >> ((state >> 28u) + 4u)) ^ state) * 277803737u;
+    return (word >> 22u) ^ word;
+}
+
+// ---- Sobol Sequence Sampling ----
+
+/**
+ * Generates a Sobol quasi-random sample via binary representation.
+ *
+ * For dim < 128, XORs direction numbers selected by the set bits of the
+ * sample index. For dim >= 128, falls back to PCG hash.
+ *
+ * @param dim          Sampling dimension (0 = subpixel x, 1 = subpixel y, 2+ = per-bounce).
+ * @param sample_index Zero-based sample index (cumulative per pixel).
+ * @return Uniform sample in [0, 1).
+ */
+float sobol_sample(uint dim, uint sample_index) {
+    if (dim >= SOBOL_DIMS) {
+        return float(pcg_hash(dim ^ (sample_index * 1103515245u))) / 4294967296.0;
+    }
+
+    uint result = 0;
+    uint offset = dim * 32u;
+    uint idx = sample_index;
+
+    for (uint bit = 0; bit < 32u && idx != 0u; ++bit) {
+        if ((idx & 1u) != 0u) {
+            result ^= sobol_data.directions[offset + bit];
+        }
+        idx >>= 1u;
+    }
+
+    return float(result) / 4294967296.0;
+}
+
+// ---- Path Tracing Random Number Generator ----
+
+/**
+ * Generates a decorrelated quasi-random sample for path tracing.
+ *
+ * Combines Sobol quasi-random sequence with Cranley-Patterson rotation
+ * using blue noise per-pixel offset. Different dimensions derive offsets
+ * from the same 128x128 blue noise texture via spatial displacement.
+ *
+ * @param dim              Sampling dimension.
+ * @param sample_index     Zero-based sample index.
+ * @param pixel            Screen-space pixel coordinate (gl_LaunchIDEXT.xy).
+ * @param frame_seed       Frame-varying seed for temporal decorrelation.
+ * @param blue_noise_index Bindless texture index of the 128x128 blue noise.
+ * @return Uniform sample in [0, 1).
+ */
+float rand_pt(uint dim, uint sample_index, ivec2 pixel,
+              uint frame_seed, uint blue_noise_index) {
+    float s = sobol_sample(dim, sample_index);
+
+    // Per-pixel blue noise offset (Cranley-Patterson rotation).
+    // Spatial displacement by dimension decorrelates across dimensions.
+    ivec2 noise_coord = (pixel + ivec2(dim * 73u, dim * 127u)) & 127;
+    float offset = texelFetch(textures[blue_noise_index], noise_coord, 0).r;
+
+    // Golden-ratio temporal scramble for frame-to-frame variation
+    offset = fract(offset + float(frame_seed) * 0.6180339887);
+
+    return fract(s + offset);
+}
+
 #endif // PT_COMMON_GLSL
