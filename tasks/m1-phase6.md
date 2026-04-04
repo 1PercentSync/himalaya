@@ -123,14 +123,14 @@
 - [x] OIDN 运行时 DLL 拷贝到可执行文件目录（app/CMakeLists.txt POST_BUILD，已配置 glob 全部 DLL）
 - [x] 新增 denoiser.h/.cpp：DenoiseState 枚举（Idle / ReadbackPending / Processing / UploadPending）+ Denoiser 类
 - [x] Denoiser::init()：OIDN device 创建（GPU 优先 fallback CPU）+ RT filter（hdr, cleanAux, High）+ 持久 staging buffers（readback beauty/albedo/normal + upload）+ timeline semaphore 创建
-- [ ] Denoiser::request_denoise(generation)：记录 trigger_generation，状态 → ReadbackPending
-- [ ] Denoiser::launch_processing()：启动 std::jthread 后台线程（vkWaitSemaphores → memcpy → oidnExecuteFilter → memcpy → 状态 → UploadPending），状态 → Processing
-- [ ] Denoiser::poll_upload_ready(current_generation)：UploadPending + generation 匹配 → true；不匹配 → 丢弃，状态 → Idle
-- [ ] Denoiser::complete_upload()：状态 → Idle
+- [x] Denoiser::request_denoise(generation)：记录 trigger_generation，状态 → ReadbackPending
+- [x] Denoiser::launch_processing()：启动 std::jthread 后台线程（vkWaitSemaphores → OIDN write → execute+sync → error check → OIDN read → 状态 → UploadPending），状态 → Processing
+- [x] Denoiser::poll_upload_ready(current_generation)：UploadPending + generation 匹配 → true；不匹配 → 丢弃，状态 → Idle
+- [x] Denoiser::complete_upload()：状态 → Idle
 - [x] Denoiser::on_resize()：join 线程 + 强制 state→Idle + 重建 staging buffers + OIDN buffers
 - [x] Denoiser::destroy()：join 线程 + 强制 state→Idle + 释放所有资源（OIDN device/filter、staging buffers、timeline semaphore）
 - [x] Denoiser::abort()：join 线程 + 强制 state→Idle（场景加载前调用）
-- [ ] 后台线程 oidnExecuteFilter 失败处理：spdlog::error + state→Idle（跳过 upload）
+- [x] 后台线程 oidnExecuteFilter 失败处理：spdlog::error + state→Idle（跳过 upload）
 - [ ] Renderer 新增 denoised buffer（RGBA32F managed image，TransferDst | Sampled）
 - [ ] Renderer 新增 accumulation_generation_（uint32_t，accumulation 重置时 +1）+ denoised_generation_
 - [ ] 降噪状态管理（Renderer 侧）：denoise_enabled / auto_denoise / interval / last_denoised_sample_count（触发时值）/ show_denoised

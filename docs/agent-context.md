@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 9 第五小项：Denoiser::request_denoise()（记录 generation，状态 → ReadbackPending）
+Step 9 下一小项：Renderer 新增 denoised buffer + accumulation_generation_ + denoised_generation_
 
 ---
 
