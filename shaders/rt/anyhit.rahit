@@ -1,0 +1,82 @@
+#version 460
+
+/**
+ * @file anyhit.rahit
+ * @brief Path tracing any-hit shader — alpha test and stochastic transparency.
+ *
+ * Invoked for non-opaque geometry (BLASGeometry::opaque = false). Handles
+ * two alpha modes:
+ *   - Mask (alpha_mode 1): discard if texel alpha < alpha_cutoff
+ *   - Blend (alpha_mode 2): stochastic discard using PCG hash random
+ *
+ * Opaque geometry (alpha_mode 0) never reaches this shader because the
+ * BLAS geometry flag VK_GEOMETRY_OPAQUE_BIT_KHR causes hardware to skip
+ * any-hit invocation entirely.
+ */
+
+#define HIMALAYA_RT
+#include "common/bindings.glsl"
+#include "rt/pt_common.glsl"
+
+// ---- Push constants (shared pipeline layout) ----
+
+layout(push_constant) uniform PushConstants {
+    uint  max_bounces;
+    uint  sample_count;
+    uint  frame_seed;
+    uint  blue_noise_index;
+    float max_clamp;
+} pc;
+
+// ---- Hit attributes ----
+
+hitAttributeEXT vec2 bary;
+
+void main() {
+    // ---- Geometry info + material lookup ----
+    GeometryInfo geo = geometry_infos[gl_InstanceCustomIndexEXT + gl_GeometryIndexEXT];
+    GPUMaterialData mat = materials[geo.material_buffer_offset];
+
+    // Opaque materials should never reach anyhit (BLAS geometry flag),
+    // but guard against it anyway
+    if (mat.alpha_mode == 0u) {
+        return;
+    }
+
+    // ---- Interpolate UV for alpha texture sampling ----
+    // Lightweight interpolation: only UV0, skip full HitAttributes
+    IndexBuffer ib = IndexBuffer(geo.index_buffer_address);
+    uint i0 = ib.indices[3 * gl_PrimitiveID + 0];
+    uint i1 = ib.indices[3 * gl_PrimitiveID + 1];
+    uint i2 = ib.indices[3 * gl_PrimitiveID + 2];
+
+    VertexBuffer v0 = VertexBuffer(geo.vertex_buffer_address + uint64_t(i0) * VERTEX_STRIDE);
+    VertexBuffer v1 = VertexBuffer(geo.vertex_buffer_address + uint64_t(i1) * VERTEX_STRIDE);
+    VertexBuffer v2 = VertexBuffer(geo.vertex_buffer_address + uint64_t(i2) * VERTEX_STRIDE);
+
+    float w0 = 1.0 - bary.x - bary.y;
+    vec2 uv = v0.uv0 * w0 + v1.uv0 * bary.x + v2.uv0 * bary.y;
+
+    // ---- Sample alpha from base color texture ----
+    float texel_alpha = texture(textures[nonuniformEXT(mat.base_color_tex)], uv).a
+                        * mat.base_color_factor.a;
+
+    if (mat.alpha_mode == 1u) {
+        // Mask: hard cutoff
+        if (texel_alpha < mat.alpha_cutoff) {
+            ignoreIntersectionEXT;
+        }
+    } else if (mat.alpha_mode == 2u) {
+        // Blend: stochastic alpha (PCG hash)
+        uint seed = gl_LaunchIDEXT.x
+                  ^ (gl_LaunchIDEXT.y * 1103515245u)
+                  ^ (pc.frame_seed * 747796405u)
+                  ^ gl_PrimitiveID
+                  ^ (gl_GeometryIndexEXT * 2654435761u);
+        float rand_val = float(pcg_hash(seed)) / 4294967296.0;
+
+        if (rand_val >= texel_alpha) {
+            ignoreIntersectionEXT;
+        }
+    }
+}
