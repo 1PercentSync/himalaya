@@ -355,7 +355,7 @@ PT 路径的 RG 编排极简：仅 Reference View Pass + Tonemapping Pass + ImGu
 - 新增 `framework/denoiser.h` / `.cpp`：
   - `DenoiseState` 枚举：`Idle`、`ReadbackPending`、`Processing`、`UploadPending`
   - `Denoiser` 类：
-    - `init(Context&, ResourceManager&)`：创建 OIDN device（GPU 优先，fallback CPU）、创建 filter（"RT" filter，beauty + albedo + normal 辅助输入）、分配持久 staging buffers（readback + upload，beauty + albedo + normal 各一组）、创建 timeline semaphore（降噪帧 GPU 完成通知）
+    - `init(Context&, ResourceManager&)`：创建 OIDN device（GPU 优先，fallback CPU）、commit 后查询实际设备类型（`device.get<DeviceType>("type")`）并 log（GPU → info，CPU → warn 提示 ~25x 性能降级）、创建 filter（"RT" filter，beauty + albedo + normal 辅助输入）、分配持久 staging buffers（readback + upload，beauty + albedo + normal 各一组）、创建 timeline semaphore（降噪帧 GPU 完成通知）
     - `request_denoise(uint32_t accumulation_generation)`：请求降噪，记录当前 `accumulation_generation`，状态 → `ReadbackPending`。调用方需在同帧的 RG 中注册 readback copy pass
     - `launch_processing()`：启动 `std::jthread` 后台线程，状态 → `Processing`。后台线程流程：`vkWaitSemaphores`（等待 readback copy 完成）→ `memcpy` staging → OIDNBuffer → `oidnExecuteFilter()` → `memcpy` OIDNBuffer → upload staging → 状态 → `UploadPending`
     - `poll_upload_ready(uint32_t current_generation)`：检查 `UploadPending` 状态。generation 匹配 → 返回 true（调用方注册 upload pass）；generation 不匹配 → 丢弃结果，状态 → `Idle`，返回 false

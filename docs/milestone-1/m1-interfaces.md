@@ -2049,6 +2049,7 @@ class Denoiser {
 public:
     /// Create OIDN device (GPU preferred, CPU fallback), RT filter,
     /// persistent staging buffers, and timeline semaphore.
+    /// Logs device type after commit: GPU backend → info, CPU fallback → warn.
     void init(rhi::Context& ctx, rhi::ResourceManager& rm);
 
     /// Request a denoise operation. Records the accumulation_generation for
