@@ -142,4 +142,25 @@ vec3 offset_ray_origin(vec3 p, vec3 n_geo) {
     );
 }
 
+// ---- Shading Normal Consistency ----
+
+/**
+ * Clamps a shading normal to the geometric normal hemisphere.
+ *
+ * Normal mapping can push the shading normal below the geometric surface,
+ * causing light leaks in path tracing. This projects the shading normal
+ * onto the geometric normal's hemisphere by reflecting it if it points
+ * to the wrong side.
+ *
+ * @param n_shading Shading normal (after normal map, normalized).
+ * @param n_geo     Geometric normal (interpolated vertex normal, normalized).
+ * @return Corrected shading normal guaranteed to be on the same side as n_geo.
+ */
+vec3 ensure_normal_consistency(vec3 n_shading, vec3 n_geo) {
+    if (dot(n_shading, n_geo) < 0.0) {
+        return reflect(n_shading, n_geo);
+    }
+    return n_shading;
+}
+
 #endif // PT_COMMON_GLSL
