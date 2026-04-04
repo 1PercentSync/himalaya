@@ -77,10 +77,10 @@ namespace himalaya::framework {
         /** @brief PT accumulation buffer (RGBA32F, Storage); invalid in rasterization mode. */
         RGResourceId pt_accumulation;
 
-        /** @brief PT OIDN auxiliary albedo image (RGBA32F, Storage); invalid in rasterization mode. */
+        /** @brief PT OIDN auxiliary albedo image (R8G8B8A8Unorm, Storage); invalid in rasterization mode. */
         RGResourceId pt_aux_albedo;
 
-        /** @brief PT OIDN auxiliary normal image (RGBA32F, Storage); invalid in rasterization mode. */
+        /** @brief PT OIDN auxiliary normal image (R16G16B16A16Sfloat, Storage); invalid in rasterization mode. */
         RGResourceId pt_aux_normal;
 
         /** @brief Resolved roughness buffer (R8Unorm, 1x). */

@@ -57,7 +57,7 @@ void main() {
     vec2 ndc = vec2(uv.x * 2.0 - 1.0, -(uv.y * 2.0 - 1.0));
 
     // Unproject to world-space ray
-    vec4 clip_target = vec4(ndc, 1.0, 1.0); // far plane in reverse-Z (z=1 = far for Vulkan NDC)
+    vec4 clip_target = vec4(ndc, 1.0, 1.0); // z=1 = near plane in reverse-Z; any z gives correct direction after normalize
     vec4 view_target = global.inv_projection * clip_target;
     view_target /= view_target.w;
 

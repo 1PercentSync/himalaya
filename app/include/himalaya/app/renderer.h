@@ -348,10 +348,10 @@ namespace himalaya::app {
         /** @brief PT accumulation buffer (RGBA32F, Relative 1.0x, Storage); created when rt_supported. */
         framework::RGManagedHandle managed_pt_accumulation_;
 
-        /** @brief PT OIDN auxiliary albedo (RGBA32F, Relative 1.0x, Storage); created when rt_supported. */
+        /** @brief PT OIDN auxiliary albedo (R8G8B8A8Unorm, Relative 1.0x, Storage); created when rt_supported. */
         framework::RGManagedHandle managed_pt_aux_albedo_;
 
-        /** @brief PT OIDN auxiliary normal (RGBA32F, Relative 1.0x, Storage); created when rt_supported. */
+        /** @brief PT OIDN auxiliary normal (R16G16B16A16Sfloat, Relative 1.0x, Storage); created when rt_supported. */
         framework::RGManagedHandle managed_pt_aux_normal_;
 
         /** @brief Current MSAA sample count (1 = no MSAA, default 4x). */
