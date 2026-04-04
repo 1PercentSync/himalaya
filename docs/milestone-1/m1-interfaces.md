@@ -1287,7 +1287,7 @@ Graphics pipeline 共享统一 layout `{Set 0, Set 1, Set 2}`。Compute pipeline
 - **Set 0**：per-frame 分配 2 个 descriptor set（对应 2 frames in flight），每帧绑定当前帧的 set
 - **Set 1**：分配 1 个 descriptor set，加载时写入，长期持有
 - **Set 2**：per-frame 分配 2 个 descriptor set（阶段五引入，对应 2 frames in flight），temporal binding 每帧更新当前帧的 copy
-- **Set 3**：push descriptor set（阶段五引入，仅 compute pipeline），每次 dispatch 前 push 绑定（storage image 输出 + pass-specific 输入）
+- **Set 3**：push descriptor set（阶段五引入，compute / RT pipeline），每次 dispatch 前 push 绑定（storage image 输出 + pass-specific 输入）
 
 设计决策见 `m1-design-decisions-core.md`「Descriptor Set 三层架构」+「Set 2 — Render Target Descriptor Set」。
 
@@ -1306,7 +1306,8 @@ Graphics pipeline 共享统一 layout `{Set 0, Set 1, Set 2}`。Compute pipeline
 | 几何信息 | 场景加载时 | Set 0, Binding 5 (SSBO) | per-geometry vertex/index address + material（阶段六引入） |
 | Env Alias Table | IBL 加载时 | Set 0, Binding 6 (SSBO) | env importance sampling alias table + total_luminance（阶段六 Step 11 引入） |
 | Per-draw 数据 | 每次绘制（仅 shadow） | Push Constant | cascade index |
-| Compute pass 私有 I/O | 每次 dispatch | Set 3 (Push Descriptor) | storage image 输出、pass-specific 输入（阶段五引入） |
+| Sobol 方向数表 | init 时一次 | Set 3, Binding 3 (SSBO) | 128 维低差异序列方向数（阶段六 Step 6a 引入，ReferenceViewPass Set 3） |
+| Compute / RT pass 私有 I/O | 每次 dispatch | Set 3 (Push Descriptor) | storage image 输出、pass-specific 输入（阶段五引入，阶段六 RT pass 复用） |
 
 ---
 
@@ -1990,6 +1991,17 @@ private:
 
 }  // namespace himalaya::passes
 ```
+
+**Set 3 push descriptor layout（4 bindings）**：
+
+| Binding | 类型 | 资源 | 说明 |
+|---------|------|------|------|
+| 0 | `image2D` (storage, rgba32f) | accumulation buffer (output) | running average 累积 |
+| 1 | `image2D` (storage, rgba32f) | aux albedo (output) | OIDN 辅助通道（bounce 0 写入） |
+| 2 | `image2D` (storage, rgba32f) | aux normal (output) | OIDN 辅助通道（bounce 0 写入） |
+| 3 | SSBO (readonly) | Sobol 方向数表 | 128 维 × 32 bit，16 KB，init 时上传 |
+
+Push constants: `PTPushConstants`（见「PT Push Constants 布局」）。
 
 #### Denoiser（阶段六）
 

@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 6a 第十二小项：pt_common.glsl Sobol 方向数表 + PCG fallback + Cranley-Patterson
+Step 6a 第十二小项：新增 sobol_direction_data.h（128 维方向数数据生成 + Renderer SSBO 上传）
 
 ---
 
