@@ -106,6 +106,10 @@ namespace himalaya::passes {
     }
 
     void ReferenceViewPass::destroy() {
+        if (!ctx_) {
+            return;
+        }
+
         rt_pipeline_.destroy(ctx_->device, ctx_->allocator);
 
         if (set3_layout_ != VK_NULL_HANDLE) {
