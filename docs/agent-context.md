@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 7 第三小项完成（managed images 创建），下一步：record() RG 注册 + push descriptors + trace_rays
+Step 7 全部完成（7/7），下一步进入 Step 8 第一小项
 
 ---
 
