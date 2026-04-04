@@ -579,10 +579,10 @@ rhi/
 │   ├── descriptors.h              # [Step 4] Set 0 layout 条件扩展 + write_set0_tlas() ; [Step 11] write_set0_env_alias_table() ; [Step 12] binding 7/8
 │   └── shader.h                   # [Step 6] RT shader stage 支持
 ├── src/
-│   ├── context.cpp                # [Step 1] 设备选择 + RT 扩展启用 + RT 函数指针加载 ; [Step 5] 补充 pfn_get_as_device_address
+│   ├── context.cpp                # [Step 1] 设备选择 + RT 扩展启用 + RT 函数指针加载 ; [Step 5] 补充 pfn_get_as_device_address ; [Step 8] shaderInt64 特性启用
 │   ├── resources.cpp              # [Step 4] ShaderDeviceAddress 映射 + get_buffer_device_address
 │   ├── commands.cpp               # [Step 3] trace_rays 实现 ; [Step 4] RT bind/descriptor/push 实现
-│   ├── descriptors.cpp            # [Step 4] Set 0 layout 条件扩展 + TLAS descriptor 写入 ; [Step 11] binding 6 ; [Step 12] binding 7/8
+│   ├── descriptors.cpp            # [Step 4] Set 0 layout 条件扩展 + TLAS descriptor 写入 ; [Step 8] Set 1 bindless 补 RAYGEN stage ; [Step 11] binding 6 ; [Step 12] binding 7/8
 │   └── shader.cpp                 # [Step 6] RT stage 编译支持
 framework/
 ├── include/himalaya/framework/
@@ -599,7 +599,7 @@ app/
 │   ├── scene_loader.h             # [Step 5] load() 新增 rt_supported 参数
 │   ├── renderer.h                 # [Step 5-9] SceneASBuilder + ReferenceViewPass + Denoiser ; [Step 12] EmissiveLightBuilder
 │   ├── config.h                   # [Step 5] AppConfig 新增 log_level 字段
-│   ├── debug_ui.h                 # [Step 5] DebugUIActions log_level_changed ; [Step 10] DebugUIContext PT 字段 + DebugUIActions PT 动作
+│   ├── debug_ui.h                 # [Step 5] DebugUIActions log_level_changed ; [Step 8] DebugUIContext render_mode + rt_supported ; [Step 10] PT 面板字段 + PT 动作
 │   └── application.h              # [Step 8] render_mode 状态
 ├── src/
 │   ├── scene_loader.cpp           # [Step 5] load_meshes() 填充 group_id/material_id + buffer flags
@@ -608,10 +608,10 @@ app/
 │   ├── renderer_rasterization.cpp # [Step 8] 光栅化渲染路径（draw group 构建 + multi-pass pipeline）
 │   ├── renderer_pt.cpp            # [Step 8-9] PT 渲染路径（Reference View + Tonemapping + ImGui）; OIDN
 │   ├── config.cpp                 # [Step 5] log_level 序列化/反序列化
-│   ├── debug_ui.cpp               # [Step 5] log level 变更返回 action ; [Step 10] PT 面板绘制
+│   ├── debug_ui.cpp               # [Step 5] log level 变更返回 action ; [Step 8] Render Mode combo ; [Step 10] PT 面板绘制
 │   └── application.cpp            # [Step 5] log level 加载 + 变更持久化 ; [Step 8-10] 模式切换 + PT actions 响应
 shaders/
-├── common/bindings.glsl           # [Step 5] binding 4/5 ; [Step 11] binding 6 ; [Step 12] binding 7/8 + double_sided
+├── common/bindings.glsl           # [Step 5] binding 4/5 ; [Step 8] HIMALAYA_RT 块补 RT 扩展声明 ; [Step 11] binding 6 ; [Step 12] binding 7/8 + double_sided
 └── forward.frag                   # [Step 12] emissive doubleSided 检查
 ```
 

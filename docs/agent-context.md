@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段六 — RT 基础设施 + PT 参考视图（规划完成，待实现）
-- **进度**：Step 7 已完成，Step 8 开始实施
+- **进度**：Step 8 已完成，进入 Step 9
 
 ### 下一个任务
 
-Step 8 第三小项已完成（render 拆分为 fill_common_gpu_data / render_rasterization / render_path_tracing），renderer.cpp 拆分为四个文件后继续第四小项
+Step 9 第一小项：手动集成 OIDN 预编译库
 
 ---
 

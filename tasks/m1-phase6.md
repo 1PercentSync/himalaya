@@ -102,9 +102,18 @@
 - [x] scene_data.h 新增 RenderMode 枚举（Rasterization、PathTracing）（uint8_t）
 - [x] RenderInput 新增 render_mode 字段
 - [x] Renderer::render() 拆分为私有方法：fill_common_gpu_data() + render_rasterization() + render_path_tracing()，按 render_mode switch。renderer.cpp 拆分为四个文件：renderer.cpp（dispatch + GPU data fill）、renderer_init.cpp（lifecycle）、renderer_rasterization.cpp（光栅化路径）、renderer_pt.cpp（PT 路径）
-- [ ] PT 路径：RG clear → accumulation + swapchain import → Reference View → Tonemapping → ImGui → present
-- [ ] VP 矩阵比较 + reset_accumulation() 触发
-- [ ] 模式切换不清零 accumulation（缓存保留）
+- [x] PT 路径：RG clear → accumulation + swapchain import → Reference View → Tonemapping → ImGui → present
+- [x] VP 矩阵比较 + reset_accumulation() 触发
+- [x] 模式切换不清零 accumulation（缓存保留）
+- [x] DebugUI Rendering section 新增 Render Mode combo（提前自 Step 10），Application 新增 `render_mode_` 状态并传入 RenderInput
+- [x] 修复：bindings.glsl `#ifdef HIMALAYA_RT` 块补 `GL_EXT_ray_tracing` + `GL_EXT_shader_explicit_arithmetic_types_int64` 扩展声明
+- [x] 修复：shadow_miss.rmiss 补 `#define HIMALAYA_RT` + `#include "common/bindings.glsl"`（统一 RT shader include 顺序）
+- [x] 修复：context.cpp RT 启用时补 `shaderInt64` 设备特性（`uint64_t` SPIR-V Int64 capability）
+- [x] 修复：descriptors.cpp Set 1 bindless stage flags 补 `RAYGEN_BIT_KHR`
+- [x] 修复：reference_view.rgen NDC Y 轴翻转（Vulkan Y-down）
+- [x] 修复：sync-shaders.sh CRLF → LF（WSL bash 兼容）
+- [x] DebugUI：PT checkbox 移至面板顶部（VSync 旁），IBL rotation 变化触发 accumulation reset
+- [x] DebugUI：Camera/Scene/Environment/Shadow/AO/Contact Shadows 栏默认收起
 
 ## Step 9：OIDN 集成
 
