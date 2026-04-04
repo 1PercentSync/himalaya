@@ -467,6 +467,7 @@ namespace himalaya::rhi {
         features_12.descriptorBindingSampledImageUpdateAfterBind = VK_TRUE;
         features_12.runtimeDescriptorArray = VK_TRUE;
         features_12.shaderSampledImageArrayNonUniformIndexing = VK_TRUE;
+        features_12.timelineSemaphore = VK_TRUE;
 
         // Vulkan 1.3 core features: dynamic rendering + synchronization2 + demote-to-helper
         // Extended Dynamic State is unconditionally available in 1.3+ (no feature bit needed)
