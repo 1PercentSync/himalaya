@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 8 第一小项：scene_data.h 新增 RenderMode 枚举
+Step 8 第二小项：RenderInput 新增 render_mode 字段
 
 ---
 
