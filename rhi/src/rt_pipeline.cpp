@@ -1,5 +1,6 @@
 #include <himalaya/rhi/rt_pipeline.h>
 #include <himalaya/rhi/context.h>
+#include <himalaya/rhi/types.h>
 
 #include <spdlog/spdlog.h>
 
@@ -7,10 +8,6 @@
 #include <vector>
 
 namespace himalaya::rhi {
-    /// Aligns a value up to the given power-of-two alignment.
-    static uint32_t align_up(const uint32_t value, const uint32_t alignment) {
-        return (value + alignment - 1) & ~(alignment - 1);
-    }
 
     RTPipeline create_rt_pipeline(const Context &ctx, const RTPipelineDesc &desc) {
         VkDevice device = ctx.device;

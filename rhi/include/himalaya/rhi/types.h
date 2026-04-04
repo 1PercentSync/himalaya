@@ -161,6 +161,19 @@ namespace himalaya::rhi {
         GreaterOrEqual,
     };
 
+    // ---- Alignment utilities ----
+
+    /**
+     * @brief Rounds up a value to the next multiple of a power-of-two alignment.
+     * @param value     Value to align.
+     * @param alignment Must be a power of two.
+     * @return Smallest multiple of alignment that is >= value.
+     */
+    template<typename T>
+    constexpr T align_up(T value, T alignment) {
+        return (value + alignment - 1) & ~(alignment - 1);
+    }
+
     // ---- Format conversion utilities ----
 
     /**

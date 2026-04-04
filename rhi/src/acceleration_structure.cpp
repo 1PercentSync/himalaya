@@ -1,5 +1,6 @@
 #include <himalaya/rhi/acceleration_structure.h>
 #include <himalaya/rhi/context.h>
+#include <himalaya/rhi/types.h>
 
 #include <cassert>
 #include <string>
@@ -9,11 +10,6 @@
 namespace himalaya::rhi {
     void AccelerationStructureManager::init(Context *context) {
         context_ = context;
-    }
-
-    // Rounds up `value` to the next multiple of `alignment`.
-    static VkDeviceSize align_up(const VkDeviceSize value, const VkDeviceSize alignment) {
-        return (value + alignment - 1) & ~(alignment - 1);
     }
 
     std::vector<BLASHandle> AccelerationStructureManager::build_blas(std::span<const BLASBuildInfo> infos) const {
