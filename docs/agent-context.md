@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 6a 第十四小项：pt_common.glsl cosine-weighted hemisphere sampling + GGX VNDF importance sampling
+Step 6a 第十五小项（最后）：pt_common.glsl Russian Roulette + MIS power heuristic
 
 ---
 
