@@ -151,6 +151,7 @@ namespace himalaya::framework {
         ColorAttachment,
         DepthAttachment,
         Transfer,
+        RayTracing,
     };
 
     /**

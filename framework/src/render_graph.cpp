@@ -191,6 +191,20 @@ namespace himalaya::framework {
                                   : VK_ACCESS_2_TRANSFER_WRITE_BIT,
                 };
 
+            case RGStage::RayTracing:
+                return {
+                    .layout = access == RGAccessType::Read
+                                  ? VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+                                  : VK_IMAGE_LAYOUT_GENERAL,
+                    .stage = VK_PIPELINE_STAGE_2_RAY_TRACING_SHADER_BIT_KHR,
+                    .access = access == RGAccessType::Read
+                                  ? VK_ACCESS_2_SHADER_SAMPLED_READ_BIT
+                                  : (VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT |
+                                     (access == RGAccessType::ReadWrite
+                                          ? VK_ACCESS_2_SHADER_STORAGE_READ_BIT
+                                          : VkAccessFlags2{0})),
+                };
+
             default:
                 assert(false && "Unhandled (RGAccessType, RGStage) combination");
                 // ReSharper disable once CppDFAUnreachableCode
