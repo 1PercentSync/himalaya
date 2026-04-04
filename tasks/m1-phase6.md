@@ -133,7 +133,7 @@
 - [x] 后台线程 oidnExecuteFilter 失败处理：spdlog::error + state→Idle（跳过 upload）
 - [x] Renderer 新增 denoised buffer（RGBA32F managed image，TransferDst | Sampled）+ Denoiser 实例 + init/destroy/on_resize 集成
 - [x] Renderer 新增 accumulation_generation_（uint32_t，accumulation 重置时 +1）+ denoised_generation_（初始 UINT32_MAX）
-- [ ] 降噪状态管理（Renderer 侧）：denoise_enabled / auto_denoise / interval / last_denoised_sample_count（触发时值）/ show_denoised
+- [x] 降噪状态管理（Renderer 侧）：denoise_enabled / auto_denoise / interval / last_denoised_sample_count（触发时值）/ show_denoised
 - [ ] 降噪触发守卫：state==Idle && denoise_enabled && show_denoised && sample_count>0 && (自动间隔 || 手动请求)
 - [ ] render_path_tracing() RG 编排：ReadbackPending → 注册 Readback Copy Pass + signal timeline semaphore + launch_processing()
 - [ ] render_path_tracing() RG 编排：poll_upload_ready() → 注册 Upload Pass + complete_upload() + 更新 denoised_generation_

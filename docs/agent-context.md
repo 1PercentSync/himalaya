@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 9 下一小项：降噪状态管理（Renderer 侧 denoise_enabled / auto_denoise / interval / show_denoised 等）
+Step 9 下一小项：降噪触发守卫 + render_path_tracing() RG 编排（Readback/Upload Pass）
 
 ---
 
