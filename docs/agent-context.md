@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 6a 第十一小项：pt_common.glsl Multi-lobe BRDF 选择
+Step 6a 第十二小项：pt_common.glsl Sobol 方向数表 + PCG fallback + Cranley-Patterson
 
 ---
 

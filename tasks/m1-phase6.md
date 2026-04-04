@@ -74,7 +74,7 @@
 - [x] pt_common.glsl：顶点属性插值工具（GeometryInfo → buffer_reference 读取 → 重心坐标插值 position/normal/tangent/UV）
 - [x] pt_common.glsl：Ray origin offset 工具函数（Wächter & Binder，Ray Tracing Gems Ch.6）
 - [x] pt_common.glsl：Shading normal 一致性修正（clamp 到几何法线半球）
-- [ ] pt_common.glsl：Multi-lobe BRDF 选择（Fresnel 估计概率选 diffuse/specular lobe + PDF 补偿）
+- [x] pt_common.glsl：Multi-lobe BRDF 选择（Fresnel 估计概率选 diffuse/specular lobe + PDF 补偿）
 - [ ] pt_common.glsl：Sobol 128 维 32-bit 方向数表（16 KB shader 常量，从 `noise/new-joe-kuo-6.21201` 生成）+ 超出 128 维 PCG hash fallback + Cranley-Patterson rotation
 - [ ] pt_common.glsl：cosine-weighted hemisphere sampling + GGX VNDF importance sampling（Heitz 2018，新增 `sample_ggx_vndf()` + `pdf_ggx_vndf()`；`#include "common/brdf.glsl"` 复用评估函数，不修改 brdf.glsl）
 - [ ] pt_common.glsl：Russian Roulette（bounce ≥ 2）+ MIS power heuristic（balance heuristic，Step 6a 定义函数，方向光不调用，Step 11 env sampling 使用）
