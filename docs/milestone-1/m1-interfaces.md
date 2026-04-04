@@ -1027,6 +1027,18 @@ public:
     rhi::SamplerHandle default_sampler() const;
     const framework::DefaultTextures& default_textures() const;
     framework::MaterialSystem& material_system();
+
+    // --- 阶段六 Step 9 降噪 accessor ---
+
+    /// Returns the timeline semaphore + signal value for the current frame's
+    /// denoise readback, or {VK_NULL_HANDLE, 0} if no denoise is pending.
+    /// Application checks after render() and appends to vkQueueSubmit2
+    /// signalSemaphoreInfos if non-null.
+    struct DenoiseSemaphoreInfo {
+        VkSemaphore semaphore = VK_NULL_HANDLE;
+        uint64_t value = 0;
+    };
+    [[nodiscard]] DenoiseSemaphoreInfo pending_denoise_signal() const;
 };
 ```
 

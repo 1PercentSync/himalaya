@@ -378,9 +378,10 @@ PT 路径的 RG 编排极简：仅 Reference View Pass + Tonemapping Pass + ImGu
   - 前置条件：`denoiser_.state() == Idle && denoise_enabled_ && show_denoised_ && sample_count > 0`
   - 自动：`auto_denoise_ && (sample_count - last_denoised >= interval)`
   - 手动：`DebugUIActions::pt_denoise_requested`
-- `render_path_tracing()` RG 编排：
-  - `denoiser_.state() == ReadbackPending` 时：在 Reference View Pass 之后注册 Readback Copy Pass（Transfer stage，读 accumulation + aux，写 staging buffer），帧 submit 附带 signal timeline semaphore，调用 `denoiser_.launch_processing()`
-  - `denoiser_.poll_upload_ready(accumulation_generation_)` 返回 true 时：注册 Upload Pass（Transfer stage，读 staging buffer，写 denoised image），执行后调用 `denoiser_.complete_upload()`，更新 `denoised_generation_`
+- `render_path_tracing()` RG 编排（降噪帧）：
+  - `denoiser_.state() == ReadbackPending` 时：在 Reference View Pass 之后注册 Readback Copy Pass（声明 accumulation + aux 为 Read + Transfer stage，RG 自动插入 image barrier → `TRANSFER_SRC_OPTIMAL`；execute lambda 手动录制 `vkCmdCopyImageToBuffer`，staging buffer 不经 RG 追踪）。`render()` 内调用 `denoiser_.launch_processing()`（submit 前启动线程，线程 `vkWaitSemaphores` 等待 GPU 完成 readback，早启动只是多等一会）
+  - `denoiser_.poll_upload_ready(accumulation_generation_)` 返回 true 时：在 Reference View Pass **之前**注册 Upload Pass（Transfer stage，写 denoised image；execute lambda 手动录制 `vkCmdCopyBufferToImage`），确保 denoised buffer 在 Tonemapping 读取前已写入。执行后调用 `denoiser_.complete_upload()`，更新 `denoised_generation_`
+- Timeline semaphore 注入 submit：Renderer 新增 `pending_denoise_signal()` getter，返回 `{VkSemaphore, uint64_t value}`（无降噪帧返回 `{VK_NULL_HANDLE, 0}`）。Application 在 `vkQueueSubmit2` 前检查，非空则追加到 `signalSemaphoreInfos` 数组
 - Tonemapping 输入切换：`show_denoised_ && denoise_enabled_ && denoised_generation_ == accumulation_generation_` 时导入 denoised buffer 为 hdr_color，否则导入 accumulation buffer
 
 **验证**：降噪后画面明显干净（对比原始累积），降噪期间 UI 不卡顿（PT 继续累积），自动触发按间隔正常工作，手动按钮即时触发，降噪中移动相机后结果被丢弃，resize 后降噪正常

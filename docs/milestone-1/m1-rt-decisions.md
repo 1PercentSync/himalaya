@@ -85,6 +85,14 @@ Idle → ReadbackPending → Processing → UploadPending → Idle
 - `Processing`：后台线程执行中（wait semaphore + OIDN）
 - `UploadPending`：后台线程完成，等下一帧 RG 注册 upload pass
 
+**Timeline semaphore 注入 submit**：Denoiser 在 framework 层，submit 在 Application 层，Renderer 不接触 submit。传递路径：Renderer 新增 `pending_denoise_signal()` getter 返回 `{VkSemaphore, uint64_t value}`（无降噪帧返回 `{VK_NULL_HANDLE, 0}`），Application 在 `vkQueueSubmit2` 前检查并追加到 `signalSemaphoreInfos`。
+
+**Readback / Upload Pass 注册方式**：RG 只追踪 image barrier，buffer 无 layout 概念。Readback pass 声明 accumulation + aux 为 `Read + Transfer`（RG 自动插入 barrier → `TRANSFER_SRC_OPTIMAL`），execute lambda 手动录制 `vkCmdCopyImageToBuffer`（staging buffer 不经 RG 追踪）。Upload pass 同理：声明 denoised image 为 `Write + Transfer`，lambda 手动录制 `vkCmdCopyBufferToImage`。
+
+**Pass 顺序**：Readback 和 Upload 在不同帧。降噪帧：Reference View → Readback Copy → Tonemapping（读 accumulation）。Upload 帧：Upload → Reference View → Tonemapping（读 denoised buffer）。Upload 在 Reference View 之前，确保 denoised buffer 在 Tonemapping 读取前已写入。
+
+**launch_processing() 调用时机**：在 `render()` 内调用（submit 之前）。后台线程 `vkWaitSemaphores` 等待 GPU 完成 readback，早启动只是多等一会。比 post-submit hook 简单。
+
 **Resize / Destroy / 场景加载安全**：`on_resize()`、`destroy()`、场景加载前 join 后台线程。`oidnExecuteFilter()` 不可中断，最坏等待 20-50ms，发生在本身就阻塞的操作中（`vkQueueWaitIdle` / 资源重建），用户无感。
 
 **OIDNBuffer**：OIDN 2.x GPU 模式要求使用 `OIDNBuffer` 对象传递图像数据（GPU 无法访问系统 malloc 内存）。Denoiser 创建持久 `OIDNBuffer`（beauty + albedo + normal + output），Vulkan readback 后 `memcpy` 到 OIDNBuffer，执行后从 OIDNBuffer `memcpy` 到 upload staging buffer。
