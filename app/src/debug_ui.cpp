@@ -267,6 +267,7 @@ namespace himalaya::app {
                 // Denoise Now button
                 const bool denoise_disabled =
                     !ctx.denoise_enabled ||
+                    ctx.auto_denoise ||
                     ctx.denoise_state != framework::DenoiseState::Idle ||
                     ctx.pt_sample_count == 0 ||
                     !ctx.show_denoised;
