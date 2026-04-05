@@ -18,6 +18,7 @@ namespace himalaya::framework {
     struct AOConfig;
     struct Camera;
     struct ContactShadowConfig;
+    enum class DenoiseState : uint8_t;
     enum class RenderMode : uint8_t;
     struct RenderFeatures;
     struct ShadowConfig;
@@ -121,6 +122,43 @@ namespace himalaya::app {
 
         /** @brief Whether RT hardware is available (controls PT option visibility). */
         bool rt_supported;
+
+        // --- Path tracing state (visible when render_mode == PathTracing) ---
+
+        /** @brief Number of PT samples accumulated so far (read-only display). */
+        uint32_t pt_sample_count;
+
+        /** @brief Target sample count (0 = unlimited). Mutable — input field. */
+        uint32_t& pt_target_samples;
+
+        /** @brief Maximum ray bounce depth (1-32). Mutable — slider. */
+        uint32_t& pt_max_bounces;
+
+        /** @brief Firefly clamping threshold (0 = disabled). Mutable — slider. */
+        float& pt_max_clamp;
+
+        /** @brief Time elapsed since PT accumulation started, in seconds (read-only). */
+        float pt_elapsed_time;
+
+        // --- Denoiser state (visible when render_mode == PathTracing) ---
+
+        /** @brief Denoise feature master switch. Mutable — checkbox. */
+        bool& denoise_enabled;
+
+        /** @brief Display denoised result (true) or raw accumulation (false). Mutable — toggle. */
+        bool& show_denoised;
+
+        /** @brief Automatic denoise trigger toggle. Mutable — checkbox. */
+        bool& auto_denoise;
+
+        /** @brief Auto denoise trigger interval in samples. Mutable — input. */
+        uint32_t& auto_denoise_interval;
+
+        /** @brief Current denoise pipeline state (read-only, for status text + button gray-out). */
+        framework::DenoiseState denoise_state;
+
+        /** @brief Sample count at which the last denoise was triggered (read-only display). */
+        uint32_t last_denoised_sample_count;
 
         // --- Render params (controls) ---
 

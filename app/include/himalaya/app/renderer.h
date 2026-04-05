@@ -27,6 +27,7 @@
 #include <himalaya/rhi/shader.h>
 
 #include <array>
+#include <chrono>
 #include <cstdint>
 #include <span>
 #include <vector>
@@ -248,6 +249,43 @@ namespace himalaya::app {
         /** @brief Aborts any in-progress denoise and resets accumulation generation. */
         void abort_denoise();
 
+        // --- PT parameter accessors (for DebugUIContext binding) ---
+
+        /** @brief Mutable reference to max bounce depth (default 8, range 1-32). */
+        uint32_t& pt_max_bounces();
+
+        /** @brief Mutable reference to firefly clamp threshold (default 10.0, 0 = disabled). */
+        float& pt_max_clamp();
+
+        /** @brief Mutable reference to target sample count (0 = unlimited). */
+        uint32_t& pt_target_samples();
+
+        /** @brief Mutable reference to denoise enabled flag. */
+        bool& denoise_enabled();
+
+        /** @brief Mutable reference to show denoised flag. */
+        bool& show_denoised();
+
+        /** @brief Mutable reference to auto denoise flag. */
+        bool& auto_denoise();
+
+        /** @brief Mutable reference to auto denoise interval. */
+        uint32_t& auto_denoise_interval();
+
+        // --- PT read-only state ---
+
+        /** @brief Returns number of accumulated PT samples. */
+        [[nodiscard]] uint32_t pt_sample_count() const;
+
+        /** @brief Returns elapsed time since PT accumulation started, in seconds. */
+        [[nodiscard]] float pt_elapsed_time() const;
+
+        /** @brief Returns current denoise pipeline state. */
+        [[nodiscard]] framework::DenoiseState denoise_state() const;
+
+        /** @brief Returns sample count at last denoise trigger. */
+        [[nodiscard]] uint32_t last_denoised_sample_count() const;
+
     private:
         // --- Subsystem references (non-owning, set during init) ---
 
@@ -401,6 +439,18 @@ namespace himalaya::app {
 
         /** @brief Display denoised result (true) or raw accumulation (false). */
         bool show_denoised_ = true;
+
+        /** @brief PT max bounce depth (default 8, range 1-32, exposed via UI Step 10). */
+        uint32_t max_bounces_ = 8;
+
+        /** @brief PT firefly clamp threshold (default 10.0, 0 = disabled, exposed via UI Step 10). */
+        float max_clamp_ = 10.0f;
+
+        /** @brief PT target sample count (0 = unlimited, exposed via UI Step 10). */
+        uint32_t target_samples_ = 0;
+
+        /** @brief Time point when PT accumulation (re)started, for elapsed time display. */
+        std::chrono::steady_clock::time_point pt_start_time_{};
 
         /** @brief Current MSAA sample count (1 = no MSAA, default 4x). */
         uint32_t current_sample_count_ = 4;
