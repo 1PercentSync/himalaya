@@ -52,6 +52,7 @@ framework/
 │   ├── imgui_backend.h          # ImGui 集成
 │   ├── color_utils.h            # 色温 → 线性 RGB 转换
 │   ├── scene_as_builder.h       # 场景加速结构构建器（阶段六引入）
+│   ├── cached_shader_compiler.h # 带磁盘缓存的 ShaderCompiler（阶段六 Step 10.5 引入）
 │   └── emissive_light_builder.h # Emissive 面光源采样构建器（阶段六 Step 12 引入）
 └── src/
     └── ...
@@ -293,6 +294,8 @@ public:
 ```cpp
 class ShaderCompiler {
 public:
+    virtual ~ShaderCompiler() = default;
+
     // 配置 #include 解析根目录（初始化时调用一次）
     void set_include_path(const std::string& path);
 
@@ -300,7 +303,36 @@ public:
     // path 相对于 set_include_path() 设置的根目录，与 FileIncluder 的解析规则一致
     // 例：set_include_path("shaders") 后，compile_from_file("forward.vert", Vertex)
     //     读取 shaders/forward.vert，filename 传 "forward.vert" 给内部 compile()
-    std::vector<uint32_t> compile_from_file(const std::string& path, ShaderStage stage);
+    // virtual：CachedShaderCompiler override 此方法添加磁盘缓存层
+    [[nodiscard]] virtual std::vector<uint32_t> compile_from_file(
+        const std::string& path, ShaderStage stage);
+
+protected:
+    // 编译 GLSL 源码为 SPIR-V，含内存缓存 + include 追踪
+    [[nodiscard]] std::vector<uint32_t> compile(
+        const std::string& source, ShaderStage stage, const std::string& filename);
+
+    // 子类编译后取回 include 依赖列表（用于磁盘缓存 .meta 写入）
+    const CacheEntry* find_cache_entry(const std::string& source, ShaderStage stage) const;
+
+    // 子类访问 include 根目录
+    const std::string& include_path() const;
+};
+```
+
+#### CachedShaderCompiler 接口（framework 层）
+
+```cpp
+// 继承 rhi::ShaderCompiler，在 compile_from_file 前加磁盘缓存层。
+// 所有 pass 持有 rhi::ShaderCompiler*，多态自动生效，pass 层零改动。
+class CachedShaderCompiler : public rhi::ShaderCompiler {
+public:
+    // 设置缓存子目录名（如 "shader_debug" / "shader_release"），未设置则不启用磁盘缓存
+    void set_cache_category(const std::string& category);
+
+    // 磁盘缓存查找 → fallback 到 compile() → 写回磁盘
+    [[nodiscard]] std::vector<uint32_t> compile_from_file(
+        const std::string& path, rhi::ShaderStage stage) override;
 };
 ```
 
