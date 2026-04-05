@@ -453,7 +453,7 @@ namespace himalaya::app {
         float max_clamp_ = 10.0f;
 
         /** @brief PT target sample count (0 = unlimited, exposed via UI Step 10). */
-        uint32_t target_samples_ = 0;
+        uint32_t target_samples_ = 2048;
 
         /** @brief Time point when PT accumulation (re)started, for elapsed time display. */
         std::chrono::steady_clock::time_point pt_start_time_{};
