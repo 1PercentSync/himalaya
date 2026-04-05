@@ -5,6 +5,7 @@
  * @brief Rendering subsystem: pass orchestration, GPU data filling, resource ownership.
  */
 
+#include <himalaya/framework/cached_shader_compiler.h>
 #include <himalaya/framework/denoiser.h>
 #include <himalaya/framework/ibl.h>
 #include <himalaya/framework/material_system.h>
@@ -24,7 +25,6 @@
 #include <himalaya/passes/reference_view_pass.h>
 #include <himalaya/passes/tonemapping_pass.h>
 #include <himalaya/rhi/context.h>
-#include <himalaya/rhi/shader.h>
 
 #include <array>
 #include <chrono>
@@ -315,8 +315,8 @@ namespace himalaya::app {
         /** @brief Render graph for pass orchestration and automatic barriers. */
         framework::RenderGraph render_graph_{};
 
-        /** @brief Shader compiler instance. */
-        rhi::ShaderCompiler shader_compiler_{};
+        /** @brief Shader compiler with persistent disk cache. */
+        framework::CachedShaderCompiler shader_compiler_{};
 
         /** @brief Material SSBO management (Set 0, Binding 2). */
         framework::MaterialSystem material_system_{};
