@@ -119,6 +119,16 @@ namespace himalaya::rhi {
         include_path_ = path;
     }
 
+    const std::string &ShaderCompiler::include_path() const {
+        return include_path_;
+    }
+
+    const ShaderCompiler::CacheEntry *ShaderCompiler::find_cache_entry(
+        const std::string &source, const ShaderStage stage) const {
+        const auto it = cache_.find(make_cache_key(source, stage));
+        return it != cache_.end() ? &it->second : nullptr;
+    }
+
     // Reads a shader file relative to include_path_ and delegates to compile().
     std::vector<uint32_t> ShaderCompiler::compile_from_file(
         const std::string &path,

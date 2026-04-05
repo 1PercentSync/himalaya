@@ -87,6 +87,27 @@ namespace himalaya::rhi {
             std::vector<std::pair<std::string, std::string>> included_files;
         };
 
+        /**
+         * @brief Returns the include root directory path.
+         *
+         * Subclasses need this to resolve shader source file paths and
+         * compute include file content hashes for disk caching.
+         */
+        [[nodiscard]] const std::string &include_path() const;
+
+        /**
+         * @brief Looks up an in-memory cache entry by source content and stage.
+         *
+         * Subclasses use this after compile() to retrieve the include dependency
+         * list for disk cache metadata.
+         *
+         * @param source Main shader source text.
+         * @param stage  Shader stage (determines cache key prefix).
+         * @return Pointer to cache entry if found, nullptr otherwise.
+         */
+        [[nodiscard]] const CacheEntry *find_cache_entry(
+            const std::string &source, ShaderStage stage) const;
+
     private:
         /** @brief SPIR-V cache. Key is stage prefix + main source text. */
         std::unordered_map<std::string, CacheEntry> cache_;
