@@ -373,6 +373,17 @@ namespace himalaya::app {
         /** @brief Generation of the last successfully uploaded denoised result (UINT32_MAX = none). */
         uint32_t denoised_generation_ = UINT32_MAX;
 
+        /**
+         * @brief True when an upload pass was recorded but complete_upload() is deferred to next frame.
+         *
+         * Ensures complete_upload() is only called after the GPU has actually
+         * executed the upload pass (next frame's begin_frame fence wait guarantees this).
+         */
+        bool upload_pending_completion_ = false;
+
+        /** @brief Accumulation generation to assign to denoised_generation_ when completing deferred upload. */
+        uint32_t pending_denoised_generation_ = 0;
+
         /** @brief Denoise feature toggle (master switch). */
         bool denoise_enabled_ = true;
 

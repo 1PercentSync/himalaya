@@ -18,6 +18,15 @@ namespace himalaya::app {
     void Renderer::render_path_tracing(rhi::CommandBuffer &cmd, const RenderInput &input) {
         draw_call_count_ = 0;
 
+        // --- Deferred upload completion from previous frame ---
+        // complete_upload() is deferred until the next frame so the GPU has
+        // actually executed the upload pass (begin_frame fence wait guarantees this).
+        if (upload_pending_completion_) {
+            denoiser_.complete_upload();
+            denoised_generation_ = pending_denoised_generation_;
+            upload_pending_completion_ = false;
+        }
+
         // --- Build render graph ---
         render_graph_.clear();
 
@@ -133,12 +142,20 @@ namespace himalaya::app {
                                                               1, &region);
                                    });
 
-            denoiser_.complete_upload();
-            denoised_generation_ = accumulation_generation_;
+            // Defer complete_upload() to next frame — the upload pass is only
+            // recorded at this point, not yet executed by the GPU. The next
+            // frame's begin_frame() fence wait guarantees GPU completion.
+            upload_pending_completion_ = true;
+            pending_denoised_generation_ = accumulation_generation_;
         }
 
         // --- Tonemapping input: denoised buffer or raw accumulation ---
-        if (want_display && denoised_generation_ == accumulation_generation_ && denoised_resource.valid()) {
+        // Check pending completion too: upload was recorded this frame, denoised
+        // buffer content will be valid after GPU executes, safe to display.
+        const bool upload_committed = upload_pending_completion_ &&
+                                      pending_denoised_generation_ == accumulation_generation_;
+        if (want_display && (denoised_generation_ == accumulation_generation_ || upload_committed)
+            && denoised_resource.valid()) {
             frame_ctx.hdr_color = denoised_resource;
 
             const auto denoised_backing = render_graph_.get_managed_backing_image(managed_denoised_);

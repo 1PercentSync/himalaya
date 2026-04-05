@@ -559,6 +559,7 @@ namespace himalaya::app {
         const bool ok = ibl_.init(*ctx_, *resource_manager_, *descriptor_manager_, shader_compiler_, hdr_path);
 
         // Environment change invalidates accumulated PT samples
+        upload_pending_completion_ = false;
         reference_view_pass_.reset_accumulation();
         ++accumulation_generation_;
         last_denoised_sample_count_ = 0;
@@ -696,6 +697,7 @@ namespace himalaya::app {
         if (ctx_->rt_supported) {
             denoiser_.on_resize(*resource_manager_,
                                 swapchain_->extent.width, swapchain_->extent.height);
+            upload_pending_completion_ = false;
             reference_view_pass_.reset_accumulation();
             ++accumulation_generation_;
             last_denoised_sample_count_ = 0;

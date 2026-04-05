@@ -205,6 +205,7 @@ namespace himalaya::app {
 
     void Renderer::abort_denoise() {
         denoiser_.abort();
+        upload_pending_completion_ = false;
         reference_view_pass_.reset_accumulation();
         ++accumulation_generation_;
         last_denoised_sample_count_ = 0;
