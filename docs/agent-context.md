@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 10.5 rhi 重构全部完成（4 小项），进入第五小项（新增 framework/cached_shader_compiler.h）
+Step 10.5 第五小项已完成（header），进入第六小项（cached_shader_compiler.cpp 磁盘缓存加载）
 
 ---
 
