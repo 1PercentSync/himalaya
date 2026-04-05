@@ -541,9 +541,9 @@ namespace himalaya::app {
             save_config(config_);
         }
 
-        if (const auto interval = renderer_.auto_denoise_interval();
-            interval != config_.auto_denoise_interval) {
-            config_.auto_denoise_interval = interval;
+        if (actions.denoise_interval_changed) {
+            renderer_.auto_denoise_interval() = actions.new_denoise_interval;
+            config_.auto_denoise_interval = actions.new_denoise_interval;
             save_config(config_);
         }
 

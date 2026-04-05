@@ -257,7 +257,8 @@ namespace himalaya::app {
                     auto interval = static_cast<int>(ctx.auto_denoise_interval);
                     if (ImGui::InputInt("##Interval", &interval, 0, 0)) {
                         if (interval < 16) { interval = 16; }
-                        ctx.auto_denoise_interval = static_cast<uint32_t>(interval);
+                        actions.denoise_interval_changed = true;
+                        actions.new_denoise_interval = static_cast<uint32_t>(interval);
                     }
                     if (ImGui::IsItemHovered()) {
                         ImGui::SetTooltip("Denoise every N samples (min 16)");

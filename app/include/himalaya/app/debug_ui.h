@@ -151,8 +151,8 @@ namespace himalaya::app {
         /** @brief Automatic denoise trigger toggle. Mutable — checkbox. */
         bool& auto_denoise;
 
-        /** @brief Auto denoise trigger interval in samples. Mutable — input. */
-        uint32_t& auto_denoise_interval;
+        /** @brief Auto denoise trigger interval in samples (read-only display). */
+        uint32_t auto_denoise_interval;
 
         /** @brief Current denoise pipeline state (read-only, for status text + button gray-out). */
         framework::DenoiseState denoise_state;
@@ -277,6 +277,12 @@ namespace himalaya::app {
 
         /** @brief True if the user clicked the Denoise Now button (manual trigger). */
         bool pt_denoise_requested = false;
+
+        /** @brief True if the auto denoise interval was changed via the input box. */
+        bool denoise_interval_changed = false;
+
+        /** @brief New auto denoise interval (valid only when denoise_interval_changed is true). */
+        uint32_t new_denoise_interval = 0;
     };
 
     /**
