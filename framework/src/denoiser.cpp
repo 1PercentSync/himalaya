@@ -35,6 +35,11 @@ namespace himalaya::framework {
         height_ = height;
 
         // ---- OIDN device (GPU preferred, CPU fallback) ----
+        // OIDN picks the best available device automatically (GPU preferred).
+        // On multi-GPU systems it may select a different GPU than Vulkan renders on.
+        // This is acceptable: data goes through CPU staging either way, and offloading
+        // denoise to a separate GPU avoids contention with the PT workload.
+        // OIDN 2.x does not support selecting a specific GPU by index.
         oidn_ = std::make_unique<OidnImpl>();
         oidn_->device = oidn::newDevice();
         oidn_->device.commit();
