@@ -27,19 +27,29 @@ namespace himalaya::app {
 
         // --- Mouse rotation (right-click hold) ---
 
-        const bool right_pressed = !io.WantCaptureMouse &&
-                                   glfwGetMouseButton(window_, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS;
+        // Once rotation starts, ignore WantCaptureMouse — the virtual cursor
+        // in CURSOR_DISABLED mode can drift over ImGui widgets, causing
+        // flickering capture state and sudden angle jumps.
+        const bool right_down = glfwGetMouseButton(window_, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS;
+        const bool right_pressed = right_button_held_
+                                       ? right_down
+                                       : (right_down && !io.WantCaptureMouse);
 
         double cursor_x, cursor_y;
         glfwGetCursorPos(window_, &cursor_x, &cursor_y);
 
         if (right_pressed) {
             if (!right_button_held_) {
-                // Just pressed: record position, hide cursor for unlimited rotation
+                // Just pressed: hide cursor, enable raw mouse motion if available
                 right_button_held_ = true;
+                glfwSetInputMode(window_, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+                if (glfwRawMouseMotionSupported()) {
+                    glfwSetInputMode(window_, GLFW_RAW_MOUSE_MOTION, GLFW_TRUE);
+                }
+                // Re-read position after mode change to avoid coordinate mismatch
+                glfwGetCursorPos(window_, &cursor_x, &cursor_y);
                 last_cursor_x_ = cursor_x;
                 last_cursor_y_ = cursor_y;
-                glfwSetInputMode(window_, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
             }
 
             const auto dx = static_cast<float>(cursor_x - last_cursor_x_);
@@ -55,6 +65,7 @@ namespace himalaya::app {
         } else if (right_button_held_) {
             // Just released: restore cursor
             right_button_held_ = false;
+            glfwSetInputMode(window_, GLFW_RAW_MOUSE_MOTION, GLFW_FALSE);
             glfwSetInputMode(window_, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
         }
 
