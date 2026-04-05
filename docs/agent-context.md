@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 10 全部完成，进入 Step 11 第一小项
+Step 10.5 第一小项已完成（virtual 析构 + virtual compile_from_file），进入第二小项（CacheEntry 和 compile() 移到 protected）
 
 ---
 

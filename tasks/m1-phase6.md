@@ -152,6 +152,19 @@
 - [x] OIDN collapsing header：Denoise 开关 + Show Denoised/Raw 切换（Show Raw 暂停降噪）+ Auto Denoise + Interval（最小值 16，默认 64）+ Denoise Now 按钮（`!denoise_enabled || state!=Idle || sample_count==0 || !show_denoised` 时灰掉）+ 上次降噪采样数 + 降噪状态文字（Idle/Denoising...）
 - [x] Application 响应 PT actions
 
+## Step 10.5：Shader 磁盘缓存（SPIR-V 持久化）
+
+- [x] `rhi/shader.h` 重构：添加 `virtual ~ShaderCompiler() = default;`，`compile_from_file()` 加 `virtual`
+- [ ] `rhi/shader.h` 重构：`CacheEntry` 结构体和 `compile()` 从 private 移到 protected
+- [ ] `rhi/shader.h` 重构：新增 protected 访问器 `include_path()` + `find_cache_entry(source, stage)`
+- [ ] `rhi/shader.cpp`：实现 `find_cache_entry()`（通过 `make_cache_key` 查 `cache_` map）
+- [ ] 新增 `framework/cached_shader_compiler.h`：`CachedShaderCompiler : public rhi::ShaderCompiler`，`set_cache_category()` + override `compile_from_file()`
+- [ ] 新增 `framework/cached_shader_compiler.cpp`：磁盘缓存加载（读 .meta JSON 验证 include hash + 读 .spv binary）
+- [ ] `framework/cached_shader_compiler.cpp`：磁盘缓存写入（编译后通过 `find_cache_entry()` 取 include 列表，写 .spv + .meta）
+- [ ] `framework/CMakeLists.txt`：添加 `cached_shader_compiler.cpp` 源文件（需用户确认构建配置）
+- [ ] `app/renderer.h`：成员类型 `rhi::ShaderCompiler` → `framework::CachedShaderCompiler`
+- [ ] `app/renderer_init.cpp`：`set_include_path()` 后添加 `set_cache_category()`（Debug: `"shader_debug"`，Release: `"shader_release"`）
+
 ## Step 11：Environment Map Importance Sampling
 
 - [ ] IBL 新增 `build_env_alias_table(float* rgb_data, int w, int h)`：半分辨率（1024×512）下采样 luminance×sin(theta) + Vose's algorithm 构建 alias table（CPU O(N)），上传 SSBO（GPU_ONLY + TransferDst），计算 total_luminance
