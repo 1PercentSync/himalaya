@@ -60,6 +60,11 @@ namespace himalaya::framework {
         return content_hash(buf.data(), buf.size());
     }
 
+    // Shared state for cache_path() directory creation tracking.
+    // clear_cache/clear_all_cache must also access this to invalidate entries.
+    static std::mutex s_created_mtx;
+    static std::unordered_set<std::string> s_created_categories;
+
     void clear_cache(const std::string_view category) {
         std::error_code ec;
         const auto dir = cache_root() / category;
@@ -68,6 +73,8 @@ namespace himalaya::framework {
         if (ec) {
             spdlog::warn("cache: failed to clear '{}': {}", dir.string(), ec.message());
         } else {
+            std::lock_guard lock(s_created_mtx);
+            s_created_categories.erase(std::string(category));
             spdlog::info("cache: cleared '{}' ({} entries removed)",
                          std::string(category), removed);
         }
@@ -81,6 +88,8 @@ namespace himalaya::framework {
         if (ec) {
             spdlog::warn("cache: failed to clear root: {}", ec.message());
         } else {
+            std::lock_guard lock(s_created_mtx);
+            s_created_categories.clear();
             spdlog::info("cache: cleared all ({} entries removed)", removed);
         }
     }
@@ -88,14 +97,12 @@ namespace himalaya::framework {
     std::filesystem::path cache_path(const std::string_view category,
                                      const std::string_view hash,
                                      const std::string_view extension) {
-        // Ensure category subdirectory exists (once per unique category).
-        static std::mutex mtx;
-        static std::unordered_set<std::string> created;
 
+        // Ensure category subdirectory exists (recreated after clear).
         const auto dir = cache_root() / category;
         {
-            std::lock_guard lock(mtx);
-            if (created.insert(std::string(category)).second) {
+            std::lock_guard lock(s_created_mtx);
+            if (s_created_categories.insert(std::string(category)).second) {
                 std::filesystem::create_directories(dir);
             }
         }

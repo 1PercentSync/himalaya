@@ -24,9 +24,18 @@ namespace himalaya::framework {
         std::abort();
     }
 
-    // Computes a 32-char hex disk key: XXH3_128(stage_prefix + source_content).
-    static std::string compute_disk_key(const std::string &source, const rhi::ShaderStage stage) {
-        const std::string composite = stage_prefix(stage) + source;
+    // Computes a 32-char hex disk key: XXH3_128(stage_prefix + path + '\0' + source_content).
+    // Including the path prevents collisions between different files with identical source
+    // (their includes resolve differently based on relative directory).
+    static std::string compute_disk_key(const std::string &source,
+                                        const rhi::ShaderStage stage,
+                                        const std::string &path) {
+        std::string composite;
+        composite.reserve(1 + path.size() + 1 + source.size());
+        composite += stage_prefix(stage);
+        composite += path;
+        composite += '\0';
+        composite += source;
         return content_hash(composite.data(), composite.size());
     }
 
@@ -93,16 +102,20 @@ namespace himalaya::framework {
         spv_file.seekg(0);
         std::vector<uint32_t> spirv(file_size / sizeof(uint32_t));
         spv_file.read(reinterpret_cast<char *>(spirv.data()), static_cast<std::streamsize>(file_size));
+        if (!spv_file) {
+            return {};
+        }
         return spirv;
     }
 
     // Writes compiled SPIR-V and include metadata to disk.
+    // Hashes are computed from the in-memory content captured at compile time,
+    // not re-read from disk, to avoid TOCTOU inconsistency.
     static void write_disk_cache(
         const std::string &category,
         const std::string &disk_key,
         const std::vector<uint32_t> &spirv,
-        const std::vector<std::pair<std::string, std::string> > &included_files,
-        const std::filesystem::path &include_root) {
+        const std::vector<std::pair<std::string, std::string>> &included_files) {
         // Write .spv binary
         const auto spv_path = cache_path(category, disk_key, ".spv");
         std::ofstream spv_file(spv_path, std::ios::binary);
@@ -113,15 +126,14 @@ namespace himalaya::framework {
         spv_file.write(reinterpret_cast<const char *>(spirv.data()),
                        static_cast<std::streamsize>(spirv.size() * sizeof(uint32_t)));
 
-        // Build .meta JSON with include content hashes
+        // Build .meta JSON — hash from compile-time captured content
         nlohmann::json meta;
         auto &includes = meta["includes"];
         includes = nlohmann::json::array();
 
-        for (const auto &path: included_files | std::views::keys) {
-            if (const auto hash = content_hash(include_root / path); !hash.empty()) {
-                includes.push_back({{"path", path}, {"hash", hash}});
-            }
+        for (const auto &[path, file_content] : included_files) {
+            const auto hash = content_hash(file_content.data(), file_content.size());
+            includes.push_back({{"path", path}, {"hash", hash}});
         }
 
         // Write .meta JSON
@@ -159,8 +171,8 @@ namespace himalaya::framework {
 
         const std::string source{std::istreambuf_iterator(file), std::istreambuf_iterator<char>()};
 
-        // 2. Compute disk key
-        const auto disk_key = compute_disk_key(source, stage);
+        // 2. Compute disk key (includes path to avoid collisions between identical sources)
+        const auto disk_key = compute_disk_key(source, stage, path);
 
         // 3. Try disk cache
         auto spirv = try_load_disk_cache(category_, disk_key, include_path());
@@ -177,7 +189,7 @@ namespace himalaya::framework {
 
         // 5. Write back to disk cache
         if (const auto *entry = find_cache_entry(source, stage)) {
-            write_disk_cache(category_, disk_key, spirv, entry->included_files, include_path());
+            write_disk_cache(category_, disk_key, spirv, entry->included_files);
         }
 
         return spirv;
