@@ -268,6 +268,11 @@ namespace himalaya::app {
         }
 
         shader_compiler_.set_include_path("shaders");
+#ifdef NDEBUG
+        shader_compiler_.set_cache_category("shader_release");
+#else
+        shader_compiler_.set_cache_category("shader_debug");
+#endif
 
         // --- GlobalUBO buffers (per-frame, CpuToGpu) ---
         constexpr const char *kGlobalUboNames[] = {"Global UBO [Frame 0]", "Global UBO [Frame 1]"};
