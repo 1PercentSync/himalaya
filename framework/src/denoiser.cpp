@@ -11,6 +11,9 @@
 #include <spdlog/spdlog.h>
 
 namespace himalaya::framework {
+    constexpr size_t kBeautyBytesPerPixel = 16; // RGBA32F
+    constexpr size_t kAuxBytesPerPixel = 8;     // RGBA16F
+
     /** @brief PIMPL holding all OIDN objects, hidden from the header. */
     struct Denoiser::OidnImpl {
         oidn::DeviceRef device;
@@ -66,8 +69,8 @@ namespace himalaya::framework {
         oidn_->filter.set("quality", oidn::Quality::High);
 
         // ---- OIDN buffers (device-managed, host-accessible) ----
-        const size_t beauty_size = static_cast<size_t>(width) * height * 16; // RGBA32F
-        const size_t aux_size = static_cast<size_t>(width) * height * 8;    // RGBA16F
+        const size_t beauty_size = static_cast<size_t>(width) * height * kBeautyBytesPerPixel; // RGBA32F
+        const size_t aux_size = static_cast<size_t>(width) * height * kAuxBytesPerPixel;    // RGBA16F
 
         oidn_->beauty_buf = oidn_->device.newBuffer(beauty_size);
         oidn_->albedo_buf = oidn_->device.newBuffer(aux_size);
@@ -75,13 +78,13 @@ namespace himalaya::framework {
         oidn_->output_buf = oidn_->device.newBuffer(beauty_size);
 
         oidn_->filter.setImage("color", oidn_->beauty_buf, oidn::Format::Float3,
-                               width, height, 0, 16, 0);
+                               width, height, 0, kBeautyBytesPerPixel, 0);
         oidn_->filter.setImage("albedo", oidn_->albedo_buf, oidn::Format::Half3,
-                               width, height, 0, 8, 0);
+                               width, height, 0, kAuxBytesPerPixel, 0);
         oidn_->filter.setImage("normal", oidn_->normal_buf, oidn::Format::Half3,
-                               width, height, 0, 8, 0);
+                               width, height, 0, kAuxBytesPerPixel, 0);
         oidn_->filter.setImage("output", oidn_->output_buf, oidn::Format::Float3,
-                               width, height, 0, 16, 0);
+                               width, height, 0, kBeautyBytesPerPixel, 0);
         oidn_->filter.commit();
 
         // ---- Vulkan staging buffers ----
@@ -187,8 +190,8 @@ namespace himalaya::framework {
             vmaInvalidateAllocation(vma, rb_albedo_alloc, 0, VK_WHOLE_SIZE);
             vmaInvalidateAllocation(vma, rb_normal_alloc, 0, VK_WHOLE_SIZE);
 
-            const size_t beauty_size = static_cast<size_t>(w) * h * 16;
-            const size_t aux_size = static_cast<size_t>(w) * h * 8;
+            const size_t beauty_size = static_cast<size_t>(w) * h * kBeautyBytesPerPixel;
+            const size_t aux_size = static_cast<size_t>(w) * h * kAuxBytesPerPixel;
 
             // Copy Vulkan staging → OIDN buffers
             impl->beauty_buf.write(0, beauty_size, readback_beauty_ptr);
@@ -259,8 +262,8 @@ namespace himalaya::framework {
         create_staging_buffers(rm, width, height);
 
         // Rebuild OIDN buffers and reconfigure filter for new resolution
-        const size_t beauty_size = static_cast<size_t>(width) * height * 16;
-        const size_t aux_size = static_cast<size_t>(width) * height * 8;
+        const size_t beauty_size = static_cast<size_t>(width) * height * kBeautyBytesPerPixel;
+        const size_t aux_size = static_cast<size_t>(width) * height * kAuxBytesPerPixel;
 
         oidn_->beauty_buf = oidn_->device.newBuffer(beauty_size);
         oidn_->albedo_buf = oidn_->device.newBuffer(aux_size);
@@ -268,13 +271,13 @@ namespace himalaya::framework {
         oidn_->output_buf = oidn_->device.newBuffer(beauty_size);
 
         oidn_->filter.setImage("color", oidn_->beauty_buf, oidn::Format::Float3,
-                               width, height, 0, 16, 0);
+                               width, height, 0, kBeautyBytesPerPixel, 0);
         oidn_->filter.setImage("albedo", oidn_->albedo_buf, oidn::Format::Half3,
-                               width, height, 0, 8, 0);
+                               width, height, 0, kAuxBytesPerPixel, 0);
         oidn_->filter.setImage("normal", oidn_->normal_buf, oidn::Format::Half3,
-                               width, height, 0, 8, 0);
+                               width, height, 0, kAuxBytesPerPixel, 0);
         oidn_->filter.setImage("output", oidn_->output_buf, oidn::Format::Float3,
-                               width, height, 0, 16, 0);
+                               width, height, 0, kBeautyBytesPerPixel, 0);
         oidn_->filter.commit();
     }
 
@@ -321,8 +324,8 @@ namespace himalaya::framework {
 
     void Denoiser::create_staging_buffers(rhi::ResourceManager &rm,
                                           const uint32_t w, const uint32_t h) {
-        const uint64_t beauty_size = static_cast<uint64_t>(w) * h * 16; // RGBA32F
-        const uint64_t aux_size = static_cast<uint64_t>(w) * h * 8;    // RGBA16F
+        const uint64_t beauty_size = static_cast<uint64_t>(w) * h * kBeautyBytesPerPixel;
+        const uint64_t aux_size = static_cast<uint64_t>(w) * h * kAuxBytesPerPixel;
 
         // Readback: GPU → CPU (GpuToCpu for host-readable after vkCmdCopyImageToBuffer)
         readback_beauty_ = rm.create_buffer(
