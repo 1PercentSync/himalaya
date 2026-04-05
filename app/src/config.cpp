@@ -74,6 +74,9 @@ namespace himalaya::app {
             if (json.contains("log_level") && json["log_level"].is_string()) {
                 config.log_level = json["log_level"].get<std::string>();
             }
+            if (json.contains("auto_denoise_interval") && json["auto_denoise_interval"].is_number_unsigned()) {
+                config.auto_denoise_interval = json["auto_denoise_interval"].get<uint32_t>();
+            }
             if (json.contains("hdr_sun_coords") && json["hdr_sun_coords"].is_object()) {
                 for (auto& [key, val] : json["hdr_sun_coords"].items()) {
                     if (val.is_array() && val.size() == 2
@@ -109,6 +112,9 @@ namespace himalaya::app {
                 j["env_path"] = config.env_path;
                 if (!config.log_level.empty()) {
                     j["log_level"] = config.log_level;
+                }
+                if (config.auto_denoise_interval > 0) {
+                    j["auto_denoise_interval"] = config.auto_denoise_interval;
                 }
                 nlohmann::json coords = nlohmann::json::object();
                 for (const auto& [hdr_path, xy] : config.hdr_sun_coords) {

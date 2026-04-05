@@ -83,6 +83,10 @@ namespace himalaya::app {
                        imgui_backend_,
                        config_.env_path);
 
+        if (config_.auto_denoise_interval > 0) {
+            renderer_.auto_denoise_interval() = config_.auto_denoise_interval;
+        }
+
         // --- Scene loading (uses Renderer's default resources) ---
         // Scene failure → empty scene (0 instances), skybox still renders if HDR loaded.
         if (!config_.scene_path.empty()) {
@@ -534,6 +538,12 @@ namespace himalaya::app {
             const auto level = static_cast<spdlog::level::level_enum>(actions.new_log_level);
             const auto sv = spdlog::level::to_string_view(level);
             config_.log_level = std::string(sv.data(), sv.size());
+            save_config(config_);
+        }
+
+        if (const auto interval = renderer_.auto_denoise_interval();
+            interval != config_.auto_denoise_interval) {
+            config_.auto_denoise_interval = interval;
             save_config(config_);
         }
 

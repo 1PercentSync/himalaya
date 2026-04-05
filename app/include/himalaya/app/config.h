@@ -41,6 +41,13 @@ namespace himalaya::app {
          * the compile-time default (warn).
          */
         std::string log_level;
+
+        /**
+         * @brief Auto denoise interval (samples between OIDN triggers).
+         *
+         * 0 means no user override — Renderer uses its built-in default (64).
+         */
+        uint32_t auto_denoise_interval = 0;
     };
 
     /**
