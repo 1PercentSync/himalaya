@@ -277,14 +277,6 @@ namespace himalaya::app {
                 }
                 ImGui::EndDisabled();
 
-                // Status text
-                ImGui::SameLine();
-                if (ctx.denoise_state == framework::DenoiseState::Idle) {
-                    ImGui::TextDisabled("Idle");
-                } else {
-                    ImGui::Text("Denoising...");
-                }
-
                 // Last denoised info
                 if (ctx.last_denoised_sample_count > 0) {
                     ImGui::Text("Last denoised at: %u samples", ctx.last_denoised_sample_count);
