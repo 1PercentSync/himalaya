@@ -205,6 +205,45 @@ namespace himalaya::app {
             actions.new_log_level = current_log_level;
         }
 
+        // Path Tracing controls (visible only in PT mode)
+        if (ctx.render_mode == framework::RenderMode::PathTracing) {
+            ImGui::Separator();
+            if (ImGui::CollapsingHeader("Path Tracing", ImGuiTreeNodeFlags_DefaultOpen)) {
+                // Status line
+                if (ctx.pt_target_samples > 0) {
+                    ImGui::Text("Samples: %u / %u", ctx.pt_sample_count, ctx.pt_target_samples);
+                } else {
+                    ImGui::Text("Samples: %u", ctx.pt_sample_count);
+                }
+                ImGui::SameLine();
+                ImGui::Text("  Time: %.1fs", static_cast<double>(ctx.pt_elapsed_time));
+
+                // Max Bounces slider (1-32)
+                auto bounces = static_cast<int>(ctx.pt_max_bounces);
+                if (ImGui::SliderInt("Max Bounces", &bounces, 1, 32)) {
+                    ctx.pt_max_bounces = static_cast<uint32_t>(bounces);
+                }
+
+                // Firefly Clamp slider (0 = Off)
+                slider_float_deferred("Firefly Clamp", &ctx.pt_max_clamp,
+                                      0.0f, 100.0f, "%.1f");
+                if (ctx.pt_max_clamp == 0.0f && ImGui::IsItemHovered()) {
+                    ImGui::SetTooltip("Firefly clamping disabled");
+                }
+
+                // Target Samples input (0 = unlimited)
+                ImGui::InputScalar("Target Samples", ImGuiDataType_U32, &ctx.pt_target_samples);
+                if (ImGui::IsItemHovered()) {
+                    ImGui::SetTooltip("0 = unlimited");
+                }
+
+                // Reset button
+                if (ImGui::Button("Reset")) {
+                    actions.pt_reset_requested = true;
+                }
+            }
+        }
+
         // Camera section
         ImGui::Separator();
         if (ImGui::CollapsingHeader("Camera")) {
