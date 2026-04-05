@@ -24,6 +24,8 @@ namespace himalaya::rhi {
      */
     class ShaderCompiler {
     public:
+        virtual ~ShaderCompiler() = default;
+
         /**
          * @brief Sets the root directory for resolving @c \#include directives.
          *
@@ -46,7 +48,7 @@ namespace himalaya::rhi {
          * @param stage Target shader stage.
          * @return SPIR-V bytecode as uint32_t words, or empty vector on failure.
          */
-        [[nodiscard]] std::vector<uint32_t> compile_from_file(
+        [[nodiscard]] virtual std::vector<uint32_t> compile_from_file(
             const std::string &path,
             ShaderStage stage);
 
