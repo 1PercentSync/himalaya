@@ -691,6 +691,10 @@ namespace himalaya::app {
             if (ImGui::Button("Clear IBL Cache")) {
                 framework::clear_cache("ibl");
             }
+            if (ImGui::Button("Clear Shader Cache")) {
+                framework::clear_cache("shader_debug");
+                framework::clear_cache("shader_release");
+            }
             ImGui::Spacing();
             if (ImGui::Button("Clear All Cache")) {
                 framework::clear_all_cache();
