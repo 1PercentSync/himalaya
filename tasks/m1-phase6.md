@@ -162,7 +162,7 @@
 - [x] 新增 `framework/cached_shader_compiler.cpp`：磁盘缓存加载（读 .meta JSON 验证 include hash + 读 .spv binary）
 - [x] `framework/cached_shader_compiler.cpp`：磁盘缓存写入（编译后通过 `find_cache_entry()` 取 include 列表，写 .spv + .meta）
 - [x] `framework/CMakeLists.txt`：添加 `cached_shader_compiler.cpp` 源文件（需用户确认构建配置）
-- [ ] `app/renderer.h`：成员类型 `rhi::ShaderCompiler` → `framework::CachedShaderCompiler`
+- [x] `app/renderer.h`：成员类型 `rhi::ShaderCompiler` → `framework::CachedShaderCompiler`
 - [ ] `app/renderer_init.cpp`：`set_include_path()` 后添加 `set_cache_category()`（Debug: `"shader_debug"`，Release: `"shader_release"`）
 
 ## Step 11：Environment Map Importance Sampling

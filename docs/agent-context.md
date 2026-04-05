@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 10.5 前八小项已完成（rhi 重构 + framework CachedShaderCompiler），进入第九小项（renderer.h 成员类型替换）
+Step 10.5 前九小项已完成，进入最后一小项（renderer_init.cpp set_cache_category 调用）
 
 ---
 
