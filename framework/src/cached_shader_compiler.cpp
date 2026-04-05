@@ -39,6 +39,19 @@ namespace himalaya::framework {
         return content_hash(composite.data(), composite.size());
     }
 
+    // Reads a file in text mode and hashes the content.
+    // Text mode matches how shaderc's FileIncluder reads includes (\r\n → \n on Windows),
+    // so the hash is consistent with the compile-time captured content.
+    static std::string text_mode_content_hash(const std::filesystem::path &file) {
+        std::ifstream ifs(file);
+        if (!ifs) {
+            return {};
+        }
+        const std::string content{std::istreambuf_iterator<char>(ifs),
+                                  std::istreambuf_iterator<char>()};
+        return content_hash(content.data(), content.size());
+    }
+
     // Validates .meta include hashes against current files on disk.
     // Returns true if all includes match, false on any mismatch or read failure.
     static bool validate_meta_includes(const nlohmann::json &meta, const std::filesystem::path &include_root) {
@@ -52,7 +65,7 @@ namespace himalaya::framework {
             }
             const auto rel_path = entry["path"].template get<std::string>();
             const auto expected_hash = entry["hash"].template get<std::string>();
-            const auto current_hash = content_hash(include_root / rel_path);
+            const auto current_hash = text_mode_content_hash(include_root / rel_path);
             return !current_hash.empty() && current_hash == expected_hash;
         });
     }
