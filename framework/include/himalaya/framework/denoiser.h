@@ -207,6 +207,10 @@ namespace himalaya::framework {
 
         // ---- State machine ----
         std::atomic<DenoiseState> state_{DenoiseState::Idle};
+
+        // Not atomic: only accessed on the main thread (request_denoise writes,
+        // poll_upload_ready reads). The background thread never touches it.
+        // Visibility is guaranteed by state_'s acquire/release ordering.
         uint32_t trigger_generation_ = 0;
 
         // ---- Background thread ----
