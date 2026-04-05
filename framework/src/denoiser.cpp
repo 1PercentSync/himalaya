@@ -12,7 +12,7 @@
 
 namespace himalaya::framework {
     constexpr size_t kBeautyBytesPerPixel = 16; // RGBA32F
-    constexpr size_t kAuxBytesPerPixel = 8;     // RGBA16F
+    constexpr size_t kAuxBytesPerPixel = 8; // RGBA16F
 
     /** @brief PIMPL holding all OIDN objects, hidden from the header. */
     struct Denoiser::OidnImpl {
@@ -27,6 +27,7 @@ namespace himalaya::framework {
     // Destructor must be defined in the .cpp where OidnImpl is complete
     // so unique_ptr's deleter can see the full type.
     Denoiser::Denoiser() = default;
+
     Denoiser::~Denoiser() = default;
 
     void Denoiser::init(const rhi::Context &ctx, rhi::ResourceManager &rm, const uint32_t width,
@@ -70,7 +71,7 @@ namespace himalaya::framework {
 
         // ---- OIDN buffers (device-managed, host-accessible) ----
         const size_t beauty_size = static_cast<size_t>(width) * height * kBeautyBytesPerPixel; // RGBA32F
-        const size_t aux_size = static_cast<size_t>(width) * height * kAuxBytesPerPixel;    // RGBA16F
+        const size_t aux_size = static_cast<size_t>(width) * height * kAuxBytesPerPixel; // RGBA16F
 
         oidn_->beauty_buf = oidn_->device.newBuffer(beauty_size);
         oidn_->albedo_buf = oidn_->device.newBuffer(aux_size);
@@ -162,8 +163,8 @@ namespace himalaya::framework {
             wait_info.pSemaphores = &semaphore;
             wait_info.pValues = &wait_value;
 
-            constexpr uint64_t kWaitTimeoutNs = 100'000'000; // 100 ms
             for (;;) {
+                constexpr uint64_t kWaitTimeoutNs = 100'000'000;
                 const VkResult result = vkWaitSemaphores(vk_device, &wait_info, kWaitTimeoutNs);
                 if (result == VK_SUCCESS) {
                     break;
@@ -261,7 +262,8 @@ namespace himalaya::framework {
         destroy_staging_buffers(rm);
         create_staging_buffers(rm, width, height);
 
-        // Rebuild OIDN buffers and reconfigure filter for new resolution
+        // Rebuild OIDN buffers and reconfigure filter for new resolution.
+        // Assignment to BufferRef releases the old buffer via reference counting.
         const size_t beauty_size = static_cast<size_t>(width) * height * kBeautyBytesPerPixel;
         const size_t aux_size = static_cast<size_t>(width) * height * kAuxBytesPerPixel;
 
