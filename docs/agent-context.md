@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 10 前五小项完成，进入第六小项（Application 响应 PT actions）
+Step 10 全部完成，进入 Step 11 第一小项
 
 ---
 
