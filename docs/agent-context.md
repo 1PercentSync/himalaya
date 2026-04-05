@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段六 — RT 基础设施 + PT 参考视图（规划完成，待实现）
-- **进度**：Step 8 已完成，进入 Step 9
+- **进度**：Step 9 已完成，进入 Step 10
 
 ### 下一个任务
 
-Step 9 已完成，进入 Step 10 第一小项
+Step 10 第一小项完成（DebugUIContext PT 字段），进入第二小项（DebugUIActions 新增 PT actions）
 
 ---
 
