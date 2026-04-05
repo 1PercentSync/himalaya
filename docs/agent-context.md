@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 10.5 前九小项已完成，进入最后一小项（renderer_init.cpp set_cache_category 调用）
+Step 10.5 全部完成（Shader 磁盘缓存），进入 Step 11（Environment Map Importance Sampling）
 
 ---
 
