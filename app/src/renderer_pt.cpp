@@ -99,11 +99,11 @@ namespace himalaya::app {
             denoiser_.state() == framework::DenoiseState::Idle &&
             denoise_enabled_ && show_denoised_ && sample_count > 0) {
             const bool auto_trigger = auto_denoise_ &&
-                                      (sample_count - last_denoised_sample_count_ >= auto_denoise_interval_);
+                                      (sample_count - last_denoise_trigger_sample_count_ >= auto_denoise_interval_);
             const bool manual_trigger = manual_denoise_requested_;
             manual_denoise_requested_ = false;
             if (auto_trigger || manual_trigger) {
-                last_denoised_sample_count_ = sample_count;
+                last_denoise_trigger_sample_count_ = sample_count;
                 denoiser_.request_denoise(accumulation_generation_);
             }
         }

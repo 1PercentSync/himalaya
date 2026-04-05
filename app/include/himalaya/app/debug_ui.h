@@ -158,7 +158,7 @@ namespace himalaya::app {
         framework::DenoiseState denoise_state;
 
         /** @brief Sample count at which the last denoise was triggered (read-only display). */
-        uint32_t last_denoised_sample_count;
+        uint32_t last_denoise_trigger_sample_count;
 
         // --- Render params (controls) ---
 

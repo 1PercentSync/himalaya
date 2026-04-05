@@ -222,7 +222,7 @@ namespace himalaya::app {
         reference_view_pass_.reset_accumulation();
         ++accumulation_generation_;
         denoised_generation_ = UINT32_MAX;
-        last_denoised_sample_count_ = 0;
+        last_denoise_trigger_sample_count_ = 0;
         pt_start_time_ = std::chrono::steady_clock::now();
     }
 
@@ -252,7 +252,7 @@ namespace himalaya::app {
         return denoiser_.state();
     }
 
-    uint32_t Renderer::last_denoised_sample_count() const {
-        return last_denoised_sample_count_;
+    uint32_t Renderer::last_denoise_trigger_sample_count() const {
+        return last_denoise_trigger_sample_count_;
     }
 } // namespace himalaya::app

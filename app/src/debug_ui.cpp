@@ -278,8 +278,8 @@ namespace himalaya::app {
                 ImGui::EndDisabled();
 
                 // Last denoised info
-                if (ctx.last_denoised_sample_count > 0) {
-                    ImGui::Text("Last triggered at: %u samples", ctx.last_denoised_sample_count);
+                if (ctx.last_denoise_trigger_sample_count > 0) {
+                    ImGui::Text("Last triggered at: %u samples", ctx.last_denoise_trigger_sample_count);
                 }
             }
         }

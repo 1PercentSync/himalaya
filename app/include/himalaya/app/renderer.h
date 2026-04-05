@@ -290,7 +290,7 @@ namespace himalaya::app {
         [[nodiscard]] framework::DenoiseState denoise_state() const;
 
         /** @brief Returns sample count at last denoise trigger. */
-        [[nodiscard]] uint32_t last_denoised_sample_count() const;
+        [[nodiscard]] uint32_t last_denoise_trigger_sample_count() const;
 
     private:
         // --- Subsystem references (non-owning, set during init) ---
@@ -441,7 +441,7 @@ namespace himalaya::app {
         uint32_t auto_denoise_interval_ = 64;
 
         /** @brief Sample count at which the last denoise was triggered (for interval calculation). */
-        uint32_t last_denoised_sample_count_ = 0;
+        uint32_t last_denoise_trigger_sample_count_ = 0;
 
         /** @brief Display denoised result (true) or raw accumulation (false). */
         bool show_denoised_ = true;
