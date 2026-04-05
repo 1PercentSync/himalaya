@@ -156,8 +156,8 @@
 
 - [x] `rhi/shader.h` 重构：添加 `virtual ~ShaderCompiler() = default;`，`compile_from_file()` 加 `virtual`
 - [x] `rhi/shader.h` 重构：`CacheEntry` 结构体和 `compile()` 从 private 移到 protected
-- [ ] `rhi/shader.h` 重构：新增 protected 访问器 `include_path()` + `find_cache_entry(source, stage)`
-- [ ] `rhi/shader.cpp`：实现 `find_cache_entry()`（通过 `make_cache_key` 查 `cache_` map）
+- [x] `rhi/shader.h` 重构：新增 protected 访问器 `include_path()` + `find_cache_entry(source, stage)`
+- [x] `rhi/shader.cpp`：实现 `find_cache_entry()`（通过 `make_cache_key` 查 `cache_` map）
 - [ ] 新增 `framework/cached_shader_compiler.h`：`CachedShaderCompiler : public rhi::ShaderCompiler`，`set_cache_category()` + override `compile_from_file()`
 - [ ] 新增 `framework/cached_shader_compiler.cpp`：磁盘缓存加载（读 .meta JSON 验证 include hash + 读 .spv binary）
 - [ ] `framework/cached_shader_compiler.cpp`：磁盘缓存写入（编译后通过 `find_cache_entry()` 取 include 列表，写 .spv + .meta）

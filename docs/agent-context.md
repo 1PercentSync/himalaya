@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 10.5 前两小项已完成，进入第三小项（新增 protected 访问器 include_path() + find_cache_entry()）
+Step 10.5 rhi 重构全部完成（4 小项），进入第五小项（新增 framework/cached_shader_compiler.h）
 
 ---
 
