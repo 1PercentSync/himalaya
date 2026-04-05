@@ -490,6 +490,14 @@ namespace himalaya::app {
         // --- Private helpers ---
 
         /**
+         * @brief Resets PT accumulation state: sample count, generation, denoise bookkeeping.
+         *
+         * Called on camera move, IBL rotation change, resize, environment reload,
+         * and denoise abort. Centralizes the 4-field reset pattern.
+         */
+        void reset_pt_accumulation();
+
+        /**
          * @brief Fills GlobalUBO and LightBuffer for the current frame.
          *
          * Shared by both rasterization and path tracing paths. Writes all UBO

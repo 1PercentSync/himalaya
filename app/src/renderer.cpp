@@ -206,6 +206,10 @@ namespace himalaya::app {
 
     void Renderer::abort_denoise() {
         denoiser_.abort();
+        reset_pt_accumulation();
+    }
+
+    void Renderer::reset_pt_accumulation() {
         upload_pending_completion_ = false;
         reference_view_pass_.reset_accumulation();
         ++accumulation_generation_;

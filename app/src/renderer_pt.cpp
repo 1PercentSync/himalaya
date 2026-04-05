@@ -71,9 +71,7 @@ namespace himalaya::app {
         if (input.camera.view_projection != prev_pt_view_projection_ ||
             input.ibl_rotation_sin != prev_pt_ibl_rotation_sin_ ||
             input.ibl_rotation_cos != prev_pt_ibl_rotation_cos_) {
-            reference_view_pass_.reset_accumulation();
-            ++accumulation_generation_;
-            last_denoised_sample_count_ = 0;
+            reset_pt_accumulation();
         }
         prev_pt_view_projection_ = input.camera.view_projection;
         prev_pt_ibl_rotation_sin_ = input.ibl_rotation_sin;
