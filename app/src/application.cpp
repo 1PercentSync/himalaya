@@ -536,6 +536,14 @@ namespace himalaya::app {
             config_.log_level = std::string(sv.data(), sv.size());
             save_config(config_);
         }
+
+        if (actions.pt_reset_requested) {
+            renderer_.request_pt_reset();
+        }
+
+        if (actions.pt_denoise_requested) {
+            renderer_.request_manual_denoise();
+        }
     }
 
     void Application::render() {

@@ -80,7 +80,9 @@ namespace himalaya::app {
             input.ibl_rotation_cos != prev_pt_ibl_rotation_cos_ ||
             light_count != prev_pt_light_count_ ||
             light_dir_intensity != prev_pt_light_dir_intensity_ ||
-            light_color_shadow != prev_pt_light_color_shadow_) {
+            light_color_shadow != prev_pt_light_color_shadow_ ||
+            max_bounces_ != prev_max_bounces_ ||
+            max_clamp_ != prev_max_clamp_) {
             reset_pt_accumulation();
         }
         prev_pt_view_projection_ = input.camera.view_projection;
@@ -89,6 +91,8 @@ namespace himalaya::app {
         prev_pt_light_count_ = light_count;
         prev_pt_light_dir_intensity_ = light_dir_intensity;
         prev_pt_light_color_shadow_ = light_color_shadow;
+        prev_max_bounces_ = max_bounces_;
+        prev_max_clamp_ = max_clamp_;
 
         // --- Denoise trigger guard ---
         if (const uint32_t sample_count = reference_view_pass_.sample_count();
@@ -96,8 +100,9 @@ namespace himalaya::app {
             denoise_enabled_ && show_denoised_ && sample_count > 0) {
             const bool auto_trigger = auto_denoise_ &&
                                       (sample_count - last_denoised_sample_count_ >= auto_denoise_interval_);
-            // Manual trigger will be added in Step 10 (DebugUIActions::pt_denoise_requested)
-            if (auto_trigger) {
+            const bool manual_trigger = manual_denoise_requested_;
+            manual_denoise_requested_ = false;
+            if (auto_trigger || manual_trigger) {
                 last_denoised_sample_count_ = sample_count;
                 denoiser_.request_denoise(accumulation_generation_);
             }
@@ -178,7 +183,13 @@ namespace himalaya::app {
         descriptor_manager_->update_render_target(input.frame_index, 0, hdr_backing, default_sampler_);
 
         // --- Record passes ---
-        reference_view_pass_.record(render_graph_, frame_ctx);
+        reference_view_pass_.set_max_bounces(max_bounces_);
+        reference_view_pass_.set_max_clamp(max_clamp_);
+
+        // Skip accumulation when target sample count is reached
+        if (target_samples_ == 0 || reference_view_pass_.sample_count() < target_samples_) {
+            reference_view_pass_.record(render_graph_, frame_ctx);
+        }
 
         // --- Readback copy pass (after Reference View, before compile) ---
         if (denoiser_.state() == framework::DenoiseState::ReadbackPending) {

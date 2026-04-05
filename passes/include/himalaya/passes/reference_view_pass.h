@@ -86,6 +86,12 @@ namespace himalaya::passes {
         /** @brief Returns the number of samples accumulated so far. */
         [[nodiscard]] uint32_t sample_count() const;
 
+        /** @brief Sets max ray bounce depth (used in push constants). */
+        void set_max_bounces(uint32_t v);
+
+        /** @brief Sets firefly clamping threshold (0 = disabled, used in push constants). */
+        void set_max_clamp(float v);
+
     private:
         /**
          * @brief Create (or recreate) the RT pipeline.
@@ -121,6 +127,14 @@ namespace himalaya::passes {
 
         /** @brief RT pipeline (pipeline + layout + SBT). */
         rhi::RTPipeline rt_pipeline_;
+
+        // ---- PT parameters (set by Renderer, consumed in push constants) ----
+
+        /** @brief Max ray bounce depth (default 8). */
+        uint32_t max_bounces_ = 8;
+
+        /** @brief Firefly clamping threshold (default 10.0, 0 = disabled). */
+        float max_clamp_ = 10.0f;
 
         // ---- Accumulation state ----
 

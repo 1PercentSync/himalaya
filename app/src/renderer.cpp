@@ -209,6 +209,14 @@ namespace himalaya::app {
         reset_pt_accumulation();
     }
 
+    void Renderer::request_pt_reset() {
+        reset_pt_accumulation();
+    }
+
+    void Renderer::request_manual_denoise() {
+        manual_denoise_requested_ = true;
+    }
+
     void Renderer::reset_pt_accumulation() {
         upload_pending_completion_ = false;
         reference_view_pass_.reset_accumulation();

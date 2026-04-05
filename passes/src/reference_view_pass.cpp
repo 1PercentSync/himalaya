@@ -31,8 +31,7 @@ namespace himalaya::passes {
 
     static_assert(sizeof(PTPushConstants) == 20);
 
-    // ---- Default PT parameters (Step 10 will expose via ImGui) ----
-
+    // Default PT parameters (overridden at runtime via Renderer setters)
     constexpr uint32_t kDefaultMaxBounces = 8;
     constexpr float kDefaultMaxClamp = 10.0f;
 
@@ -288,11 +287,11 @@ namespace himalaya::passes {
 
                          // Push constants
                          const PTPushConstants pc{
-                             .max_bounces = kDefaultMaxBounces,
+                             .max_bounces = max_bounces_,
                              .sample_count = current_sample,
                              .frame_seed = current_seed,
                              .blue_noise_index = blue_noise_index_,
-                             .max_clamp = kDefaultMaxClamp,
+                             .max_clamp = max_clamp_,
                          };
                          cmd.push_constants(
                              rt_pipeline_.layout,
@@ -321,5 +320,13 @@ namespace himalaya::passes {
 
     uint32_t ReferenceViewPass::sample_count() const {
         return sample_count_;
+    }
+
+    void ReferenceViewPass::set_max_bounces(const uint32_t v) {
+        max_bounces_ = v;
+    }
+
+    void ReferenceViewPass::set_max_clamp(const float v) {
+        max_clamp_ = v;
     }
 } // namespace himalaya::passes

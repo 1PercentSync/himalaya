@@ -249,6 +249,12 @@ namespace himalaya::app {
         /** @brief Aborts any in-progress denoise and resets accumulation generation. */
         void abort_denoise();
 
+        /** @brief Resets PT accumulation (called from UI Reset button). */
+        void request_pt_reset();
+
+        /** @brief Requests a manual denoise trigger (consumed in next render_path_tracing). */
+        void request_manual_denoise();
+
         // --- PT parameter accessors (for DebugUIContext binding) ---
 
         /** @brief Mutable reference to max bounce depth (default 8, range 1-32). */
@@ -451,6 +457,15 @@ namespace himalaya::app {
 
         /** @brief Time point when PT accumulation (re)started, for elapsed time display. */
         std::chrono::steady_clock::time_point pt_start_time_{};
+
+        /** @brief Manual denoise trigger flag (set by UI, consumed in render_path_tracing). */
+        bool manual_denoise_requested_ = false;
+
+        /** @brief Cached max bounces from previous PT frame (change detection → reset). */
+        uint32_t prev_max_bounces_ = 8;
+
+        /** @brief Cached max clamp from previous PT frame (change detection → reset). */
+        float prev_max_clamp_ = 10.0f;
 
         /** @brief Current MSAA sample count (1 = no MSAA, default 4x). */
         uint32_t current_sample_count_ = 4;
