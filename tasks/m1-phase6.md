@@ -147,8 +147,8 @@
 
 - [x] DebugUIContext 新增 PT 字段（render_mode、rt_supported、sample_count、target_samples、max_bounces、max_clamp、elapsed_time、denoise_state、denoise 控件）
 - [x] DebugUIActions 新增 pt_reset_requested + pt_denoise_requested
-- [ ] Rendering section 新增渲染模式 combo（仅 rt_supported 时显示 PT 选项）
-- [ ] Path Tracing collapsing header：状态信息 + Max Bounces + Firefly Clamp slider（0=关闭，默认 10.0）+ Target Samples + Reset 按钮
+- [x] Rendering section 新增渲染模式 combo（仅 rt_supported 时显示 PT 选项）（Step 8 已提前实现）
+- [x] Path Tracing collapsing header：状态信息 + Max Bounces + Firefly Clamp slider（0=关闭，默认 10.0）+ Target Samples + Reset 按钮
 - [ ] OIDN collapsing header：Denoise 开关 + Show Denoised/Raw 切换（Show Raw 暂停降噪）+ Auto Denoise + Interval（最小值 16，默认 64）+ Denoise Now 按钮（`!denoise_enabled || state!=Idle || sample_count==0 || !show_denoised` 时灰掉）+ 上次降噪采样数 + 降噪状态文字（Idle/Denoising...）
 - [ ] Application 响应 PT actions
 

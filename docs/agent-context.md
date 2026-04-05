@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 10 前两小项完成，进入第三小项（Rendering section 渲染模式 combo）
+Step 10 前四小项完成（DebugUIContext/Actions/combo/PT header），进入第五小项（OIDN collapsing header）
 
 ---
 
