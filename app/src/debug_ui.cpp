@@ -209,7 +209,7 @@ namespace himalaya::app {
         // Path Tracing controls (visible only in PT mode)
         if (ctx.render_mode == framework::RenderMode::PathTracing) {
             ImGui::Separator();
-            if (ImGui::CollapsingHeader("Path Tracing", ImGuiTreeNodeFlags_DefaultOpen)) {
+            if (ImGui::CollapsingHeader("Path Tracing##settings", ImGuiTreeNodeFlags_DefaultOpen)) {
                 // Status line
                 if (ctx.pt_target_samples > 0) {
                     ImGui::Text("Samples: %u / %u", ctx.pt_sample_count, ctx.pt_target_samples);
