@@ -271,6 +271,12 @@ namespace himalaya::app {
 
         /** @brief New spdlog level enum value (valid only when log_level_changed is true). */
         int new_log_level = 0;
+
+        /** @brief True if the user clicked the PT Reset button (clear accumulation). */
+        bool pt_reset_requested = false;
+
+        /** @brief True if the user clicked the Denoise Now button (manual trigger). */
+        bool pt_denoise_requested = false;
     };
 
     /**
