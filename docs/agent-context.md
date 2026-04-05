@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 10 第一小项完成（DebugUIContext PT 字段），进入第二小项（DebugUIActions 新增 PT actions）
+Step 10 前两小项完成，进入第三小项（Rendering section 渲染模式 combo）
 
 ---
 
