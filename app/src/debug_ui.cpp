@@ -7,6 +7,7 @@
 
 #include <himalaya/framework/cache.h>
 #include <himalaya/framework/camera.h>
+#include <himalaya/framework/denoiser.h>    // DenoiseState
 #include <himalaya/framework/scene_data.h>  // RenderMode
 #include <himalaya/rhi/context.h>
 #include <himalaya/rhi/swapchain.h>
@@ -240,6 +241,52 @@ namespace himalaya::app {
                 // Reset button
                 if (ImGui::Button("Reset")) {
                     actions.pt_reset_requested = true;
+                }
+            }
+
+            // OIDN Denoiser controls
+            if (ImGui::CollapsingHeader("Denoiser (OIDN)", ImGuiTreeNodeFlags_DefaultOpen)) {
+                ImGui::Checkbox("Denoise", &ctx.denoise_enabled);
+
+                ImGui::Checkbox("Show Denoised", &ctx.show_denoised);
+
+                ImGui::Checkbox("Auto Denoise", &ctx.auto_denoise);
+                if (ctx.auto_denoise) {
+                    ImGui::SameLine();
+                    ImGui::SetNextItemWidth(80.0f);
+                    auto interval = static_cast<int>(ctx.auto_denoise_interval);
+                    if (ImGui::InputInt("##Interval", &interval, 0, 0)) {
+                        if (interval < 16) { interval = 16; }
+                        ctx.auto_denoise_interval = static_cast<uint32_t>(interval);
+                    }
+                    if (ImGui::IsItemHovered()) {
+                        ImGui::SetTooltip("Denoise every N samples (min 16)");
+                    }
+                }
+
+                // Denoise Now button
+                const bool denoise_disabled =
+                    !ctx.denoise_enabled ||
+                    ctx.denoise_state != framework::DenoiseState::Idle ||
+                    ctx.pt_sample_count == 0 ||
+                    !ctx.show_denoised;
+                ImGui::BeginDisabled(denoise_disabled);
+                if (ImGui::Button("Denoise Now")) {
+                    actions.pt_denoise_requested = true;
+                }
+                ImGui::EndDisabled();
+
+                // Status text
+                ImGui::SameLine();
+                if (ctx.denoise_state == framework::DenoiseState::Idle) {
+                    ImGui::TextDisabled("Idle");
+                } else {
+                    ImGui::Text("Denoising...");
+                }
+
+                // Last denoised info
+                if (ctx.last_denoised_sample_count > 0) {
+                    ImGui::Text("Last denoised at: %u samples", ctx.last_denoised_sample_count);
                 }
             }
         }
