@@ -139,7 +139,12 @@ namespace himalaya::framework {
             wait_info.semaphoreCount = 1;
             wait_info.pSemaphores = &semaphore;
             wait_info.pValues = &wait_value;
-            vkWaitSemaphores(vk_device, &wait_info, UINT64_MAX);
+            if (const VkResult result = vkWaitSemaphores(vk_device, &wait_info, UINT64_MAX);
+                result != VK_SUCCESS) {
+                spdlog::error("OIDN: vkWaitSemaphores failed ({})", static_cast<int>(result));
+                state_ptr->store(DenoiseState::Idle, std::memory_order_release);
+                return;
+            }
 
             // Invalidate readback buffers for CPU cache coherency.
             // GpuToCpu memory may be HOST_CACHED but not HOST_COHERENT
