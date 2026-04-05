@@ -45,10 +45,6 @@ namespace himalaya::app {
                                                                     VK_IMAGE_LAYOUT_GENERAL,
                                                                     accum_has_data);
 
-        // Update Set 2 binding 0 to point to accumulation buffer for Tonemapping sampling
-        const auto accum_backing = render_graph_.get_managed_backing_image(managed_pt_accumulation_);
-        descriptor_manager_->update_render_target(input.frame_index, 0, accum_backing, default_sampler_);
-
         // Aux images are fully overwritten each frame (bounce 0 imageStore)
         const auto aux_albedo_resource = render_graph_.use_managed_image(managed_pt_aux_albedo_,
                                                                          VK_IMAGE_LAYOUT_GENERAL,
@@ -152,14 +148,17 @@ namespace himalaya::app {
         // buffer content will be valid after GPU executes, safe to display.
         const bool upload_committed = upload_pending_completion_ &&
                                       pending_denoised_generation_ == accumulation_generation_;
-        if (want_display && (denoised_generation_ == accumulation_generation_ || upload_committed)
-            && denoised_resource.valid()) {
+        const bool use_denoised = want_display
+                                  && (denoised_generation_ == accumulation_generation_ || upload_committed)
+                                  && denoised_resource.valid();
+        if (use_denoised) {
             frame_ctx.hdr_color = denoised_resource;
-
-            const auto denoised_backing = render_graph_.get_managed_backing_image(managed_denoised_);
-            descriptor_manager_->update_render_target(input.frame_index, 0,
-                                                      denoised_backing, default_sampler_);
         }
+
+        // Update Set 2 binding 0 once with the final tonemapping source
+        const auto hdr_backing = render_graph_.get_managed_backing_image(
+            use_denoised ? managed_denoised_ : managed_pt_accumulation_);
+        descriptor_manager_->update_render_target(input.frame_index, 0, hdr_backing, default_sampler_);
 
         // --- Record passes ---
         reference_view_pass_.record(render_graph_, frame_ctx);
