@@ -143,15 +143,32 @@ namespace himalaya::framework {
 
         std::atomic<DenoiseState> *state_ptr = &state_;
 
-        thread_ = std::jthread([=](const std::stop_token &) {
-            // Wait for GPU readback copy to complete
+        thread_ = std::jthread([=](const std::stop_token &stop) {
+            // Wait for GPU readback copy to complete.
+            // Use a bounded timeout loop so jthread stop requests (from
+            // join_and_idle / destroy) can break out even if the driver
+            // never signals (e.g. device lost without returning an error).
             VkSemaphoreWaitInfo wait_info{};
             wait_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO;
             wait_info.semaphoreCount = 1;
             wait_info.pSemaphores = &semaphore;
             wait_info.pValues = &wait_value;
-            if (const VkResult result = vkWaitSemaphores(vk_device, &wait_info, UINT64_MAX);
-                result != VK_SUCCESS) {
+
+            constexpr uint64_t kWaitTimeoutNs = 100'000'000; // 100 ms
+            for (;;) {
+                const VkResult result = vkWaitSemaphores(vk_device, &wait_info, kWaitTimeoutNs);
+                if (result == VK_SUCCESS) {
+                    break;
+                }
+                if (result == VK_TIMEOUT) {
+                    if (stop.stop_requested()) {
+                        spdlog::warn("OIDN: denoise thread cancelled during semaphore wait");
+                        state_ptr->store(DenoiseState::Idle, std::memory_order_release);
+                        return;
+                    }
+                    continue; // retry
+                }
+                // Any other error (e.g. VK_ERROR_DEVICE_LOST)
                 spdlog::error("OIDN: vkWaitSemaphores failed ({})", static_cast<int>(result));
                 state_ptr->store(DenoiseState::Idle, std::memory_order_release);
                 return;
