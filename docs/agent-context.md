@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 10.5 第五小项已完成（header），进入第六小项（cached_shader_compiler.cpp 磁盘缓存加载）
+Step 10.5 前八小项已完成（rhi 重构 + framework CachedShaderCompiler），进入第九小项（renderer.h 成员类型替换）
 
 ---
 
