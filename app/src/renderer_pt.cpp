@@ -65,15 +65,30 @@ namespace himalaya::app {
         frame_ctx.frame_index = input.frame_index;
         frame_ctx.frame_number = frame_counter_;
 
-        // --- VP / IBL rotation comparison for accumulation reset ---
+        // --- VP / IBL rotation / light comparison for accumulation reset ---
+        const auto light_count = static_cast<uint32_t>(input.lights.size());
+        glm::vec4 light_dir_intensity{0.0f};
+        glm::vec4 light_color_shadow{0.0f};
+        if (light_count > 0) {
+            const auto &l = input.lights[0];
+            light_dir_intensity = glm::vec4(l.direction, l.intensity);
+            light_color_shadow = glm::vec4(l.color, l.cast_shadows ? 1.0f : 0.0f);
+        }
+
         if (input.camera.view_projection != prev_pt_view_projection_ ||
             input.ibl_rotation_sin != prev_pt_ibl_rotation_sin_ ||
-            input.ibl_rotation_cos != prev_pt_ibl_rotation_cos_) {
+            input.ibl_rotation_cos != prev_pt_ibl_rotation_cos_ ||
+            light_count != prev_pt_light_count_ ||
+            light_dir_intensity != prev_pt_light_dir_intensity_ ||
+            light_color_shadow != prev_pt_light_color_shadow_) {
             reset_pt_accumulation();
         }
         prev_pt_view_projection_ = input.camera.view_projection;
         prev_pt_ibl_rotation_sin_ = input.ibl_rotation_sin;
         prev_pt_ibl_rotation_cos_ = input.ibl_rotation_cos;
+        prev_pt_light_count_ = light_count;
+        prev_pt_light_dir_intensity_ = light_dir_intensity;
+        prev_pt_light_color_shadow_ = light_color_shadow;
 
         // --- Denoise trigger guard ---
         if (const uint32_t sample_count = reference_view_pass_.sample_count();
