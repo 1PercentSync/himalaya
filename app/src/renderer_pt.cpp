@@ -21,6 +21,8 @@ namespace himalaya::app {
         // --- Deferred upload completion from previous frame ---
         // complete_upload() is deferred until the next frame so the GPU has
         // actually executed the upload pass (begin_frame fence wait guarantees this).
+        // Trade-off: minimum denoise trigger interval increases from 2 to 3 frames
+        // (trigger → upload → complete/re-trigger). Negligible at interval ≥ 16.
         if (upload_pending_completion_) {
             denoiser_.complete_upload();
             denoised_generation_ = pending_denoised_generation_;
