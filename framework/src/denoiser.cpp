@@ -109,7 +109,10 @@ namespace himalaya::framework {
         auto *filter = static_cast<oidn::FilterRef *>(oidn_filter_);
         auto *oidn_dev = static_cast<oidn::DeviceRef *>(oidn_device_);
 
-        // Mapped pointers for Vulkan staging buffers (persistently mapped by VMA)
+        // Mapped pointers for Vulkan staging buffers (persistently mapped by VMA).
+        // SAFETY: these raw pointers are valid for the lifetime of their VmaAllocation.
+        // All paths that destroy staging buffers (on_resize, destroy) call join_and_idle()
+        // first, ensuring the thread has finished before any pointer becomes dangling.
         const auto &rb_beauty_data = rm_->get_buffer(readback_beauty_);
         const auto &rb_albedo_data = rm_->get_buffer(readback_albedo_);
         const auto &rb_normal_data = rm_->get_buffer(readback_normal_);
@@ -301,6 +304,10 @@ namespace himalaya::framework {
     uint32_t Denoiser::width() const { return width_; }
     uint32_t Denoiser::height() const { return height_; }
 
+    // INVARIANT: must be called before destroying staging buffers or OIDN resources.
+    // The background thread captures raw mapped pointers and OIDN object pointers
+    // that become dangling after destruction. All callers (on_resize, destroy, abort)
+    // call this first.
     void Denoiser::join_and_idle() {
         thread_ = {};
         state_.store(DenoiseState::Idle, std::memory_order_release);
