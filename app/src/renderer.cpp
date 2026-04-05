@@ -213,6 +213,7 @@ namespace himalaya::app {
         upload_pending_completion_ = false;
         reference_view_pass_.reset_accumulation();
         ++accumulation_generation_;
+        denoised_generation_ = UINT32_MAX;
         last_denoised_sample_count_ = 0;
     }
 } // namespace himalaya::app
