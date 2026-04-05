@@ -8,14 +8,9 @@
 #include <himalaya/rhi/resources.h>
 
 #include <atomic>
+#include <memory>
 #include <thread>
 #include <vulkan/vulkan.h>
-
-namespace oidn {
-    class DeviceRef;
-    class FilterRef;
-    class BufferRef;
-} // namespace oidn
 
 namespace himalaya::rhi {
     class Context;
@@ -60,6 +55,11 @@ namespace himalaya::framework {
      */
     class Denoiser {
     public:
+        Denoiser();
+        ~Denoiser();
+        Denoiser(const Denoiser &) = delete;
+        Denoiser &operator=(const Denoiser &) = delete;
+
         /**
          * @brief Initializes OIDN device, filter, staging buffers, and timeline semaphore.
          *
@@ -188,24 +188,9 @@ namespace himalaya::framework {
         VkSemaphore timeline_semaphore_ = VK_NULL_HANDLE;
         uint64_t semaphore_value_ = 0;
 
-        // ---- OIDN resources (opaque pointers to avoid header leak) ----
-        /** @brief OIDN device handle. Managed via oidn.hpp C++ wrapper. */
-        void *oidn_device_ = nullptr;
-
-        /** @brief OIDN "RT" filter handle. */
-        void *oidn_filter_ = nullptr;
-
-        /** @brief OIDN buffer for beauty input (RGBA32F). */
-        void *oidn_beauty_buf_ = nullptr;
-
-        /** @brief OIDN buffer for albedo auxiliary input (RGBA16F). */
-        void *oidn_albedo_buf_ = nullptr;
-
-        /** @brief OIDN buffer for normal auxiliary input (RGBA16F). */
-        void *oidn_normal_buf_ = nullptr;
-
-        /** @brief OIDN buffer for denoised output (RGBA32F). */
-        void *oidn_output_buf_ = nullptr;
+        // ---- OIDN resources (PIMPL to avoid oidn.hpp header leak) ----
+        struct OidnImpl;
+        std::unique_ptr<OidnImpl> oidn_;
 
         // ---- Vulkan staging buffers ----
         rhi::BufferHandle readback_beauty_{};

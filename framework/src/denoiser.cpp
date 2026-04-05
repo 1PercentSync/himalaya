@@ -11,6 +11,21 @@
 #include <spdlog/spdlog.h>
 
 namespace himalaya::framework {
+    /** @brief PIMPL holding all OIDN objects, hidden from the header. */
+    struct Denoiser::OidnImpl {
+        oidn::DeviceRef device;
+        oidn::FilterRef filter;
+        oidn::BufferRef beauty_buf;
+        oidn::BufferRef albedo_buf;
+        oidn::BufferRef normal_buf;
+        oidn::BufferRef output_buf;
+    };
+
+    // Destructor must be defined in the .cpp where OidnImpl is complete
+    // so unique_ptr's deleter can see the full type.
+    Denoiser::Denoiser() = default;
+    Denoiser::~Denoiser() = default;
+
     void Denoiser::init(const rhi::Context &ctx, rhi::ResourceManager &rm, const uint32_t width,
                         const uint32_t height) {
         device_ = ctx.device;
@@ -20,51 +35,49 @@ namespace himalaya::framework {
         height_ = height;
 
         // ---- OIDN device (GPU preferred, CPU fallback) ----
-        const auto oidn_device = new oidn::DeviceRef(oidn::newDevice());
-        oidn_device->commit();
+        oidn_ = std::make_unique<OidnImpl>();
+        oidn_->device = oidn::newDevice();
+        oidn_->device.commit();
 
-        if (const auto device_type = oidn_device->get<oidn::DeviceType>("type");
+        if (const auto device_type = oidn_->device.get<oidn::DeviceType>("type");
             device_type == oidn::DeviceType::CPU) {
             spdlog::warn("OIDN: using CPU device (~25x slower than GPU)");
         } else {
             auto type_name = "GPU";
-            if (device_type == oidn::DeviceType::CUDA) { type_name = "CUDA GPU"; } else if (
-                device_type == oidn::DeviceType::HIP) { type_name = "HIP GPU"; } else if (
-                device_type == oidn::DeviceType::SYCL) { type_name = "SYCL GPU"; }
+            if (device_type == oidn::DeviceType::CUDA) {
+                type_name = "CUDA GPU";
+            } else if (device_type == oidn::DeviceType::HIP) {
+                type_name = "HIP GPU";
+            } else if (device_type == oidn::DeviceType::SYCL) {
+                type_name = "SYCL GPU";
+            }
             spdlog::info("OIDN: using {} device", type_name);
         }
-        oidn_device_ = oidn_device;
 
         // ---- OIDN filter ("RT" with albedo + normal auxiliary) ----
-        auto *filter = new oidn::FilterRef(oidn_device->newFilter("RT"));
-        filter->set("hdr", true);
-        filter->set("cleanAux", true);
-        filter->set("quality", oidn::Quality::High);
-        oidn_filter_ = filter;
+        oidn_->filter = oidn_->device.newFilter("RT");
+        oidn_->filter.set("hdr", true);
+        oidn_->filter.set("cleanAux", true);
+        oidn_->filter.set("quality", oidn::Quality::High);
 
         // ---- OIDN buffers (device-managed, host-accessible) ----
         const size_t beauty_size = static_cast<size_t>(width) * height * 16; // RGBA32F
-        const size_t aux_size = static_cast<size_t>(width) * height * 8; // RGBA16F
+        const size_t aux_size = static_cast<size_t>(width) * height * 8;    // RGBA16F
 
-        auto *beauty_buf = new oidn::BufferRef(oidn_device->newBuffer(beauty_size));
-        auto *albedo_buf = new oidn::BufferRef(oidn_device->newBuffer(aux_size));
-        auto *normal_buf = new oidn::BufferRef(oidn_device->newBuffer(aux_size));
-        auto *output_buf = new oidn::BufferRef(oidn_device->newBuffer(beauty_size));
+        oidn_->beauty_buf = oidn_->device.newBuffer(beauty_size);
+        oidn_->albedo_buf = oidn_->device.newBuffer(aux_size);
+        oidn_->normal_buf = oidn_->device.newBuffer(aux_size);
+        oidn_->output_buf = oidn_->device.newBuffer(beauty_size);
 
-        filter->setImage("color", *beauty_buf, oidn::Format::Float3,
-                         width, height, 0, 16, 0);
-        filter->setImage("albedo", *albedo_buf, oidn::Format::Half3,
-                         width, height, 0, 8, 0);
-        filter->setImage("normal", *normal_buf, oidn::Format::Half3,
-                         width, height, 0, 8, 0);
-        filter->setImage("output", *output_buf, oidn::Format::Float3,
-                         width, height, 0, 16, 0);
-        filter->commit();
-
-        oidn_beauty_buf_ = beauty_buf;
-        oidn_albedo_buf_ = albedo_buf;
-        oidn_normal_buf_ = normal_buf;
-        oidn_output_buf_ = output_buf;
+        oidn_->filter.setImage("color", oidn_->beauty_buf, oidn::Format::Float3,
+                               width, height, 0, 16, 0);
+        oidn_->filter.setImage("albedo", oidn_->albedo_buf, oidn::Format::Half3,
+                               width, height, 0, 8, 0);
+        oidn_->filter.setImage("normal", oidn_->normal_buf, oidn::Format::Half3,
+                               width, height, 0, 8, 0);
+        oidn_->filter.setImage("output", oidn_->output_buf, oidn::Format::Float3,
+                               width, height, 0, 16, 0);
+        oidn_->filter.commit();
 
         // ---- Vulkan staging buffers ----
         create_staging_buffers(rm, width, height);
@@ -102,12 +115,7 @@ namespace himalaya::framework {
         const uint32_t w = width_;
         const uint32_t h = height_;
 
-        auto *beauty_buf = static_cast<oidn::BufferRef *>(oidn_beauty_buf_);
-        auto *albedo_buf = static_cast<oidn::BufferRef *>(oidn_albedo_buf_);
-        auto *normal_buf = static_cast<oidn::BufferRef *>(oidn_normal_buf_);
-        const auto *output_buf = static_cast<oidn::BufferRef *>(oidn_output_buf_);
-        auto *filter = static_cast<oidn::FilterRef *>(oidn_filter_);
-        auto *oidn_dev = static_cast<oidn::DeviceRef *>(oidn_device_);
+        auto *impl = oidn_.get();
 
         // Mapped pointers for Vulkan staging buffers (persistently mapped by VMA).
         // SAFETY: these raw pointers are valid for the lifetime of their VmaAllocation.
@@ -161,17 +169,17 @@ namespace himalaya::framework {
             const size_t aux_size = static_cast<size_t>(w) * h * 8;
 
             // Copy Vulkan staging → OIDN buffers
-            beauty_buf->write(0, beauty_size, readback_beauty_ptr);
-            albedo_buf->write(0, aux_size, readback_albedo_ptr);
-            normal_buf->write(0, aux_size, readback_normal_ptr);
+            impl->beauty_buf.write(0, beauty_size, readback_beauty_ptr);
+            impl->albedo_buf.write(0, aux_size, readback_albedo_ptr);
+            impl->normal_buf.write(0, aux_size, readback_normal_ptr);
 
             // Execute OIDN filter
-            filter->execute();
-            oidn_dev->sync();
+            impl->filter.execute();
+            impl->device.sync();
 
             // Check for errors
             const char *error_msg = nullptr;
-            if (const auto error = oidn_dev->getError(error_msg); error != oidn::Error::None) {
+            if (const auto error = impl->device.getError(error_msg); error != oidn::Error::None) {
                 spdlog::error("OIDN filter failed: {} ({})",
                               error_msg ? error_msg : "unknown",
                               static_cast<int>(error));
@@ -180,7 +188,7 @@ namespace himalaya::framework {
             }
 
             // Copy OIDN output → Vulkan upload staging
-            output_buf->read(0, beauty_size, upload_ptr);
+            impl->output_buf.read(0, beauty_size, upload_ptr);
 
             // Flush upload buffer for CPU cache coherency.
             // CpuToGpu memory may not be HOST_COHERENT on all platforms.
@@ -229,36 +237,23 @@ namespace himalaya::framework {
         create_staging_buffers(rm, width, height);
 
         // Rebuild OIDN buffers and reconfigure filter for new resolution
-        auto &oidn_device = *static_cast<oidn::DeviceRef *>(oidn_device_);
-        auto &filter = *static_cast<oidn::FilterRef *>(oidn_filter_);
-
         const size_t beauty_size = static_cast<size_t>(width) * height * 16;
         const size_t aux_size = static_cast<size_t>(width) * height * 8;
 
-        auto *beauty_buf = new oidn::BufferRef(oidn_device.newBuffer(beauty_size));
-        auto *albedo_buf = new oidn::BufferRef(oidn_device.newBuffer(aux_size));
-        auto *normal_buf = new oidn::BufferRef(oidn_device.newBuffer(aux_size));
-        auto *output_buf = new oidn::BufferRef(oidn_device.newBuffer(beauty_size));
+        oidn_->beauty_buf = oidn_->device.newBuffer(beauty_size);
+        oidn_->albedo_buf = oidn_->device.newBuffer(aux_size);
+        oidn_->normal_buf = oidn_->device.newBuffer(aux_size);
+        oidn_->output_buf = oidn_->device.newBuffer(beauty_size);
 
-        delete static_cast<oidn::BufferRef *>(oidn_output_buf_);
-        delete static_cast<oidn::BufferRef *>(oidn_normal_buf_);
-        delete static_cast<oidn::BufferRef *>(oidn_albedo_buf_);
-        delete static_cast<oidn::BufferRef *>(oidn_beauty_buf_);
-
-        oidn_beauty_buf_ = beauty_buf;
-        oidn_albedo_buf_ = albedo_buf;
-        oidn_normal_buf_ = normal_buf;
-        oidn_output_buf_ = output_buf;
-
-        filter.setImage("color", *beauty_buf, oidn::Format::Float3,
-                        width, height, 0, 16, 0);
-        filter.setImage("albedo", *albedo_buf, oidn::Format::Half3,
-                        width, height, 0, 8, 0);
-        filter.setImage("normal", *normal_buf, oidn::Format::Half3,
-                        width, height, 0, 8, 0);
-        filter.setImage("output", *output_buf, oidn::Format::Float3,
-                        width, height, 0, 16, 0);
-        filter.commit();
+        oidn_->filter.setImage("color", oidn_->beauty_buf, oidn::Format::Float3,
+                               width, height, 0, 16, 0);
+        oidn_->filter.setImage("albedo", oidn_->albedo_buf, oidn::Format::Half3,
+                               width, height, 0, 8, 0);
+        oidn_->filter.setImage("normal", oidn_->normal_buf, oidn::Format::Half3,
+                               width, height, 0, 8, 0);
+        oidn_->filter.setImage("output", oidn_->output_buf, oidn::Format::Float3,
+                               width, height, 0, 16, 0);
+        oidn_->filter.commit();
     }
 
     void Denoiser::abort() {
@@ -268,19 +263,8 @@ namespace himalaya::framework {
     void Denoiser::destroy() {
         join_and_idle();
 
-        // OIDN resources (release in reverse order)
-        delete static_cast<oidn::BufferRef *>(oidn_output_buf_);
-        delete static_cast<oidn::BufferRef *>(oidn_normal_buf_);
-        delete static_cast<oidn::BufferRef *>(oidn_albedo_buf_);
-        delete static_cast<oidn::BufferRef *>(oidn_beauty_buf_);
-        delete static_cast<oidn::FilterRef *>(oidn_filter_);
-        delete static_cast<oidn::DeviceRef *>(oidn_device_);
-        oidn_output_buf_ = nullptr;
-        oidn_normal_buf_ = nullptr;
-        oidn_albedo_buf_ = nullptr;
-        oidn_beauty_buf_ = nullptr;
-        oidn_filter_ = nullptr;
-        oidn_device_ = nullptr;
+        // OIDN resources — unique_ptr handles deletion
+        oidn_.reset();
 
         // Vulkan staging buffers
         if (rm_) {
@@ -316,7 +300,7 @@ namespace himalaya::framework {
     void Denoiser::create_staging_buffers(rhi::ResourceManager &rm,
                                           const uint32_t w, const uint32_t h) {
         const uint64_t beauty_size = static_cast<uint64_t>(w) * h * 16; // RGBA32F
-        const uint64_t aux_size = static_cast<uint64_t>(w) * h * 8; // RGBA16F
+        const uint64_t aux_size = static_cast<uint64_t>(w) * h * 8;    // RGBA16F
 
         // Readback: GPU → CPU (GpuToCpu for host-readable after vkCmdCopyImageToBuffer)
         readback_beauty_ = rm.create_buffer(
