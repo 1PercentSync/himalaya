@@ -52,7 +52,7 @@ namespace himalaya::rhi {
             const std::string &path,
             ShaderStage stage);
 
-    private:
+    protected:
         /**
          * @brief Compiles GLSL source code to SPIR-V bytecode.
          *
@@ -87,6 +87,7 @@ namespace himalaya::rhi {
             std::vector<std::pair<std::string, std::string>> included_files;
         };
 
+    private:
         /** @brief SPIR-V cache. Key is stage prefix + main source text. */
         std::unordered_map<std::string, CacheEntry> cache_;
 
