@@ -442,6 +442,7 @@ namespace himalaya::app {
             .auto_denoise_interval = renderer_.auto_denoise_interval(),
             .denoise_state = renderer_.denoise_state(),
             .last_denoise_trigger_sample_count = renderer_.last_denoise_trigger_sample_count(),
+            .last_denoise_duration = renderer_.last_denoise_duration(),
             .ibl_intensity = ibl_intensity_,
             .ev = ev_,
             .debug_render_mode = debug_render_mode_,

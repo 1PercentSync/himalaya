@@ -133,6 +133,9 @@ namespace himalaya::framework {
         /** @brief Returns the current denoise state (acquire semantics). */
         [[nodiscard]] DenoiseState state() const;
 
+        /** @brief Returns the wall-clock duration of the last completed OIDN filter, in seconds. 0 if none. */
+        [[nodiscard]] float last_denoise_duration() const;
+
         /**
          * @brief Handles window resize: joins thread, resets state, rebuilds staging buffers.
          *
@@ -218,5 +221,8 @@ namespace himalaya::framework {
 
         // ---- Background thread ----
         std::jthread thread_;
+
+        /** @brief Duration of the last completed OIDN filter in seconds (written by bg thread). */
+        std::atomic<float> last_denoise_duration_{0.0f};
     };
 } // namespace himalaya::framework

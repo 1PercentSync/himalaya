@@ -211,13 +211,20 @@ namespace himalaya::app {
             ImGui::Separator();
             if (ImGui::CollapsingHeader("Path Tracing##settings", ImGuiTreeNodeFlags_DefaultOpen)) {
                 // Status line
+                const bool target_reached = ctx.pt_target_samples > 0 &&
+                                            ctx.pt_sample_count >= ctx.pt_target_samples;
                 if (ctx.pt_target_samples > 0) {
                     ImGui::Text("Samples: %u / %u", ctx.pt_sample_count, ctx.pt_target_samples);
                 } else {
                     ImGui::Text("Samples: %u", ctx.pt_sample_count);
                 }
                 ImGui::SameLine();
-                ImGui::Text("  Time: %.1fs", static_cast<double>(ctx.pt_elapsed_time));
+                ImGui::Text("  Time: %.3fs", static_cast<double>(ctx.pt_elapsed_time));
+                if (target_reached && ctx.pt_sample_count > 0) {
+                    ImGui::Text("Avg: %.3f ms/sample",
+                                static_cast<double>(ctx.pt_elapsed_time) /
+                                ctx.pt_sample_count * 1000.0);
+                }
 
                 // Max Bounces slider (1-32)
                 auto bounces = static_cast<int>(ctx.pt_max_bounces);
@@ -278,9 +285,11 @@ namespace himalaya::app {
                 }
                 ImGui::EndDisabled();
 
-                // Last denoised info
+                // Last denoise info
                 if (ctx.last_denoise_trigger_sample_count > 0) {
-                    ImGui::Text("Last triggered at: %u samples", ctx.last_denoise_trigger_sample_count);
+                    ImGui::Text("Last triggered at: %u samples (%.3fs)",
+                                ctx.last_denoise_trigger_sample_count,
+                                static_cast<double>(ctx.last_denoise_duration));
                 }
             }
         }

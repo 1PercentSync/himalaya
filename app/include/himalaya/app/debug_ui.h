@@ -160,6 +160,9 @@ namespace himalaya::app {
         /** @brief Sample count at which the last denoise was triggered (read-only display). */
         uint32_t last_denoise_trigger_sample_count;
 
+        /** @brief Wall-clock duration of the last OIDN filter execution, in seconds. */
+        float last_denoise_duration;
+
         // --- Render params (controls) ---
 
         /** @brief Editable reference to the IBL environment light intensity. */

@@ -224,6 +224,7 @@ namespace himalaya::app {
         denoised_generation_ = UINT32_MAX;
         last_denoise_trigger_sample_count_ = 0;
         pt_start_time_ = std::chrono::steady_clock::now();
+        pt_finish_time_ = pt_start_time_;
     }
 
     // ---- PT parameter accessors (for DebugUIContext binding) ----
@@ -244,6 +245,10 @@ namespace himalaya::app {
         if (reference_view_pass_.sample_count() == 0) {
             return 0.0f;
         }
+        // Freeze timer when target reached
+        if (pt_finish_time_ > pt_start_time_) {
+            return std::chrono::duration<float>(pt_finish_time_ - pt_start_time_).count();
+        }
         const auto now = std::chrono::steady_clock::now();
         return std::chrono::duration<float>(now - pt_start_time_).count();
     }
@@ -254,5 +259,9 @@ namespace himalaya::app {
 
     uint32_t Renderer::last_denoise_trigger_sample_count() const {
         return last_denoise_trigger_sample_count_;
+    }
+
+    float Renderer::last_denoise_duration() const {
+        return denoiser_.last_denoise_duration();
     }
 } // namespace himalaya::app

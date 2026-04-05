@@ -292,6 +292,9 @@ namespace himalaya::app {
         /** @brief Returns sample count at last denoise trigger. */
         [[nodiscard]] uint32_t last_denoise_trigger_sample_count() const;
 
+        /** @brief Returns wall-clock duration of the last OIDN filter execution, in seconds. */
+        [[nodiscard]] float last_denoise_duration() const;
+
     private:
         // --- Subsystem references (non-owning, set during init) ---
 
@@ -457,6 +460,9 @@ namespace himalaya::app {
 
         /** @brief Time point when PT accumulation (re)started, for elapsed time display. */
         std::chrono::steady_clock::time_point pt_start_time_{};
+
+        /** @brief Time point when target samples was reached (freezes elapsed timer). Default = start (not reached). */
+        std::chrono::steady_clock::time_point pt_finish_time_{};
 
         /** @brief Manual denoise trigger flag (set by UI, consumed in render_path_tracing). */
         bool manual_denoise_requested_ = false;

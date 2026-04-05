@@ -189,6 +189,13 @@ namespace himalaya::app {
         // Skip accumulation when target sample count is reached
         if (target_samples_ == 0 || reference_view_pass_.sample_count() < target_samples_) {
             reference_view_pass_.record(render_graph_, frame_ctx);
+
+            // Record finish time on the frame that reaches the target
+            if (target_samples_ > 0 &&
+                reference_view_pass_.sample_count() >= target_samples_ &&
+                pt_finish_time_ <= pt_start_time_) {
+                pt_finish_time_ = std::chrono::steady_clock::now();
+            }
         }
 
         // --- Readback copy pass (after Reference View, before compile) ---

@@ -10,6 +10,8 @@
 #include <OpenImageDenoise/oidn.hpp>
 #include <spdlog/spdlog.h>
 
+#include <chrono>
+
 namespace himalaya::framework {
     constexpr size_t kBeautyBytesPerPixel = 16; // RGBA32F
     constexpr size_t kAuxBytesPerPixel = 8; // RGBA16F
@@ -151,6 +153,7 @@ namespace himalaya::framework {
         VmaAllocation upload_alloc = upload_data.allocation;
 
         std::atomic<DenoiseState> *state_ptr = &state_;
+        std::atomic<float> *duration_ptr = &last_denoise_duration_;
 
         thread_ = std::jthread([=](const std::stop_token &stop) {
             // Wait for GPU readback copy to complete.
@@ -199,9 +202,11 @@ namespace himalaya::framework {
             impl->albedo_buf.write(0, aux_size, readback_albedo_ptr);
             impl->normal_buf.write(0, aux_size, readback_normal_ptr);
 
-            // Execute OIDN filter
+            // Execute OIDN filter (timed)
+            const auto t0 = std::chrono::steady_clock::now();
             impl->filter.execute();
             impl->device.sync();
+            const auto t1 = std::chrono::steady_clock::now();
 
             // Check for errors
             const char *error_msg = nullptr;
@@ -212,6 +217,9 @@ namespace himalaya::framework {
                 state_ptr->store(DenoiseState::Idle, std::memory_order_release);
                 return;
             }
+
+            duration_ptr->store(std::chrono::duration<float>(t1 - t0).count(),
+                                std::memory_order_relaxed);
 
             // Copy OIDN output → Vulkan upload staging
             impl->output_buf.read(0, beauty_size, upload_ptr);
@@ -250,6 +258,10 @@ namespace himalaya::framework {
 
     DenoiseState Denoiser::state() const {
         return state_.load(std::memory_order_acquire);
+    }
+
+    float Denoiser::last_denoise_duration() const {
+        return last_denoise_duration_.load(std::memory_order_relaxed);
     }
 
     void Denoiser::on_resize(rhi::ResourceManager &rm, const uint32_t width, const uint32_t height) {
