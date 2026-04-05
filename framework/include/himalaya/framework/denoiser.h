@@ -56,8 +56,11 @@ namespace himalaya::framework {
     class Denoiser {
     public:
         Denoiser();
+
         ~Denoiser();
+
         Denoiser(const Denoiser &) = delete;
+
         Denoiser &operator=(const Denoiser &) = delete;
 
         /**
