@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 10 前四小项完成（DebugUIContext/Actions/combo/PT header），进入第五小项（OIDN collapsing header）
+Step 10 前五小项完成，进入第六小项（Application 响应 PT actions）
 
 ---
 
