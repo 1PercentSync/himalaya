@@ -155,7 +155,7 @@
 ## Step 10.5：Shader 磁盘缓存（SPIR-V 持久化）
 
 - [x] `rhi/shader.h` 重构：添加 `virtual ~ShaderCompiler() = default;`，`compile_from_file()` 加 `virtual`
-- [ ] `rhi/shader.h` 重构：`CacheEntry` 结构体和 `compile()` 从 private 移到 protected
+- [x] `rhi/shader.h` 重构：`CacheEntry` 结构体和 `compile()` 从 private 移到 protected
 - [ ] `rhi/shader.h` 重构：新增 protected 访问器 `include_path()` + `find_cache_entry(source, stage)`
 - [ ] `rhi/shader.cpp`：实现 `find_cache_entry()`（通过 `make_cache_key` 查 `cache_` map）
 - [ ] 新增 `framework/cached_shader_compiler.h`：`CachedShaderCompiler : public rhi::ShaderCompiler`，`set_cache_category()` + override `compile_from_file()`

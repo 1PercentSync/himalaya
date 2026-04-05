@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 10.5 第一小项已完成（virtual 析构 + virtual compile_from_file），进入第二小项（CacheEntry 和 compile() 移到 protected）
+Step 10.5 前两小项已完成，进入第三小项（新增 protected 访问器 include_path() + find_cache_entry()）
 
 ---
 
