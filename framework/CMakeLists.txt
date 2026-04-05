@@ -2,6 +2,7 @@ add_library(himalaya_framework STATIC)
 
 target_sources(himalaya_framework PRIVATE
         src/cache.cpp
+        src/cached_shader_compiler.cpp
         src/camera.cpp
         src/color_utils.cpp
         src/denoiser.cpp
@@ -25,6 +26,7 @@ target_include_directories(himalaya_framework PUBLIC include)
 find_package(imgui CONFIG REQUIRED)
 find_package(mikktspace CONFIG REQUIRED)
 find_package(Stb REQUIRED)
+find_package(nlohmann_json CONFIG REQUIRED)
 find_package(xxHash CONFIG REQUIRED)
 
 target_include_directories(himalaya_framework PRIVATE ${Stb_INCLUDE_DIR})
@@ -40,5 +42,5 @@ set_target_properties(oidn PROPERTIES
 
 target_link_libraries(himalaya_framework
         PUBLIC himalaya_rhi imgui::imgui
-        PRIVATE mikktspace::mikktspace xxHash::xxhash bc7enc oidn
+        PRIVATE mikktspace::mikktspace nlohmann_json::nlohmann_json xxHash::xxhash bc7enc oidn
 )
