@@ -87,6 +87,12 @@ namespace himalaya::framework {
          */
         void request_denoise(uint32_t accumulation_generation);
 
+        /** @brief Timeline semaphore signal info for vkQueueSubmit2 injection. */
+        struct SemaphoreSignal {
+            VkSemaphore semaphore = VK_NULL_HANDLE;
+            uint64_t value = 0;
+        };
+
         /**
          * @brief Launches the background denoise thread.
          *
@@ -95,8 +101,10 @@ namespace himalaya::framework {
          * and transitions state to UploadPending (or Idle on failure).
          *
          * @pre state() == ReadbackPending (readback pass has been recorded)
+         * @return Timeline semaphore signal info that the caller must inject
+         *         into the frame's vkQueueSubmit2 signalSemaphoreInfos.
          */
-        void launch_processing();
+        [[nodiscard]] SemaphoreSignal launch_processing();
 
         /**
          * @brief Checks whether denoised output is ready for upload.
@@ -145,20 +153,6 @@ namespace himalaya::framework {
          * Joins background thread first if running.
          */
         void destroy();
-
-        /**
-         * @brief Returns timeline semaphore + signal value for the current denoise frame.
-         *
-         * The Application injects this into vkQueueSubmit2 signalSemaphoreInfos.
-         * Returns {VK_NULL_HANDLE, 0} when no signal is needed.
-         * One-shot: clears the pending value after returning, ensuring the
-         * semaphore is signaled exactly once per denoise request.
-         */
-        struct SemaphoreSignal {
-            VkSemaphore semaphore = VK_NULL_HANDLE;
-            uint64_t value = 0;
-        };
-        SemaphoreSignal pending_denoise_signal();
 
         /** @brief Returns the readback staging buffer for beauty (RGBA32F). */
         [[nodiscard]] rhi::BufferHandle readback_beauty_buffer() const;
@@ -229,7 +223,6 @@ namespace himalaya::framework {
         // ---- State machine ----
         std::atomic<DenoiseState> state_{DenoiseState::Idle};
         uint32_t trigger_generation_ = 0;
-        uint64_t pending_signal_value_ = 0;
 
         // ---- Background thread ----
         std::jthread thread_;

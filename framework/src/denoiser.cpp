@@ -85,12 +85,12 @@ namespace himalaya::framework {
 
     void Denoiser::request_denoise(const uint32_t accumulation_generation) {
         trigger_generation_ = accumulation_generation;
-        pending_signal_value_ = ++semaphore_value_;
+        ++semaphore_value_;
         state_.store(DenoiseState::ReadbackPending, std::memory_order_release);
         spdlog::info("OIDN: denoise requested (gen={})", accumulation_generation);
     }
 
-    void Denoiser::launch_processing() {
+    Denoiser::SemaphoreSignal Denoiser::launch_processing() {
         state_.store(DenoiseState::Processing, std::memory_order_release);
 
         // Capture by value what the thread needs; pointers to persistent resources are safe.
@@ -98,7 +98,7 @@ namespace himalaya::framework {
         VkDevice vk_device = device_;
         // ReSharper disable once CppLocalVariableMayBeConst
         VkSemaphore semaphore = timeline_semaphore_;
-        const uint64_t wait_value = pending_signal_value_;
+        const uint64_t wait_value = semaphore_value_;
         const uint32_t w = width_;
         const uint32_t h = height_;
 
@@ -183,6 +183,8 @@ namespace himalaya::framework {
             spdlog::info("OIDN: filter complete, upload pending");
             state_ptr->store(DenoiseState::UploadPending, std::memory_order_release);
         });
+
+        return {timeline_semaphore_, semaphore_value_};
     }
 
     bool Denoiser::poll_upload_ready(const uint32_t current_generation) {
@@ -287,15 +289,6 @@ namespace himalaya::framework {
         rm_ = nullptr;
     }
 
-    Denoiser::SemaphoreSignal Denoiser::pending_denoise_signal() {
-        if (pending_signal_value_ == 0) {
-            return {};
-        }
-        const auto signal = SemaphoreSignal{timeline_semaphore_, pending_signal_value_};
-        pending_signal_value_ = 0; // One-shot: signal exactly once per denoise request
-        return signal;
-    }
-
     rhi::BufferHandle Denoiser::readback_beauty_buffer() const { return readback_beauty_; }
     rhi::BufferHandle Denoiser::readback_albedo_buffer() const { return readback_albedo_; }
     rhi::BufferHandle Denoiser::readback_normal_buffer() const { return readback_normal_; }
@@ -306,7 +299,6 @@ namespace himalaya::framework {
     void Denoiser::join_and_idle() {
         thread_ = {};
         state_.store(DenoiseState::Idle, std::memory_order_release);
-        pending_signal_value_ = 0;
     }
 
     void Denoiser::create_staging_buffers(rhi::ResourceManager &rm,

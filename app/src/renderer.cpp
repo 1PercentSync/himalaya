@@ -150,6 +150,7 @@ namespace himalaya::app {
     // ---- Render dispatch ----
 
     void Renderer::render(rhi::CommandBuffer &cmd, const RenderInput &input) {
+        pending_semaphore_signal_ = {}; // Clear previous frame's signal
         fill_common_gpu_data(input);
 
         // Fall back to rasterization when PT is requested but no valid TLAS exists
@@ -199,8 +200,8 @@ namespace himalaya::app {
         return draw_call_count_;
     }
 
-    framework::Denoiser::SemaphoreSignal Renderer::pending_denoise_signal() {
-        return denoiser_.pending_denoise_signal();
+    framework::Denoiser::SemaphoreSignal Renderer::pending_denoise_signal() const {
+        return pending_semaphore_signal_;
     }
 
     void Renderer::abort_denoise() {

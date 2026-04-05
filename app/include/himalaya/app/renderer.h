@@ -242,8 +242,8 @@ namespace himalaya::app {
         /** @brief Returns the current shadow map resolution (width = height). */
         [[nodiscard]] uint32_t shadow_resolution() const;
 
-        /** @brief Returns timeline semaphore signal info for the current denoise frame (null if none). One-shot. */
-        framework::Denoiser::SemaphoreSignal pending_denoise_signal();
+        /** @brief Returns timeline semaphore signal info for the current denoise frame (null if none). */
+        [[nodiscard]] framework::Denoiser::SemaphoreSignal pending_denoise_signal() const;
 
         /** @brief Aborts any in-progress denoise and resets accumulation generation. */
         void abort_denoise();
@@ -366,6 +366,9 @@ namespace himalaya::app {
 
         /** @brief OIDN asynchronous denoiser instance. */
         framework::Denoiser denoiser_{};
+
+        /** @brief Timeline semaphore signal to inject into the current frame's submit. Set by launch_processing(), cleared at frame start. */
+        framework::Denoiser::SemaphoreSignal pending_semaphore_signal_{};
 
         /** @brief Monotonically increasing counter, incremented on every accumulation reset. */
         uint32_t accumulation_generation_ = 0;
