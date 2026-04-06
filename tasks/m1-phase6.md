@@ -177,7 +177,7 @@
 - [x] Renderer：IBL init 后调用 write_set0_env_alias_table() 写入 binding 6
 - [x] bindings.glsl `#ifdef HIMALAYA_RT` 新增 `EnvAliasEntry` struct + `EnvAliasTable` buffer（binding 6）
 - [x] pt_common.glsl 新增 `sample_env_alias_table()` 函数（2 rand → pixel index → equirect UV → 方向 → IBL rotation）
-- [ ] pt_common.glsl 新增 `env_pdf()` 函数（方向 → IBL cubemap luminance → PDF）
+- [x] pt_common.glsl 新增 `env_pdf()` 函数（方向 → IBL cubemap luminance → PDF）
 - [ ] closesthit.rchit + reference_view.rgen 调用 `mis_power_heuristic()`（Step 6 已定义）计算 env MIS 权重
 - [ ] PrimaryPayload 新增 `float env_mis_weight` 字段（56B → 60B）
 - [ ] closesthit.rchit 新增 NEE 环境光：alias table 采样 → shadow ray → MIS 加权贡献
