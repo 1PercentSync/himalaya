@@ -103,7 +103,9 @@ namespace himalaya::framework {
         /** @brief Return value of load_equirect(). */
         struct EquirectResult { // NOLINT(*-pro-type-member-init)
             rhi::ImageHandle image; ///< GPU image handle (SHADER_READ_ONLY layout).
-            uint32_t width; ///< Equirect image width in pixels.
+            uint32_t width;  ///< Equirect image width in pixels.
+            uint32_t height; ///< Equirect image height in pixels.
+            float* rgb_data; ///< Raw RGB float32 pixel data (caller must stbi_image_free).
         };
 
         /**
@@ -113,8 +115,9 @@ namespace himalaya::framework {
          * create R16G16B16A16F 2D image → upload via staging buffer.
          * Must be called within an active immediate scope.
          *
-         * @return Equirect image handle and width. Caller must destroy the image.
-         *         Returns invalid handle (valid() == false) if loading fails.
+         * @return Equirect result with GPU image, dimensions, and raw RGB float32 data.
+         *         Caller must destroy the image and stbi_image_free() the rgb_data.
+         *         Returns invalid handle (valid() == false) and nullptr rgb_data on failure.
          */
         [[nodiscard]] EquirectResult load_equirect(const std::string &hdr_path) const;
 

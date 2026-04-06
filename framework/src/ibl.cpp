@@ -286,6 +286,7 @@ namespace himalaya::framework {
         DeferredCleanup deferred;
         rhi::ImageHandle equirect;
         bool hdr_loaded = cubemaps_cached; // cached cubemaps imply valid HDR
+        float *hdr_rgb_data = nullptr;     // Raw HDR pixels (owned, freed after alias table)
 
         ctx.begin_immediate();
 
@@ -301,11 +302,12 @@ namespace himalaya::framework {
             pref_ktx2.reset();
             spdlog::info("IBL: 3 cubemaps loaded from cache");
         } else {
-            auto [eq, eq_width] = load_equirect(hdr_path);
-            equirect = eq;
+            auto result = load_equirect(hdr_path);
+            equirect = result.image;
             hdr_loaded = equirect.valid();
+            hdr_rgb_data = result.rgb_data;
             if (hdr_loaded) {
-                convert_equirect_to_cubemap(ctx, sc, equirect, eq_width, deferred);
+                convert_equirect_to_cubemap(ctx, sc, equirect, result.width, deferred);
                 compute_irradiance(ctx, sc, deferred);
                 compute_prefiltered(ctx, sc, deferred);
                 // Prefiltering done — mip chain no longer needed for sampling.
@@ -373,6 +375,10 @@ namespace himalaya::framework {
         for (auto &fn: deferred) {
             fn();
         }
+        // Free raw HDR pixels (kept alive for alias table construction)
+        if (hdr_rgb_data) {
+            stbi_image_free(hdr_rgb_data);
+        }
         if (equirect.valid()) {
             rm_->destroy_image(equirect);
         }
@@ -392,7 +398,7 @@ namespace himalaya::framework {
         if (!rgb_data) {
             spdlog::error("Failed to load HDR environment map '{}': {}",
                           hdr_path, stbi_failure_reason());
-            return {.image = {}, .width = 0};
+            return {.image = {}, .width = 0, .height = 0, .rgb_data = nullptr};
         }
         spdlog::info("Loaded HDR environment map '{}' ({}x{})", hdr_path, w, h);
 
@@ -409,7 +415,7 @@ namespace himalaya::framework {
             rgba16[i * 4 + 3] = glm::packHalf1x16(1.0f);
         }
 
-        stbi_image_free(rgb_data);
+        // NOTE: rgb_data is NOT freed here — caller owns it for alias table construction.
 
         // Create GPU image and upload (caller must have an active immediate scope)
         const rhi::ImageDesc desc{
@@ -427,7 +433,8 @@ namespace himalaya::framework {
         rm_->upload_image(image, rgba16.data(), rgba16.size() * sizeof(uint16_t),
                           VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT);
 
-        return {.image = image, .width = static_cast<uint32_t>(w)};
+        return {.image = image, .width = static_cast<uint32_t>(w),
+                .height = static_cast<uint32_t>(h), .rgb_data = rgb_data};
     }
 
     // -----------------------------------------------------------------------
