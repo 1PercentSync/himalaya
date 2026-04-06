@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 11 进行中。已完成：load_equirect() 重构（stbi_image_free 移至 init 调用侧）。下一项：build_env_alias_table()
+Step 11 进行中。已完成：load_equirect() 重构、build_env_alias_table()（Vose + SSBO 上传 + getter + destroy）。下一项：alias table 二进制缓存
 
 ---
 
