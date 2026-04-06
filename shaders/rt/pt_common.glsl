@@ -409,9 +409,11 @@ float russian_roulette(vec3 throughput, uint bounce, float rand_val,
  *
  * @param rand1 Uniform random in [0, 1) — bin selection.
  * @param rand2 Uniform random in [0, 1) — accept/reject.
+ * @param rand3 Uniform random in [0, 1) — sub-pixel jitter (horizontal).
+ * @param rand4 Uniform random in [0, 1) — sub-pixel jitter (vertical).
  * @return Sampled world-space direction (normalized).
  */
-vec3 sample_env_alias_table(float rand1, float rand2) {
+vec3 sample_env_alias_table(float rand1, float rand2, float rand3, float rand4) {
     // Alias table lookup: O(1) importance sampling
     uint N = entry_count;
     uint idx = min(uint(rand1 * float(N)), N - 1u);
@@ -419,13 +421,13 @@ vec3 sample_env_alias_table(float rand1, float rand2) {
     EnvAliasEntry e = env_alias_entries[idx];
     uint pixel = (rand2 < e.prob) ? idx : e.alias_index;
 
-    // Pixel index -> equirect UV (pixel center)
+    // Pixel index -> equirect UV (jittered within pixel)
     uint w = table_width;
     uint h = table_height;
     uint px = pixel % w;
     uint py = pixel / w;
-    float u = (float(px) + 0.5) / float(w);
-    float v = (float(py) + 0.5) / float(h);
+    float u = (float(px) + rand3) / float(w);
+    float v = (float(py) + rand4) / float(h);
 
     // Equirect UV -> direction (matching equirect_to_cubemap.comp convention)
     // phi = (u - 0.5) * 2PI, theta = (0.5 - v) * PI
@@ -443,11 +445,15 @@ vec3 sample_env_alias_table(float rand1, float rand2) {
 /**
  * Computes the solid-angle PDF of a direction under the env alias table distribution.
  *
- * Rotates the world-space direction into env space, samples the skybox cubemap
- * to obtain luminance, and converts to a solid-angle PDF consistent with the
- * alias table weights (luminance x sin(theta), sin(theta) cancels in the PDF).
+ * Converts the world-space direction to env-space equirect UV, looks up the
+ * stored per-pixel luminance from the alias table SSBO (same values used to
+ * build the alias table), and converts to a solid-angle PDF.
  *
  * pdf = luminance * W * H / (total_luminance * 2 * PI^2)
+ *
+ * Using the stored luminance instead of a cubemap lookup ensures the PDF is
+ * exactly consistent with the alias table sampling distribution, eliminating
+ * MIS bias from cubemap compression / resolution differences.
  *
  * @param world_dir World-space direction (normalized).
  * @return Solid-angle PDF (> 0 for visible environment).
@@ -458,14 +464,24 @@ float env_pdf(vec3 world_dir) {
                             global.ibl_rotation_sin,
                             global.ibl_rotation_cos);
 
-    // Sample skybox cubemap (raw HDR, no ibl_intensity — matches alias table weights)
-    vec3 color = texture(cubemaps[nonuniformEXT(global.skybox_cubemap_index)], env_dir).rgb;
-    float lum = 0.2126 * color.r + 0.7152 * color.g + 0.0722 * color.b;
+    // Direction -> equirect UV (matching equirect_to_cubemap.comp convention)
+    float phi   = atan(env_dir.z, env_dir.x);
+    float theta = asin(clamp(env_dir.y, -1.0, 1.0));
+    float u = phi / TWO_PI + 0.5;
+    float v = 0.5 - theta * INV_PI;
+
+    // UV -> alias table pixel index (nearest pixel, no filtering)
+    uint w = table_width;
+    uint h = table_height;
+    uint px = min(uint(u * float(w)), w - 1u);
+    uint py = min(uint(v * float(h)), h - 1u);
+    uint pixel = py * w + px;
+
+    // Look up stored luminance (same value used to build alias table weights)
+    float lum = env_alias_entries[pixel].luminance;
 
     // Convert to solid-angle PDF
-    float w = float(table_width);
-    float h = float(table_height);
-    return max(lum * w * h / (total_luminance * TWO_PI * PI), 1e-7);
+    return max(lum * float(w) * float(h) / (total_luminance * TWO_PI * PI), 1e-7);
 }
 
 // ---- MIS Power Heuristic ----

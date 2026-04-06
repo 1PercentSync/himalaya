@@ -42,7 +42,7 @@ layout(location = 0) rayPayloadEXT PrimaryPayload payload;
 // ---- Sobol dimension allocation ----
 // dims 0-1: subpixel jitter (x, y)
 // per-bounce base = 2 + bounce * DIMS_PER_BOUNCE
-const uint DIMS_PER_BOUNCE = 6; // lobe_select, brdf_xi0, brdf_xi1, rr, env_nee_r1, env_nee_r2
+const uint DIMS_PER_BOUNCE = 8; // lobe_select, brdf_xi0, brdf_xi1, rr, env_nee_r1..r4
 
 void main() {
     const ivec2 pixel = ivec2(gl_LaunchIDEXT.xy);

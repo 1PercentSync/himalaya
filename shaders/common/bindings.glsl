@@ -167,10 +167,11 @@ layout (set = 0, binding = 5) readonly buffer GeometryInfoBuffer {
     GeometryInfo geometry_infos[];
 };
 
-/** Env map alias table entry (std430, 8 bytes). Used for importance sampling. */
+/** Env map alias table entry (std430, 12 bytes). Used for importance sampling. */
 struct EnvAliasEntry {
     float prob;         // acceptance probability [0,1]
     uint  alias_index;  // redirect index when rejected
+    float luminance;    // original downsampled luminance (for PDF computation)
 };
 
 layout (set = 0, binding = 6) readonly buffer EnvAliasTable {

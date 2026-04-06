@@ -291,8 +291,9 @@ namespace himalaya::framework {
         if (!hdr_hash.empty()) {
             const auto alias_path = cache_path("ibl", hdr_hash + "_alias_table", ".bin");
             if (std::ifstream alias_file(alias_path, std::ios::binary | std::ios::ate); alias_file) {
-                // Minimum valid size: header (16 bytes) + at least 1 entry (8 bytes)
-                if (const auto file_size = static_cast<uint64_t>(alias_file.tellg()); file_size >= 24) {
+                // Validate file size: header (16 bytes) + entries at 12 bytes each
+                if (const auto file_size = static_cast<uint64_t>(alias_file.tellg());
+                    file_size >= 28 && (file_size - 16) % 12 == 0) {
                     alias_cache_data.resize(file_size);
                     alias_file.seekg(0);
                     alias_file.read(reinterpret_cast<char *>(alias_cache_data.data()),
@@ -515,6 +516,7 @@ namespace himalaya::framework {
 
         // --- Downsample luminance × sin(theta) weights ---
         std::vector<float> weights(entry_count);
+        std::vector<float> luminances(entry_count); // per-pixel luminance for PDF computation
         const auto src_h = static_cast<float>(h);
         double weight_sum = 0.0;
 
@@ -544,7 +546,9 @@ namespace himalaya::framework {
                 const float lum = lum_sum * 0.25f;
                 const float weight = lum * sin_theta;
 
-                weights[y * alias_table_width_ + x] = weight;
+                const uint32_t idx = y * alias_table_width_ + x;
+                weights[idx] = weight;
+                luminances[idx] = lum; // store raw luminance (no sin_theta) for env_pdf()
                 weight_sum += static_cast<double>(weight);
             }
         }
@@ -555,6 +559,7 @@ namespace himalaya::framework {
         struct AliasEntry {
             float prob;
             uint32_t alias;
+            float luminance; // original downsampled luminance for env_pdf()
         };
 
         std::vector<AliasEntry> table(entry_count);
@@ -609,6 +614,11 @@ namespace himalaya::framework {
             small.pop_back();
             table[s].prob = 1.0f;
             table[s].alias = s;
+        }
+
+        // Fill per-entry luminance (for consistent env_pdf() evaluation)
+        for (uint32_t i = 0; i < entry_count; ++i) {
+            table[i].luminance = luminances[i];
         }
 
         // --- Upload SSBO: header (total_luminance + entry_count + width + height) + entries ---

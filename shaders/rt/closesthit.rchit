@@ -44,7 +44,7 @@ hitAttributeEXT vec2 bary;
 
 // ---- Sobol dimension layout (must match raygen) ----
 
-const uint DIMS_PER_BOUNCE = 6; // lobe_select, brdf_xi0, brdf_xi1, rr, env_nee_r1, env_nee_r2
+const uint DIMS_PER_BOUNCE = 8; // lobe_select, brdf_xi0, brdf_xi1, rr, env_nee_r1..r4
 
 void main() {
     // ---- Geometry info lookup ----
@@ -161,8 +161,12 @@ void main() {
                                pc.frame_seed, pc.blue_noise_index);
         float env_r2 = rand_pt(env_dim + 1u, pc.sample_count, px,
                                pc.frame_seed, pc.blue_noise_index);
+        float env_r3 = rand_pt(env_dim + 2u, pc.sample_count, px,
+                               pc.frame_seed, pc.blue_noise_index);
+        float env_r4 = rand_pt(env_dim + 3u, pc.sample_count, px,
+                               pc.frame_seed, pc.blue_noise_index);
 
-        vec3 L = sample_env_alias_table(env_r1, env_r2);
+        vec3 L = sample_env_alias_table(env_r1, env_r2, env_r3, env_r4);
         float NdotL = dot(N_shading, L);
 
         if (NdotL > 0.0) {
