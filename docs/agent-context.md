@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 11 进行中。已完成：load_equirect() 重构、build_env_alias_table()、alias table 缓存、getter、fallback。下一项：DescriptorManager binding 6 扩展
+Step 11 进行中。已完成：load_equirect() 重构、build_env_alias_table()、缓存、getter、fallback、binding 6 扩展、Renderer descriptor 写入。下一项：bindings.glsl binding 6 声明
 
 ---
 
