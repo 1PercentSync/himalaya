@@ -284,17 +284,19 @@ void main() {
         vec3 L_ts = sample_cosine_hemisphere(vec2(rand_xi0, rand_xi1));
         next_dir = T_basis * L_ts.x + B_basis * L_ts.y + N_shading * L_ts.z;
 
-        // Weight simplification:
-        // BRDF = diffuse_color * INV_PI
-        // PDF  = cos(theta) * INV_PI
-        // weight = BRDF * cos / PDF / (1 - p_spec) = diffuse_color / (1 - p_spec)
-        throughput_update = diffuse_color / (1.0 - p_spec);
-
         // Combined multi-lobe PDF: evaluate specular PDF at diffuse-sampled direction
         float NdotL_d = max(dot(N_shading, next_dir), 1e-4);
         vec3 H_d = normalize(V + next_dir);
         float NdotH_d = max(dot(N_shading, H_d), 0.0);
         float VdotH_d = max(dot(V, H_d), 0.0);
+
+        // Weight: BRDF * cos / PDF / lobe_probability
+        // BRDF = (1 - F) * diffuse_color * INV_PI
+        // PDF  = cos(theta) * INV_PI
+        // weight = (1 - F) * diffuse_color / (1 - p_spec)
+        vec3 F_d = F_Schlick(VdotH_d, F0);
+        throughput_update = (1.0 - F_d) * diffuse_color / (1.0 - p_spec);
+
         float pdf_spec_d = pdf_ggx_vndf(NdotH_d, NdotV, VdotH_d, roughness);
         brdf_pdf_combined = p_spec * pdf_spec_d + (1.0 - p_spec) * (NdotL_d * INV_PI);
     }

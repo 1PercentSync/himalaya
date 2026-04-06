@@ -491,6 +491,9 @@ namespace himalaya::app {
         /** @brief Cached directional lights from previous PT frame (change detection → reset). */
         bool prev_directional_lights_ = false;
 
+        /** @brief Cached IBL intensity from previous PT frame (change detection → reset). */
+        float prev_ibl_intensity_ = 1.0f;
+
         /** @brief Current MSAA sample count (1 = no MSAA, default 4x). */
         uint32_t current_sample_count_ = 4;
 

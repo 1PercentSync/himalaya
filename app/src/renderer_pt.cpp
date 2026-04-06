@@ -84,7 +84,8 @@ namespace himalaya::app {
             max_bounces_ != prev_max_bounces_ ||
             max_clamp_ != prev_max_clamp_ ||
             env_sampling_ != prev_env_sampling_ ||
-            directional_lights_ != prev_directional_lights_) {
+            directional_lights_ != prev_directional_lights_ ||
+            input.ibl_intensity != prev_ibl_intensity_) {
             reset_pt_accumulation();
         }
         prev_pt_view_projection_ = input.camera.view_projection;
@@ -97,6 +98,7 @@ namespace himalaya::app {
         prev_max_clamp_ = max_clamp_;
         prev_env_sampling_ = env_sampling_;
         prev_directional_lights_ = directional_lights_;
+        prev_ibl_intensity_ = input.ibl_intensity;
 
         // --- Denoise trigger guard ---
         if (const uint32_t sample_count = reference_view_pass_.sample_count();
@@ -189,7 +191,9 @@ namespace himalaya::app {
         // --- Record passes ---
         reference_view_pass_.set_max_bounces(max_bounces_);
         reference_view_pass_.set_max_clamp(max_clamp_);
-        reference_view_pass_.set_env_sampling(env_sampling_);
+        // Env sampling requires a valid alias table (no HDR fallback)
+        const bool effective_env_sampling = env_sampling_ && ibl_.alias_table_buffer().valid();
+        reference_view_pass_.set_env_sampling(effective_env_sampling);
         reference_view_pass_.set_directional_lights(directional_lights_);
 
         // Skip accumulation when target sample count is reached

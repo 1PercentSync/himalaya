@@ -416,6 +416,9 @@ float russian_roulette(vec3 throughput, uint bounce, float rand_val,
 vec3 sample_env_alias_table(float rand1, float rand2, float rand3, float rand4) {
     // Alias table lookup: O(1) importance sampling
     uint N = entry_count;
+    if (N == 0u) {
+        return vec3(0.0, 1.0, 0.0); // fallback: up direction
+    }
     uint idx = min(uint(rand1 * float(N)), N - 1u);
 
     EnvAliasEntry e = env_alias_entries[idx];
@@ -480,7 +483,10 @@ float env_pdf(vec3 world_dir) {
     // Look up stored luminance (same value used to build alias table weights)
     float lum = env_alias_entries[pixel].luminance;
 
-    // Convert to solid-angle PDF
+    // Convert to solid-angle PDF (guard against zero total_luminance)
+    if (total_luminance <= 0.0) {
+        return 1e-7;
+    }
     return max(lum * float(w) * float(h) / (total_luminance * TWO_PI * PI), 1e-7);
 }
 
