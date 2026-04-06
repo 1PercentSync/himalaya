@@ -167,6 +167,18 @@ layout (set = 0, binding = 5) readonly buffer GeometryInfoBuffer {
     GeometryInfo geometry_infos[];
 };
 
+/** Env map alias table entry (std430, 8 bytes). Used for importance sampling. */
+struct EnvAliasEntry {
+    float prob;         // acceptance probability [0,1]
+    uint  alias_index;  // redirect index when rejected
+};
+
+layout (set = 0, binding = 6) readonly buffer EnvAliasTable {
+    float total_luminance;          // integrated luminance of the env map
+    uint  entry_count;              // number of alias table entries (width * height)
+    EnvAliasEntry env_alias_entries[];
+};
+
 #endif // HIMALAYA_RT
 
 // ---- Set 1: Bindless arrays ----
