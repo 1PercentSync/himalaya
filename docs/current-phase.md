@@ -575,21 +575,22 @@ Pass 层、IBL 等所有通过 `rhi::ShaderCompiler*` 使用编译器的代码**
 
 IBL alias table 构建 + closesthit NEE 环境光 + MIS 权重。架构决策见 `milestone-1/m1-rt-decisions.md`「Environment Map Importance Sampling」。
 
-- IBL 新增 `build_env_alias_table()`：在 `load_equirect()` 的 stbi_loadf 数据上计算 luminance×sin(theta)，Vose's algorithm 构建半分辨率（1024×512）alias table，上传 SSBO（GPU_ONLY + TransferDst）。输出 `total_luminance`（float）。alias table 缓存（key = `hdr_hash + "_alias_table"`，二进制格式）
+- `load_equirect()` 重构：`stbi_image_free` 移至 `init()` 调用侧，返回 raw `float*` 数据供 alias table 构建使用（raw data 在 alias table 构建完成后才释放）
+- IBL 新增 `build_env_alias_table(float* rgb_data, int w, int h)`：从 raw HDR 像素计算 luminance×sin(theta)，半分辨率（1024×512）下采样，Vose's algorithm 构建 alias table（CPU O(N)），上传 SSBO（GPU_ONLY + TransferDst）。输出 `total_luminance`（float）
+- IBL alias table 二进制缓存（key = `hdr_hash + "_alias_table"`）。**独立于 cubemap 缓存**——三组缓存（cubemaps / brdf_lut / alias_table）各自独立判断，miss 只重建自己。cubemap 缓存命中但 alias table 未缓存时（首次升级场景）单独 `stbi_loadf` 读取 HDR 像素构建 alias table
 - IBL 新增 getter：`alias_table_buffer()`（BufferHandle）、`total_luminance()`（float）、`alias_table_width()`/`alias_table_height()`（uint32_t）
+- IBL fallback cubemap 时跳过 alias table 构建（无 HDR 环境，env importance sampling 退化为纯 BRDF miss）
 - Set 0 binding 6 新增：`EnvAliasTable` SSBO（`rt_supported` 时，`PARTIALLY_BOUND`），DescriptorManager 条件扩展 layout + descriptor pool 容量
 - DescriptorManager 新增 `write_set0_env_alias_table(BufferHandle, uint64_t size)`
 - Renderer：IBL init 后调用 `write_set0_env_alias_table()` 写入 binding 6
 - bindings.glsl `#ifdef HIMALAYA_RT` 区域新增 binding 6 声明（`EnvAliasEntry` struct + `EnvAliasTable` buffer）
 - pt_common.glsl 新增 `sample_env_alias_table()` 函数（2 个 uniform random → 像素索引 → equirect UV → 方向 → 应用 IBL rotation）
 - pt_common.glsl 新增 `env_pdf()` 函数（方向 → IBL cubemap luminance → PDF）
-- pt_common.glsl 新增 `mis_power_heuristic(float pdf_a, float pdf_b)` 函数
 - closesthit.rchit 新增 NEE 环境光步骤：alias table 采样 → shadow ray → MIS 加权贡献
 - closesthit.rchit BRDF 采样后：预计算 `env_mis_weight`，写入 PrimaryPayload
 - PrimaryPayload 新增 `float env_mis_weight` 字段（56B → 60B）
 - reference_view.rgen：miss 返回的 env color 乘以 payload 中的 `env_mis_weight`
 - miss.rmiss：不变（仍返回 raw env color，MIS 权重由 raygen 应用）
-- IBL fallback cubemap 时跳过 alias table 构建（无 HDR 环境，env importance sampling 退化为纯 BRDF miss）
 
 **验证**：高亮度 HDR 环境（含太阳）下，PT 前 60 帧对比无 env sampling 版本收敛明显加速，无萤火虫噪点；低亮度均匀 HDR 下与无 env sampling 版本无可见差异
 
