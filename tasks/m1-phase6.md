@@ -172,8 +172,8 @@
 - [x] IBL alias table 二进制缓存（key = `hdr_hash + "_alias_table"`，独立于 cubemap 缓存）：缓存命中直接加载 SSBO；cubemap 缓存命中但 alias table 未缓存时单独 `stbi_loadf` 构建
 - [x] IBL 新增 getter：alias_table_buffer()、total_luminance()、alias_table_width()、alias_table_height()
 - [x] IBL fallback 时跳过 alias table 构建（无 HDR 环境）
-- [ ] DescriptorManager：Set 0 layout 条件新增 binding 6（SSBO，`PARTIALLY_BOUND`，RT stages，`rt_supported` 守卫）+ descriptor pool 容量扩展
-- [ ] DescriptorManager 新增 `write_set0_env_alias_table(BufferHandle, uint64_t size)`
+- [x] DescriptorManager：Set 0 layout 条件新增 binding 6（SSBO，`PARTIALLY_BOUND`，RT stages，`rt_supported` 守卫）+ descriptor pool 容量扩展
+- [x] DescriptorManager 新增 `write_set0_env_alias_table(BufferHandle, uint64_t size)`
 - [ ] Renderer：IBL init 后调用 write_set0_env_alias_table() 写入 binding 6
 - [ ] bindings.glsl `#ifdef HIMALAYA_RT` 新增 `EnvAliasEntry` struct + `EnvAliasTable` buffer（binding 6）
 - [ ] pt_common.glsl 新增 `sample_env_alias_table()` 函数（2 rand → pixel index → equirect UV → 方向 → IBL rotation）

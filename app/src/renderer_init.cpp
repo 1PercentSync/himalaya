@@ -428,6 +428,11 @@ namespace himalaya::app {
         // --- IBL precomputation ---
         ibl_.init(*ctx_, *resource_manager_, *descriptor_manager_, shader_compiler_, hdr_path);
 
+        if (ctx_->rt_supported && ibl_.alias_table_buffer().valid()) {
+            const auto &buf = resource_manager_->get_buffer(ibl_.alias_table_buffer());
+            descriptor_manager_->write_set0_env_alias_table(ibl_.alias_table_buffer(), buf.desc.size);
+        }
+
         // --- Pass setup ---
         shadow_pass_.setup(*ctx_, *resource_manager_, *descriptor_manager_, shader_compiler_);
         depth_prepass_.setup(*ctx_, *resource_manager_, *descriptor_manager_, shader_compiler_, current_sample_count_);
@@ -562,6 +567,11 @@ namespace himalaya::app {
     bool Renderer::reload_environment(const std::string &hdr_path) {
         ibl_.destroy();
         const bool ok = ibl_.init(*ctx_, *resource_manager_, *descriptor_manager_, shader_compiler_, hdr_path);
+
+        if (ctx_->rt_supported && ibl_.alias_table_buffer().valid()) {
+            const auto &buf = resource_manager_->get_buffer(ibl_.alias_table_buffer());
+            descriptor_manager_->write_set0_env_alias_table(ibl_.alias_table_buffer(), buf.desc.size);
+        }
 
         // Environment change invalidates accumulated PT samples
         reset_pt_accumulation();
