@@ -439,6 +439,34 @@ vec3 sample_env_alias_table(float rand1, float rand2) {
     return rotate_y(dir, -global.ibl_rotation_sin, global.ibl_rotation_cos);
 }
 
+/**
+ * Computes the solid-angle PDF of a direction under the env alias table distribution.
+ *
+ * Rotates the world-space direction into env space, samples the skybox cubemap
+ * to obtain luminance, and converts to a solid-angle PDF consistent with the
+ * alias table weights (luminance x sin(theta), sin(theta) cancels in the PDF).
+ *
+ * pdf = luminance * W * H / (total_luminance * 2 * PI^2)
+ *
+ * @param world_dir World-space direction (normalized).
+ * @return Solid-angle PDF (> 0 for visible environment).
+ */
+float env_pdf(vec3 world_dir) {
+    // World space -> env space (same rotation the miss shader applies)
+    vec3 env_dir = rotate_y(world_dir,
+                            global.ibl_rotation_sin,
+                            global.ibl_rotation_cos);
+
+    // Sample skybox cubemap (raw HDR, no ibl_intensity — matches alias table weights)
+    vec3 color = texture(cubemaps[nonuniformEXT(global.skybox_cubemap_index)], env_dir).rgb;
+    float lum = 0.2126 * color.r + 0.7152 * color.g + 0.0722 * color.b;
+
+    // Convert to solid-angle PDF
+    float w = float(table_width);
+    float h = float(table_height);
+    return max(lum * w * h / (total_luminance * TWO_PI * PI), 1e-7);
+}
+
 // ---- MIS Power Heuristic ----
 
 /**
