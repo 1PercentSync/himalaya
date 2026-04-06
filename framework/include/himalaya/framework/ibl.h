@@ -302,14 +302,29 @@ namespace himalaya::framework {
         /**
          * @brief Build environment map alias table from raw HDR pixel data.
          *
-         * Downsamples to half resolution (max 1024x512), computes luminance * sin(theta)
-         * weights, builds alias table via Vose's algorithm (O(N)), and uploads as GPU SSBO.
+         * Downsamples to half resolution, computes luminance * sin(theta) weights,
+         * builds alias table via Vose's algorithm (O(N)). Returns raw SSBO bytes
+         * (header + entries) for cache writing. Caller must call upload_env_alias_table()
+         * to create the GPU buffer.
          *
          * @param rgb_data Raw RGB float32 pixel data from stbi_loadf.
          * @param w        Source image width in pixels.
          * @param h        Source image height in pixels.
+         * @return SSBO data: [float total_luminance, uint entry_count, AliasEntry[]].
          */
-        void build_env_alias_table(const float *rgb_data, int w, int h);
+        [[nodiscard]] std::vector<uint8_t> build_env_alias_table(const float *rgb_data, int w, int h);
+
+        /**
+         * @brief Upload alias table SSBO data to GPU.
+         *
+         * Shared by both fresh-build and cache-load paths. Parses the header
+         * (total_luminance, entry_count) and creates a GpuOnly storage buffer.
+         * Must be called within an active immediate scope.
+         *
+         * @param data Raw SSBO bytes (same layout as build_env_alias_table output).
+         * @param size Byte count.
+         */
+        void upload_env_alias_table(const uint8_t *data, uint64_t size);
 
         rhi::BufferHandle alias_table_buffer_; ///< Alias table SSBO (Set 0 binding 6)
         float total_luminance_ = 0.0f;         ///< Sin-weighted total luminance

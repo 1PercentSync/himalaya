@@ -16,6 +16,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <fstream>
 #include <numbers>
 #include <vector>
 
@@ -284,11 +285,29 @@ namespace himalaya::framework {
         auto brdf_ktx2 = read_ktx2(cache_path("ibl", "brdf_lut", ".ktx2"));
         const bool brdf_cached = brdf_ktx2.has_value();
 
+        // Try reading alias table binary cache (independent of cubemap cache)
+        std::vector<uint8_t> alias_cache_data;
+        bool alias_cached = false;
+        if (!hdr_hash.empty()) {
+            const auto alias_path = cache_path("ibl", hdr_hash + "_alias_table", ".bin");
+            if (std::ifstream alias_file(alias_path, std::ios::binary | std::ios::ate); alias_file) {
+                // Minimum valid size: header (8 bytes) + at least 1 entry (8 bytes)
+                if (const auto file_size = static_cast<uint64_t>(alias_file.tellg()); file_size >= 16) {
+                    alias_cache_data.resize(file_size);
+                    alias_file.seekg(0);
+                    alias_file.read(reinterpret_cast<char *>(alias_cache_data.data()),
+                                    static_cast<std::streamsize>(file_size));
+                    alias_cached = alias_file.good();
+                }
+            }
+        }
+
         // --- Phase 2: GPU operations (upload cached or compute missing) ---
         DeferredCleanup deferred;
         rhi::ImageHandle equirect;
         bool hdr_loaded = cubemaps_cached; // cached cubemaps imply valid HDR
         float *hdr_rgb_data = nullptr; // Raw HDR pixels (owned, freed after alias table)
+        std::vector<uint8_t> alias_build_data; // Freshly built alias table (for cache write)
 
         ctx.begin_immediate();
 
@@ -329,13 +348,29 @@ namespace himalaya::framework {
             }
         }
 
-        // Env alias table: build from raw HDR data (cubemaps not cached path)
-        // ReSharper disable once CppDFAConstantConditions
-        if (hdr_rgb_data && hdr_loaded) {
+        // Env alias table: cache load, build from existing raw data, or stbi_loadf on demand
+        if (alias_cached) {
+            alias_table_width_ = equirect_width_ / 2;
+            alias_table_height_ = equirect_height_ / 2;
+            upload_env_alias_table(alias_cache_data.data(), alias_cache_data.size());
+            spdlog::info("IBL: env alias table loaded from cache");
+            // ReSharper disable once CppDFAConstantConditions
+        } else if (hdr_rgb_data && hdr_loaded) {
+            // Cubemaps not cached — raw HDR data already available from load_equirect
             // ReSharper disable once CppDFAUnreachableCode
-            build_env_alias_table(hdr_rgb_data,
-                                  static_cast<int>(equirect_width_),
-                                  static_cast<int>(equirect_height_));
+            alias_build_data = build_env_alias_table(hdr_rgb_data,
+                                                     static_cast<int>(equirect_width_),
+                                                     static_cast<int>(equirect_height_));
+            upload_env_alias_table(alias_build_data.data(), alias_build_data.size());
+        } else if (hdr_loaded && equirect_width_ > 0) {
+            // Cubemaps cached but alias table not — load HDR pixels just for alias table
+            int aw = 0, ah = 0, ac = 0;
+            if (float *alias_rgb =
+                    stbi_loadf(hdr_path.c_str(), &aw, &ah, &ac, 3)) {
+                alias_build_data = build_env_alias_table(alias_rgb, aw, ah);
+                upload_env_alias_table(alias_build_data.data(), alias_build_data.size());
+                stbi_image_free(alias_rgb);
+            }
         }
 
         // BRDF LUT: cache load or compute
@@ -386,6 +421,19 @@ namespace himalaya::framework {
                 write_readback_cache(pw.product, "ibl", pw.cache_key);
                 destroy_readback(ctx.allocator, pw.product);
             }
+        }
+
+        // Write alias table binary cache (if freshly built)
+        if (!alias_build_data.empty() && !hdr_hash.empty()) {
+            const auto alias_path = cache_path("ibl", hdr_hash + "_alias_table", ".bin");
+            if (std::ofstream ofs(alias_path, std::ios::binary | std::ios::trunc); ofs) {
+                ofs.write(reinterpret_cast<const char *>(alias_build_data.data()),
+                          static_cast<std::streamsize>(alias_build_data.size()));
+                spdlog::info("IBL: env alias table cached ({:.1f} MB)",
+                             static_cast<double>(alias_build_data.size()) / (1024.0 * 1024.0));
+            }
+            // ReSharper disable once CppDFAUnusedValue
+            alias_build_data = {}; // free memory
         }
 
         for (auto &fn: deferred) {
@@ -461,7 +509,7 @@ namespace himalaya::framework {
     // build_env_alias_table — Vose's algorithm for env importance sampling
     // -----------------------------------------------------------------------
 
-    void IBL::build_env_alias_table(const float *rgb_data, const int w, const int h) {
+    std::vector<uint8_t> IBL::build_env_alias_table(const float *rgb_data, const int w, const int h) {
         // Half-resolution dimensions (source width/height divided by 2)
         alias_table_width_ = static_cast<uint32_t>(w) / 2;
         alias_table_height_ = static_cast<uint32_t>(h) / 2;
@@ -570,25 +618,38 @@ namespace himalaya::framework {
         const uint64_t entries_size = static_cast<uint64_t>(entry_count) * sizeof(AliasEntry);
         const uint64_t total_size = header_size + entries_size;
 
-        // Build contiguous CPU buffer: [float total_luminance, uint entry_count, AliasEntry[]]
+        // Build contiguous SSBO layout: [float total_luminance, uint entry_count, AliasEntry[]]
         std::vector<uint8_t> cpu_data(total_size);
         std::memcpy(cpu_data.data(), &total_luminance_, sizeof(float));
         std::memcpy(cpu_data.data() + sizeof(float), &entry_count, sizeof(uint32_t));
         std::memcpy(cpu_data.data() + header_size, table.data(), entries_size);
 
+        spdlog::info("IBL: env alias table built {}x{} ({} entries, {:.1f} MB, total_lum={:.2f})",
+                     alias_table_width_,
+                     alias_table_height_, entry_count,
+                     static_cast<double>(total_size) / (1024.0 * 1024.0),
+                     total_luminance_);
+
+        return cpu_data;
+    }
+
+    void IBL::upload_env_alias_table(const uint8_t *data, const uint64_t size) {
+        // Parse header to populate member fields
+        std::memcpy(&total_luminance_, data, sizeof(float));
+        uint32_t entry_count = 0;
+        std::memcpy(&entry_count, data + sizeof(float), sizeof(uint32_t));
+
         alias_table_buffer_ = rm_->create_buffer({
-                                                     .size = total_size,
+                                                     .size = size,
                                                      .usage = rhi::BufferUsage::StorageBuffer |
                                                               rhi::BufferUsage::TransferDst,
                                                      .memory = rhi::MemoryUsage::GpuOnly,
                                                  }, "Env Alias Table");
 
-        rm_->upload_buffer(alias_table_buffer_, cpu_data.data(), total_size);
+        rm_->upload_buffer(alias_table_buffer_, data, size);
 
-        spdlog::info("IBL: env alias table {}x{} ({} entries, {:.1f} MB, total_lum={:.2f})",
-                     alias_table_width_, alias_table_height_, entry_count,
-                     static_cast<double>(total_size) / (1024.0 * 1024.0),
-                     total_luminance_);
+        spdlog::info("IBL: env alias table uploaded ({} entries, {:.1f} MB)",
+                     entry_count, static_cast<double>(size) / (1024.0 * 1024.0));
     }
 
     // -----------------------------------------------------------------------
