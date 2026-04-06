@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 11 进行中。已完成：load_equirect() 重构、build_env_alias_table()（Vose + SSBO 上传 + getter + destroy）。下一项：alias table 二进制缓存
+Step 11 进行中。已完成：load_equirect() 重构、build_env_alias_table()、alias table 缓存、getter、fallback。下一项：DescriptorManager binding 6 扩展
 
 ---
 
