@@ -92,6 +92,9 @@ namespace himalaya::passes {
         /** @brief Sets firefly clamping threshold (0 = disabled, used in push constants). */
         void set_max_clamp(float v);
 
+        /** @brief Enables/disables environment map importance sampling (push constant flag). */
+        void set_env_sampling(bool v);
+
     private:
         /**
          * @brief Create (or recreate) the RT pipeline.
@@ -135,6 +138,9 @@ namespace himalaya::passes {
 
         /** @brief Firefly clamping threshold (default 10.0, 0 = disabled). */
         float max_clamp_ = 10.0f;
+
+        /** @brief Environment map importance sampling enabled (default true). */
+        bool env_sampling_ = true;
 
         // ---- Accumulation state ----
 

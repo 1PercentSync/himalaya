@@ -26,6 +26,7 @@ layout(push_constant) uniform PushConstants {
     uint  frame_seed;
     uint  blue_noise_index;
     float max_clamp;
+    uint  env_sampling;
 } pc;
 
 // ---- Hit attributes ----

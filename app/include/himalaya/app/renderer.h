@@ -263,6 +263,9 @@ namespace himalaya::app {
         /** @brief Mutable reference to firefly clamp threshold (default 10.0, 0 = disabled). */
         float& pt_max_clamp();
 
+        /** @brief Mutable reference to env map importance sampling toggle. */
+        bool& pt_env_sampling();
+
         /** @brief Mutable reference to target sample count (0 = unlimited). */
         uint32_t& pt_target_samples();
 
@@ -455,6 +458,9 @@ namespace himalaya::app {
         /** @brief PT firefly clamp threshold (default 10.0, 0 = disabled, exposed via UI Step 10). */
         float max_clamp_ = 10.0f;
 
+        /** @brief Environment map importance sampling toggle (default true, exposed via UI). */
+        bool env_sampling_ = true;
+
         /** @brief PT target sample count (0 = unlimited, exposed via UI Step 10). */
         uint32_t target_samples_ = 2048;
 
@@ -472,6 +478,9 @@ namespace himalaya::app {
 
         /** @brief Cached max clamp from previous PT frame (change detection → reset). */
         float prev_max_clamp_ = 10.0f;
+
+        /** @brief Cached env sampling from previous PT frame (change detection → reset). */
+        bool prev_env_sampling_ = true;
 
         /** @brief Current MSAA sample count (1 = no MSAA, default 4x). */
         uint32_t current_sample_count_ = 4;

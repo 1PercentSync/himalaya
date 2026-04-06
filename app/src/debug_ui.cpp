@@ -239,6 +239,9 @@ namespace himalaya::app {
                     ImGui::SetTooltip("Firefly clamping disabled");
                 }
 
+                // Env Importance Sampling toggle
+                ImGui::Checkbox("Env Importance Sampling", &ctx.pt_env_sampling);
+
                 // Target Samples input (0 = unlimited)
                 ImGui::InputScalar("Target Samples", ImGuiDataType_U32, &ctx.pt_target_samples);
                 if (ImGui::IsItemHovered()) {

@@ -137,6 +137,9 @@ namespace himalaya::app {
         /** @brief Firefly clamping threshold (0 = disabled). Mutable — slider. */
         float& pt_max_clamp;
 
+        /** @brief Environment map importance sampling toggle. Mutable — checkbox. */
+        bool& pt_env_sampling;
+
         /** @brief Time elapsed since PT accumulation started, in seconds (read-only). */
         float pt_elapsed_time;
 

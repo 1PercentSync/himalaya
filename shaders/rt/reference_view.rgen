@@ -28,6 +28,7 @@ layout(push_constant) uniform PushConstants {
     uint  frame_seed;
     uint  blue_noise_index;
     float max_clamp;
+    uint  env_sampling;     // 1 = env importance sampling enabled
 } pc;
 
 // ---- Accumulation buffer (push descriptor, Set 3 binding 0) ----

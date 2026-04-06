@@ -25,6 +25,7 @@ layout(push_constant) uniform PushConstants {
     uint  frame_seed;
     uint  blue_noise_index;
     float max_clamp;
+    uint  env_sampling;     // 1 = env importance sampling enabled
 } pc;
 
 // ---- OIDN auxiliary images (push descriptor, Set 3) ----
@@ -153,7 +154,7 @@ void main() {
     }
 
     // ---- NEE: Environment light (alias table importance sampling + MIS) ----
-    {
+    if (pc.env_sampling == 1u) {
         ivec2 px = ivec2(gl_LaunchIDEXT.xy);
         uint env_dim = 2u + payload.bounce * DIMS_PER_BOUNCE + 4u;
         float env_r1 = rand_pt(env_dim, pc.sample_count, px,
@@ -294,7 +295,9 @@ void main() {
     }
 
     // ---- Precompute env MIS weight for potential miss (BRDF strategy) ----
-    payload.env_mis_weight = mis_power_heuristic(brdf_pdf_combined, env_pdf(next_dir));
+    payload.env_mis_weight = (pc.env_sampling == 1u)
+        ? mis_power_heuristic(brdf_pdf_combined, env_pdf(next_dir))
+        : 1.0;
 
     // ---- Write payload ----
     payload.color = emissive + nee_radiance;
