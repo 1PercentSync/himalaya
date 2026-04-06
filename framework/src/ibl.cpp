@@ -291,8 +291,8 @@ namespace himalaya::framework {
         if (!hdr_hash.empty()) {
             const auto alias_path = cache_path("ibl", hdr_hash + "_alias_table", ".bin");
             if (std::ifstream alias_file(alias_path, std::ios::binary | std::ios::ate); alias_file) {
-                // Minimum valid size: header (8 bytes) + at least 1 entry (8 bytes)
-                if (const auto file_size = static_cast<uint64_t>(alias_file.tellg()); file_size >= 16) {
+                // Minimum valid size: header (16 bytes) + at least 1 entry (8 bytes)
+                if (const auto file_size = static_cast<uint64_t>(alias_file.tellg()); file_size >= 24) {
                     alias_cache_data.resize(file_size);
                     alias_file.seekg(0);
                     alias_file.read(reinterpret_cast<char *>(alias_cache_data.data()),
@@ -350,8 +350,6 @@ namespace himalaya::framework {
 
         // Env alias table: cache load, build from existing raw data, or stbi_loadf on demand
         if (alias_cached) {
-            alias_table_width_ = equirect_width_ / 2;
-            alias_table_height_ = equirect_height_ / 2;
             upload_env_alias_table(alias_cache_data.data(), alias_cache_data.size());
             spdlog::info("IBL: env alias table loaded from cache");
             // ReSharper disable once CppDFAConstantConditions
@@ -613,15 +611,17 @@ namespace himalaya::framework {
             table[s].alias = s;
         }
 
-        // --- Upload SSBO: header (total_luminance + entry_count) + entries ---
-        constexpr uint64_t header_size = sizeof(float) + sizeof(uint32_t);
+        // --- Upload SSBO: header (total_luminance + entry_count + width + height) + entries ---
+        constexpr uint64_t header_size = sizeof(float) + 3 * sizeof(uint32_t);
         const uint64_t entries_size = static_cast<uint64_t>(entry_count) * sizeof(AliasEntry);
         const uint64_t total_size = header_size + entries_size;
 
-        // Build contiguous SSBO layout: [float total_luminance, uint entry_count, AliasEntry[]]
+        // Build contiguous SSBO layout: [float total_luminance, uint entry_count, uint width, uint height, AliasEntry[]]
         std::vector<uint8_t> cpu_data(total_size);
         std::memcpy(cpu_data.data(), &total_luminance_, sizeof(float));
-        std::memcpy(cpu_data.data() + sizeof(float), &entry_count, sizeof(uint32_t));
+        std::memcpy(cpu_data.data() + 4, &entry_count, sizeof(uint32_t));
+        std::memcpy(cpu_data.data() + 8, &alias_table_width_, sizeof(uint32_t));
+        std::memcpy(cpu_data.data() + 12, &alias_table_height_, sizeof(uint32_t));
         std::memcpy(cpu_data.data() + header_size, table.data(), entries_size);
 
         spdlog::info("IBL: env alias table built {}x{} ({} entries, {:.1f} MB, total_lum={:.2f})",
@@ -637,7 +637,9 @@ namespace himalaya::framework {
         // Parse header to populate member fields
         std::memcpy(&total_luminance_, data, sizeof(float));
         uint32_t entry_count = 0;
-        std::memcpy(&entry_count, data + sizeof(float), sizeof(uint32_t));
+        std::memcpy(&entry_count, data + 4, sizeof(uint32_t));
+        std::memcpy(&alias_table_width_, data + 8, sizeof(uint32_t));
+        std::memcpy(&alias_table_height_, data + 12, sizeof(uint32_t));
 
         alias_table_buffer_ = rm_->create_buffer({
                                                      .size = size,

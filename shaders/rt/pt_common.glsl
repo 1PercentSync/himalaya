@@ -19,6 +19,7 @@
 #extension GL_EXT_scalar_block_layout                : require
 
 #include "common/brdf.glsl"
+#include "common/transform.glsl"
 
 // ---- Ray Payloads ----
 
@@ -393,6 +394,49 @@ float russian_roulette(vec3 throughput, uint bounce, float rand_val,
     float p = clamp(max(throughput.r, max(throughput.g, throughput.b)), 0.05, 0.95);
     survive = (rand_val < p);
     return p;
+}
+
+// ---- Environment Map Importance Sampling ----
+
+/**
+ * Samples the environment map via alias table importance sampling.
+ *
+ * Uses Vose's alias table for O(1) pixel selection proportional to
+ * luminance x sin(theta) weights. Returns a world-space direction
+ * with inverse IBL rotation applied (env space -> world space).
+ * Use env_pdf() to compute the solid-angle PDF for MIS.
+ *
+ * @param rand1 Uniform random in [0, 1) — bin selection.
+ * @param rand2 Uniform random in [0, 1) — accept/reject.
+ * @return Sampled world-space direction (normalized).
+ */
+vec3 sample_env_alias_table(float rand1, float rand2) {
+    // Alias table lookup: O(1) importance sampling
+    uint N = entry_count;
+    uint idx = min(uint(rand1 * float(N)), N - 1u);
+
+    EnvAliasEntry e = env_alias_entries[idx];
+    uint pixel = (rand2 < e.prob) ? idx : e.alias_index;
+
+    // Pixel index -> equirect UV (pixel center)
+    uint w = table_width;
+    uint h = table_height;
+    uint px = pixel % w;
+    uint py = pixel / w;
+    float u = (float(px) + 0.5) / float(w);
+    float v = (float(py) + 0.5) / float(h);
+
+    // Equirect UV -> direction (matching equirect_to_cubemap.comp convention)
+    // phi = (u - 0.5) * 2PI, theta = (0.5 - v) * PI
+    float phi   = (u - 0.5) * TWO_PI;
+    float theta = (0.5 - v) * PI;
+    float cos_theta = cos(theta);
+    vec3 dir = vec3(cos_theta * cos(phi), sin(theta), cos_theta * sin(phi));
+
+    // Inverse IBL rotation: env space -> world space
+    // Miss shader applies rotate_y(world_dir, sin, cos) to get env lookup dir,
+    // so world_dir = rotate_y(env_dir, -sin, cos).
+    return rotate_y(dir, -global.ibl_rotation_sin, global.ibl_rotation_cos);
 }
 
 // ---- MIS Power Heuristic ----

@@ -174,8 +174,10 @@ struct EnvAliasEntry {
 };
 
 layout (set = 0, binding = 6) readonly buffer EnvAliasTable {
-    float total_luminance;          // integrated luminance of the env map
+    float total_luminance;          // sum of luminance × sin(theta) weights
     uint  entry_count;              // number of alias table entries (width * height)
+    uint  table_width;              // half-resolution equirect width
+    uint  table_height;             // half-resolution equirect height
     EnvAliasEntry env_alias_entries[];
 };
 
