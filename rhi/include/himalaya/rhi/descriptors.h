@@ -134,6 +134,16 @@ namespace himalaya::rhi {
         void write_set0_tlas(const TLASHandle &tlas) const;
 
         /**
+         * @brief Writes the env alias table SSBO to Set 0 binding 6 across all frames.
+         *
+         * Only valid when rt_supported is true. Binding 6 is STORAGE_BUFFER (PARTIALLY_BOUND).
+         *
+         * @param buffer Alias table buffer handle.
+         * @param size   Buffer size in bytes.
+         */
+        void write_set0_env_alias_table(BufferHandle buffer, uint64_t size) const;
+
+        /**
          * @brief Registers a cubemap+sampler pair into the bindless cubemap array.
          *
          * Writes a combined image sampler descriptor into Set 1, binding 1.
@@ -215,7 +225,7 @@ namespace himalaya::rhi {
 
         // ---- Layouts ----
 
-        /** @brief Set 0: GlobalUBO (0) + LightBuffer (1) + MaterialBuffer (2) + InstanceBuffer (3); RT adds TLAS (4) + GeometryInfoBuffer (5). */
+        /** @brief Set 0: GlobalUBO (0) + LightBuffer (1) + MaterialBuffer (2) + InstanceBuffer (3); RT adds TLAS (4) + GeometryInfoBuffer (5) + EnvAliasTable (6). */
         VkDescriptorSetLayout set0_layout_ = VK_NULL_HANDLE;
 
         /** @brief Set 1: bindless sampler2D array (binding 0) + samplerCube array (binding 1). */
