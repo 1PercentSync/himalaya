@@ -70,6 +70,7 @@ void main() {
 
     vec3 origin    = ray_origin;
     vec3 direction = ray_direction;
+    payload.env_mis_weight = 1.0; // Bounce 0 miss: no MIS (direct sky view)
 
     for (uint bounce = 0; bounce < pc.max_bounces; ++bounce) {
         // Russian Roulette (bounce >= 2, based on accumulated throughput)
@@ -103,6 +104,11 @@ void main() {
 
         // Accumulate radiance contribution from this bounce
         vec3 contribution = throughput * payload.color;
+
+        // Apply env MIS weight on miss (BRDF strategy hit environment)
+        if (payload.hit_distance < 0.0) {
+            contribution *= payload.env_mis_weight;
+        }
 
         // Firefly clamping: indirect bounces only (bounce > 0)
         if (bounce > 0u && pc.max_clamp > 0.0) {
