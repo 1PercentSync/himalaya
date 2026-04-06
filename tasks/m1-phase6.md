@@ -181,7 +181,7 @@
 - [x] closesthit.rchit + reference_view.rgen 调用 `mis_power_heuristic()`（Step 6 已定义）计算 env MIS 权重
 - [x] PrimaryPayload 新增 `float env_mis_weight` 字段（56B → 60B）
 - [x] closesthit.rchit 新增 NEE 环境光：alias table 采样 → shadow ray → MIS 加权贡献
-- [ ] closesthit.rchit BRDF 采样后预计算 env_mis_weight 写入 PrimaryPayload
+- [x] closesthit.rchit BRDF 采样后预计算 env_mis_weight 写入 PrimaryPayload
 - [ ] reference_view.rgen：miss 返回 env color × payload.env_mis_weight
 
 ## Step 12a：EmissiveLightBuilder + 基础设施
