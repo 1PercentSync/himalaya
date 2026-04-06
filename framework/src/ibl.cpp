@@ -15,6 +15,8 @@
 #include <stb_image.h>
 
 #include <algorithm>
+#include <cmath>
+#include <numbers>
 #include <vector>
 
 namespace {
@@ -286,7 +288,7 @@ namespace himalaya::framework {
         DeferredCleanup deferred;
         rhi::ImageHandle equirect;
         bool hdr_loaded = cubemaps_cached; // cached cubemaps imply valid HDR
-        float *hdr_rgb_data = nullptr;     // Raw HDR pixels (owned, freed after alias table)
+        float *hdr_rgb_data = nullptr; // Raw HDR pixels (owned, freed after alias table)
 
         ctx.begin_immediate();
 
@@ -306,7 +308,9 @@ namespace himalaya::framework {
             equirect = result.image;
             hdr_loaded = equirect.valid();
             hdr_rgb_data = result.rgb_data;
+            // ReSharper disable once CppDFAConstantConditions
             if (hdr_loaded) {
+                // ReSharper disable once CppDFAUnreachableCode
                 convert_equirect_to_cubemap(ctx, sc, equirect, result.width, deferred);
                 compute_irradiance(ctx, sc, deferred);
                 compute_prefiltered(ctx, sc, deferred);
@@ -325,6 +329,15 @@ namespace himalaya::framework {
             }
         }
 
+        // Env alias table: build from raw HDR data (cubemaps not cached path)
+        // ReSharper disable once CppDFAConstantConditions
+        if (hdr_rgb_data && hdr_loaded) {
+            // ReSharper disable once CppDFAUnreachableCode
+            build_env_alias_table(hdr_rgb_data,
+                                  static_cast<int>(equirect_width_),
+                                  static_cast<int>(equirect_height_));
+        }
+
         // BRDF LUT: cache load or compute
         if (brdf_cached) {
             upload_ktx2_image(rm, *brdf_ktx2, brdf_lut_, "IBL BRDF LUT (cached)");
@@ -336,7 +349,10 @@ namespace himalaya::framework {
 
         // --- Readback + cache write preparation (only computed products) ---
         std::vector<PendingCache> pending_writes;
+        // ReSharper disable once CppDFAConstantConditions
+        // ReSharper disable once CppDFAUnreachableCode
         if (!cubemaps_cached && hdr_loaded && !hdr_hash.empty()) {
+            // ReSharper disable once CppDFAUnreachableCode
             pending_writes.push_back({
                 readback_image(ctx, rm, cubemap_),
                 hdr_hash + "_skybox"
@@ -379,7 +395,9 @@ namespace himalaya::framework {
         if (hdr_rgb_data) {
             stbi_image_free(hdr_rgb_data);
         }
+        // ReSharper disable once CppDFAConstantConditions
         if (equirect.valid()) {
+            // ReSharper disable once CppDFAUnreachableCode
             rm_->destroy_image(equirect);
         }
 
@@ -433,8 +451,144 @@ namespace himalaya::framework {
         rm_->upload_image(image, rgba16.data(), rgba16.size() * sizeof(uint16_t),
                           VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT);
 
-        return {.image = image, .width = static_cast<uint32_t>(w),
-                .height = static_cast<uint32_t>(h), .rgb_data = rgb_data};
+        return {
+            .image = image, .width = static_cast<uint32_t>(w),
+            .height = static_cast<uint32_t>(h), .rgb_data = rgb_data
+        };
+    }
+
+    // -----------------------------------------------------------------------
+    // build_env_alias_table — Vose's algorithm for env importance sampling
+    // -----------------------------------------------------------------------
+
+    void IBL::build_env_alias_table(const float *rgb_data, const int w, const int h) {
+        // Half-resolution dimensions (source width/height divided by 2)
+        alias_table_width_ = static_cast<uint32_t>(w) / 2;
+        alias_table_height_ = static_cast<uint32_t>(h) / 2;
+        const uint32_t entry_count = alias_table_width_ * alias_table_height_;
+
+        // --- Downsample luminance × sin(theta) weights ---
+        std::vector<float> weights(entry_count);
+        const auto src_h = static_cast<float>(h);
+        double weight_sum = 0.0;
+
+        for (uint32_t y = 0; y < alias_table_height_; ++y) {
+            // Map alias table row to 2×2 source block top-left
+            const int sy = std::clamp(static_cast<int>(y) * 2, 0, h - 2);
+
+            // sin(theta) at block center for solid angle correction (equirectangular projection)
+            const float theta = std::numbers::pi_v<float> * (static_cast<float>(sy) + 1.0f) / src_h;
+            const float sin_theta = std::sin(theta);
+
+            for (uint32_t x = 0; x < alias_table_width_; ++x) {
+                const int sx = std::clamp(static_cast<int>(x) * 2, 0, w - 2);
+
+                // 2×2 box filter: average luminance of 4 source pixels
+                float lum_sum = 0.0f;
+                for (int dy = 0; dy < 2; ++dy) {
+                    for (int dx = 0; dx < 2; ++dx) {
+                        const int idx = ((sy + dy) * w + (sx + dx)) * 3;
+                        const float r = rgb_data[idx + 0];
+                        const float g = rgb_data[idx + 1];
+                        const float b = rgb_data[idx + 2];
+                        const float lum = 0.2126f * r + 0.7152f * g + 0.0722f * b;
+                        lum_sum += lum;
+                    }
+                }
+                const float lum = lum_sum * 0.25f;
+                const float weight = lum * sin_theta;
+
+                weights[y * alias_table_width_ + x] = weight;
+                weight_sum += static_cast<double>(weight);
+            }
+        }
+
+        total_luminance_ = static_cast<float>(weight_sum);
+
+        // --- Vose's alias table algorithm (O(N)) ---
+        struct AliasEntry {
+            float prob;
+            uint32_t alias;
+        };
+
+        std::vector<AliasEntry> table(entry_count);
+
+        // Normalize weights to average = 1.0
+        const double avg = weight_sum / static_cast<double>(entry_count);
+        std::vector<float> normalized(entry_count);
+        for (uint32_t i = 0; i < entry_count; ++i) {
+            normalized[i] = (avg > 0.0) ? static_cast<float>(static_cast<double>(weights[i]) / avg) : 1.0f;
+        }
+
+        // Partition into small (< 1) and large (>= 1) work lists
+        std::vector<uint32_t> small, large;
+        small.reserve(entry_count);
+        large.reserve(entry_count);
+        for (uint32_t i = 0; i < entry_count; ++i) {
+            if (normalized[i] < 1.0f) {
+                small.push_back(i);
+            } else {
+                large.push_back(i);
+            }
+        }
+
+        // Build alias table
+        while (!small.empty() && !large.empty()) {
+            const uint32_t s = small.back();
+            small.pop_back();
+            const uint32_t l = large.back();
+            large.pop_back();
+
+            table[s].prob = normalized[s];
+            table[s].alias = l;
+
+            normalized[l] = (normalized[l] + normalized[s]) - 1.0f;
+
+            if (normalized[l] < 1.0f) {
+                small.push_back(l);
+            } else {
+                large.push_back(l);
+            }
+        }
+
+        // Remaining entries get probability 1.0 (numerical cleanup)
+        while (!large.empty()) {
+            const uint32_t l = large.back();
+            large.pop_back();
+            table[l].prob = 1.0f;
+            table[l].alias = l;
+        }
+        while (!small.empty()) {
+            const uint32_t s = small.back();
+            small.pop_back();
+            table[s].prob = 1.0f;
+            table[s].alias = s;
+        }
+
+        // --- Upload SSBO: header (total_luminance + entry_count) + entries ---
+        constexpr uint64_t header_size = sizeof(float) + sizeof(uint32_t);
+        const uint64_t entries_size = static_cast<uint64_t>(entry_count) * sizeof(AliasEntry);
+        const uint64_t total_size = header_size + entries_size;
+
+        // Build contiguous CPU buffer: [float total_luminance, uint entry_count, AliasEntry[]]
+        std::vector<uint8_t> cpu_data(total_size);
+        std::memcpy(cpu_data.data(), &total_luminance_, sizeof(float));
+        std::memcpy(cpu_data.data() + sizeof(float), &entry_count, sizeof(uint32_t));
+        std::memcpy(cpu_data.data() + header_size, table.data(), entries_size);
+
+        alias_table_buffer_ = rm_->create_buffer({
+                                                     .size = total_size,
+                                                     .usage = rhi::BufferUsage::StorageBuffer |
+                                                              rhi::BufferUsage::TransferDst,
+                                                     .memory = rhi::MemoryUsage::GpuOnly,
+                                                 }, "Env Alias Table");
+
+        rm_->upload_buffer(alias_table_buffer_, cpu_data.data(), total_size);
+
+        spdlog::info("IBL: env alias table {}x{} ({} entries, {:.1f} MB, total_lum={:.2f})",
+                     alias_table_width_, alias_table_height_, entry_count,
+                     static_cast<double>(total_size) / (1024.0 * 1024.0),
+                     total_luminance_);
     }
 
     // -----------------------------------------------------------------------
@@ -601,6 +755,9 @@ namespace himalaya::framework {
         if (prefiltered_cubemap_.valid()) rm_->destroy_image(prefiltered_cubemap_);
         if (brdf_lut_.valid()) rm_->destroy_image(brdf_lut_);
 
+        // Destroy alias table buffer
+        if (alias_table_buffer_.valid()) rm_->destroy_buffer(alias_table_buffer_);
+
         // Destroy shared sampler
         if (sampler_.valid()) rm_->destroy_sampler(sampler_);
     }
@@ -631,5 +788,21 @@ namespace himalaya::framework {
 
     uint32_t IBL::equirect_height() const {
         return equirect_height_;
+    }
+
+    rhi::BufferHandle IBL::alias_table_buffer() const {
+        return alias_table_buffer_;
+    }
+
+    float IBL::total_luminance() const {
+        return total_luminance_;
+    }
+
+    uint32_t IBL::alias_table_width() const {
+        return alias_table_width_;
+    }
+
+    uint32_t IBL::alias_table_height() const {
+        return alias_table_height_;
     }
 } // namespace himalaya::framework

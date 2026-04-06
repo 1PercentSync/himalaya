@@ -96,6 +96,18 @@ namespace himalaya::framework {
         /** @brief Original equirectangular input image height in pixels. 0 if no HDR loaded. */
         [[nodiscard]] uint32_t equirect_height() const;
 
+        /** @brief Alias table buffer handle for Set 0 binding 6. Invalid if no HDR loaded. */
+        [[nodiscard]] rhi::BufferHandle alias_table_buffer() const;
+
+        /** @brief Environment total luminance (sin-weighted). 0 if no HDR loaded. */
+        [[nodiscard]] float total_luminance() const;
+
+        /** @brief Alias table width (equirect_width / 2). */
+        [[nodiscard]] uint32_t alias_table_width() const;
+
+        /** @brief Alias table height (equirect_height / 2). */
+        [[nodiscard]] uint32_t alias_table_height() const;
+
     private:
         /** @brief Deferred cleanup function list, executed after end_immediate(). */
         using DeferredCleanup = std::vector<std::function<void()> >;
@@ -284,5 +296,24 @@ namespace himalaya::framework {
         // --- Original equirect dimensions (for HDR Sun coordinate conversion) ---
         uint32_t equirect_width_ = 0;
         uint32_t equirect_height_ = 0;
+
+        // --- Env alias table (Step 11, importance sampling) ---
+
+        /**
+         * @brief Build environment map alias table from raw HDR pixel data.
+         *
+         * Downsamples to half resolution (max 1024x512), computes luminance * sin(theta)
+         * weights, builds alias table via Vose's algorithm (O(N)), and uploads as GPU SSBO.
+         *
+         * @param rgb_data Raw RGB float32 pixel data from stbi_loadf.
+         * @param w        Source image width in pixels.
+         * @param h        Source image height in pixels.
+         */
+        void build_env_alias_table(const float *rgb_data, int w, int h);
+
+        rhi::BufferHandle alias_table_buffer_; ///< Alias table SSBO (Set 0 binding 6)
+        float total_luminance_ = 0.0f;         ///< Sin-weighted total luminance
+        uint32_t alias_table_width_ = 0;       ///< Half-resolution width
+        uint32_t alias_table_height_ = 0;      ///< Half-resolution height
     };
 } // namespace himalaya::framework
