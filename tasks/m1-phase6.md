@@ -182,7 +182,7 @@
 - [x] PrimaryPayload 新增 `float env_mis_weight` 字段（56B → 60B）
 - [x] closesthit.rchit 新增 NEE 环境光：alias table 采样 → shadow ray → MIS 加权贡献
 - [x] closesthit.rchit BRDF 采样后预计算 env_mis_weight 写入 PrimaryPayload
-- [ ] reference_view.rgen：miss 返回 env color × payload.env_mis_weight
+- [x] reference_view.rgen：miss 返回 env color × payload.env_mis_weight
 
 ## Step 12a：EmissiveLightBuilder + 基础设施
 
