@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 11 进行中。已完成：load_equirect() 重构、build_env_alias_table()、缓存、getter、fallback、binding 6 扩展、Renderer descriptor 写入、bindings.glsl binding 6 声明、sample_env_alias_table()、env_pdf()。下一项：closesthit.rchit + reference_view.rgen MIS 权重
+Step 11 进行中。已完成：…bindings.glsl binding 6 声明、sample_env_alias_table()、env_pdf()、PrimaryPayload env_mis_weight。下一项：closesthit NEE 环境光（alias table 采样 + shadow ray + MIS）
 
 ---
 
