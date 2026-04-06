@@ -2193,10 +2193,10 @@ public:
     /// 环境贴图总亮度（PDF 归一化用）。无 HDR 时 0。
     [[nodiscard]] float total_luminance() const;
 
-    /// Alias table 半分辨率宽度（= equirect_width / 2, clamped to 1024）。
+    /// Alias table 半分辨率宽度（= equirect_width / 2）。
     [[nodiscard]] uint32_t alias_table_width() const;
 
-    /// Alias table 半分辨率高度（= equirect_height / 2, clamped to 512）。
+    /// Alias table 半分辨率高度（= equirect_height / 2）。
     [[nodiscard]] uint32_t alias_table_height() const;
 };
 ```

@@ -576,7 +576,7 @@ Pass 层、IBL 等所有通过 `rhi::ShaderCompiler*` 使用编译器的代码**
 IBL alias table 构建 + closesthit NEE 环境光 + MIS 权重。架构决策见 `milestone-1/m1-rt-decisions.md`「Environment Map Importance Sampling」。
 
 - `load_equirect()` 重构：`stbi_image_free` 移至 `init()` 调用侧，返回 raw `float*` 数据供 alias table 构建使用（raw data 在 alias table 构建完成后才释放）
-- IBL 新增 `build_env_alias_table(float* rgb_data, int w, int h)`：从 raw HDR 像素计算 luminance×sin(theta)，半分辨率（1024×512）下采样，Vose's algorithm 构建 alias table（CPU O(N)），上传 SSBO（GPU_ONLY + TransferDst）。输出 `total_luminance`（float）
+- IBL 新增 `build_env_alias_table(float* rgb_data, int w, int h)`：从 raw HDR 像素计算 luminance×sin(theta)，半分辨率下采样（源宽高各除 2），Vose's algorithm 构建 alias table（CPU O(N)），上传 SSBO（GPU_ONLY + TransferDst）。输出 `total_luminance`（float）
 - IBL alias table 二进制缓存（key = `hdr_hash + "_alias_table"`）。**独立于 cubemap 缓存**——三组缓存（cubemaps / brdf_lut / alias_table）各自独立判断，miss 只重建自己。cubemap 缓存命中但 alias table 未缓存时（首次升级场景）单独 `stbi_loadf` 读取 HDR 像素构建 alias table
 - IBL 新增 getter：`alias_table_buffer()`（BufferHandle）、`total_luminance()`（float）、`alias_table_width()`/`alias_table_height()`（uint32_t）
 - IBL fallback cubemap 时跳过 alias table 构建（无 HDR 环境，env importance sampling 退化为纯 BRDF miss）
@@ -804,7 +804,7 @@ shaders/
 | RT shader 热重载 | RTPipeline 封装绑定 pipeline + SBT 生命周期，rebuild_pipelines() 走 destroy + create 全量重建 |
 | RT 函数加载 | vulkan-1.lib 不导出 KHR RT/AS 符号。Context 通过 `vkGetDeviceProcAddr` 加载 6 个 device-level 函数指针（create/destroy/build AS、create RT pipeline、get shader group handles），CommandBuffer 同模式加载 `vkCmdTraceRaysKHR`（匿名命名空间，`init_rt_functions(VkDevice)` 初始化） |
 | PT Push Constants | 演进：Step 6 20B（max_bounces + sample_count + frame_seed + blue_noise_index + max_clamp）→ Step 12 24B（+emissive_light_count）→ Step 13 28B（+lod_bias）。相机逆矩阵从 GlobalUBO 读取 |
-| Env Alias Table | 1024×512 半分辨率，`{float32 prob, uint32 alias}` 8B/entry，total_luminance + entry_count 嵌入 SSBO 头部。IBL load_equirect() 中从原始 float32 RGB 构建（Vose O(N)），随 IBL 产物缓存。Set 0 binding 6，PARTIALLY_BOUND，rt_supported 守卫 |
+| Env Alias Table | 源 HDR 半分辨率（宽高各除 2），`{float32 prob, uint32 alias}` 8B/entry，total_luminance + entry_count 嵌入 SSBO 头部。IBL load_equirect() 中从原始 float32 RGB 构建（Vose O(N)），随 IBL 产物缓存。Set 0 binding 6，PARTIALLY_BOUND，rt_supported 守卫 |
 | Ray Origin Offset | Wächter & Binder（Ray Tracing Gems Ch.6）：float 位整数偏移，全尺度鲁棒无 epsilon。pt_common.glsl 工具函数，closesthit 的 shadow ray 和 next_origin 共用 |
 | Normal Mapping (RT) | closesthit 通过 buffer_reference 读 tangent（vec4），`#include "common/normal.glsl"` 复用 `get_shading_normal()` + shading normal 一致性修正（clamp 到几何法线半球） |
 | Subpixel Jitter | Sobol dims 0-1 像素偏移，per-bounce 维度从 dim 2 开始。无亚像素抖动则 PT 几何边缘永远锯齿 |

@@ -453,9 +453,9 @@ layout(set = 0, binding = 6) readonly buffer EnvAliasTable {
 };
 ```
 
-- **分辨率**：1024×512（源 HDR 半分辨率），512K entries
+- **分辨率**：源 HDR 半分辨率（宽高各除 2，典型 2048×1024 → 1024×512 = 512K entries）
 - **格式**：`{float32 prob, uint32 alias}`，8 bytes/entry
-- **总大小**：8 + 512K × 8 ≈ 4 MB
+- **总大小**：8 + entries × 8（典型 512K entries ≈ 4 MB）
 - **无独立 PDF 纹理**：MIS 权重计算时直接从已有 IBL cubemap（Set 1 bindless）采样计算 luminance，除以 `total_luminance` 得到 PDF
 
 `alias` 索引为 uint32（全分辨率 2M 像素超出 uint16 范围，半分辨率 512K 虽可用 uint16 但 std430 对齐后省不了空间，统一 uint32 保持简单）。
