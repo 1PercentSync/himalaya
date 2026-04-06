@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 10.5 全部完成（Shader 磁盘缓存），进入 Step 11（Environment Map Importance Sampling）。文档已更新：alias table 缓存独立于 cubemap 缓存，load_equirect() 重构方案已确认
+Step 11 进行中。已完成：load_equirect() 重构（stbi_image_free 移至 init 调用侧）。下一项：build_env_alias_table()
 
 ---
 
