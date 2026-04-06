@@ -29,6 +29,7 @@ layout(push_constant) uniform PushConstants {
     uint  blue_noise_index;
     float max_clamp;
     uint  env_sampling;     // 1 = env importance sampling enabled
+    uint  directional_lights; // 1 = directional lights enabled in PT
 } pc;
 
 // ---- Accumulation buffer (push descriptor, Set 3 binding 0) ----

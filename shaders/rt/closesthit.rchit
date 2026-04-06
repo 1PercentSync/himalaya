@@ -26,6 +26,7 @@ layout(push_constant) uniform PushConstants {
     uint  blue_noise_index;
     float max_clamp;
     uint  env_sampling;     // 1 = env importance sampling enabled
+    uint  directional_lights; // 1 = directional lights enabled in PT
 } pc;
 
 // ---- OIDN auxiliary images (push descriptor, Set 3) ----
@@ -112,7 +113,7 @@ void main() {
 
     // ---- NEE: Directional lights (delta distribution, MIS weight = 1) ----
     vec3 nee_radiance = vec3(0.0);
-    for (uint i = 0; i < global.directional_light_count; ++i) {
+    for (uint i = 0; i < global.directional_light_count && pc.directional_lights == 1u; ++i) {
         vec3 L = normalize(-directional_lights[i].direction_and_intensity.xyz);
         float NdotL = dot(N_shading, L);
         if (NdotL <= 0.0) {

@@ -266,6 +266,9 @@ namespace himalaya::app {
         /** @brief Mutable reference to env map importance sampling toggle. */
         bool& pt_env_sampling();
 
+        /** @brief Mutable reference to PT directional lights toggle. */
+        bool& pt_directional_lights();
+
         /** @brief Mutable reference to target sample count (0 = unlimited). */
         uint32_t& pt_target_samples();
 
@@ -461,6 +464,9 @@ namespace himalaya::app {
         /** @brief Environment map importance sampling toggle (default true, exposed via UI). */
         bool env_sampling_ = true;
 
+        /** @brief Directional lights enabled in PT (default false — env sampling replaces them). */
+        bool directional_lights_ = false;
+
         /** @brief PT target sample count (0 = unlimited, exposed via UI Step 10). */
         uint32_t target_samples_ = 2048;
 
@@ -481,6 +487,9 @@ namespace himalaya::app {
 
         /** @brief Cached env sampling from previous PT frame (change detection → reset). */
         bool prev_env_sampling_ = true;
+
+        /** @brief Cached directional lights from previous PT frame (change detection → reset). */
+        bool prev_directional_lights_ = false;
 
         /** @brief Current MSAA sample count (1 = no MSAA, default 4x). */
         uint32_t current_sample_count_ = 4;

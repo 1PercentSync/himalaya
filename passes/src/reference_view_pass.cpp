@@ -27,10 +27,11 @@ namespace himalaya::passes {
         uint32_t frame_seed;
         uint32_t blue_noise_index;
         float max_clamp;
-        uint32_t env_sampling; ///< 1 = env map importance sampling enabled, 0 = disabled
+        uint32_t env_sampling;        ///< 1 = env map importance sampling enabled, 0 = disabled
+        uint32_t directional_lights;  ///< 1 = directional lights enabled in PT, 0 = disabled
     };
 
-    static_assert(sizeof(PTPushConstants) == 24);
+    static_assert(sizeof(PTPushConstants) == 28);
 
     // Default PT parameters (overridden at runtime via Renderer setters)
     constexpr uint32_t kDefaultMaxBounces = 8;
@@ -294,6 +295,7 @@ namespace himalaya::passes {
                              .blue_noise_index = blue_noise_index_,
                              .max_clamp = max_clamp_,
                              .env_sampling = env_sampling_ ? 1u : 0u,
+                             .directional_lights = directional_lights_ ? 1u : 0u,
                          };
                          cmd.push_constants(
                              rt_pipeline_.layout,
@@ -334,5 +336,9 @@ namespace himalaya::passes {
 
     void ReferenceViewPass::set_env_sampling(const bool v) {
         env_sampling_ = v;
+    }
+
+    void ReferenceViewPass::set_directional_lights(const bool v) {
+        directional_lights_ = v;
     }
 } // namespace himalaya::passes

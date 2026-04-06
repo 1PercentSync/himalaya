@@ -242,6 +242,14 @@ namespace himalaya::app {
                 // Env Importance Sampling toggle
                 ImGui::Checkbox("Env Importance Sampling", &ctx.pt_env_sampling);
 
+                // Directional Lights toggle (default off — env sampling handles sun)
+                ImGui::Checkbox("Directional Lights", &ctx.pt_directional_lights);
+                if (ImGui::IsItemHovered()) {
+                    ImGui::SetTooltip("HDR sun directional light is an approximation of the sun in the environment map.\n"
+                                      "With Env Importance Sampling enabled, the environment map already provides\n"
+                                      "accurate sun lighting — enabling this may cause double illumination artifacts.");
+                }
+
                 // Target Samples input (0 = unlimited)
                 ImGui::InputScalar("Target Samples", ImGuiDataType_U32, &ctx.pt_target_samples);
                 if (ImGui::IsItemHovered()) {

@@ -83,7 +83,8 @@ namespace himalaya::app {
             light_color_shadow != prev_pt_light_color_shadow_ ||
             max_bounces_ != prev_max_bounces_ ||
             max_clamp_ != prev_max_clamp_ ||
-            env_sampling_ != prev_env_sampling_) {
+            env_sampling_ != prev_env_sampling_ ||
+            directional_lights_ != prev_directional_lights_) {
             reset_pt_accumulation();
         }
         prev_pt_view_projection_ = input.camera.view_projection;
@@ -95,6 +96,7 @@ namespace himalaya::app {
         prev_max_bounces_ = max_bounces_;
         prev_max_clamp_ = max_clamp_;
         prev_env_sampling_ = env_sampling_;
+        prev_directional_lights_ = directional_lights_;
 
         // --- Denoise trigger guard ---
         if (const uint32_t sample_count = reference_view_pass_.sample_count();
@@ -188,6 +190,7 @@ namespace himalaya::app {
         reference_view_pass_.set_max_bounces(max_bounces_);
         reference_view_pass_.set_max_clamp(max_clamp_);
         reference_view_pass_.set_env_sampling(env_sampling_);
+        reference_view_pass_.set_directional_lights(directional_lights_);
 
         // Skip accumulation when target sample count is reached
         if (target_samples_ == 0 || reference_view_pass_.sample_count() < target_samples_) {

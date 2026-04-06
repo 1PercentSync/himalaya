@@ -232,6 +232,7 @@ namespace himalaya::app {
     uint32_t& Renderer::pt_max_bounces() { return max_bounces_; }
     float& Renderer::pt_max_clamp() { return max_clamp_; }
     bool& Renderer::pt_env_sampling() { return env_sampling_; }
+    bool& Renderer::pt_directional_lights() { return directional_lights_; }
     uint32_t& Renderer::pt_target_samples() { return target_samples_; }
     bool& Renderer::denoise_enabled() { return denoise_enabled_; }
     bool& Renderer::show_denoised() { return show_denoised_; }

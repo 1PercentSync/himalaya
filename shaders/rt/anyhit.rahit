@@ -27,6 +27,7 @@ layout(push_constant) uniform PushConstants {
     uint  blue_noise_index;
     float max_clamp;
     uint  env_sampling;
+    uint  directional_lights;
 } pc;
 
 // ---- Hit attributes ----

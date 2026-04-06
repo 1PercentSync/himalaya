@@ -95,6 +95,9 @@ namespace himalaya::passes {
         /** @brief Enables/disables environment map importance sampling (push constant flag). */
         void set_env_sampling(bool v);
 
+        /** @brief Enables/disables directional lights in PT (push constant flag). */
+        void set_directional_lights(bool v);
+
     private:
         /**
          * @brief Create (or recreate) the RT pipeline.
@@ -141,6 +144,9 @@ namespace himalaya::passes {
 
         /** @brief Environment map importance sampling enabled (default true). */
         bool env_sampling_ = true;
+
+        /** @brief Directional lights enabled in PT (default false — env sampling replaces them). */
+        bool directional_lights_ = false;
 
         // ---- Accumulation state ----
 

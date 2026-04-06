@@ -140,6 +140,9 @@ namespace himalaya::app {
         /** @brief Environment map importance sampling toggle. Mutable — checkbox. */
         bool& pt_env_sampling;
 
+        /** @brief Directional lights enabled in PT. Mutable — checkbox. */
+        bool& pt_directional_lights;
+
         /** @brief Time elapsed since PT accumulation started, in seconds (read-only). */
         float pt_elapsed_time;
 
