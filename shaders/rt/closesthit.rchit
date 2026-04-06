@@ -43,7 +43,7 @@ hitAttributeEXT vec2 bary;
 
 // ---- Sobol dimension layout (must match raygen) ----
 
-const uint DIMS_PER_BOUNCE = 4; // lobe_select, brdf_xi0, brdf_xi1, rr
+const uint DIMS_PER_BOUNCE = 6; // lobe_select, brdf_xi0, brdf_xi1, rr, env_nee_r1, env_nee_r2
 
 void main() {
     // ---- Geometry info lookup ----
@@ -149,6 +149,69 @@ void main() {
             vec3 diffuse  = (1.0 - F) * diffuse_color * INV_PI;
 
             nee_radiance += (diffuse + specular) * light_color * intensity * NdotL;
+        }
+    }
+
+    // ---- NEE: Environment light (alias table importance sampling + MIS) ----
+    {
+        ivec2 px = ivec2(gl_LaunchIDEXT.xy);
+        uint env_dim = 2u + payload.bounce * DIMS_PER_BOUNCE + 4u;
+        float env_r1 = rand_pt(env_dim, pc.sample_count, px,
+                               pc.frame_seed, pc.blue_noise_index);
+        float env_r2 = rand_pt(env_dim + 1u, pc.sample_count, px,
+                               pc.frame_seed, pc.blue_noise_index);
+
+        vec3 L = sample_env_alias_table(env_r1, env_r2);
+        float NdotL = dot(N_shading, L);
+
+        if (NdotL > 0.0) {
+            // Shadow ray toward environment (infinite distance)
+            shadow_payload.visible = 0;
+            traceRayEXT(
+                tlas,
+                gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsSkipClosestHitShaderEXT,
+                0xFF,
+                0, 0,
+                1,          // miss index 1 (shadow miss)
+                offset_pos,
+                0.0,
+                L,
+                10000.0,
+                1           // payload location 1
+            );
+
+            if (shadow_payload.visible == 1u) {
+                // Look up environment radiance at sampled direction
+                vec3 env_dir = rotate_y(L, global.ibl_rotation_sin,
+                                        global.ibl_rotation_cos);
+                vec3 env_color = texture(cubemaps[nonuniformEXT(global.skybox_cubemap_index)],
+                                         env_dir).rgb * global.ibl_intensity;
+
+                // Evaluate full BRDF at light direction
+                vec3 H = normalize(V + L);
+                float NdotH_e = max(dot(N_shading, H), 0.0);
+                float VdotH_e = max(dot(V, H), 0.0);
+
+                float D_e   = D_GGX(NdotH_e, roughness);
+                float Vis_e = V_SmithGGX(NdotV, NdotL, roughness);
+                vec3  F_e   = F_Schlick(VdotH_e, F0);
+
+                vec3 spec_e = D_e * Vis_e * F_e;
+                vec3 diff_e = (1.0 - F_e) * diffuse_color * INV_PI;
+                vec3 brdf_val = diff_e + spec_e;
+
+                // Combined multi-lobe BRDF PDF at the light direction
+                float local_p_spec = specular_probability(NdotV, F0);
+                float pdf_spec = pdf_ggx_vndf(NdotH_e, NdotV, VdotH_e, roughness);
+                float pdf_diff = NdotL * INV_PI;
+                float brdf_pdf = local_p_spec * pdf_spec + (1.0 - local_p_spec) * pdf_diff;
+
+                // MIS weight (light sampling strategy)
+                float pdf_light = env_pdf(L);
+                float mis_w = mis_power_heuristic(pdf_light, brdf_pdf);
+
+                nee_radiance += env_color * brdf_val * NdotL * mis_w / max(pdf_light, 1e-7);
+            }
         }
     }
 
