@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 11 进行中。已完成：…bindings.glsl binding 6 声明、sample_env_alias_table()、env_pdf()、PrimaryPayload env_mis_weight。下一项：closesthit NEE 环境光（alias table 采样 + shadow ray + MIS）
+Step 11 进行中。已完成：…env_pdf()、PrimaryPayload env_mis_weight、closesthit NEE 环境光 + MIS。下一项：closesthit BRDF 采样后预计算 env_mis_weight
 
 ---
 
