@@ -240,6 +240,7 @@ void main() {
 
     vec3 next_dir;
     vec3 throughput_update;
+    float brdf_pdf_combined; // Full multi-lobe PDF for env MIS
 
     if (rand_lobe < p_spec) {
         // ---- Specular lobe: GGX VNDF importance sampling ----
@@ -252,6 +253,7 @@ void main() {
             payload.color = emissive + nee_radiance;
             payload.throughput_update = vec3(0.0);
             payload.hit_distance = -1.0;
+            payload.env_mis_weight = 1.0;
             return;
         }
 
@@ -268,6 +270,9 @@ void main() {
 
         // Weight = BRDF * cos(theta) / PDF / lobe_probability
         throughput_update = (D * Vis * F * NdotL) / max(pdf * p_spec, 1e-7);
+
+        // Combined multi-lobe PDF: specular + diffuse contribution at this direction
+        brdf_pdf_combined = p_spec * pdf + (1.0 - p_spec) * (NdotL * INV_PI);
     } else {
         // ---- Diffuse lobe: cosine-weighted hemisphere sampling ----
         vec3 L_ts = sample_cosine_hemisphere(vec2(rand_xi0, rand_xi1));
@@ -278,7 +283,18 @@ void main() {
         // PDF  = cos(theta) * INV_PI
         // weight = BRDF * cos / PDF / (1 - p_spec) = diffuse_color / (1 - p_spec)
         throughput_update = diffuse_color / (1.0 - p_spec);
+
+        // Combined multi-lobe PDF: evaluate specular PDF at diffuse-sampled direction
+        float NdotL_d = max(dot(N_shading, next_dir), 1e-4);
+        vec3 H_d = normalize(V + next_dir);
+        float NdotH_d = max(dot(N_shading, H_d), 0.0);
+        float VdotH_d = max(dot(V, H_d), 0.0);
+        float pdf_spec_d = pdf_ggx_vndf(NdotH_d, NdotV, VdotH_d, roughness);
+        brdf_pdf_combined = p_spec * pdf_spec_d + (1.0 - p_spec) * (NdotL_d * INV_PI);
     }
+
+    // ---- Precompute env MIS weight for potential miss (BRDF strategy) ----
+    payload.env_mis_weight = mis_power_heuristic(brdf_pdf_combined, env_pdf(next_dir));
 
     // ---- Write payload ----
     payload.color = emissive + nee_radiance;
