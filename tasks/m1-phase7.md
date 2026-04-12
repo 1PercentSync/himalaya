@@ -37,7 +37,7 @@
 
 ## Step 5：BakeDenoiser
 
-- [ ] 新增 `framework/bake_denoiser.h`：BakeDenoiser 类（init / denoise / destroy）
+- [x] 新增 `framework/bake_denoiser.h`：BakeDenoiser 类（init / denoise / destroy）
 - [ ] 新增 `framework/bake_denoiser.cpp`：OIDN device 创建（GPU 优先 fallback CPU）+ RT filter + OIDNBuffer 管理
 - [ ] `bake_denoiser.cpp`：`denoise()` 同步阻塞实现（memcpy → oidnExecuteFilter → memcpy → error check）
 - [ ] `framework/CMakeLists.txt`：添加 `bake_denoiser.cpp`
