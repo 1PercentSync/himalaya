@@ -626,6 +626,7 @@ Shader 侧 emissive NEE 采样 + MIS 权重计算。
 - closesthit.rchit BRDF 采样后写入 `payload.last_brdf_pdf`
 - closesthit.rchit 命中 emissive 表面时（bounce > 0）：读 `payload.last_brdf_pdf` + 算 light_pdf → MIS 权重。Bounce 0 直视权重 1.0
 - PrimaryPayload 新增 `float last_brdf_pdf` 字段（60B → 64B）
+- DebugUI Path Tracing 面板新增 Emissive NEE checkbox（默认开启，关闭时 push constant emissive_light_count = 0），与 env_sampling 对称
 
 **验证**：含 emissive 灯罩/LED 的场景，PT 前 60 帧对比无 area light NEE 版本收敛明显加速，灯罩周围墙面照亮
 

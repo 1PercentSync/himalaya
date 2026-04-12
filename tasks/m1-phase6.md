@@ -208,6 +208,7 @@
 - [x] closesthit.rchit BRDF 采样后写入 `payload.last_brdf_pdf`
 - [x] closesthit.rchit 命中 emissive 表面时（bounce > 0）：读 last_brdf_pdf + 算 light_pdf → MIS 权重。Bounce 0 直视权重 1.0
 - [x] PrimaryPayload 新增 `float last_brdf_pdf` 字段（60B → 64B）
+- [ ] DebugUI Path Tracing 面板新增 Emissive NEE checkbox（默认开启，关闭时 push constant emissive_light_count = 0）
 
 ## Step 13：Texture LOD（Ray Cones）
 
