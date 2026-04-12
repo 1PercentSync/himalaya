@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 12a 进行中。已完成：GPUMaterialData double_sided。下一项：closesthit 背面透传
+Step 12a 进行中。已完成：double_sided + closesthit 背面透传。下一项：max_bounces 默认值调整
 
 ---
 

@@ -187,7 +187,7 @@
 ## Step 12a：EmissiveLightBuilder + 基础设施
 
 - [x] GPUMaterialData `_padding`（offset 76）→ `uint double_sided`，SceneLoader 填充 doubleSided
-- [ ] closesthit.rchit：single-sided 材质背面透传（命中背面且 `double_sided == 0` 时消耗一个 bounce 穿过表面：`color = 0`，`throughput_update = vec3(1.0)`，`hit_distance = gl_HitTEXT`，`next_origin/next_direction` 沿原 ray 方向继续）
+- [x] closesthit.rchit：single-sided 材质背面透传（命中背面且 `double_sided == 0` 时消耗一个 bounce 穿过表面：`color = 0`，`throughput_update = vec3(1.0)`，`hit_distance = gl_HitTEXT`，`next_origin/next_direction` 沿原 ray 方向继续）
 - [ ] max_bounces 默认值从 8 调至 16（配合背面透传消耗 bounce 的方案）
 - [ ] 新增 emissive_light_builder.h/.cpp：EmissiveLightBuilder 类（build / destroy / getters）
 - [ ] build()：遍历 mesh primitive 识别 emissive（`any(emissive_factor > 0)`），收集世界空间顶点/UV/面积/emission，计算 power = luminance(emissive_factor) × area
