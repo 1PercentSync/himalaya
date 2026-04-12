@@ -171,6 +171,109 @@ vec3 ensure_normal_consistency(vec3 n_shading, vec3 n_geo) {
     return n_shading;
 }
 
+// ---- Ray Cone Utilities (Akenine-Möller et al. 2021) ----
+
+/**
+ * Computes the initial pixel spread angle for ray cone tracking.
+ *
+ * Derives the per-pixel angular extent from the vertical FOV and screen
+ * resolution. The caller initializes payload.cone_width = 0 and
+ * payload.cone_spread = returned value.
+ *
+ * FOV is derived from the inverse projection matrix without adding
+ * a new UBO field: tan(fov_y/2) = abs(inv_projection[1][1]).
+ *
+ * @param screen_height Vertical resolution in pixels (gl_LaunchSizeEXT.y).
+ * @return Pixel spread angle in radians.
+ */
+float init_ray_cone(float screen_height) {
+    float tan_half_fov = abs(global.inv_projection[1][1]);
+    return atan(2.0 * tan_half_fov / screen_height);
+}
+
+/**
+ * Propagates the ray cone to a hit point, handling focal point crossing.
+ *
+ * Updates cone_width by the travel distance scaled by the current spread
+ * angle. If the cone passes through a focal point (concave surface caused
+ * spread to go negative, making width cross zero), takes the absolute value
+ * of width and flips spread to model re-divergence after the focus.
+ *
+ * @param[in,out] cone_width  Accumulated cone width (world-space length).
+ * @param[in,out] cone_spread Current spread angle (radians, may be negative).
+ * @param         hit_distance Distance traveled by the ray (gl_HitTEXT).
+ */
+void propagate_ray_cone(inout float cone_width, inout float cone_spread,
+                        float hit_distance) {
+    cone_width = cone_width + hit_distance * cone_spread;
+    // Focal point crossing: cone converged past focus, now re-diverges
+    if (cone_width < 0.0) {
+        cone_width = abs(cone_width);
+        cone_spread = -cone_spread;
+    }
+}
+
+/**
+ * Estimates surface curvature from geometric and interpolated normals.
+ *
+ * Uses the deviation between the face normal (flat triangle) and the
+ * interpolated vertex normal (smooth shading) to approximate the local
+ * curvature along the ray direction. The result feeds into the ray cone
+ * spread update: spread' = spread + 2 * curvature * cone_width.
+ *
+ * Sign convention:
+ *   - Negative: concave surface (focusing, narrows cone)
+ *   - Positive: convex surface (defocusing, widens cone)
+ *   - Zero: flat surface (no change)
+ *
+ * Both normals must be in world space and post-backface-flip, otherwise
+ * the concave/convex sign may be inverted.
+ *
+ * @param N_face        Geometric face normal (normalized, world space).
+ * @param N_interp      Interpolated vertex normal (normalized, world space).
+ * @param ray_direction Incoming ray direction (world space, not negated).
+ * @param cone_width    Current cone width at the hit point (> 0 after propagation).
+ * @return Estimated curvature (1/radius, signed).
+ */
+float estimate_curvature(vec3 N_face, vec3 N_interp, vec3 ray_direction,
+                         float cone_width) {
+    return dot(N_interp - N_face, -ray_direction) / max(cone_width, 1e-6);
+}
+
+/**
+ * Computes texture LOD from ray cone width and triangle/texture properties.
+ *
+ * Combines the per-triangle base LOD (from cone width and texel density)
+ * with the per-texture resolution term, then clamps to [0, lod_max_level].
+ * Degenerate triangles (near-zero world or UV area) and zero-width cones
+ * fall back to LOD 0 (full resolution) to avoid numerical explosion.
+ *
+ * Formula: lod = log2(cone_width * sqrt(uv_area / world_area))
+ *              + 0.5 * log2(tex_w * tex_h)
+ *        clamped to [0, lod_max_level]
+ *
+ * The base_lod term (first line) depends only on triangle geometry and cone
+ * width; the GPU shader compiler will CSE it across multiple calls with
+ * different tex_size for the same hit point.
+ *
+ * @param cone_width    Cone width at the hit point (world-space length).
+ * @param world_area    Triangle area in world space.
+ * @param uv_area       Triangle area in UV space.
+ * @param tex_size      Texture resolution (textureSize(tex, 0)).
+ * @param lod_max_level Maximum allowed LOD level (push constant).
+ * @return Clamped texture LOD value.
+ */
+float compute_ray_cone_lod(float cone_width, float world_area, float uv_area,
+                           ivec2 tex_size, uint lod_max_level) {
+    // Degenerate triangle or zero-width cone: fall back to full resolution
+    if (world_area < 1e-12 || uv_area < 1e-12 || cone_width <= 0.0) {
+        return 0.0;
+    }
+    float base_lod = log2(cone_width * sqrt(uv_area / world_area));
+    float lod = base_lod + 0.5 * log2(float(tex_size.x) * float(tex_size.y));
+    return clamp(lod, 0.0, float(lod_max_level));
+}
+
 // ---- Multi-lobe BRDF Selection ----
 
 /**
