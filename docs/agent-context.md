@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 13 进行中。已完成：全部 shader 改动。下一项：PrimaryPayload 新增 cone_width + cone_spread
+Step 13 进行中。已完成：全部 shader + payload。下一项：Push constant 新增 lod_max_level（shader + C++）
 
 ---
 
