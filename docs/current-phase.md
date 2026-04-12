@@ -112,6 +112,57 @@ Step 13: ImGui 烘焙控制面板
 
 mesh_hash = `content_hash(vertex positions + indices)`（不含 UV、normal 等——只有几何拓扑决定 UV layout）。xatlas gutter 默认 2（padding texels around UV islands）。`generate_lightmap_uv()` 是纯 CPU 函数，不涉及 GPU 资源。
 
+#### xatlas API 用法
+
+```cpp
+// 1. 创建 atlas
+xatlas::Atlas *atlas = xatlas::Create();
+
+// 2. 填充 MeshDecl
+xatlas::MeshDecl decl;
+decl.vertexPositionData = positions_ptr;       // const float* (xyz)
+decl.vertexPositionStride = sizeof(Vertex);    // 跨距：整个 Vertex 结构体大小
+decl.vertexCount = vertex_count;
+decl.indexData = indices_ptr;                  // const uint32_t*
+decl.indexCount = index_count;
+decl.indexFormat = xatlas::IndexFormat::UInt32; // 项目用 uint32_t 索引
+
+// 3. AddMesh（数据会被拷贝，调用后原数据可释放）
+xatlas::AddMeshError error = xatlas::AddMesh(atlas, decl);
+// 检查 error == AddMeshError::Success
+
+// 4. Generate（= ComputeCharts + PackCharts）
+xatlas::PackOptions pack;
+pack.padding = 2;  // gutter: UV island 间 2 texel 填充
+xatlas::Generate(atlas, xatlas::ChartOptions(), pack);
+
+// 5. 提取结果（仅单 mesh，meshes[0]）
+const xatlas::Mesh &out = atlas->meshes[0];
+// out.vertexCount  — 可能 > 输入顶点数（xatlas 在接缝处拆分顶点）
+// out.vertexArray[i].uv[0/1] — 未归一化，范围 [0, atlas->width/height]
+// out.vertexArray[i].xref     — 原始顶点索引（即 vertex_remap）
+// out.indexArray              — 新索引缓冲
+// out.indexCount              — 新索引数量
+// atlas->width / atlas->height — atlas 尺寸
+
+// 6. UV 归一化到 [0, 1]
+float inv_w = 1.0f / static_cast<float>(atlas->width);
+float inv_h = 1.0f / static_cast<float>(atlas->height);
+for (uint32_t i = 0; i < out.vertexCount; ++i) {
+    uv.x = out.vertexArray[i].uv[0] * inv_w;
+    uv.y = out.vertexArray[i].uv[1] * inv_h;
+}
+
+// 7. 清理
+xatlas::Destroy(atlas);
+```
+
+**关键注意点**：
+- `vertexPositionStride` 必须正确设置为 `sizeof(framework::Vertex)`（xatlas 按 stride 跳跃读取 position）
+- xatlas 输出 UV 是像素坐标（`[0, width]` × `[0, height]`），必须归一化后写入 `LightmapUVResult::lightmap_uvs`
+- `Vertex::xref` 直接作为 `LightmapUVResult::vertex_remap`（new_vertex → original_vertex）
+- `atlasIndex == -1` 表示顶点未被分配到任何 atlas（退化三角形等），UV 为 `(0, 0)`
+
 ---
 
 ### Step 4：Lightmap UV 拓扑应用
