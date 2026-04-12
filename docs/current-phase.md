@@ -48,7 +48,7 @@ Step 13: ImGui 烘焙控制面板
 | 3 | xatlas + Lightmap UV 生成器 | 无 TEXCOORD_1 的 mesh：xatlas 生成 lightmap UV + 缓存写入；有 TEXCOORD_1 的 mesh：跳过 xatlas |
 | 4 | Lightmap UV 拓扑应用 | 场景加载后 Mesh::uv1 包含 lightmap UV，BLAS/TLAS 正确重建，光栅化和 PT 参考视图渲染无回归 |
 | 5 | BakeDenoiser | 单元测试或手动验证：输入噪声 HDR buffer → 输出降噪结果，OIDN 无报错 |
-| 6 | Push Constants 扩展 | RT shader 编译通过（push constant 60B 超集），reference view 行为不变 |
+| 6 | Push Constants 扩展 + 默认值 | RT shader 编译通过（push constant 60B 超集），reference view 行为不变（max_clamp 默认 0.0） |
 | 7 | Position/Normal Map pass | RenderDoc：position map 和 normal map 在 UV 空间正确渲染（非零 texel 覆盖三角形区域） |
 | 8 | Lightmap Baker Pass | RenderDoc：accumulation buffer 逐帧亮度增加，UV 空间可见光照分布 |
 | 9 | 烘焙模式 + Lightmap 端到端 | 触发烘焙 → 累积 → 降噪 → BC6H → KTX2 写入磁盘，文件可被 read_ktx2() 正确加载 |
@@ -152,12 +152,13 @@ BakeDenoiser 的 OIDNBuffer 尺寸在 `init()` 时未知——首次 `denoise()`
 
 ---
 
-### Step 6：PT Push Constants 扩展
+### Step 6：PT Push Constants 扩展 + 默认值修正
 
 扩展 push constant 超集布局，追加 baker 专属字段。Closesthit 不加条件分支——aux imageStore 保持 Phase 6 原样无条件执行，baker pipeline 绑定自己的 aux image。
 
 - `shaders/rt/pt_common.glsl` 或各 RT shader：PushConstants struct 末尾追加 `uint lightmap_width` + `uint lightmap_height` + `float probe_pos_x/y/z` + `uint face_index`（36B → 60B）。`face_index` = probe cubemap face 0-5（probe baker 用），lightmap/reference view 忽略
 - `pt_common.glsl` 新增 `build_orthonormal_basis(vec3 N, out vec3 T, out vec3 B)` 函数（从 closesthit.rchit:392-398 提取，baker raygen 初始射线和 closesthit BRDF 采样共用）
+- `renderer.h`：`max_clamp_` 默认值从 10.0f 改为 0.0f（firefly clamping 默认关闭，OIDN 降噪足够强）；`prev_max_clamp_` 同步改为 0.0f
 - `passes/reference_view_pass.cpp`：push constant 填充追加 baker 字段为 0（reference view 不读）
 - `passes/reference_view_pass.h`：push constant range 更新为 60B
 
@@ -193,7 +194,8 @@ Lightmap 烘焙 RT pipeline + raygen shader + accumulation。
   - 读 position/normal map（push descriptor Set 3 binding 4/5）
   - `position.a == 0.0` → 跳过（未覆盖 texel，alpha 通道标记）
   - 从 world position 沿 normal 半球发射射线（cosine-weighted initial direction，TBN frame 从 N 用 frisvad/duff 构建）
-  - 后续 bounce 调用 `pt_common.glsl` 中提取的 `vec3 trace_path(vec3 origin, vec3 direction, float initial_cone_width, float initial_cone_spread, ivec2 pixel)`。函数内部直接读 `pc.max_bounces`/`pc.sample_count`/`pc.frame_seed`/`pc.blue_noise_index`/`pc.max_clamp`（push constant 是 per-dispatch uniform，不需要参数传递）。`env_mis_weight`/`last_brdf_pdf` 初始值三个 raygen 相同（1.0/0.0），hardcode 在函数内部。Baker 通过 `pc.max_clamp = 0` 禁用 firefly clamping（烘焙求无偏）。从 reference_view.rgen:89-150 提取，三个 raygen 共用。Raygen 职责仅为：计算初始 origin/direction/cone → 调用 trace_path() → 写 accumulation
+  - 初始 Ray Cone：`cone_width = 0, cone_spread = 0`（lightmap 离线烘焙 4096 SPP，始终全分辨率纹理采样；secondary bounce 正常积累 spread）
+  - 后续 bounce 调用 `pt_common.glsl` 中提取的 `vec3 trace_path(vec3 origin, vec3 direction, float initial_cone_width, float initial_cone_spread, ivec2 pixel)`。函数内部直接读 `pc.xxx`（push constant 是 per-dispatch uniform，不需要参数传递）。`env_mis_weight`/`last_brdf_pdf` 初始值 hardcode 在函数内部（1.0/0.0，三个 raygen 相同）。Baker 通过 `pc.max_clamp = 0` 禁用 firefly clamping（烘焙求无偏）。从 reference_view.rgen:89-150 提取，三个 raygen 共用。Raygen 职责仅为：计算初始 origin/direction/cone → 调用 trace_path() → 写 accumulation
   - Running average 累积到 accumulation buffer（Set 3 binding 0）
   - Push constant：共享 60B 超集 struct（lightmap_width/height 填入实际值，probe 字段为 0）
 - 新增 `passes/lightmap_baker_pass.h/.cpp`：
@@ -209,6 +211,12 @@ Lightmap 烘焙 RT pipeline + raygen shader + accumulation。
 Lightmap baker 和 reference view 共享 closesthit/miss/anyhit shader，closesthit 无条件写入 aux image（Phase 6 原样不动）。Baker 的 Set 3 binding 1/2 绑定与 accumulation 同分辨率的真正 aux image（RGBA16F），closesthit bounce 0 时写入。Baker 烘焙完成后将 aux image 连同 accumulation 一起 readback 传给 BakeDenoiser，获得完整辅助通道降噪。Aux image 随 accumulation 一起 per-instance 创建和销毁。
 
 Position/normal map 通过 `sampler2D`（nearest, clamp）采样而非 storage image 读取——texel 坐标完美对齐，nearest sampling 等价于直接读取但不需要 image layout 为 GENERAL。
+
+**trace_path() 提取细节**：
+
+- `DIMS_PER_BOUNCE` 常量从 raygen/closesthit 迁移到 `pt_common.glsl`（两者都引用它计算 Sobol 维度偏移）
+- trace_path() 包在 `#ifdef RAYGEN_SHADER` 内：raygen 在 `#include "rt/pt_common.glsl"` 前定义 `#define RAYGEN_SHADER`，closesthit 不定义。trace_path() 内调用 `traceRayEXT`（仅 raygen 可用），且引用 raygen 声明的 `payload` 变量（GLSL `#include` 是文本合并，同一编译单元内变量可见）
+- reference_view.rgen 重构为调用 trace_path()（行为不变，原 bounce loop 代码移入函数）
 
 ---
 
@@ -269,8 +277,10 @@ Probe 烘焙 RT pipeline + raygen shader + cubemap accumulation。
   - Probe 位置通过 push constant 读取（`probe_pos_x/y/z`，共享 60B 超集 struct）
   - 6 个 face 的方向矩阵从 face index 推导（cube face → world direction）
   - 从 probe 位置沿 face 方向发射射线
-  - 后续 bounce 调用 `pt_common.glsl` 共享 bounce loop 函数（与 lightmap baker 相同）
-  - Push constant：共享 60B 超集 struct（probe_pos 填入当前 probe 位置，lightmap 字段为 0）
+  - 初始 Ray Cone：`cone_width = 0, cone_spread = atan(2.0 / face_resolution)`（cubemap texel 张角，类似 reference view 的像素张角）
+  - 后续 bounce 调用 `pt_common.glsl` 共享 trace_path() 函数
+  - Push constant：共享 60B 超集 struct（probe_pos 填入当前 probe 位置，face_index 填入当前 face，lightmap 字段为 0）
+  - 6 个 face 共享同一个 per-probe sample_count：每帧 6 个 face 各 dispatch 一次，帧结束后 sample_count +1（不是 +6），Sobol 序列按 sample_count 索引保证时序一致
 - 新增 `passes/probe_baker_pass.h/.cpp`：
   - `setup()`：编译 probe_baker.rgen，创建 RT pipeline
   - `record()`：每帧 **6 次 dispatch**（每 face 一次，face index 通过 push constant `face_index` 字段传入）。每次 dispatch 绑定 accumulation cubemap 的 per-layer 2D view + 对应 face 的 aux 2D image。保持 closesthit 用 `ivec2(gl_LaunchIDEXT.xy)` 写 aux 不变（已确认 closesthit 不使用 screen_size 等变换，直接用 `gl_LaunchIDEXT.xy`）

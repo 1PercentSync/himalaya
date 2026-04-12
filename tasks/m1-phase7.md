@@ -44,10 +44,11 @@
 - [ ] `bake_denoiser.cpp`：`denoise()` 同步阻塞实现（memcpy → oidnExecuteFilter → memcpy → error check）
 - [ ] `framework/CMakeLists.txt`：添加 `bake_denoiser.cpp`
 
-## Step 6：PT Push Constants 扩展
+## Step 6：PT Push Constants 扩展 + 默认值修正
 
 - [ ] RT shader PushConstants struct 追加 `uint lightmap_width` + `uint lightmap_height` + `float probe_pos_x/y/z` + `uint face_index`（36B → 60B）
 - [ ] `pt_common.glsl` 新增 `build_orthonormal_basis(N, out T, out B)` 函数（从 closesthit:392-398 提取）
+- [ ] `renderer.h`：`max_clamp_` 默认值 10.0f → 0.0f + `prev_max_clamp_` 同步改为 0.0f（firefly clamping 默认关闭）
 - [ ] `reference_view_pass.cpp`：push constant 填充追加 baker 字段为 0
 - [ ] `reference_view_pass.h`：push constant range 更新为 60B
 - [ ] closesthit.rchit 不改动（aux imageStore 保持无条件执行）
@@ -61,8 +62,9 @@
 
 ## Step 8：Lightmap Baker Pass
 
-- [ ] `pt_common.glsl`：从 reference_view.rgen 提取共享 `trace_path()` 函数（三个 raygen 共用，返回 total_radiance）
-- [ ] `reference_view.rgen`：重构为调用 `trace_path()`（行为不变）
+- [ ] `pt_common.glsl`：`DIMS_PER_BOUNCE` 常量从 raygen/closesthit 迁移到此处
+- [ ] `pt_common.glsl`：从 reference_view.rgen 提取共享 `trace_path()` 函数（`#ifdef RAYGEN_SHADER` 守卫，三个 raygen 共用）
+- [ ] `reference_view.rgen`：重构为 `#define RAYGEN_SHADER` + 调用 `trace_path()`（行为不变）
 - [ ] 新增 `shaders/rt/lightmap_baker.rgen`：读 position/normal map → 逐 texel 发射射线 → 调用共享 bounce loop → accumulation
 - [ ] 新增 `passes/lightmap_baker_pass.h`：LightmapBakerPass 类声明
 - [ ] 新增 `passes/lightmap_baker_pass.cpp`：setup（编译 rgen + 创建 RT pipeline）+ record（RG pass + push descriptors + trace_rays）
