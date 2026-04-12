@@ -44,5 +44,5 @@ set_target_properties(oidn PROPERTIES
 
 target_link_libraries(himalaya_framework
         PUBLIC himalaya_rhi imgui::imgui
-        PRIVATE mikktspace::mikktspace nlohmann_json::nlohmann_json xxHash::xxhash bc7enc oidn
+        PRIVATE mikktspace::mikktspace nlohmann_json::nlohmann_json xxHash::xxhash bc7enc xatlas oidn
 )
