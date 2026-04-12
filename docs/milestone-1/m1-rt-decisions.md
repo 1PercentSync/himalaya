@@ -696,7 +696,7 @@ cone_spread' = cone_spread + 2 × curvature × cone_width
 curvature ≈ dot(N_interp - N_face, -ray_direction) / max(cone_width, epsilon)
 ```
 
-精度有限（基于三角形级别的法线差异，非解析曲率），但正确捕捉了凹/凸/平的符号和量级。允许 spread 为负值（凹面聚焦），不 clamp 到 0。负 spread 使 cone_width 在后续传播中缩小；当 cone_width 穿越零点（焦点）时取绝对值并翻转 spread（焦点后重新发散），详见传播公式。
+精度有限（基于三角形级别的法线差异，非解析曲率），但正确捕捉了凹/凸/平的符号和量级。`N_face` 和 `N_interp` 必须在 backface flip 之后比较（closesthit 中双面材质背面命中时翻转法线），否则凹/凸符号可能反转。允许 spread 为负值（凹面聚焦），不 clamp 到 0。负 spread 使 cone_width 在后续传播中缩小；当 cone_width 穿越零点（焦点）时取绝对值并翻转 spread（焦点后重新发散），详见传播公式。
 
 PrimaryPayload 需同时存储 `cone_width`（累积宽度）和 `cone_spread`（当前扩展角）。扩展角不再是常量——每次反射后可能因曲率而变化，且可为负。
 
@@ -725,26 +725,28 @@ lod = min(log2(cone_width × sqrt(uv_area / world_area)) + 0.5 × log2(tex_w × 
 
 Vulkan spec 限制 anyhit 不能读写 payload，无法获取真实 cone width。使用近似：`cone_width ≈ gl_HitTEXT × pixel_spread`（`pixel_spread` 从 `inv_projection` + `screen_size` 重新计算）。
 
-- Primary ray：精确（cone_spread = 0 时等价于真实公式）
-- Bounce ray：下界（忽略前几段累积的宽度），LOD 偏向高分辨率 mip
+- Primary ray：精确（cone_width = 0 时等价于真实公式）
+- Bounce ray（无凹面聚焦）：下界（忽略前几段累积的宽度），LOD 偏向高分辨率 mip
+- Bounce ray（经过凹面聚焦）：近似值可能大于真实 cone width（真实 cone 因聚焦收窄，近似值不知道），此时 LOD 可能偏高
 
-下界意味着 alpha test 保守安全（不会错误采用过低分辨率导致 alpha 判断失误），唯一 tradeoff 是 non-opaque 几何体的带宽节省未达理想值。anyhit 中已读取 v0/v1/v2 做 UV 插值，顺便计算 texel density 零额外内存访问。
+整体仍偏保守（多数路径无凹面聚焦），但不是严格下界。对 alpha test 的影响有限——偏高 LOD 意味着偶尔用略低分辨率采样 alpha，被 `lod_max_level` clamp 兜底。anyhit 中已读取 v0/v1/v2 做 UV 插值，顺便计算 texel density 零额外内存访问。
 
 ### NEE Emissive 纹理 LOD
 
-closesthit 中 NEE 采样 emissive 光源纹理使用 ray cone LOD。shadow ray 到达光源三角形时的 cone width：
+closesthit 中 NEE 采样 emissive 光源纹理使用 ray cone LOD。shadow ray 到达光源三角形时的 cone width 复用传播逻辑（含焦点穿越处理）：
 
 ```
 nee_cone_width = cone_width + shadow_distance × cone_spread
+if nee_cone_width < 0: nee_cone_width = abs(nee_cone_width)  // 焦点穿越
 ```
 
 光源三角形的 texel density 直接从 EmissiveTriangle 结构体计算（v0/v1/v2 已在世界空间，uv0/uv1/uv2 已存储），无需额外 buffer_reference 读取。然后用与材质纹理相同的 LOD 公式 + `lod_max_level` clamp。
 
 ### LOD Clamp
 
-Push constant 新增 `uint lod_max_level`，应用时 `final_lod = min(computed_lod, lod_max_level)`。防止多次 bounce 累积、凸面曲率高估、极窄三角形等情况导致 LOD 过高（纹理过度模糊）。
+Push constant 新增 `uint lod_max_level`，应用时 `final_lod = clamp(computed_lod, 0, lod_max_level)`。下限 0 由显式 clamp 保证（不依赖硬件对负 LOD 的隐式截断），上限防止过度模糊。
 
-默认值 4（保留至少 16×16 细节，对 4K 纹理 = 最多降到 mip 8，256×256）。值为 0 = 强制全分辨率（调试用）。Step 13 ImGui 面板加 slider（范围 0 ~ `textureQueryLevels - 1`）。
+默认值 4（mip 4：4K 纹理 = 256×256，1K 纹理 = 64×64）。值为 0 = 强制全分辨率（调试用）。Step 13 ImGui 面板加 slider（范围 0 ~ `textureQueryLevels - 1`）。
 
 不使用 lod_bias（全局偏移）：bias 无法针对性解决模糊问题，会误伤所有正常 LOD。clamp 只截断极端值，不影响正常区域。
 
@@ -753,9 +755,9 @@ Push constant 新增 `uint lod_max_level`，应用时 `final_lod = min(computed_
 新增两个字段（64B → 72B）：
 
 - `float cone_width`：累积 cone 宽度（世界空间长度）。raygen 初始化为 0，closesthit 每次 bounce 更新为 `旧值 + hit_distance × cone_spread`
-- `float cone_spread`：当前扩展角（rad）。raygen 初始化为 `pixel_spread`（像素张角），closesthit 每次反射后根据曲率估算修正：`max(旧值 + 2 × curvature × cone_width, 0)`
+- `float cone_spread`：当前扩展角（rad，可为负）。raygen 初始化为 `pixel_spread`（像素张角），closesthit 每次反射后根据曲率估算修正：`旧值 + 2 × curvature × cone_width`（不 clamp，允许负值表示凹面聚焦）
 
-两者都需要跨 bounce 传递——`cone_spread` 不再是常量（曲率修正后每个 bounce 可能不同）。
+两者都需要跨 bounce 传递——`cone_spread` 不再是常量（曲率修正后每个 bounce 可能不同，且可为负）。
 
 ### Shader 改动
 

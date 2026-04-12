@@ -640,7 +640,7 @@ RT 纹理 mip 选择。架构决策见 `milestone-1/m1-rt-decisions.md`「Textur
 - pt_common.glsl 新增 `compute_texel_density()`：独立函数，通过 buffer_reference 重新读取三角形三个顶点的世界坐标和 UV（GPU L1 cache 命中，`interpolate_hit()` 刚访问过相同地址），返回 world area 和 UV area。退化三角形（面积接近零）回退 LOD 0
 - reference_view.rgen：初始化 `payload.cone_width = 0`、`payload.cone_spread = pixel_spread`，FOV 从 `abs(global.inv_projection[1][1])` 推导（不新增 UBO 字段）
 - closesthit.rchit：propagate cone（含焦点穿越：cone_width < 0 时取绝对值并翻转 spread），估算表面曲率（face_normal vs interpolated_normal）修正 spread angle（允许负值，不 clamp），compute per-triangle `base_lod` 一次，每个材质纹理加 `0.5 × log2(tex_w × tex_h)` 得到 per-texture LOD（通过 `textureSize()` 取分辨率），LOD clamp 到 `lod_max_level`（push constant，防止过度模糊），所有材质纹理 `texture()` → `textureLod(tex, uv, lod)`（~4 处）。NEE emissive 光源纹理同样使用 ray cone LOD（shadow ray cone width + EmissiveTriangle texel density）
-- anyhit.rahit：alpha 纹理采样 `texture()` → `textureLod()`（~1 处），因 anyhit 无法访问 payload，使用近似 cone width = `gl_HitTEXT × pixel_spread`（primary ray 精确，bounce ray 为保守下界——偏向高分辨率 mip，alpha test 安全）
+- anyhit.rahit：alpha 纹理采样 `texture()` → `textureLod()`（~1 处），因 anyhit 无法访问 payload，使用近似 cone width = `gl_HitTEXT × pixel_spread`（primary ray 精确，bounce ray 近似——多数路径偏保守，经过凹面聚焦后近似值可能偏大，由 `lod_max_level` clamp 兜底）
 - PrimaryPayload 新增 `float cone_width` + `float cone_spread` 两个字段（64B → 72B），cone_width = 累积宽度，cone_spread = 当前扩展角（含曲率修正，不再是常量）
 - Push constant 新增 `uint lod_max_level`（32B → 36B，默认 4，0 = 强制全分辨率）
 - Step 10 ImGui 面板新增 LOD Max Level slider
