@@ -634,7 +634,11 @@ NEE emissive 和 BRDF 采样命中 emissive 使用 power heuristic 平衡。
 
 跟随 glTF `doubleSided` 标志：`doubleSided = true` 双面发光，`false` 仅正面发光。
 
-GPUMaterialData 的 `_padding`（offset 76）改为 `uint double_sided`。forward.frag 对齐：emissive 贡献受 doubleSided + `gl_FrontFacing` 控制。SceneLoader 填充 doubleSided 字段。
+GPUMaterialData 的 `_padding`（offset 76）改为 `uint double_sided`。SceneLoader 填充 doubleSided 字段。
+
+光栅化管线中 single-sided 背面已由硬件 face culling 处理（`VkCullModeFlagBits` 由 `MeshDrawGroup::double_sided` 控制），forward.frag 无需额外 discard。
+
+RT 管线中 closesthit 检测到命中背面（`dot(N_geo_unflipped, ray_dir) > 0`）且 `double_sided == 0` 时，消耗一个 bounce 穿过表面：`color = vec3(0)`、`throughput_update = vec3(1.0)`、`hit_distance = gl_HitTEXT`、`next_origin/next_direction` 沿原 ray 方向继续。raygen 无需修改——RR 在 throughput=1.0 时存活概率 100%，路径自然继续。max_bounces 默认值从 8 调至 16 以配合偶尔的背面穿透消耗。
 
 ### 代码归属
 

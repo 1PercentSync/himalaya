@@ -601,9 +601,8 @@ IBL alias table 构建 + closesthit NEE 环境光 + MIS 权重。架构决策见
 C++ 侧 emissive 面光源数据构建 + descriptor 扩展。架构决策见 `milestone-1/m1-rt-decisions.md`「Area Light NEE」。
 
 - GPUMaterialData `_padding`（offset 76）→ `uint double_sided`（从 glTF `doubleSided` 填充）
-- forward.frag：`!gl_FrontFacing && double_sided == 0` → `discard`（single-sided 材质背面剔除，替代纯依赖光栅化 face culling）
-- forward.frag emissive 贡献对齐 doubleSided 检查
-- closesthit.rchit：命中背面（`dot(N_geo_unflipped, ray_dir) > 0`）且 `mat.double_sided == 0` 时，视为未命中（`hit_distance = -1`，`throughput_update = vec3(1.0)`，路径继续）。翻转法线仅对 double-sided 表面执行
+- closesthit.rchit：命中背面（`dot(N_geo_unflipped, ray_dir) > 0`）且 `mat.double_sided == 0` 时，消耗一个 bounce 穿过表面（`color = vec3(0)`，`throughput_update = vec3(1.0)`，`hit_distance = gl_HitTEXT`，`next_origin` 偏移至命中点前方，`next_direction` = 原 ray 方向），raygen 无需修改。翻转法线仅对 double-sided 表面执行
+- max_bounces 默认值从 8 调至 16（RR 控制实际路径长度，提高上限配合背面透传的 bounce 消耗）
 - 新增 `framework/emissive_light_builder.h` / `.cpp`：
   - `EmissiveLightBuilder` 类：
     - `build(Context&, ResourceManager&, meshes, mesh_instances, materials)`：遍历 mesh primitive 识别 emissive（`any(emissive_factor > 0)`），收集世界空间顶点/UV/面积，计算 `luminance(emissive_factor) × area` 功率，Vose's algorithm 构建 power-weighted alias table，上传 EmissiveTriangleBuffer SSBO + EmissiveAliasTable SSBO
