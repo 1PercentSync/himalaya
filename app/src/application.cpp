@@ -47,14 +47,6 @@ namespace himalaya::app {
             ? kDefaultLogLevel
             : spdlog::level::from_str(config_.log_level));
 
-        // Apply persisted present mode preference
-        if (config_.present_mode == "fifo") {
-            user_present_mode_ = rhi::PresentMode::Fifo;
-        } else if (config_.present_mode == "immediate") {
-            user_present_mode_ = rhi::PresentMode::Immediate;
-        } else {
-            user_present_mode_ = rhi::PresentMode::Mailbox; // default
-        }
         pt_allow_tearing_ = config_.pt_allow_tearing;
 
         glfwInit();
@@ -588,17 +580,10 @@ namespace himalaya::app {
             present_mode_changed_ = true;
         }
 
-        // ---- Persist present mode settings on change ----
-        {
-            const char* mode_str = "mailbox";
-            if (user_present_mode_ == rhi::PresentMode::Fifo) { mode_str = "fifo"; }
-            else if (user_present_mode_ == rhi::PresentMode::Immediate) { mode_str = "immediate"; }
-
-            if (config_.present_mode != mode_str || config_.pt_allow_tearing != pt_allow_tearing_) {
-                config_.present_mode = mode_str;
-                config_.pt_allow_tearing = pt_allow_tearing_;
-                save_config(config_);
-            }
+        // ---- Persist pt_allow_tearing on change ----
+        if (config_.pt_allow_tearing != pt_allow_tearing_) {
+            config_.pt_allow_tearing = pt_allow_tearing_;
+            save_config(config_);
         }
     }
 

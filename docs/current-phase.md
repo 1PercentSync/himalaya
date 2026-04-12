@@ -657,7 +657,7 @@ RT 纹理 mip 选择。架构决策见 `milestone-1/m1-rt-decisions.md`「Textur
 - DebugUI：VSync checkbox → Present Mode combo box（"VSync (FIFO)" / "Mailbox" / "Immediate (tearing)"），默认 Mailbox。`DebugUIActions::vsync_toggled` → `present_mode_changed`，`DebugUIContext` 对应调整
 - DebugUI PT 面板：新增 "Allow Tearing" checkbox（仅 PT 模式显示，启用时 PT 路径下自动覆盖 present mode 为 IMMEDIATE 绕过驱动帧率限制，切回光栅化时恢复用户选择的 present mode）
 - Application：present mode 变更处理替代原 `vsync_changed_` 逻辑；PT allow tearing 激活/恢复时触发 swapchain recreate
-- AppConfig 持久化：新增 `present_mode`（字符串 `"fifo"` / `"mailbox"` / `"immediate"`，默认 `"mailbox"`）+ `pt_allow_tearing`（bool，默认 `false`），config.cpp 序列化/反序列化
+- AppConfig 持久化：新增 `pt_allow_tearing`（bool，默认 `false`），config.cpp 序列化/反序列化。Present mode 不持久化（每次启动默认 Mailbox）
 - Swapchain 新增 `mailbox_supported` / `immediate_supported` 布尔字段，`create_resources()` 中从 `vkGetPhysicalDeviceSurfacePresentModesKHR` 查询并缓存（surface 不变则结果不变，查一次即可）
 - DebugUI Present Mode combo 仅列出硬件支持的模式（FIFO 始终列出）。仅 FIFO 可用时 combo 灰掉（`ImGui::BeginDisabled`）。config 中持久化的模式在启动时若不支持，fallback 到 FIFO 并回写 combo 显示
 - DebugUI Allow Tearing checkbox：`immediate_supported == false` 时 `BeginDisabled` 灰掉不可选。勾选生效后若 IMMEDIATE 实际 fallback 到 FIFO（`swapchain_.present_mode != Immediate`），自动还原 `pt_allow_tearing_ = false` 并持久化

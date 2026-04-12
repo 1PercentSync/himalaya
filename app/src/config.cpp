@@ -77,9 +77,6 @@ namespace himalaya::app {
             if (json.contains("auto_denoise_interval") && json["auto_denoise_interval"].is_number_unsigned()) {
                 config.auto_denoise_interval = json["auto_denoise_interval"].get<uint32_t>();
             }
-            if (json.contains("present_mode") && json["present_mode"].is_string()) {
-                config.present_mode = json["present_mode"].get<std::string>();
-            }
             if (json.contains("pt_allow_tearing") && json["pt_allow_tearing"].is_boolean()) {
                 config.pt_allow_tearing = json["pt_allow_tearing"].get<bool>();
             }
@@ -121,9 +118,6 @@ namespace himalaya::app {
                 }
                 if (config.auto_denoise_interval > 0) {
                     j["auto_denoise_interval"] = config.auto_denoise_interval;
-                }
-                if (!config.present_mode.empty()) {
-                    j["present_mode"] = config.present_mode;
                 }
                 j["pt_allow_tearing"] = config.pt_allow_tearing;
                 nlohmann::json coords = nlohmann::json::object();

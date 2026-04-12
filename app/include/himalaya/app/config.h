@@ -50,13 +50,6 @@ namespace himalaya::app {
         uint32_t auto_denoise_interval = 0;
 
         /**
-         * @brief Present mode preference ("fifo", "mailbox", "immediate").
-         *
-         * Empty string means no user override — defaults to "mailbox".
-         */
-        std::string present_mode;
-
-        /**
          * @brief PT allow tearing: override to IMMEDIATE while path tracing.
          *
          * Bypasses driver-level frame rate caps (e.g. Sunshine streaming).
