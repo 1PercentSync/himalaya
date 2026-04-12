@@ -374,6 +374,32 @@ namespace himalaya::framework {
         uint32_t cascade_index; ///< 4 bytes — shadow.vert cascade selection
     };
 
+    /**
+     * @brief Emissive triangle data for RT NEE sampling (Set 0, Binding 7 SSBO element).
+     *
+     * std430 layout, 96 bytes per element, aligned to 16.
+     * World-space vertices, emissive factor, precomputed area, material index,
+     * and per-vertex UV coordinates for texture sampling at NEE sample points.
+     *
+     * Padding fields align C++ layout to GLSL std430 rules:
+     * vec3 has 16-byte alignment, vec2 has 8-byte alignment.
+     */
+    struct alignas(16) EmissiveTriangle {
+        glm::vec3 v0;              ///< offset  0 — world-space vertex 0
+        float _pad0;               ///< offset 12 — pad to vec3 alignment (16)
+        glm::vec3 v1;              ///< offset 16 — world-space vertex 1
+        float _pad1;               ///< offset 28 — pad to vec3 alignment (32)
+        glm::vec3 v2;              ///< offset 32 — world-space vertex 2
+        float _pad2;               ///< offset 44 — pad to vec3 alignment (48)
+        glm::vec3 emission;        ///< offset 48 — raw emissive_factor (no texture)
+        float area;                ///< offset 60 — precomputed world-space triangle area
+        uint32_t material_index;   ///< offset 64 — index into MaterialBuffer SSBO
+        uint32_t _pad3;            ///< offset 68 — pad to vec2 alignment (72)
+        glm::vec2 uv0;             ///< offset 72 — vertex 0 texture coordinate
+        glm::vec2 uv1;             ///< offset 80 — vertex 1 texture coordinate
+        glm::vec2 uv2;             ///< offset 88 — vertex 2 texture coordinate
+    };
+
     // ---- CPU-side Draw Grouping ----
 
     /**
@@ -430,4 +456,14 @@ namespace himalaya::framework {
     static_assert(offsetof(GPUInstanceData, normal_col0) == 64);
     static_assert(offsetof(GPUInstanceData, material_index) == 112);
     static_assert(sizeof(PushConstantData) == 4, "PushConstantData must be 4 bytes");
+    static_assert(sizeof(EmissiveTriangle) == 96, "EmissiveTriangle must be 96 bytes (std430)");
+    static_assert(offsetof(EmissiveTriangle, v0) == 0);
+    static_assert(offsetof(EmissiveTriangle, v1) == 16);
+    static_assert(offsetof(EmissiveTriangle, v2) == 32);
+    static_assert(offsetof(EmissiveTriangle, emission) == 48);
+    static_assert(offsetof(EmissiveTriangle, area) == 60);
+    static_assert(offsetof(EmissiveTriangle, material_index) == 64);
+    static_assert(offsetof(EmissiveTriangle, uv0) == 72);
+    static_assert(offsetof(EmissiveTriangle, uv1) == 80);
+    static_assert(offsetof(EmissiveTriangle, uv2) == 88);
 } // namespace himalaya::framework

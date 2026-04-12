@@ -84,6 +84,15 @@ namespace himalaya::app {
         /** @brief Returns the loaded directional lights (may be empty). */
         [[nodiscard]] std::span<const framework::DirectionalLight> directional_lights() const;
 
+        /** @brief Returns per-mesh CPU vertex data (parallel to meshes()). Available until destroy(). */
+        [[nodiscard]] std::span<const std::vector<framework::Vertex>> cpu_vertices() const;
+
+        /** @brief Returns per-mesh CPU index data (parallel to meshes()). Available until destroy(). */
+        [[nodiscard]] std::span<const std::vector<uint32_t>> cpu_indices() const;
+
+        /** @brief Returns GPU material data array. Available until destroy(). */
+        [[nodiscard]] std::span<const framework::GPUMaterialData> gpu_materials() const;
+
         /** @brief Returns the number of GPU texture images loaded from the scene. */
         [[nodiscard]] uint32_t texture_count() const;
 
@@ -121,6 +130,15 @@ namespace himalaya::app {
 
         /** @brief Directional lights extracted from glTF KHR_lights_punctual. */
         std::vector<framework::DirectionalLight> directional_lights_;
+
+        /** @brief CPU vertex data per mesh (parallel to meshes_). Retained for EmissiveLightBuilder. */
+        std::vector<std::vector<framework::Vertex>> cpu_vertices_;
+
+        /** @brief CPU index data per mesh (parallel to meshes_). Retained for EmissiveLightBuilder. */
+        std::vector<std::vector<uint32_t>> cpu_indices_;
+
+        /** @brief GPU material data array. Retained for EmissiveLightBuilder emissive_factor lookup. */
+        std::vector<framework::GPUMaterialData> gpu_materials_;
 
         /** @brief Union AABB of all mesh instance world_bounds, computed at load time. */
         framework::AABB scene_bounds_{};

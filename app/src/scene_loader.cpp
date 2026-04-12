@@ -405,6 +405,10 @@ namespace himalaya::app {
                 resource_manager_->upload_buffer(vb, vertices.data(), vb_size);
                 resource_manager_->upload_buffer(ib, indices.data(), ib_size);
 
+                // Retain CPU data for EmissiveLightBuilder (freed in destroy())
+                cpu_vertices_.push_back(std::move(vertices));
+                cpu_indices_.push_back(std::move(indices));
+
                 // Material index is required before push (used for group_id/material_id)
                 if (!primitive.materialIndex.has_value()) {
                     throw std::runtime_error("Mesh '" + std::string(gltf_mesh.name)
@@ -616,6 +620,9 @@ namespace himalaya::app {
             material_system.upload_materials(gpu_materials);
         }
 
+        // Retain CPU copy for EmissiveLightBuilder (freed in destroy())
+        gpu_materials_ = std::move(gpu_materials);
+
         spdlog::info("Loaded {} materials, {} GPU textures",
                      material_instances_.size(), images_.size());
     }
@@ -713,6 +720,9 @@ namespace himalaya::app {
         material_instances_.clear();
         mesh_instances_.clear();
         directional_lights_.clear();
+        cpu_vertices_.clear();
+        cpu_indices_.clear();
+        gpu_materials_.clear();
         scene_bounds_ = {glm::vec3(0.0f), glm::vec3(0.0f)};
 
         resource_manager_ = nullptr;
@@ -733,6 +743,18 @@ namespace himalaya::app {
 
     std::span<const framework::DirectionalLight> SceneLoader::directional_lights() const {
         return directional_lights_;
+    }
+
+    std::span<const std::vector<framework::Vertex>> SceneLoader::cpu_vertices() const {
+        return cpu_vertices_;
+    }
+
+    std::span<const std::vector<uint32_t>> SceneLoader::cpu_indices() const {
+        return cpu_indices_;
+    }
+
+    std::span<const framework::GPUMaterialData> SceneLoader::gpu_materials() const {
+        return gpu_materials_;
     }
 
     uint32_t SceneLoader::texture_count() const {
