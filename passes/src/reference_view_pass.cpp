@@ -37,7 +37,7 @@ namespace himalaya::passes {
 
     // Default PT parameters (overridden at runtime via Renderer setters)
     constexpr uint32_t kDefaultMaxBounces = 8;
-    constexpr float kDefaultMaxClamp = 10.0f;
+    constexpr float kDefaultMaxClamp = 0.0f;
 
     // ---- Init / Destroy ----
 

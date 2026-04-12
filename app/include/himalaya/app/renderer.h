@@ -475,8 +475,8 @@ namespace himalaya::app {
         /** @brief PT max bounce depth (default 16, range 1-32, exposed via UI Step 10). */
         uint32_t max_bounces_ = 16;
 
-        /** @brief PT firefly clamp threshold (default 10.0, 0 = disabled, exposed via UI Step 10). */
-        float max_clamp_ = 10.0f;
+        /** @brief PT firefly clamp threshold (default 0 = disabled, OIDN denoise suffices). */
+        float max_clamp_ = 0.0f;
 
         /** @brief Environment map importance sampling toggle (default true, exposed via UI). */
         bool env_sampling_ = true;
@@ -506,7 +506,7 @@ namespace himalaya::app {
         uint32_t prev_max_bounces_ = 16;
 
         /** @brief Cached max clamp from previous PT frame (change detection → reset). */
-        float prev_max_clamp_ = 10.0f;
+        float prev_max_clamp_ = 0.0f;
 
         /** @brief Cached env sampling from previous PT frame (change detection → reset). */
         bool prev_env_sampling_ = true;

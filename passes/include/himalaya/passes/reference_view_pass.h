@@ -145,8 +145,8 @@ namespace himalaya::passes {
         /** @brief Max ray bounce depth (default 8). */
         uint32_t max_bounces_ = 8;
 
-        /** @brief Firefly clamping threshold (default 10.0, 0 = disabled). */
-        float max_clamp_ = 10.0f;
+        /** @brief Firefly clamping threshold (default 0 = disabled, OIDN denoise suffices). */
+        float max_clamp_ = 0.0f;
 
         /** @brief Environment map importance sampling enabled (default true). */
         bool env_sampling_ = true;
