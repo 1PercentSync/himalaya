@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 2 进行中：cubemap_filter.h/cpp + ibl_compute.cpp 重构已完成，下一小项：CMakeLists.txt 添加 cubemap_filter.cpp。
+Step 2 已完成。下一个任务：Step 3 xatlas 集成 + Lightmap UV 生成器。
 
 ---
 

@@ -16,7 +16,7 @@
 - [x] 新增 `framework/cubemap_filter.h`：`prefilter_cubemap()` 函数声明
 - [x] 新增 `framework/cubemap_filter.cpp`：从 `ibl_compute.cpp` 迁移 prefilter dispatch 逻辑，泛化签名（src/dst cubemap + mip count）
 - [x] `ibl_compute.cpp`：`IBL::compute_prefiltered()` 改为调用 `prefilter_cubemap()`
-- [ ] `framework/CMakeLists.txt`：添加 `cubemap_filter.cpp` 源文件
+- [x] `framework/CMakeLists.txt`：添加 `cubemap_filter.cpp` 源文件
 
 ## Step 3：xatlas 集成 + Lightmap UV 生成器
 
