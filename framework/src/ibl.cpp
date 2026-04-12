@@ -422,14 +422,29 @@ namespace himalaya::framework {
             }
         }
 
-        // Write alias table binary cache (if freshly built)
+        // Write alias table binary cache (if freshly built, write-to-temp + rename)
         if (!alias_build_data.empty() && !hdr_hash.empty()) {
             const auto alias_path = cache_path("ibl", hdr_hash + "_alias_table", ".bin");
-            if (std::ofstream ofs(alias_path, std::ios::binary | std::ios::trunc); ofs) {
+            auto tmp_path = alias_path;
+            tmp_path += ".tmp";
+            if (std::ofstream ofs(tmp_path, std::ios::binary | std::ios::trunc); ofs) {
                 ofs.write(reinterpret_cast<const char *>(alias_build_data.data()),
                           static_cast<std::streamsize>(alias_build_data.size()));
-                spdlog::info("IBL: env alias table cached ({:.1f} MB)",
-                             static_cast<double>(alias_build_data.size()) / (1024.0 * 1024.0));
+                ofs.close();
+                if (ofs.good()) {
+                    std::error_code ec;
+                    std::filesystem::rename(tmp_path, alias_path, ec);
+                    if (ec) {
+                        spdlog::warn("IBL: alias table rename failed: {}", ec.message());
+                        std::filesystem::remove(tmp_path, ec);
+                    } else {
+                        spdlog::info("IBL: env alias table cached ({:.1f} MB)",
+                                     static_cast<double>(alias_build_data.size()) / (1024.0 * 1024.0));
+                    }
+                } else {
+                    std::error_code ec;
+                    std::filesystem::remove(tmp_path, ec);
+                }
             }
             // ReSharper disable once CppDFAUnusedValue
             alias_build_data = {}; // free memory

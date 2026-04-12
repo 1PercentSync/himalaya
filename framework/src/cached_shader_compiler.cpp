@@ -129,15 +129,34 @@ namespace himalaya::framework {
         const std::string &disk_key,
         const std::vector<uint32_t> &spirv,
         const std::vector<std::pair<std::string, std::string>> &included_files) {
-        // Write .spv binary
+        // Write .spv binary (write-to-temp + rename)
         const auto spv_path = cache_path(category, disk_key, ".spv");
-        std::ofstream spv_file(spv_path, std::ios::binary);
-        if (!spv_file.is_open()) {
-            spdlog::warn("Shader disk cache: failed to write {}", spv_path.string());
-            return;
+        auto spv_tmp = spv_path;
+        spv_tmp += ".tmp";
+        {
+            std::ofstream spv_file(spv_tmp, std::ios::binary);
+            if (!spv_file.is_open()) {
+                spdlog::warn("Shader disk cache: failed to write {}", spv_path.string());
+                return;
+            }
+            spv_file.write(reinterpret_cast<const char *>(spirv.data()),
+                           static_cast<std::streamsize>(spirv.size() * sizeof(uint32_t)));
+            spv_file.close();
+            if (!spv_file.good()) {
+                std::error_code ec;
+                std::filesystem::remove(spv_tmp, ec);
+                return;
+            }
         }
-        spv_file.write(reinterpret_cast<const char *>(spirv.data()),
-                       static_cast<std::streamsize>(spirv.size() * sizeof(uint32_t)));
+        {
+            std::error_code ec;
+            std::filesystem::rename(spv_tmp, spv_path, ec);
+            if (ec) {
+                spdlog::warn("Shader disk cache: spv rename failed: {}", ec.message());
+                std::filesystem::remove(spv_tmp, ec);
+                return;
+            }
+        }
 
         // Build .meta JSON — hash from compile-time captured content
         nlohmann::json meta;
@@ -149,14 +168,32 @@ namespace himalaya::framework {
             includes.push_back({{"path", path}, {"hash", hash}});
         }
 
-        // Write .meta JSON
+        // Write .meta JSON (write-to-temp + rename)
         const auto meta_path = cache_path(category, disk_key, ".meta");
-        std::ofstream meta_file(meta_path);
-        if (!meta_file.is_open()) {
-            spdlog::warn("Shader disk cache: failed to write {}", meta_path.string());
-            return;
+        auto meta_tmp = meta_path;
+        meta_tmp += ".tmp";
+        {
+            std::ofstream meta_file(meta_tmp);
+            if (!meta_file.is_open()) {
+                spdlog::warn("Shader disk cache: failed to write {}", meta_path.string());
+                return;
+            }
+            meta_file << meta.dump(2);
+            meta_file.close();
+            if (!meta_file.good()) {
+                std::error_code ec;
+                std::filesystem::remove(meta_tmp, ec);
+                return;
+            }
         }
-        meta_file << meta.dump(2);
+        {
+            std::error_code ec;
+            std::filesystem::rename(meta_tmp, meta_path, ec);
+            if (ec) {
+                spdlog::warn("Shader disk cache: meta rename failed: {}", ec.message());
+                std::filesystem::remove(meta_tmp, ec);
+            }
+        }
     }
 
     void CachedShaderCompiler::set_cache_category(const std::string &category) {
