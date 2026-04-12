@@ -2,55 +2,24 @@
 
 /**
  * @file reference_view.rgen
- * @brief Path tracing raygen shader — primary ray generation, bounce loop,
- *        Russian Roulette, firefly clamping, and running-average accumulation.
+ * @brief Path tracing raygen shader — primary ray generation and accumulation.
  *
  * Computes one path-traced sample per pixel per frame. The accumulated result
  * is a running average stored in the accumulation buffer (Set 3 binding 0).
  *
- * Push constants (60 bytes):
- *   max_bounces         — maximum path depth
- *   sample_count        �� samples accumulated so far (0 = first frame, overwrite)
- *   frame_seed          — per-frame temporal decorrelation seed
- *   blue_noise_index    — bindless index of the 128x128 blue noise texture
- *   max_clamp           — firefly clamping threshold (0 = disabled)
- *   env_sampling        — env map importance sampling toggle
- *   directional_lights  — directional lights in PT toggle
- *   emissive_light_count — number of emissive triangles (0 = skip NEE)
- *   lod_max_level       — ray cone LOD upper clamp (0 = full resolution)
+ * Primary ray construction (subpixel jitter, inverse camera matrices) is
+ * handled here; the bounce loop is delegated to the shared trace_path()
+ * function in pt_common.glsl.
  */
 
 #define HIMALAYA_RT
+#define RAYGEN_SHADER
 #include "common/bindings.glsl"
 #include "rt/pt_common.glsl"
-
-// ---- Push constants ----
-
-layout(push_constant) uniform PushConstants {
-    uint  max_bounces;
-    uint  sample_count;
-    uint  frame_seed;
-    uint  blue_noise_index;
-    float max_clamp;
-    uint  env_sampling;          // 1 = env importance sampling enabled
-    uint  directional_lights;    // 1 = directional lights enabled in PT
-    uint  emissive_light_count;  // number of emissive triangles (0 = skip NEE emissive)
-    uint  lod_max_level;         // ray cone LOD upper clamp (0 = full resolution)
-    uint  lightmap_width;        // lightmap texel width (0 for reference view)
-    uint  lightmap_height;       // lightmap texel height (0 for reference view)
-    float probe_pos_x;           // probe world position x (0 for non-probe)
-    float probe_pos_y;           // probe world position y (0 for non-probe)
-    float probe_pos_z;           // probe world position z (0 for non-probe)
-    uint  face_index;            // probe cubemap face 0-5 (0 for non-probe)
-} pc;
 
 // ---- Accumulation buffer (push descriptor, Set 3 binding 0) ----
 
 layout(set = 3, binding = 0, rgba32f) uniform image2D accumulation_image;
-
-// ---- Ray payload (location 0 — PrimaryPayload) ----
-
-layout(location = 0) rayPayloadEXT PrimaryPayload payload;
 
 void main() {
     const ivec2 pixel = ivec2(gl_LaunchIDEXT.xy);
@@ -73,82 +42,10 @@ void main() {
     vec3 ray_origin    = (global.inv_view * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
     vec3 ray_direction = normalize((global.inv_view * vec4(view_target.xyz, 0.0)).xyz);
 
-    // ---- Path tracing loop ----
-    vec3 total_radiance = vec3(0.0);
-    vec3 throughput     = vec3(1.0);
-
-    vec3 origin    = ray_origin;
-    vec3 direction = ray_direction;
-    payload.env_mis_weight = 1.0; // Bounce 0 miss: no MIS (direct sky view)
-    payload.last_brdf_pdf = 0.0;  // Bounce 0 hit emissive: weight 1.0 (no previous BRDF sample)
-
-    // Ray cone initialization: zero width at camera, pixel angular extent as spread
+    // ---- Path trace (shared bounce loop) ----
     float pixel_spread = init_ray_cone(float(size.y));
-    payload.cone_width  = 0.0;
-    payload.cone_spread = pixel_spread;
-
-    for (uint bounce = 0; bounce < pc.max_bounces; ++bounce) {
-        // Russian Roulette (bounce >= 2, based on accumulated throughput)
-        if (bounce >= 2u) {
-            uint rr_dim = 2u + bounce * DIMS_PER_BOUNCE + 3u;
-            float rr_rand = rand_pt(rr_dim, pc.sample_count, pixel,
-                                    pc.frame_seed, pc.blue_noise_index);
-            bool survive;
-            float rr_prob = russian_roulette(throughput, bounce, rr_rand, survive);
-            if (!survive) {
-                break;
-            }
-            throughput /= rr_prob;
-        }
-
-        // Trace primary/bounce ray
-        payload.bounce = bounce;
-        traceRayEXT(
-            tlas,                   // acceleration structure
-            gl_RayFlagsNoneEXT,     // ray flags
-            0xFF,                   // cull mask (hit everything)
-            0,                      // SBT offset (hit group 0)
-            0,                      // SBT stride
-            0,                      // miss index (environment miss)
-            origin,
-            0.001,                  // tMin
-            direction,
-            10000.0,                // tMax
-            0                       // payload location
-        );
-
-        // Accumulate radiance contribution from this bounce
-        vec3 contribution = throughput * payload.color;
-
-        // Apply env MIS weight on miss (BRDF strategy hit environment)
-        if (payload.hit_distance < 0.0) {
-            contribution *= payload.env_mis_weight;
-        }
-
-        // Firefly clamping: indirect bounces only (bounce > 0)
-        if (bounce > 0u && pc.max_clamp > 0.0) {
-            contribution = min(contribution, vec3(pc.max_clamp));
-        }
-
-        total_radiance += contribution;
-
-        // Miss: path terminated (hit_distance < 0)
-        if (payload.hit_distance < 0.0) {
-            break;
-        }
-
-        // Update throughput with BRDF weight from closesthit
-        throughput *= payload.throughput_update;
-
-        // Early termination if throughput is negligible
-        if (max(throughput.r, max(throughput.g, throughput.b)) < 1e-6) {
-            break;
-        }
-
-        // Advance ray for next bounce
-        origin    = payload.next_origin;
-        direction = payload.next_direction;
-    }
+    vec3 total_radiance = trace_path(ray_origin, ray_direction,
+                                     0.0, pixel_spread, pixel);
 
     // ---- Running average accumulation ----
     if (pc.sample_count == 0u) {
