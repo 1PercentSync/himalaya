@@ -182,6 +182,36 @@ layout (set = 0, binding = 6) readonly buffer EnvAliasTable {
     EnvAliasEntry env_alias_entries[];
 };
 
+/** Emissive triangle data (std430, 96 bytes). World-space vertices + emission + UV for NEE sampling. */
+struct EmissiveTriangle {
+    vec3  v0;              // offset  0 — world-space vertex 0 (+4B implicit pad)
+    vec3  v1;              // offset 16 — world-space vertex 1 (+4B implicit pad)
+    vec3  v2;              // offset 32 — world-space vertex 2 (+4B implicit pad)
+    vec3  emission;        // offset 48 — raw emissive_factor (no texture)
+    float area;            // offset 60 — precomputed world-space triangle area
+    uint  material_index;  // offset 64 — index into MaterialBuffer SSBO
+    uint  _pad;            // offset 68 — pad to vec2 alignment
+    vec2  uv0;             // offset 72 — vertex 0 texture coordinate
+    vec2  uv1;             // offset 80 — vertex 1 texture coordinate
+    vec2  uv2;             // offset 88 — vertex 2 texture coordinate
+};                         // total: 96 bytes
+
+/** Emissive alias table entry (std430, 8 bytes). Power-weighted sampling. */
+struct EmissiveAliasEntry {
+    float prob;            // acceptance probability [0,1]
+    uint  alias_index;     // redirect index when rejected
+};
+
+layout (set = 0, binding = 7) readonly buffer EmissiveTriangleBuffer {
+    EmissiveTriangle emissive_triangles[];
+};
+
+layout (set = 0, binding = 8) readonly buffer EmissiveAliasTable {
+    uint  emissive_count;       // number of emissive triangles / alias table entries
+    float total_power;          // sum of luminance(emissive_factor) × area weights
+    EmissiveAliasEntry emissive_alias_entries[];
+};
+
 #endif // HIMALAYA_RT
 
 // ---- Set 1: Bindless arrays ----
