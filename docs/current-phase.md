@@ -156,7 +156,8 @@ BakeDenoiser 的 OIDNBuffer 尺寸在 `init()` 时未知——首次 `denoise()`
 
 扩展 push constant 超集布局，追加 baker 专属字段。Closesthit 不加条件分支——aux imageStore 保持 Phase 6 原样无条件执行，baker pipeline 绑定自己的 aux image。
 
-- `shaders/rt/pt_common.glsl` 或各 RT shader：PushConstants struct 末尾追加 `uint lightmap_width`（36B → 40B）+ `uint lightmap_height`（40B → 44B）+ `float probe_pos_x` + `float probe_pos_y` + `float probe_pos_z`（44B → 56B）+ `uint _pad`（56B → 60B，对齐到 4）。注意：60B 不需要 16 字节对齐——push constant 只需要 4 字节自然对齐
+- `shaders/rt/pt_common.glsl` 或各 RT shader：PushConstants struct 末尾追加 `uint lightmap_width` + `uint lightmap_height` + `float probe_pos_x/y/z` + `uint face_index`（36B → 60B）。`face_index` = probe cubemap face 0-5（probe baker 用），lightmap/reference view 忽略
+- `pt_common.glsl` 新增 `build_orthonormal_basis(vec3 N, out vec3 T, out vec3 B)` 函数（从 closesthit.rchit:392-398 提取，baker raygen 初始射线和 closesthit BRDF 采样共用）
 - `passes/reference_view_pass.cpp`：push constant 填充追加 baker 字段为 0（reference view 不读）
 - `passes/reference_view_pass.h`：push constant range 更新为 60B
 
@@ -192,7 +193,7 @@ Lightmap 烘焙 RT pipeline + raygen shader + accumulation。
   - 读 position/normal map（push descriptor Set 3 binding 4/5）
   - `position.a == 0.0` → 跳过（未覆盖 texel，alpha 通道标记）
   - 从 world position 沿 normal 半球发射射线（cosine-weighted initial direction，TBN frame 从 N 用 frisvad/duff 构建）
-  - 后续 bounce 调用 `pt_common.glsl` 中提取的共享 bounce loop 函数（从 reference_view.rgen 提取，三个 raygen 共用）
+  - 后续 bounce 调用 `pt_common.glsl` 中提取的 `trace_path(origin, direction, initial_env_mis_weight, initial_cone_width, initial_cone_spread, pixel, sample_count, frame_seed, blue_noise_index) → vec3 total_radiance`。从 reference_view.rgen:89-150 提取，三个 raygen 共用。Raygen 职责仅为：计算初始 origin/direction → 调用 trace_path() → 写 accumulation
   - Running average 累积到 accumulation buffer（Set 3 binding 0）
   - Push constant：共享 60B 超集 struct（lightmap_width/height 填入实际值，probe 字段为 0）
 - 新增 `passes/lightmap_baker_pass.h/.cpp`：
@@ -251,6 +252,8 @@ Position/normal map 通过 `sampler2D`（nearest, clamp）采样而非 storage i
 
 RT 几何过滤在烘焙触发时执行（非场景加载时——grid spacing 等参数在 UI 中可调）。Compute shader 使用 `rayQueryEXT`（Vulkan 1.2+ ray query 扩展，Phase 6 Step 1 已启用）+ `gl_RayFlagsTerminateOnFirstHitEXT`（只需 hit/miss）。单次 dispatch 处理全部候选点（每个 invocation 一个候选点 × 6 方向射线）。
 
+Compute pipeline 为一次性使用：烘焙触发时在 immediate scope 内创建 → dispatch → 读回结果 → 销毁 pipeline。与 pos/normal map pipeline（持久存活）不同——placement 只执行一次，不值得持久占用资源。
+
 ---
 
 ### Step 11：Probe Baker Pass
@@ -266,7 +269,7 @@ Probe 烘焙 RT pipeline + raygen shader + cubemap accumulation。
   - Push constant：共享 60B 超集 struct（probe_pos 填入当前 probe 位置，lightmap 字段为 0）
 - 新增 `passes/probe_baker_pass.h/.cpp`：
   - `setup()`：编译 probe_baker.rgen，创建 RT pipeline
-  - `record()`：每帧 **6 次 dispatch**（每 face 一次，face index 通过 push constant 或 specialization constant 传入）。每次 dispatch 绑定 accumulation cubemap 的 per-layer 2D view + 对应 face 的 aux 2D image。保持 closesthit 用 `ivec2(gl_LaunchIDEXT.xy)` 写 aux 不变
+  - `record()`：每帧 **6 次 dispatch**（每 face 一次，face index 通过 push constant `face_index` 字段传入）。每次 dispatch 绑定 accumulation cubemap 的 per-layer 2D view + 对应 face 的 aux 2D image。保持 closesthit 用 `ivec2(gl_LaunchIDEXT.xy)` 写 aux 不变（已确认 closesthit 不使用 screen_size 等变换，直接用 `gl_LaunchIDEXT.xy`）
   - Set 3 layout（per-dispatch 切换绑定）：binding 0 accumulation face view（image2D storage，cubemap 单层 2D view）+ binding 1 aux albedo（image2D storage，per-face）+ binding 2 aux normal（image2D storage，per-face）+ binding 3 Sobol SSBO
   - Aux image 管理：6 对 aux albedo + normal 2D image（或 2 个 image2DArray × 6 layer，per-dispatch 绑定单层 2D view），随 accumulation cubemap 一起 per-probe 创建/销毁
 

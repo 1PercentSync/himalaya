@@ -2540,7 +2540,7 @@ layout(push_constant) uniform PushConstants {
     float probe_pos_x;          // 44 — probe baker: 世界空间位置
     float probe_pos_y;          // 48
     float probe_pos_z;          // 52
-    uint  _pad;                 // 56
+    uint  face_index;           // 56 — probe baker: 当前 cubemap face (0-5)，lightmap/reference view 忽略
 };  // 60 bytes
 ```
 

@@ -490,7 +490,7 @@ raygen shader 的 push constant 逐步演进：
 - Step 12（32B）：+ `emissive_light_count`（uint，0 = 跳过 NEE emissive）
 - Step 13（36B）：+ `lod_max_level`（uint，Ray Cones LOD clamp 上限，默认 4）
 - 阶段七 lightmap（44B）：+ `uint lightmap_width` + `uint lightmap_height`（baker raygen 专属，reference view 忽略）
-- 阶段七 probe（60B）：+ `float probe_pos_x` + `float probe_pos_y` + `float probe_pos_z` + `uint _pad`（probe baker raygen 专属）
+- 阶段七 probe（60B）：+ `float probe_pos_x` + `float probe_pos_y` + `float probe_pos_z` + `uint face_index`（probe baker raygen 专属，face_index = 当前 cubemap face 0-5）
 
 阶段七采用**超集布局**：reference view、lightmap baker、probe baker 三个 RT pipeline 共用同一个 push constant struct。各 raygen 只读自己需要的字段，closesthit 只读共享字段。60B 远在 Vulkan 最低 128B 保证之内。closesthit 不需要 `baker_mode` 字段——aux imageStore 无条件执行，各 pipeline 通过 Set 3 push descriptor 绑定各自的 aux image。
 
