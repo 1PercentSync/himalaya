@@ -179,29 +179,96 @@ Tonemapping Pass
 
 ## 烘焙模式帧流程（独立渲染路径）
 
-烘焙模式激活时，光栅化和 PT 参考视图均跳过，GPU 全力用于烘焙。
+烘焙模式激活时，光栅化和 PT 参考视图均跳过，GPU 全力用于烘焙。逐项顺序执行：先所有 lightmap（逐 instance），再所有 probe（逐 probe）。
+
+### Lightmap 烘焙（每个 mesh instance）
 
 ```
+--- 初始化（烘焙该 instance 的第一帧） ---
+
+Position/Normal Map Rasterization Pass (Graphics Pipeline)
+  输入：Mesh vertex/index buffer（含 lightmap UV in uv1）、instance transform
+  输出：Position Map（RGBA32F，lightmap 分辨率）、Normal Map（RGBA32F，lightmap 分辨率）
+  说明：vertex shader 将 uv1 映射到 NDC，fragment shader 输出世界空间 position + normal
+
+--- 每帧累积 ---
+
 Lightmap Baker Pass (RT Pipeline)
-  输入：Position Map（UV 空间）、Normal Map（UV 空间）、
+  输入：Position Map、Normal Map、
         TLAS、Geometry Info SSBO、材质、光源数组、IBL Cubemap、
         Lightmap Accumulation Buffer（上一帧累积）
-  输出：Lightmap Accumulation Buffer（本帧累积后）
+  输出：Lightmap Accumulation Buffer（本帧 1 SPP 累积后）
+  说明：baker raygen 按 texel 坐标读 position/normal map，发射射线，
+        复用 closesthit/miss/anyhit（baker_mode=1 跳过 OIDN aux 写入），
+        running average 累积到 RGBA32F buffer
 
-  — 或 —
+ImGui Bake Preview
+  输入：当前 Accumulation Buffer
+  输出：ImGui image widget 显示 UV 空间累积画面 + 进度文字
+
+--- 达到目标采样数后（GPU idle） ---
+
+BakeDenoiser（同步）
+  输入：Accumulation Buffer readback + albedo/normal 辅助通道（如有）
+  输出：Denoised RGBA32F CPU 内存
+
+BC6H 压缩（GPU compute）
+  输入：Denoised RGBA32F → upload GPU image
+  输出：BC6H image
+
+KTX2 持久化
+  输入：BC6H image readback
+  输出：cache_root()/bake/ 下的 KTX2 文件
+
+释放 accumulation + position/normal map → 下一个 instance
+```
+
+### Probe 烘焙（每个 probe）
+
+```
+--- 每帧累积 ---
 
 Probe Baker Pass (RT Pipeline)
-  输入：Probe 位置、TLAS、Geometry Info SSBO、材质、光源数组、IBL Cubemap、
-        Probe Accumulation Cubemap（上一帧累积）
-  输出：Probe Accumulation Cubemap（本帧累积后）
+  输入：Probe 世界空间位置、
+        TLAS、Geometry Info SSBO、材质、光源数组、IBL Cubemap、
+        Probe Accumulation Cubemap（上一帧累积，RGBA32F，6 face）
+  输出：Probe Accumulation Cubemap（本帧 1 SPP 累积后）
+  说明：raygen 从 probe 位置向 6 面方向发射射线（baker_mode=1）
 
-Bake Preview Display
-  输入：当前 Accumulation Buffer / Cubemap
-  输出：Swapchain Image（预览烘焙进度）
+ImGui Bake Preview
+  输入：当前 Accumulation Cubemap（展示一个 face 或展开图）
+  输出：ImGui image widget + 进度文字
 
-烘焙完成后：
-  OIDN Denoise → BC6H 压缩 → KTX2 持久化
+--- 达到目标采样数后（GPU idle） ---
+
+BakeDenoiser（同步，6 face 逐面降噪）
+  输入：Accumulation Cubemap readback
+  输出：Denoised RGBA32F CPU 内存
+
+Prefilter Mip Chain（GPU compute，复用 prefilter 通用工具）
+  输入：Denoised cubemap → upload GPU
+  输出：Multi-mip prefiltered cubemap
+
+BC6H 压缩（GPU compute，复用 BC6H 通用工具）
+  输入：Prefiltered cubemap
+  输出：BC6H cubemap
+
+KTX2 持久化
+  输入：BC6H cubemap readback
+  输出：cache_root()/bake/ 下的 KTX2 文件
+
+释放 accumulation cubemap → 下一个 probe
 ```
+
+### 烘焙关键资源
+
+| 资源 | 产生 | 消费 | 存活范围 |
+|------|------|------|----------|
+| Position Map（RGBA32F） | Pos/Normal Rasterization | Lightmap Baker Pass | 当前 instance 烘焙期间 |
+| Normal Map（RGBA32F） | Pos/Normal Rasterization | Lightmap Baker Pass | 当前 instance 烘焙期间 |
+| Lightmap Accumulation（RGBA32F） | Lightmap Baker Pass | BakeDenoiser readback | 当前 instance 烘焙期间 |
+| Probe Accumulation Cubemap（RGBA32F） | Probe Baker Pass | BakeDenoiser readback | 当前 probe 烘焙期间 |
+| TLAS + Geometry Info SSBO | 场景加载时构建 | 所有 Baker Pass | 跨烘焙持久 |
 
 ---
 

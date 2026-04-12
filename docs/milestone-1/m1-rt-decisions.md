@@ -119,7 +119,33 @@ Idle → ReadbackPending → Processing → UploadPending → Idle
 
 烘焙模式激活时接管渲染：光栅化和 PT 参考视图均跳过，GPU 全力用于烘焙。
 
-每帧 dispatch N 个采样 → 累积到 accumulation buffer → 展示当前进度到 swapchain。达到目标采样数后执行 OIDN 降噪 → BC6H 压缩 → KTX2 持久化。
+### 逐项顺序执行
+
+状态机：`Idle → BakingLightmaps → BakingProbes → Finalizing → Complete`。
+
+BakingLightmaps 内部逐 instance 依次烘焙：分配 accumulation buffer → 每帧 dispatch 采样累积 → 达到目标采样数 → OIDN 降噪 → BC6H 压缩 → KTX2 持久化 → 释放 → 下一个 instance。BakingProbes 同理（逐 probe 烘焙 6 面 cubemap）。
+
+选择逐项顺序而非批量并行的理由：一次只需一个 accumulation buffer 在 VRAM 中，内存可控；M1 场景规模有限，GPU 利用率不是瓶颈。
+
+### 烘焙进度预览
+
+ImGui image widget 显示当前 accumulation buffer + 文字进度信息（当前 mesh/probe 编号、采样数/目标、总进度百分比）。将当前 accumulation buffer 注册为 ImGui 纹理，在烘焙控制面板中显示。lightmap 预览展示的是展开的 UV 空间；3D 效果在 Phase 8 集成后可见。
+
+不在烘焙模式中跑 forward pass 做 3D 预览——复杂度高，收益低。
+
+### 烘焙默认参数
+
+| 参数 | 默认值 | 范围 | 说明 |
+|------|--------|------|------|
+| Lightmap 目标采样数 | 4096 | 64-65536 | 高采样 + OIDN 降噪，保守质量优先 |
+| Probe 目标采样数 | 2048 | 64-65536 | 低分辨率 cubemap 收敛更快 |
+| Lightmap texels_per_meter | 10 | 1-100 | 全局 lightmap 密度参数 |
+| Lightmap min_resolution | 32 | 4-256 | 分辨率下限（对齐到 4） |
+| Lightmap max_resolution | 2048 | 256-4096 | 分辨率上限（对齐到 4） |
+| Probe face 分辨率 | 512 | 64-1024 | 光滑表面反射需要足够分辨率 |
+| Probe grid spacing | 1m | 0.5-10 | 自动放置间距 |
+
+所有参数通过 ImGui 烘焙控制面板可调。
 
 ---
 
@@ -159,15 +185,58 @@ SceneASBuilder 构建 `BLASGeometry` 时根据对应 primitive 的材质 `alpha_
 
 ---
 
-## Lightmap UV2
+## Lightmap 粒度与分辨率
 
-**生成**：xatlas 运行时自动生成。per-mesh 按需标记是否需要 lightmap UV，M1 全部静态 mesh 标记。
+### Per-instance Lightmap
 
-**缓存**：xxHash 内容哈希 + 自定义二进制格式。
+每个 mesh instance 拥有独立的 lightmap 纹理。UV layout 按 mesh group（`group_id`）生成一次（xatlas per unique mesh geometry），所有同 group 的 instance 共享 UV layout，但各自烘焙独立的 lightmap 纹理（不同位置的 instance 有不同的光照）。
+
+不采用 per-mesh-group 共享 lightmap——同一 mesh 放在不同位置时光照不同，共享会导致错误。
+
+### 分辨率自动计算
+
+Per-instance lightmap 分辨率按世界空间表面积自动计算：
+
+```
+resolution = clamp(round(sqrt(world_surface_area) * texels_per_meter), min_res, max_res)
+```
+
+分辨率向上取到最近的 4 的倍数（BC6H block size 要求）。`world_surface_area` 在场景加载时 CPU 端遍历三角形面积求和，一次性计算。
+
+`texels_per_meter`（默认 10）、`min_res`（默认 32）、`max_res`（默认 2048）均通过 ImGui 烘焙面板可调。
+
+---
+
+## Lightmap UV 生成
+
+### 来源优先级
+
+1. glTF 自带 TEXCOORD_1 → 直接使用 `Vertex::uv1`，拓扑不变，跳过 xatlas
+2. 无 TEXCOORD_1 → xatlas 运行时生成（或从缓存加载）
+
+### xatlas 集成
+
+xatlas 通过 vcpkg manifest 引入（vcpkg 有 `xatlas` 端口）。per-mesh 按需生成：M1 全部静态 mesh 标记需要 lightmap UV。
+
+### xatlas 拓扑变更处理
+
+xatlas 生成 lightmap UV 时可能在 UV seam 处拆分顶点，产生新的顶点数组和索引数组。处理方式：**加载时用 xatlas 输出替换内存中 Mesh 的 vertex buffer / index buffer**。
+
+流程：glTF 加载 → 原始 vertex/index buffer → xatlas 生成 lightmap UV（或从缓存加载）→ 根据 remap table 构建新 vertex buffer（拆分顶点，`Vertex::uv1` 写入 lightmap UV）+ �� index buffer → 上传 GPU 替换原始 buffer handle → build BLAS/TLAS（基于新 buffer）。
+
+`Vertex::uv1`（offset 48，`glm::vec2`）中原来的 glTF TEXCOORD_1 数据被 lightmap UV 覆盖。M1 全管线中 TEXCOORD_1 无消费方（`forward.frag` 未读取 `uv1`），覆盖零影响。加载完成后内存中只有一份 `uv1`，不管来自 glTF TEXCOORD_1 还是 xatlas 生成，对后续管线完全透明。
+
+Phase 8 forward shader 直接通过 `uv1` 顶点属性采样 lightmap，零额外开销。
+
+不修改 glTF 源文件——xatlas 输出缓存到项目自有的缓存系统。
+
+### 缓存
+
+xxHash 内容哈希 + 自定义二进制格式。
 
 缓存文件内容：
 - Header：magic + version + 源 mesh xxHash + atlas 尺寸 + 顶点数 + 索引数
-- Data：UV2 坐标数组 + 新 index buffer + 顶点重映射表（新顶点 → 原始顶点）
+- Data：lightmap UV 坐标数组 + 新 index buffer + 顶点重映射表（新顶点 → 原始顶点）
 
 缓存命中时直接读取，未命中时跑 xatlas 后保存。mesh 几何变化 → hash 变化 → 自动重新生成（旧 lightmap 也需重新烘焙）。
 
@@ -175,18 +244,91 @@ SceneASBuilder 构建 `BLASGeometry` 时根据对应 primitive 的材质 `alpha_
 
 ## Reflection Probe 放置
 
-**网格 + 几何过滤**：场景 AABB 内按固定间距放置 3D 网格探针，利用 RT 射线检测剔除落在几何体内部的探针。密度通过 ImGui 参数可调。
+### 均匀网格 + RT 几何过滤
+
+场景 AABB 内按固定间距（默认 1m）放置 3D 网格候选探针。对每个候选点向多个方向发射 RT 射线，大部分射线在极短距离内命中几何体的点判定为墙内/物体内部，剔除。
+
+Cubemap face 分辨率默认 512×512（光滑表面反射需要足够分辨率，与 IBL prefiltered cubemap 一致）。Grid spacing 和 face 分辨率均通过 ImGui 烘焙面板可调。
+
+### Probe Prefilter
+
+烘焙完成的 probe cubemap 需要 prefiltered mip chain（不同 roughness 对应不同 mip）。复用从 IBL 模块提取的 prefilter 通用工具函数（`prefilter.comp` shader + C++ dispatch 逻辑），输入烘焙 cubemap → 输出 GGX filtered mip chain。
 
 ---
 
-## 烘焙产物格式
+## 烘焙产物格式与存储
+
+### 格式
 
 | 资源 | 累积格式 | 使用格式 | 持久化格式 |
 |------|---------|---------|-----------|
 | Lightmap | RGBA32F | BC6H | KTX2 (BC6H) |
 | Reflection Probe | RGBA32F | BC6H + mip chain | KTX2 (BC6H + mip chain) |
 
-复用已有 BC6H 压缩 shader 和 KTX2 读写基础设施。Probe 的 prefilter mip chain 复用 IBL prefilter 管线。
+### BC6H 压缩泛化
+
+`compress/bc6h.comp` 对 face/mip 无感——只压缩一张 2D 输入。C++ 侧 dispatch 逻辑从 `IBL::compress_cubemaps_bc6h()` 提取为 framework 层通用工具函数，泛化签名接受 `{ImageHandle, face_count, mip_count}` 列表。IBL 和 baker 共用同一个函数。
+
+### Prefilter 管线泛化
+
+`prefilter.comp` 本身通用（input cubemap + roughness → output filtered mip）。C++ dispatch 逻辑从 `IBL::compute_prefiltered()` 提取为 framework 层通用工具函数：`prefilter_cubemap(ctx, sc, src_cubemap, dst_cubemap, mip_count, deferred)`。IBL 和 probe baker 共用。
+
+### 存储位置
+
+统一使用项目缓存系统（`cache_root() / "bake" /`），与 texture cache / IBL cache / shader cache 一致。
+
+cache key = `content_hash(scene_path) + instance/probe 标识 + 烘焙参数 hash`。参数变化 → hash 变化 → 自动失效重烘焙。场景再次加载时自动命中缓存。
+
+---
+
+## Lightmap Position/Normal Map 预处理
+
+Baker raygen shader 需要知道每个 lightmap texel 对应的世界空间 position 和 normal。通过**光栅化 pass** 预处理生成这两张 map：
+
+- Vertex shader：将 lightmap UV 映射到 NDC（`gl_Position = vec4(uv1 * 2.0 - 1.0, 0.0, 1.0)`）
+- Fragment shader：输出 `world_position`（`model * in_position`）和 `world_normal`（normal matrix 变换）
+- Dynamic Rendering 写入两张 RGBA32F render target（与 lightmap 同分辨率）
+- xatlas gutter（2-4 texel padding）+ 光栅化三角形覆盖自然处理 UV seam，不需要 conservative rasterization
+
+选择光栅化而非 compute shader 的理由：GPU 硬件天生擅长"三角形覆盖哪些像素 + 插值属性"，正是此处需要的操作。
+
+每个 mesh instance 烘焙前执行一次。使用该 instance 的 transform 矩阵，输出的 position/normal 是世界空间的。
+
+---
+
+## Baker OIDN（BakeDenoiser）
+
+Baker 的降噪需求与 reference view 的 `Denoiser` 完全不同：
+
+| | Denoiser（reference view） | BakeDenoiser（baker） |
+|---|---|---|
+| 执行时机 | 渲染进行中，GPU 活跃 | 烘焙完成后，GPU idle |
+| 同步模型 | 异步后台线程 + timeline semaphore | 同步阻塞 |
+| 结果去向 | Upload 回 GPU 供 tonemapping 采样 | 留在 CPU 内存走 BC6H 压缩 + KTX2 写盘 |
+
+新建轻量 `BakeDenoiser`（framework 层），接口极简：
+
+- `init()` / `destroy()`：OIDN device + filter + OIDNBuffer
+- `denoise(input, albedo, normal, w, h) → output buffer`：同步阻塞调用
+
+不需要状态机、timeline semaphore、后台线程。现有 `Denoiser` 继续服务 reference view，两者共享 OIDN 库但逻辑独立。
+
+---
+
+## Baker Closesthit 共享
+
+Baker 的 RT pipeline 复用 reference view 的 closesthit/miss/anyhit shader（着色逻辑完全相同），仅 raygen shader 不同。
+
+Closesthit 在 bounce 0 时写入 OIDN 辅助 image（`imageStore aux_albedo/aux_normal`），baker 不需要这些输出。通过 push constant `uint baker_mode` 条件跳过：
+
+```glsl
+if (baker_mode == 0u && payload.bounce == 0u) {
+    imageStore(aux_albedo_image, pixel, ...);
+    imageStore(aux_normal_image, pixel, ...);
+}
+```
+
+`baker_mode` 是 uniform 值，所有线程走同一条分支，零 divergence 开销。
 
 ---
 
@@ -351,6 +493,9 @@ raygen shader 的 push constant 逐步演进：
 - Step 11（28B）：+ `env_sampling`（uint，1 = 环境光重要性采样）+ `directional_lights`（uint，1 = PT 中启用方向光）
 - Step 12（32B）：+ `emissive_light_count`（uint，0 = 跳过 NEE emissive）
 - Step 13（36B）：+ `lod_max_level`（uint，Ray Cones LOD clamp 上限，默认 4）
+- 阶段七（48B）：+ `baker_mode`（uint，0 = reference view，1 = baker，closesthit 条件跳过 OIDN aux 写入）+ `lightmap_width`（uint，baker 专属）+ `lightmap_height`（uint，baker 专属）
+
+阶段七采用**超集布局**：reference view 和 baker 两个 RT pipeline 共用同一个 push constant struct。Baker 填写全部共享字段（closesthit 的着色行为依赖 `max_bounces`、`env_sampling`、`emissive_light_count` 等），reference view 忽略 baker 专属字段。48B 远在 Vulkan 最低 128B 保证之内。
 
 相机逆矩阵（`inv_view`、`inv_projection`）从 GlobalUBO 读取。理由：Vulkan 保证 `maxPushConstantsSize` ≥ 128 字节，两个 mat4 = 128 字节会逼近下限；且与现有 compute pass 的轻量 push constant 模式一致。GlobalUBO 阶段六新增 `inv_view` 字段（`inv_projection` 阶段五已有）。
 

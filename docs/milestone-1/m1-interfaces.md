@@ -53,7 +53,11 @@ framework/
 │   ├── color_utils.h            # 色温 → 线性 RGB 转换
 │   ├── scene_as_builder.h       # 场景加速结构构建器（阶段六引入）
 │   ├── cached_shader_compiler.h # 带磁盘缓存的 ShaderCompiler（阶段六 Step 10.5 引入）
-│   └── emissive_light_builder.h # Emissive 面光源采样构建器（阶段六 Step 12 引入）
+│   ├── emissive_light_builder.h # Emissive 面光源采样构建器（阶段六 Step 12 引入）
+│   ├── texture_compress.h       # BC6H GPU 压缩通用工具（阶段七，从 IBL 提取）
+│   ├── cubemap_filter.h         # Cubemap prefilter 通用工具（阶段七，从 IBL 提取）
+│   ├── bake_denoiser.h          # 同步 OIDN 降噪（阶段七引入）
+│   └── lightmap_uv.h            # Lightmap UV 生成 + xatlas 集成 + 缓存（阶段七引入）
 └── src/
     └── ...
 ```
@@ -108,6 +112,7 @@ app/
     ├── renderer_init.cpp        # init/destroy/resize/reload、descriptor helpers
     ├── renderer_rasterization.cpp  # 光栅化渲染路径
     ├── renderer_pt.cpp          # PT 渲染路径
+    ├── renderer_bake.cpp        # 烘焙渲染路径（阶段七引入）
     ├── scene_loader.cpp
     ├── camera_controller.cpp
     ├── debug_ui.cpp
@@ -155,6 +160,9 @@ shaders/
 │   ├── anyhit.rahit             # Alpha test + stochastic alpha（Mask/Blend 几何体）
 │   ├── miss.rmiss               # Miss shader（环境光 / IBL 采样）
 │   └── shadow_miss.rmiss        # Shadow miss shader（未遮挡标记）
+├── bake/                        # 烘焙 shader（阶段七引入）
+│   ├── pos_normal_map.vert      # UV 空间光栅化（lightmap UV → NDC，输出 world pos/normal）
+│   └── pos_normal_map.frag      # 写入 position + normal render target
 ```
 
 - `shaders/common/bindings.glsl` 定义全局绑定布局，所有 shader 通过 `#include` 引用，确保绑定一致性
@@ -2301,3 +2309,236 @@ enum class RGStage : uint8_t {
     RayTracing,  ///< VK_PIPELINE_STAGE_2_RAY_TRACING_SHADER_BIT_KHR
 };
 ```
+
+---
+
+### 阶段七新增/变更接口
+
+#### RenderMode 扩展（阶段七）
+
+```cpp
+enum class RenderMode : uint8_t {
+    Rasterization,  ///< 完整光栅化管线
+    PathTracing,    ///< PT 参考视图
+    Baking,         ///< 烘焙模式（阶段七新增）
+};
+```
+
+#### BC6H 压缩通用工具（阶段七，从 IBL 提取）
+
+```cpp
+namespace himalaya::framework {
+
+/// GPU BC6H 压缩的单个输入项。
+struct BC6HCompressInput {
+    rhi::ImageHandle* handle;  ///< [in/out] 源 image，压缩后替换为 BC6H 版本
+    const char* debug_name;    ///< BC6H image 的 debug 名称
+};
+
+/// GPU BC6H 压缩（compute shader dispatch）。
+/// 对每个输入 image 的每个 face × mip dispatch bc6h.comp，
+/// 创建 BC6H 格式 image 替换原 handle，原 image 推入 deferred 销毁。
+/// 支持 cubemap（6 face × N mip）和 2D（1 face × 1 mip）。
+/// 源 image 必须在 SHADER_READ_ONLY 布局。
+/// 在 immediate command scope 内调用。
+void compress_bc6h(rhi::Context& ctx,
+                   rhi::ResourceManager& rm,
+                   rhi::ShaderCompiler& sc,
+                   std::span<const BC6HCompressInput> inputs,
+                   std::vector<std::function<void()>>& deferred);
+
+}  // namespace himalaya::framework
+```
+
+#### Cubemap Prefilter 通用工具（阶段七，从 IBL 提取）
+
+```cpp
+namespace himalaya::framework {
+
+/// 对 cubemap 执行 GGX importance sampling prefilter，生成 multi-mip chain。
+/// 对每个 mip level dispatch prefilter.comp（roughness 通过 push constant 传入）。
+/// dst_cubemap 必须已创建，带完整 mip chain，GENERAL 或 UNDEFINED 布局。
+/// 在 immediate command scope 内调用。
+void prefilter_cubemap(rhi::Context& ctx,
+                       rhi::ResourceManager& rm,
+                       rhi::ShaderCompiler& sc,
+                       rhi::ImageHandle src_cubemap,
+                       rhi::ImageHandle dst_cubemap,
+                       uint32_t mip_count,
+                       std::vector<std::function<void()>>& deferred);
+
+}  // namespace himalaya::framework
+```
+
+#### BakeDenoiser（阶段七）
+
+```cpp
+namespace himalaya::framework {
+
+/// Synchronous OIDN denoiser for offline baking.
+///
+/// Unlike the async Denoiser (reference view), BakeDenoiser runs
+/// synchronously: readback → OIDN execute → return denoised data.
+/// No state machine, no background thread, no timeline semaphore.
+class BakeDenoiser {
+public:
+    /// Create OIDN device (GPU preferred, CPU fallback) + HDR filter.
+    void init();
+
+    /// Denoise a single HDR image with albedo/normal auxiliary channels.
+    /// All buffers are CPU memory (readback results). Output written to
+    /// caller-provided buffer. Blocking call.
+    /// @param beauty   Input RGBA32F pixel data (w × h × 16 bytes).
+    /// @param albedo   Auxiliary albedo R16G16B16A16F (w × h × 8 bytes, nullable).
+    /// @param normal   Auxiliary normal R16G16B16A16F (w × h × 8 bytes, nullable).
+    /// @param output   Output RGBA32F pixel data (w × h × 16 bytes, caller-allocated).
+    /// @param w        Image width in pixels.
+    /// @param h        Image height in pixels.
+    /// @return true on success, false on OIDN error (logged).
+    bool denoise(const void* beauty, const void* albedo, const void* normal,
+                 void* output, uint32_t w, uint32_t h);
+
+    void destroy();
+
+private:
+    // oidn::DeviceRef, oidn::FilterRef, oidn::BufferRef (beauty/albedo/normal/output)
+};
+
+}  // namespace himalaya::framework
+```
+
+#### LightmapUVGenerator（阶段七）
+
+```cpp
+namespace himalaya::framework {
+
+/// Per-mesh xatlas output (or loaded from cache).
+struct LightmapUVResult {
+    std::vector<glm::vec2> lightmap_uvs;    ///< Per-vertex lightmap UV coordinates.
+    std::vector<uint32_t> new_indices;       ///< New index buffer (topology may change).
+    std::vector<uint32_t> vertex_remap;      ///< new_vertex → original_vertex mapping.
+    uint32_t atlas_width;                    ///< xatlas computed atlas width.
+    uint32_t atlas_height;                   ///< xatlas computed atlas height.
+};
+
+/// Generates lightmap UV for a mesh using xatlas, or loads from cache.
+/// If mesh already has TEXCOORD_1 (uv1 not all-zero), returns nullopt
+/// (caller uses existing uv1 as lightmap UV, no topology change).
+///
+/// Cache key: xxHash of mesh vertex positions + indices.
+/// Cache hit: load from disk, skip xatlas. Cache miss: run xatlas, save to disk.
+[[nodiscard]] std::optional<LightmapUVResult>
+generate_lightmap_uv(std::span<const Vertex> vertices,
+                     std::span<const uint32_t> indices,
+                     const std::string& mesh_hash);
+
+}  // namespace himalaya::framework
+```
+
+#### LightmapBakerPass（阶段七）
+
+```cpp
+namespace himalaya::passes {
+
+/// Lightmap baker pass — UV-space RT dispatch with per-texel accumulation.
+///
+/// For each lightmap texel, reads world position/normal from precomputed
+/// maps, traces rays via the shared closesthit/miss/anyhit shaders.
+/// Accumulates results into an RGBA32F buffer (running average).
+class LightmapBakerPass {
+public:
+    void setup(rhi::Context& ctx, rhi::ResourceManager& rm,
+               rhi::DescriptorManager& dm, rhi::ShaderCompiler& sc,
+               rhi::BufferHandle sobol_buffer, uint32_t blue_noise_index);
+
+    /// Record one frame of baking (1 SPP dispatch).
+    void record(framework::RenderGraph& rg, const framework::FrameContext& ctx);
+
+    void rebuild_pipelines();
+    void destroy();
+
+    void reset_accumulation();
+    [[nodiscard]] uint32_t sample_count() const;
+
+private:
+    rhi::RTPipeline rt_pipeline_{};
+    VkDescriptorSetLayout set3_layout_ = VK_NULL_HANDLE;
+    uint32_t sample_count_ = 0;
+    uint32_t frame_seed_ = 0;
+    // ... PT parameters (max_bounces, env_sampling, etc.)
+};
+
+}  // namespace himalaya::passes
+```
+
+#### ProbeBakerPass（阶段七）
+
+```cpp
+namespace himalaya::passes {
+
+/// Reflection probe baker pass — cubemap-space RT dispatch.
+///
+/// For each probe, dispatches 6-face RT tracing from probe position,
+/// accumulates into an RGBA32F cubemap. After target SPP reached,
+/// OIDN denoise → prefilter mip chain → BC6H compress → KTX2 persist.
+class ProbeBakerPass {
+public:
+    void setup(rhi::Context& ctx, rhi::ResourceManager& rm,
+               rhi::DescriptorManager& dm, rhi::ShaderCompiler& sc,
+               rhi::BufferHandle sobol_buffer, uint32_t blue_noise_index);
+
+    /// Record one frame of probe baking (1 SPP dispatch, 6 faces).
+    void record(framework::RenderGraph& rg, const framework::FrameContext& ctx);
+
+    void rebuild_pipelines();
+    void destroy();
+
+    void reset_accumulation();
+    [[nodiscard]] uint32_t sample_count() const;
+
+private:
+    rhi::RTPipeline rt_pipeline_{};
+    VkDescriptorSetLayout set3_layout_ = VK_NULL_HANDLE;
+    uint32_t sample_count_ = 0;
+    uint32_t frame_seed_ = 0;
+};
+
+}  // namespace himalaya::passes
+```
+
+#### Position/Normal Map Pipeline（阶段七）
+
+Lightmap baker 预处理阶段。光栅化 pass 将 mesh 在 lightmap UV 空间渲染，输出世界空间 position 和 normal 两张 RGBA32F render target。
+
+```
+Vertex shader:  gl_Position = vec4(uv1 * 2.0 - 1.0, 0.0, 1.0)
+                outputs: world_position = model * in_position
+                         world_normal = normalize(normal_matrix * in_normal)
+
+Fragment shader: writes position + normal to render targets
+```
+
+不需要独立的 Pass 类——Renderer 在烘焙每个 instance 前直接录制 Dynamic Rendering 命令。
+
+#### PT Push Constants 扩展（阶段七）
+
+```glsl
+layout(push_constant) uniform PushConstants {
+    // ---- 共享字段（阶段六已有，closesthit + raygen 共用） ----
+    uint  max_bounces;          // 0
+    uint  sample_count;         // 4
+    uint  frame_seed;           // 8
+    uint  blue_noise_index;     // 12
+    float max_clamp;            // 16
+    uint  env_sampling;         // 20
+    uint  directional_lights;   // 24
+    uint  emissive_light_count; // 28
+    uint  lod_max_level;        // 32
+    // ---- 阶段七新增 ----
+    uint  baker_mode;           // 36 — 0 = reference view, 1 = baker
+    uint  lightmap_width;       // 40 — baker 专属（position/normal map 尺寸）
+    uint  lightmap_height;      // 44 — baker 专属
+};  // 48 bytes
+```
+
+超集布局：reference view 和 baker 两个 RT pipeline 共用同一个 struct。

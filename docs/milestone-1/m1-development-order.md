@@ -126,15 +126,26 @@
 
 ## 阶段七：PT 烘焙器
 
-- xatlas 集成（运行时 UV2 自动生成，per-mesh 按需标记，M1 全部静态 mesh 标记）
-- UV2 缓存（xxHash 内容哈希 + 自定义二进制格式：header + 顶点重映射表 + UV2 坐标 + 新 index buffer）
-- Lightmap Baker Pass（UV 空间射线发射：position/normal map 预处理 → raygen shader 逐 texel 发射射线 → accumulation → OIDN 降噪 → BC6H 压缩 → KTX2 持久化）
-- Reflection Probe Baker Pass（cubemap 六面射线发射 → accumulation → OIDN 降噪 → prefilter mip chain → BC6H 压缩 → KTX2 持久化）
-- Probe 自动放置（场景 AABB 内网格放置 + RT 几何过滤剔除墙内探针）
-- 烘焙模式渲染路径（接管渲染，展示烘焙进度，每帧 dispatch 采样并累积）
-- ImGui 烘焙控制面板（触发烘焙、参数配置、进度显示）
+**Layer 1 重构 + Layer 1 烘焙基础设施 + Layer 2 Baker Pass + Layer 3 烘焙模式**
 
-**产出：** 能在引擎内烘焙出 Lightmap 和 Reflection Probe 数据，保存为 KTX2 文件。烘焙过程中可观察进度。
+- BC6H 压缩通用工具提取（从 IBL 提取为 framework 层独立模块，cubemap + 2D 通用）
+- Cubemap prefilter 通用工具提取（从 IBL 提取为 framework 层独立模块）
+- xatlas vcpkg 集成 + Lightmap UV 生成器（TEXCOORD_1 优先使用 → 无则 xatlas 生成 → 缓存）
+- Lightmap UV 拓扑应用（xatlas 输出替换内存中 Mesh 的 vertex/index buffer，`uv1` 写入 lightmap UV）
+- Lightmap 分辨率自动计算（世界空间表面积 × texels_per_meter，clamp 到 min/max，对齐到 4）
+- BakeDenoiser（framework 层，同步阻塞 OIDN 降噪，独立于 reference view 的异步 Denoiser）
+- Position/Normal Map 光栅化 pass（UV 空间渲染：vertex shader 将 lightmap UV 映射到 NDC，fragment shader 输出世界空间 position + normal）
+- PT Push Constants 扩展（`baker_mode` + `lightmap_width` + `lightmap_height`，超集布局）
+- Closesthit `baker_mode` 条件分支（跳过 OIDN aux imageStore）
+- Lightmap Baker Pass（UV 空间 RT dispatch：读 position/normal map → 逐 texel 发射射线 → accumulation → BakeDenoiser → BC6H → KTX2 持久化）
+- Probe 自动放置（场景 AABB 内均匀网格 1m 间距 + RT 射线几何过滤剔除墙内探针）
+- Reflection Probe Baker Pass（cubemap 6 面 RT dispatch → accumulation → BakeDenoiser → prefilter mip chain → BC6H → KTX2 持久化）
+- 烘焙模式渲染路径（RenderMode::Baking，逐项顺序执行：lightmaps → probes → finalize）
+- ImGui 烘焙控制面板（触发烘焙、参数配置、进度显示 + accumulation buffer ImGui 预览）
+
+**产出：** 能在引擎内烘焙出 Lightmap 和 Reflection Probe 数据，保存为 KTX2 文件。烘焙过程中可在 ImGui 中观察 UV 空间的累积进度。Per-instance lightmap 分辨率按世界空间面积自动适配。
+
+**战略价值：** BC6H 和 prefilter 通用工具为���续（M2+ 的 probe 更新、其他 HDR 压缩需求）直接复用。BakeDenoiser 的同步模型为任何离线处理管线提供���噪能力。xatlas lightmap UV 基础设施为 Phase 8 的 forward shader 集成提供零开销的 `uv1` 顶点属性访问。
 
 ---
 
