@@ -217,15 +217,18 @@ namespace himalaya::framework {
                      static_cast<double>(tri_buffer_size) / 1024.0);
 
         // ---- Phase 3b: Upload EmissiveAliasTable SSBO (Set 0, Binding 8) ----
-        // Layout: [uint entry_count] [AliasEntry[entry_count]]
-        //   AliasEntry = {float prob, uint alias} = 8 bytes
+        // Layout: [uint entry_count, float total_power] [AliasEntry[entry_count]]
+        //   Header = 8 bytes, AliasEntry = {float prob, uint alias} = 8 bytes
 
-        constexpr uint64_t header_size = sizeof(uint32_t);
+        constexpr uint64_t header_size = sizeof(uint32_t) + sizeof(float);
         const uint64_t entries_size = static_cast<uint64_t>(emissive_count_) * sizeof(AliasEntry);
         const uint64_t alias_buffer_size = header_size + entries_size;
 
+        const auto total_power = static_cast<float>(power_sum);
+
         std::vector<uint8_t> alias_cpu(alias_buffer_size);
         std::memcpy(alias_cpu.data(), &emissive_count_, sizeof(uint32_t));
+        std::memcpy(alias_cpu.data() + sizeof(uint32_t), &total_power, sizeof(float));
         std::memcpy(alias_cpu.data() + header_size, table.data(), entries_size);
 
         alias_table_buffer_ = rm.create_buffer({
