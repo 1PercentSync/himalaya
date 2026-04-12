@@ -194,8 +194,8 @@
 - [x] Power-weighted alias table 构建（Vose's algorithm，复用 Step 11 逻辑）
 - [x] EmissiveTriangleBuffer SSBO 上传（96B/entry：v0/v1/v2 + emission + area + material_index + uv0/uv1/uv2）
 - [x] EmissiveAliasTable SSBO 上传（header + `{float prob, uint alias}` 8B/entry）
-- [ ] 无 emissive 场景跳过构建（emissive_count() 返回 0）
-- [ ] DescriptorManager：Set 0 binding 7（EmissiveTriangleBuffer）+ binding 8（EmissiveAliasTable），`PARTIALLY_BOUND`，`rt_supported` 守卫
+- [x] 无 emissive 场景跳过构建（emissive_count() 返回 0）
+- [x] DescriptorManager：Set 0 binding 7（EmissiveTriangleBuffer）+ binding 8（EmissiveAliasTable），`PARTIALLY_BOUND`，`rt_supported` 守卫
 - [ ] Renderer：场景加载后调用 EmissiveLightBuilder::build() + 写入 Set 0 binding 7/8
 
 ## Step 12b：Shader NEE Emissive + MIS
