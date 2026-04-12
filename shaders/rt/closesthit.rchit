@@ -29,6 +29,12 @@ layout(push_constant) uniform PushConstants {
     uint  directional_lights;    // 1 = directional lights enabled in PT
     uint  emissive_light_count;  // number of emissive triangles (0 = skip NEE emissive)
     uint  lod_max_level;         // ray cone LOD upper clamp (0 = full resolution)
+    uint  lightmap_width;        // lightmap texel width (0 for reference view)
+    uint  lightmap_height;       // lightmap texel height (0 for reference view)
+    float probe_pos_x;           // probe world position x (0 for non-probe)
+    float probe_pos_y;           // probe world position y (0 for non-probe)
+    float probe_pos_z;           // probe world position z (0 for non-probe)
+    uint  face_index;            // probe cubemap face 0-5 (0 for non-probe)
 } pc;
 
 // ---- OIDN auxiliary images (push descriptor, Set 3) ----

@@ -30,6 +30,12 @@ layout(push_constant) uniform PushConstants {
     uint  directional_lights;
     uint  emissive_light_count;
     uint  lod_max_level;
+    uint  lightmap_width;
+    uint  lightmap_height;
+    float probe_pos_x;
+    float probe_pos_y;
+    float probe_pos_z;
+    uint  face_index;
 } pc;
 
 // ---- Hit attributes ----

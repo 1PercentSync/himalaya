@@ -8,7 +8,7 @@
  * Computes one path-traced sample per pixel per frame. The accumulated result
  * is a running average stored in the accumulation buffer (Set 3 binding 0).
  *
- * Push constants (36 bytes):
+ * Push constants (60 bytes):
  *   max_bounces         — maximum path depth
  *   sample_count        �� samples accumulated so far (0 = first frame, overwrite)
  *   frame_seed          — per-frame temporal decorrelation seed
@@ -36,6 +36,12 @@ layout(push_constant) uniform PushConstants {
     uint  directional_lights;    // 1 = directional lights enabled in PT
     uint  emissive_light_count;  // number of emissive triangles (0 = skip NEE emissive)
     uint  lod_max_level;         // ray cone LOD upper clamp (0 = full resolution)
+    uint  lightmap_width;        // lightmap texel width (0 for reference view)
+    uint  lightmap_height;       // lightmap texel height (0 for reference view)
+    float probe_pos_x;           // probe world position x (0 for non-probe)
+    float probe_pos_y;           // probe world position y (0 for non-probe)
+    float probe_pos_z;           // probe world position z (0 for non-probe)
+    uint  face_index;            // probe cubemap face 0-5 (0 for non-probe)
 } pc;
 
 // ---- Accumulation buffer (push descriptor, Set 3 binding 0) ----
