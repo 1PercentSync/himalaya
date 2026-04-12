@@ -56,7 +56,7 @@
 - [x] 新增 `shaders/bake/pos_normal_map.vert`：uv1 → NDC 映射 + 世界空间 position/normal 输出
 - [x] 新增 `shaders/bake/pos_normal_map.frag`：写入两个 RGBA32F color attachment
 - [x] 新增 `passes/pos_normal_map_pass.h`：`PosNormalMapPass` 类声明
-- [ ] 新增 `passes/pos_normal_map_pass.cpp`：pipeline 创建（Dynamic Rendering，2×RGBA32F，无 depth）+ `record()` 录制函数
+- [x] 新增 `passes/pos_normal_map_pass.cpp`：pipeline 创建（Dynamic Rendering，2×RGBA32F，无 depth）+ `record()` 录制函数
 - [ ] `passes/CMakeLists.txt`：添加 `pos_normal_map_pass.cpp`
 - [ ] `renderer.h` + `renderer_init.cpp`：持有 `PosNormalMapPass` 实例，setup/destroy/rebuild 统一调用
 
