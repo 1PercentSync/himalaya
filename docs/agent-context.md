@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 2 进行中：cubemap_filter.h 已完成，下一小项：cubemap_filter.cpp 实现。
+Step 2 进行中：cubemap_filter.h/cpp 已完成，下一小项：ibl_compute.cpp 改为调用 prefilter_cubemap()。
 
 ---
 

@@ -14,7 +14,7 @@
 ## Step 2：Cubemap Prefilter 通用工具提取
 
 - [x] 新增 `framework/cubemap_filter.h`：`prefilter_cubemap()` 函数声明
-- [ ] 新增 `framework/cubemap_filter.cpp`：从 `ibl_compute.cpp` 迁移 prefilter dispatch 逻辑，泛化签名（src/dst cubemap + mip count）
+- [x] 新增 `framework/cubemap_filter.cpp`：从 `ibl_compute.cpp` 迁移 prefilter dispatch 逻辑，泛化签名（src/dst cubemap + mip count）
 - [ ] `ibl_compute.cpp`：`IBL::compute_prefiltered()` 改为调用 `prefilter_cubemap()`
 - [ ] `framework/CMakeLists.txt`：添加 `cubemap_filter.cpp` 源文件
 
