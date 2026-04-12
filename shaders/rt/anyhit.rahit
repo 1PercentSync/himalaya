@@ -28,6 +28,7 @@ layout(push_constant) uniform PushConstants {
     float max_clamp;
     uint  env_sampling;
     uint  directional_lights;
+    uint  emissive_light_count;
 } pc;
 
 // ---- Hit attributes ----

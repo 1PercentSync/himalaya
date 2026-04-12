@@ -98,6 +98,9 @@ namespace himalaya::passes {
         /** @brief Enables/disables directional lights in PT (push constant flag). */
         void set_directional_lights(bool v);
 
+        /** @brief Sets the number of emissive triangles for NEE (0 = skip). */
+        void set_emissive_light_count(uint32_t v);
+
     private:
         /**
          * @brief Create (or recreate) the RT pipeline.
@@ -147,6 +150,9 @@ namespace himalaya::passes {
 
         /** @brief Directional lights enabled in PT (default false — env sampling replaces them). */
         bool directional_lights_ = false;
+
+        /** @brief Number of emissive triangles for area light NEE (0 = skip). */
+        uint32_t emissive_light_count_ = 0;
 
         // ---- Accumulation state ----
 

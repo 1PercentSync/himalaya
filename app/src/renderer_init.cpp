@@ -581,6 +581,8 @@ namespace himalaya::app {
             const auto &alias_data = resource_manager_->get_buffer(alias_buf);
             descriptor_manager_->write_set0_emissive_alias_table(alias_buf, alias_data.desc.size);
         }
+
+        reference_view_pass_.set_emissive_light_count(emissive_light_builder_.emissive_count());
     }
 
     // ---- Environment reload ----
