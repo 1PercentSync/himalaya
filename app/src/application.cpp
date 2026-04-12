@@ -294,7 +294,7 @@ namespace himalaya::app {
             frame.image_available_semaphore, VK_NULL_HANDLE, &image_index_);
 
         if (acquire_result == VK_ERROR_OUT_OF_DATE_KHR) {
-            handle_resize();
+            recreate_swapchain();
             return false;
         }
         if (acquire_result != VK_SUCCESS && acquire_result != VK_SUBOPTIMAL_KHR) {
@@ -687,16 +687,16 @@ namespace himalaya::app {
             present_result == VK_SUBOPTIMAL_KHR ||
             framebuffer_resized_) {
             framebuffer_resized_ = false;
-            handle_resize();
+            recreate_swapchain();
         } else if (present_result != VK_SUCCESS) {
             std::abort();
         }
 
         // Present mode change — deferred from update() to after present.
-        // Must go through handle_resize() for renderer swapchain hooks.
+        // Must go through recreate_swapchain() for renderer swapchain hooks.
         if (present_mode_changed_) {
             present_mode_changed_ = false;
-            handle_resize();
+            recreate_swapchain();
 
             // Post-recreate: fallback may have changed swapchain_.present_mode
             if (render_mode_ == framework::RenderMode::PathTracing && pt_allow_tearing_) {
@@ -715,10 +715,9 @@ namespace himalaya::app {
 
     // ---- Resize handling ----
 
-    // vkQueueWaitIdle guarantees no GPU references, so we destroy immediately
-    // (not deferred). All resolution-dependent resources are rebuilt after
-    // the swapchain is recreated.
-    void Application::handle_resize() {
+    // Waits for GPU idle, invalidates renderer state, recreates swapchain
+    // (resize, present mode change, etc.), then rebuilds renderer resources.
+    void Application::recreate_swapchain() {
         vkQueueWaitIdle(context_.graphics_queue);
         renderer_.on_swapchain_invalidated();
         swapchain_.recreate(context_, window_);

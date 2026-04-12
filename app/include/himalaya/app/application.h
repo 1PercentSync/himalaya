@@ -259,11 +259,11 @@ namespace himalaya::app {
          * @brief Handles window resize: waits for GPU idle, destroys old resolution-dependent
          *        resources, recreates swapchain, and rebuilds those resources.
          *
-         * Called from both begin_frame() (acquire failure) and end_frame() (present failure
-         * or explicit resize/vsync toggle). Uses vkQueueWaitIdle for immediate destruction
-         * instead of deferred deletion, since idle guarantees no GPU references.
+         * Called from begin_frame() (acquire failure), end_frame() (present failure,
+         * framebuffer resize, or present mode change). Uses vkQueueWaitIdle for
+         * immediate destruction instead of deferred deletion.
          */
-        void handle_resize();
+        void recreate_swapchain();
 
         /**
          * @brief Processes left-click drag input.
