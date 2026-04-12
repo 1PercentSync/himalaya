@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段七 — PT 烘焙器
-- **进度**：规划完成，待实现
+- **进度**：Step 4 完成
 
 ### 下一个任务
 
-Step 3 完成，下一步：Step 4 Lightmap UV 拓扑应用。
+Step 4 完成，下一步：Step 5 BakeDenoiser。
 
 ---
 

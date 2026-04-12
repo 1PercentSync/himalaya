@@ -30,10 +30,10 @@
 
 ## Step 4：Lightmap UV 拓扑应用
 
-- [ ] `scene_loader.cpp`：load_meshes() 内部、GPU upload 前，对无 TEXCOORD_1 的 primitive 计算 mesh_hash + 调用 `generate_lightmap_uv()`
-- [ ] `scene_loader.cpp`：根据 remap table 构建新 vertex 数组（uv1 写入 lightmap UV）+ 新 index 数组，替换原 vertices/indices
-- [ ] `scene_loader.cpp`：日志输出每个 mesh 的 lightmap UV 来源（TEXCOORD_1 / xatlas / cache）
-- [ ] 加载顺序确认：glTF → vertex/index build → tangent → TEXCOORD_1 → xatlas UV → GPU upload → BLAS/TLAS → emissive lights
+- [x] `scene_loader.cpp`：load_meshes() 内部、GPU upload 前，对无 TEXCOORD_1 的 primitive 计算 mesh_hash + 调用 `generate_lightmap_uv()`
+- [x] `scene_loader.cpp`：根据 remap table 构建新 vertex 数组（uv1 写入 lightmap UV）+ 新 index 数组，替换原 vertices/indices
+- [x] `scene_loader.cpp`：日志输出每个 mesh 的 lightmap UV 来源（TEXCOORD_1 / xatlas / cache）
+- [x] 加载顺序确认：glTF → vertex/index build → tangent → TEXCOORD_1 → xatlas UV → GPU upload → BLAS/TLAS → emissive lights
 
 ## Step 5：BakeDenoiser
 
