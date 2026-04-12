@@ -46,7 +46,7 @@
 
 - [x] RT shader PushConstants struct 追加 `uint lightmap_width` + `uint lightmap_height` + `float probe_pos_x/y/z` + `uint face_index`（36B → 60B）
 - [x] `pt_common.glsl` 新增 `build_orthonormal_basis(N, out T, out B)` 函数（从 closesthit:392-398 提取）
-- [ ] `renderer.h`：`max_clamp_` 默认值 10.0f → 0.0f + `prev_max_clamp_` 同步改为 0.0f（firefly clamping 默认关闭）
+- [x] `renderer.h`：`max_clamp_` 默认值 10.0f → 0.0f + `prev_max_clamp_` 同步改为 0.0f（firefly clamping 默认关闭）
 - [ ] `reference_view_pass.cpp`：push constant 填充追加 baker 字段为 0
 - [ ] `reference_view_pass.h`：push constant range 更新为 60B
 - [ ] closesthit.rchit 不改动（aux imageStore 保持无条件执行）
