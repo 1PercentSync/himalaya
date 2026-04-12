@@ -225,16 +225,18 @@ UV 空间光栅化预处理。
 
 - 新增 `shaders/bake/pos_normal_map.vert`：`gl_Position = vec4(uv1 * 2.0 - 1.0, 0.0, 1.0)`，输出世界空间 position（`model * in_position`）和 normal（`normalize(normal_matrix * in_normal)`）
 - 新增 `shaders/bake/pos_normal_map.frag`：写入两个 color attachment（position: RGBA32F, normal: RGBA32F）
-- Renderer（`renderer_bake.cpp`）：
-  - 创建 position/normal map graphics pipeline（Dynamic Rendering，2 个 color attachment，无 depth）
-  - 录制函数：给定 mesh + instance transform + lightmap 分辨率，创建两张 RGBA32F image，录制 draw call
-  - Pipeline 生命周期跟随 Renderer（init 时创建，destroy 时销毁）。`renderer_bake.cpp` 在此 step 创建（仅含 pipeline 创建 + pos/normal map 录制函数），Step 9 扩展为完整烘焙状态机
+- 新增 `passes/pos_normal_map_pass.h/.cpp`：`PosNormalMapPass` 类
+  - `setup()`：编译 shader，创建 graphics pipeline（Dynamic Rendering，2 个 RGBA32F color attachment，无 depth）
+  - `record()`：给定 CommandBuffer + mesh + transform + image handles + 分辨率，录制 draw call
+  - `rebuild_pipelines()` / `destroy()`：热重载和销毁
+  - Pipeline 生命周期跟随 Pass（setup 时创建，destroy 时销毁）
+- Renderer 持有 `PosNormalMapPass` 实例，与其他 Pass 统一管理
 
 **验证**：RenderDoc 捕获烘焙帧：position map 中非零 texel 覆盖 mesh 三角形在 UV 空间的投影区域，normal map 中法线方向合理（xyz 分量可视化）
 
 #### 设计要点
 
-Viewport 和 scissor 设置为 lightmap 分辨率。Vertex input 与现有 forward.vert 相同（Vertex binding 0，5 个 attribute）。Push constant 传 instance 的 model matrix + normal matrix。不需要 depth buffer。Clear color = vec4(0)。Position map fragment shader 输出 `alpha = 1.0` 标记已覆盖 texel；baker raygen 检查 `position.a == 0.0` 跳过未覆盖 texel（避免 `position.xyz == vec3(0)` 哨兵值误判世界原点处的有效 texel）。
+Viewport 和 scissor 设置为 lightmap 分辨率（不使用负高度 viewport 翻转）。Vertex input 与现有 forward.vert 相同（Vertex binding 0，5 个 attribute）。Push constant 传 instance 的 model matrix + normal matrix（112 字节）。不需要 depth buffer，不需要 descriptor set。Clear color = vec4(0)。Position map fragment shader 输出 `alpha = 1.0` 标记已覆盖 texel；baker raygen 检查 `position.a == 0.0` 跳过未覆盖 texel（避免 `position.xyz == vec3(0)` 哨兵值误判世界原点处的有效 texel）。
 
 ---
 

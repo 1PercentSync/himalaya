@@ -2527,19 +2527,46 @@ private:
 
 每帧 6 次 dispatch，每次切换 binding 0/1/2 到对应 face 的 image/view。
 
-#### Position/Normal Map Pipeline（阶段七）
+#### PosNormalMapPass（阶段七）
 
 Lightmap baker 预处理阶段。光栅化 pass 将 mesh 在 lightmap UV 空间渲染，输出世界空间 position 和 normal 两张 RGBA32F render target。
 
-```
-Vertex shader:  gl_Position = vec4(uv1 * 2.0 - 1.0, 0.0, 1.0)
-                outputs: world_position = model * in_position
-                         world_normal = normalize(normal_matrix * in_normal)
+```cpp
+namespace himalaya::passes {
 
-Fragment shader: writes position + normal to render targets
+/// UV-space rasterization pass for lightmap position/normal map generation.
+///
+/// Maps lightmap UV1 to NDC, outputs world-space position (alpha=1.0
+/// coverage marker) and normal to two RGBA32F render targets.
+/// Used once per mesh instance before baker RT dispatch.
+class PosNormalMapPass {
+public:
+    void setup(rhi::Context& ctx, rhi::ResourceManager& rm,
+               rhi::ShaderCompiler& sc);
+
+    /// Record a single draw call for one mesh instance.
+    void record(rhi::CommandBuffer& cmd,
+                const framework::Mesh& mesh,
+                const glm::mat4& model,
+                const glm::mat3& normal_matrix,
+                rhi::ImageHandle position_map,
+                rhi::ImageHandle normal_map,
+                uint32_t width, uint32_t height);
+
+    void rebuild_pipelines();
+    void destroy();
+
+private:
+    rhi::Context* ctx_ = nullptr;
+    rhi::ResourceManager* rm_ = nullptr;
+    rhi::ShaderCompiler* sc_ = nullptr;
+    rhi::Pipeline pipeline_{};
+};
+
+}  // namespace himalaya::passes
 ```
 
-不需要独立的 Pass 类——Renderer 在烘焙每个 instance 前直接录制 Dynamic Rendering 命令。
+独立 Pass 类，Renderer 持有实例，与其他 Pass 统一管理。Push constant: `mat4 model` + `mat3 normal_matrix`（112 字节，无 descriptor set）。
 
 #### PT Push Constants 扩展（阶段七）
 
