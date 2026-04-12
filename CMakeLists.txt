@@ -6,6 +6,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 add_subdirectory(third_party/bc7enc)
 add_subdirectory(third_party/xatlas)
+add_subdirectory(third_party/oidn)
 add_subdirectory(rhi)
 add_subdirectory(framework)
 add_subdirectory(passes)
