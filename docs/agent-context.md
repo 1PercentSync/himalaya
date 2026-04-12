@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 1：BC6H 压缩通用工具提取（从 IBL 重构为 framework 工具）。
+Step 1：BC6H 压缩通用工具提取（从 IBL 重构为 framework 工具）。texture_compress.h 已完成，下一项：texture_compress.cpp。
 
 ---
 
