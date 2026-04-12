@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 2 已完成。下一个任务：Step 3 xatlas 集成 + Lightmap UV 生成器。
+Step 3 进行中：xatlas 集成已完成（third_party/xatlas/ + CMake），下一小项：lightmap_uv.h 声明。
 
 ---
 

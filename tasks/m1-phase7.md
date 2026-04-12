@@ -20,8 +20,8 @@
 
 ## Step 3：xatlas 集成 + Lightmap UV 生成器
 
-- [ ] 新增 `third_party/xatlas/`：复制 xatlas.h + xatlas.cpp（单文件库，MIT）
-- [ ] `framework/CMakeLists.txt`：添加 xatlas.cpp 到源文件 + include path
+- [x] 新增 `third_party/xatlas/`：复制 xatlas.h + xatlas.cpp（单文件库，MIT）
+- [x] `framework/CMakeLists.txt`：添加 xatlas.cpp 到源文件 + include path
 - [ ] 新增 `framework/lightmap_uv.h`：`LightmapUVResult` 结构体 + `generate_lightmap_uv()` 函数声明
 - [ ] 新增 `framework/lightmap_uv.cpp`：TEXCOORD_1 检测（接受 `bool has_lightmap_uv` flag，由 SceneLoader 通过 `findAttribute("TEXCOORD_1")` 检测传递）
 - [ ] `lightmap_uv.cpp`：xatlas 调用（Create → AddMesh → Generate → 提取结果）
