@@ -8,12 +8,16 @@
  * Computes one path-traced sample per pixel per frame. The accumulated result
  * is a running average stored in the accumulation buffer (Set 3 binding 0).
  *
- * Push constants (20 bytes):
- *   max_bounces      — maximum path depth
- *   sample_count     — samples accumulated so far (0 = first frame, overwrite)
- *   frame_seed       — per-frame temporal decorrelation seed
- *   blue_noise_index — bindless index of the 128x128 blue noise texture
- *   max_clamp        — firefly clamping threshold (0 = disabled)
+ * Push constants (36 bytes):
+ *   max_bounces         — maximum path depth
+ *   sample_count        �� samples accumulated so far (0 = first frame, overwrite)
+ *   frame_seed          — per-frame temporal decorrelation seed
+ *   blue_noise_index    — bindless index of the 128x128 blue noise texture
+ *   max_clamp           — firefly clamping threshold (0 = disabled)
+ *   env_sampling        — env map importance sampling toggle
+ *   directional_lights  — directional lights in PT toggle
+ *   emissive_light_count — number of emissive triangles (0 = skip NEE)
+ *   lod_max_level       — ray cone LOD upper clamp (0 = full resolution)
  */
 
 #define HIMALAYA_RT
