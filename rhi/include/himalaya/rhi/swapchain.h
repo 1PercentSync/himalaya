@@ -5,6 +5,7 @@
  * @brief Vulkan swapchain: presentation surface, images, and image views.
  */
 
+#include <cstdint>
 #include <vector>
 
 #include <vulkan/vulkan.h>
@@ -13,6 +14,13 @@ struct GLFWwindow;
 
 namespace himalaya::rhi {
     class Context;
+
+    /** @brief Swapchain present mode selection. */
+    enum class PresentMode : uint8_t {
+        Fifo,       ///< VSync — wait for vertical blank (VK_PRESENT_MODE_FIFO_KHR, guaranteed)
+        Mailbox,    ///< Triple-buffered, no tearing, low latency (VK_PRESENT_MODE_MAILBOX_KHR)
+        Immediate,  ///< No sync, allows tearing, uncapped framerate (VK_PRESENT_MODE_IMMEDIATE_KHR)
+    };
 
     /**
      * @brief Manages a Vulkan swapchain and its associated image views.
@@ -27,9 +35,9 @@ namespace himalaya::rhi {
          * @brief Creates the swapchain and its image views.
          * @param context Vulkan context providing device, physical device, and surface.
          * @param window  GLFW window used to query framebuffer size for extent.
-         * @param vsync   true selects FIFO (vsync), false prefers MAILBOX.
+         * @param mode    Present mode selection (default Mailbox).
          */
-        void init(const Context &context, GLFWwindow *window, bool vsync = false);
+        void init(const Context &context, GLFWwindow *window, PresentMode mode = PresentMode::Mailbox);
 
         /**
          * @brief Recreates the swapchain after a resize or suboptimal present.
@@ -49,8 +57,8 @@ namespace himalaya::rhi {
          */
         void destroy(VkDevice device) const;
 
-        /** @brief Current vsync preference. Read by recreate() to preserve the setting. */
-        bool vsync = false;
+        /** @brief Current present mode. Read by recreate() to preserve the setting. */
+        PresentMode present_mode = PresentMode::Mailbox;
 
         /** @brief Swapchain handle. */
         VkSwapchainKHR swapchain = VK_NULL_HANDLE;
@@ -87,12 +95,12 @@ namespace himalaya::rhi {
         static VkSurfaceFormatKHR choose_surface_format(VkPhysicalDevice physical_device, VkSurfaceKHR surface);
 
         /**
-         * @brief Selects the best present mode.
+         * @brief Selects the Vulkan present mode from the requested PresentMode.
          *
-         * Prefers MAILBOX (triple-buffered, no tearing, low latency).
-         * Falls back to FIFO (guaranteed available, v-sync).
+         * FIFO is always available. MAILBOX and IMMEDIATE fall back to FIFO
+         * with a warning if unsupported by the surface.
          */
-        static VkPresentModeKHR choose_present_mode(VkPhysicalDevice physical_device, VkSurfaceKHR surface, bool vsync);
+        static VkPresentModeKHR choose_present_mode(VkPhysicalDevice physical_device, VkSurfaceKHR surface, PresentMode mode);
 
         /**
          * @brief Determines the swapchain extent from surface capabilities.

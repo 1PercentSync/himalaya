@@ -8,8 +8,8 @@
 #include <spdlog/spdlog.h>
 
 namespace himalaya::rhi {
-    void Swapchain::init(const Context &context, GLFWwindow *window, const bool vsync) {
-        this->vsync = vsync;
+    void Swapchain::init(const Context &context, GLFWwindow *window, const PresentMode mode) {
+        present_mode = mode;
         create_resources(context, window, VK_NULL_HANDLE);
     }
 
@@ -48,7 +48,7 @@ namespace himalaya::rhi {
         vkGetPhysicalDeviceSurfaceCapabilitiesKHR(context.physical_device, context.surface, &capabilities);
 
         const auto [surface_format, color_space] = choose_surface_format(context.physical_device, context.surface);
-        const auto present_mode = choose_present_mode(context.physical_device, context.surface, vsync);
+        const auto vk_present_mode = choose_present_mode(context.physical_device, context.surface, present_mode);
         extent = choose_extent(capabilities, window);
         format = surface_format;
 
@@ -71,7 +71,7 @@ namespace himalaya::rhi {
         create_info.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
         create_info.preTransform = capabilities.currentTransform;
         create_info.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-        create_info.presentMode = present_mode;
+        create_info.presentMode = vk_present_mode;
         create_info.clipped = VK_TRUE;
         create_info.oldSwapchain = old_swapchain;
 
@@ -132,32 +132,37 @@ namespace himalaya::rhi {
         return formats[0];
     }
 
-    // Selects present mode based on vsync preference.
-    // vsync=true → FIFO (wait for vertical blank).
-    // vsync=false → prefer MAILBOX (low-latency, no tearing), fallback FIFO.
+    // Selects Vulkan present mode from the requested PresentMode enum.
+    // FIFO is guaranteed. MAILBOX and IMMEDIATE fall back to FIFO if unavailable.
     // ReSharper disable CppParameterMayBeConst
     VkPresentModeKHR Swapchain::choose_present_mode(VkPhysicalDevice physical_device,
                                                     VkSurfaceKHR surface,
-                                                    const bool vsync) {
+                                                    const PresentMode mode) {
         // ReSharper restore CppParameterMayBeConst
-        if (vsync) {
+        if (mode == PresentMode::Fifo) {
             spdlog::info("Present mode: FIFO (vsync)");
             return VK_PRESENT_MODE_FIFO_KHR;
         }
 
+        // Query available modes for MAILBOX / IMMEDIATE
         uint32_t count = 0;
         vkGetPhysicalDeviceSurfacePresentModesKHR(physical_device, surface, &count, nullptr);
-        std::vector<VkPresentModeKHR> modes(count);
-        vkGetPhysicalDeviceSurfacePresentModesKHR(physical_device, surface, &count, modes.data());
+        std::vector<VkPresentModeKHR> available(count);
+        vkGetPhysicalDeviceSurfacePresentModesKHR(physical_device, surface, &count, available.data());
 
-        for (const auto mode: modes) {
-            if (mode == VK_PRESENT_MODE_MAILBOX_KHR) {
-                spdlog::info("Present mode: MAILBOX");
-                return mode;
+        const VkPresentModeKHR target = (mode == PresentMode::Mailbox)
+            ? VK_PRESENT_MODE_MAILBOX_KHR
+            : VK_PRESENT_MODE_IMMEDIATE_KHR;
+        const char* target_name = (mode == PresentMode::Mailbox) ? "MAILBOX" : "IMMEDIATE";
+
+        for (const auto m : available) {
+            if (m == target) {
+                spdlog::info("Present mode: {}", target_name);
+                return m;
             }
         }
 
-        spdlog::warn("Present mode: FIFO (MAILBOX not available)");
+        spdlog::warn("Present mode: FIFO ({} not available)", target_name);
         return VK_PRESENT_MODE_FIFO_KHR;
     }
 
