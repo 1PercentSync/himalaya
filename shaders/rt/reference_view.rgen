@@ -31,6 +31,7 @@ layout(push_constant) uniform PushConstants {
     uint  env_sampling;          // 1 = env importance sampling enabled
     uint  directional_lights;    // 1 = directional lights enabled in PT
     uint  emissive_light_count;  // number of emissive triangles (0 = skip NEE emissive)
+    uint  lod_max_level;         // ray cone LOD upper clamp (0 = full resolution)
 } pc;
 
 // ---- Accumulation buffer (push descriptor, Set 3 binding 0) ----

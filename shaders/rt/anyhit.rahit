@@ -29,6 +29,7 @@ layout(push_constant) uniform PushConstants {
     uint  env_sampling;
     uint  directional_lights;
     uint  emissive_light_count;
+    uint  lod_max_level;
 } pc;
 
 // ---- Hit attributes ----
