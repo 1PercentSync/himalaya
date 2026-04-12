@@ -218,7 +218,29 @@ namespace himalaya::framework {
                      emissive_count_,
                      static_cast<double>(tri_buffer_size) / 1024.0);
 
-        // TODO: Phase 3b — EmissiveAliasTable SSBO upload (next task item)
+        // ---- Phase 3b: Upload EmissiveAliasTable SSBO (Set 0, Binding 8) ----
+        // Layout: [uint entry_count] [AliasEntry[entry_count]]
+        //   AliasEntry = {float prob, uint alias} = 8 bytes
+
+        constexpr uint64_t header_size = sizeof(uint32_t);
+        const uint64_t entries_size = static_cast<uint64_t>(emissive_count_) * sizeof(AliasEntry);
+        const uint64_t alias_buffer_size = header_size + entries_size;
+
+        std::vector<uint8_t> alias_cpu(alias_buffer_size);
+        std::memcpy(alias_cpu.data(), &emissive_count_, sizeof(uint32_t));
+        std::memcpy(alias_cpu.data() + header_size, table.data(), entries_size);
+
+        alias_table_buffer_ = rm.create_buffer({
+            .size = alias_buffer_size,
+            .usage = rhi::BufferUsage::StorageBuffer | rhi::BufferUsage::TransferDst,
+            .memory = rhi::MemoryUsage::GpuOnly,
+        }, "Emissive Alias Table");
+
+        rm.upload_buffer(alias_table_buffer_, alias_cpu.data(), alias_buffer_size);
+
+        spdlog::info("EmissiveLightBuilder: alias table uploaded ({} entries, {:.1f} KB)",
+                     emissive_count_,
+                     static_cast<double>(alias_buffer_size) / 1024.0);
     }
 
     void EmissiveLightBuilder::destroy() {
