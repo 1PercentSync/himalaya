@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段七 — PT 烘焙器
-- **进度**：Step 8 进行中（DIMS_PER_BOUNCE 迁移完成）
+- **进度**：Step 8 进行中（DIMS_PER_BOUNCE 迁移 + trace_path 提取 + rgen 重构完成）
 
 ### 下一个任务
 
-Step 8 第 2 项：从 reference_view.rgen 提取共享 `trace_path()` 函数到 pt_common.glsl。
+Step 8 第 4 项：新增 `shaders/rt/lightmap_baker.rgen`。
 
 ---
 
