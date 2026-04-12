@@ -122,9 +122,26 @@ void main() {
         imageStore(aux_normal_image, pixel, vec4(N_shading, 1.0));
     }
 
-    // ---- Emissive contribution (all bounces, Step 12 adds MIS weight) ----
-    vec3 emissive = texture(textures[nonuniformEXT(mat.emissive_tex)], hit.uv0).rgb
-                    * mat.emissive_factor.rgb;
+    // ---- Emissive contribution (all bounces) ----
+    vec3 emissive_raw = texture(textures[nonuniformEXT(mat.emissive_tex)], hit.uv0).rgb
+                        * mat.emissive_factor.rgb;
+
+    // MIS weight for BRDF-sampled ray hitting emissive surface:
+    // Bounce 0 (direct view): weight 1.0 — primary ray is not a BRDF sample.
+    // Bounce > 0 with NEE active: balance heuristic(brdf_pdf, light_pdf).
+    // Bounce > 0 without NEE: weight 1.0 — no competing strategy.
+    vec3 emissive = emissive_raw;
+    if (payload.bounce > 0u && pc.emissive_light_count > 0u) {
+        float emi_lum = dot(mat.emissive_factor.rgb, vec3(0.2126, 0.7152, 0.0722));
+        if (emi_lum > 0.0) {
+            // Compute light PDF at this hit from the BRDF sampling perspective
+            float cos_theta_l = abs(dot(N_face, gl_WorldRayDirectionEXT));
+            float light_pdf = emissive_light_pdf(emi_lum, gl_HitTEXT,
+                                                  cos_theta_l, total_power);
+            float mis_w = mis_power_heuristic(payload.last_brdf_pdf, light_pdf);
+            emissive = emissive_raw * mis_w;
+        }
+    }
 
     // ---- Ray origin offset (shared by shadow rays and next bounce) ----
     vec3 offset_pos = offset_ray_origin(world_pos, N_face);
@@ -425,4 +442,5 @@ void main() {
     payload.next_direction = next_dir;
     payload.throughput_update = throughput_update;
     payload.hit_distance = gl_HitTEXT;
+    payload.last_brdf_pdf = brdf_pdf_combined;
 }
