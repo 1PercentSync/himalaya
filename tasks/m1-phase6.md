@@ -225,6 +225,6 @@
 - [x] DebugUI PT 面板新增 "Allow Tearing" checkbox（PT 模式下覆盖 present mode 为 IMMEDIATE 绕过驱动帧率限制，切回光栅化时恢复用户选择）
 - [x] Application：present mode 变更处理替代 `vsync_changed_` 逻辑，PT uncap 激活/恢复触发 swapchain recreate
 - [x] AppConfig 持久化 `present_mode`（字符串，默认 `"mailbox"`）+ `pt_allow_tearing`（bool，默认 false），config.cpp 序列化/反序列化
-- [ ] Swapchain 新增 `mailbox_supported` / `immediate_supported` 布尔字段，`create_resources()` 中查询并缓存
-- [ ] DebugUI Present Mode combo 仅列出硬件支持的模式（FIFO 始终列出），仅 FIFO 可用时 combo 灰掉
-- [ ] DebugUI Allow Tearing checkbox：IMMEDIATE 不支持时灰掉不可选，勾选后若 IMMEDIATE fallback 到 FIFO 则自动还原 checkbox
+- [x] Swapchain 新增 `mailbox_supported` / `immediate_supported` 布尔字段，`create_resources()` 中查询并缓存
+- [x] DebugUI Present Mode combo 仅列出硬件支持的模式（FIFO 始终列出），仅 FIFO 可用时 combo 灰掉
+- [x] DebugUI Allow Tearing checkbox：IMMEDIATE 不支持时灰掉不可选，勾选后若 IMMEDIATE fallback 到 FIFO 则自动还原 checkbox
