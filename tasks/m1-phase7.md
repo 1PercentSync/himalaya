@@ -49,7 +49,7 @@
 - [x] `renderer.h`：`max_clamp_` 默认值 10.0f → 0.0f + `prev_max_clamp_` 同步改为 0.0f（firefly clamping 默认关闭）
 - [x] `reference_view_pass.cpp`：push constant 填充追加 baker 字段为 0
 - [x] `reference_view_pass.h`：push constant range 更新为 60B（通过 sizeof(PTPushConstants) 自动生效）
-- [ ] closesthit.rchit 不改动（aux imageStore 保持无条件执行）
+- [x] closesthit.rchit 不改动（aux imageStore 保持无条件执行）
 
 ## Step 7：Position/Normal Map 光栅化 pass
 
