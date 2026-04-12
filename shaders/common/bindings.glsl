@@ -50,7 +50,7 @@ struct GPUMaterialData {
     uint occlusion_tex;            // offset 64 — bindless index
     float alpha_cutoff;             // offset 68
     uint alpha_mode;               // offset 72 — 0=Opaque, 1=Mask, 2=Blend
-    uint _padding;                 // offset 76
+    uint double_sided;             // offset 76 — 1 if glTF doubleSided, 0 otherwise
 };
 
 // ---- Feature flags (bitmask for GlobalUBO.feature_flags) ----

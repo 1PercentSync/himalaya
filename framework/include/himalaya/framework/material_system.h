@@ -53,7 +53,7 @@ namespace himalaya::framework {
         uint32_t occlusion_tex; ///< offset 64 — bindless index
         float alpha_cutoff; ///< offset 68 — glTF alphaCutoff (Mask mode threshold)
         uint32_t alpha_mode; ///< offset 72 — AlphaMode as uint (0/1/2)
-        uint32_t _padding; ///< offset 76 — padding to 80 bytes
+        uint32_t double_sided; ///< offset 76 — 1 if glTF doubleSided, 0 otherwise
     };
 
     static_assert(sizeof(GPUMaterialData) == 80, "GPUMaterialData must be 80 bytes (std430)");

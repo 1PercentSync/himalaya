@@ -571,7 +571,7 @@ namespace himalaya::app {
             data.occlusion_strength = mat.occlusionTexture.has_value() ? mat.occlusionTexture->strength : 1.0f;
             data.alpha_cutoff = mat.alphaCutoff;
             data.alpha_mode = static_cast<uint32_t>(convert_alpha_mode(mat.alphaMode));
-            data._padding = 0;
+            data.double_sided = mat.doubleSided ? 1u : 0u;
 
             // Texture references (UINT32_MAX = unset, filled by fill_material_defaults)
             data.base_color_tex = pbr.baseColorTexture.has_value()
