@@ -2283,7 +2283,7 @@ struct DebugUIContext {
     uint32_t pt_sample_count;                   ///< 当前累积采样数（只读）
     uint32_t& pt_target_samples;                ///< 目标采样数（读写，0 = 无限）
     uint32_t& pt_max_bounces;                   ///< 最大 bounce 数（读写，默认 8，范围 1-32）
-    float& pt_max_clamp;                        ///< Firefly clamping 阈值（读写，默认 10.0，0 = 关闭）
+    float& pt_max_clamp;                        ///< Firefly clamping 阈值（读写，默认 0.0 = 关闭，OIDN 足够强）
     float pt_elapsed_time;                      ///< 累积耗时秒（只读）
     bool& denoise_enabled;                      ///< 降噪功能开关（读写）
     bool& auto_denoise;                         ///< 自动降噪开关（读写）
@@ -2423,7 +2423,7 @@ struct LightmapUVResult {
 };
 
 /// Generates lightmap UV for a mesh using xatlas, or loads from cache.
-/// If mesh already has TEXCOORD_1 (uv1 not all-zero), returns nullopt
+/// If mesh already has TEXCOORD_1 (has_lightmap_uv flag from SceneLoader), returns nullopt
 /// (caller uses existing uv1 as lightmap UV, no topology change).
 ///
 /// Cache key: xxHash of mesh vertex positions + indices.
@@ -2431,6 +2431,7 @@ struct LightmapUVResult {
 [[nodiscard]] std::optional<LightmapUVResult>
 generate_lightmap_uv(std::span<const Vertex> vertices,
                      std::span<const uint32_t> indices,
+                     bool has_lightmap_uv,
                      const std::string& mesh_hash);
 
 }  // namespace himalaya::framework
@@ -2472,6 +2473,17 @@ private:
 }  // namespace himalaya::passes
 ```
 
+**LightmapBakerPass Set 3 push descriptor layout（6 bindings）**：
+
+| Binding | 类型 | 资源 | 说明 |
+|---------|------|------|------|
+| 0 | `image2D` (storage, rgba32f) | accumulation buffer | running average 累积 |
+| 1 | `image2D` (storage, rgba16f) | aux albedo | OIDN 辅助通道（closesthit bounce 0 写入） |
+| 2 | `image2D` (storage, rgba16f) | aux normal | OIDN 辅助通道（closesthit bounce 0 写入） |
+| 3 | SSBO (readonly) | Sobol 方向数表 | 共享，与 reference view 相同 |
+| 4 | `sampler2D` (nearest, clamp) | position map | UV 空间 world position（RGBA32F, alpha=覆盖标记） |
+| 5 | `sampler2D` (nearest, clamp) | normal map | UV 空间 world normal（RGBA32F） |
+
 #### ProbeBakerPass（阶段七）
 
 ```cpp
@@ -2506,6 +2518,17 @@ private:
 
 }  // namespace himalaya::passes
 ```
+
+**ProbeBakerPass Set 3 push descriptor layout（per-dispatch，4 bindings）**：
+
+| Binding | 类型 | 资源 | 说明 |
+|---------|------|------|------|
+| 0 | `image2D` (storage, rgba32f) | accumulation face view | cubemap 单层 2D view，per-dispatch 切换 face |
+| 1 | `image2D` (storage, rgba16f) | aux albedo (per-face) | closesthit bounce 0 写入 |
+| 2 | `image2D` (storage, rgba16f) | aux normal (per-face) | closesthit bounce 0 写入 |
+| 3 | SSBO (readonly) | Sobol 方向数表 | 共享 |
+
+每帧 6 次 dispatch，每次切换 binding 0/1/2 到对应 face 的 image/view。
 
 #### Position/Normal Map Pipeline（阶段七）
 

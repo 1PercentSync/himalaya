@@ -220,7 +220,7 @@ KTX2 持久化
   输入：BC6H image readback
   输出：cache_root()/bake/ 下的 KTX2 文件
 
-释放 accumulation + position/normal map → 下一个 instance
+释放 accumulation + aux albedo/normal + position/normal map → 下一个 instance
 ```
 
 ### Probe 烘焙（每个 probe）
@@ -241,8 +241,8 @@ ImGui Bake Preview
 
 --- 达到目标采样数后（GPU idle） ---
 
-BakeDenoiser（同步，6 face 逐面降噪）
-  输入：Accumulation Cubemap readback
+BakeDenoiser（同步，6 face 逐面降噪，含辅助通道）
+  输入：Accumulation Cubemap readback + aux albedo + aux normal（per-face readback）
   输出：Denoised RGBA32F CPU 内存
 
 Prefilter Mip Chain（GPU compute，复用 prefilter 通用工具）
@@ -257,7 +257,7 @@ KTX2 持久化
   输入：BC6H cubemap readback
   输出：cache_root()/bake/ 下的 KTX2 文件
 
-释放 accumulation cubemap → 下一个 probe
+释放 accumulation cubemap + aux albedo/normal → 下一个 probe
 ```
 
 ### 烘焙关键资源
@@ -267,7 +267,9 @@ KTX2 持久化
 | Position Map（RGBA32F） | Pos/Normal Rasterization | Lightmap Baker Pass | 当前 instance 烘焙期间 |
 | Normal Map（RGBA32F） | Pos/Normal Rasterization | Lightmap Baker Pass | 当前 instance 烘焙期间 |
 | Lightmap Accumulation（RGBA32F） | Lightmap Baker Pass | BakeDenoiser readback | 当前 instance 烘焙期间 |
+| Lightmap Aux Albedo/Normal（RGBA16F × 2） | closesthit bounce 0 | BakeDenoiser readback | 当前 instance 烘焙期间 |
 | Probe Accumulation Cubemap（RGBA32F） | Probe Baker Pass | BakeDenoiser readback | 当前 probe 烘焙期间 |
+| Probe Aux Albedo/Normal（RGBA16F × 6 face × 2） | closesthit bounce 0 | BakeDenoiser readback | 当前 probe 烘焙期间 |
 | TLAS + Geometry Info SSBO | 场景加载时构建 | 所有 Baker Pass | 跨烘焙持久 |
 
 ---

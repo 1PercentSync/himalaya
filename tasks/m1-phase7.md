@@ -64,7 +64,7 @@
 
 - [ ] `pt_common.glsl`：`DIMS_PER_BOUNCE` 常量从 raygen/closesthit 迁移到此处
 - [ ] `pt_common.glsl`：从 reference_view.rgen 提取共享 `trace_path()` 函数（`#ifdef RAYGEN_SHADER` 守卫，三个 raygen 共用）
-- [ ] `reference_view.rgen`：重构为 `#define RAYGEN_SHADER` + 调用 `trace_path()`（行为不变）
+- [ ] `reference_view.rgen`：重构为 `#define RAYGEN_SHADER` + 调用 `trace_path()`（行为不变）。push constant + payload 声明移到 `#include "rt/pt_common.glsl"` 之前（trace_path() 引用 `pc.xxx` 和 `payload`）
 - [ ] 新增 `shaders/rt/lightmap_baker.rgen`：读 position/normal map → 逐 texel 发射射线 → 调用共享 bounce loop → accumulation
 - [ ] 新增 `passes/lightmap_baker_pass.h`：LightmapBakerPass 类声明
 - [ ] 新增 `passes/lightmap_baker_pass.cpp`：setup（编译 rgen + 创建 RT pipeline）+ record（RG pass + push descriptors + trace_rays）
@@ -77,6 +77,9 @@
 - [ ] 新增 `renderer_bake.cpp`：烘焙状态机（BakingLightmaps → BakingProbes → Complete）
 - [ ] `renderer_bake.cpp`：烘焙触发时计算 per-instance lightmap 分辨率（世界空间表面积 × texels_per_meter，对齐到 4）
 - [ ] `renderer_bake.cpp`：per-instance lightmap 烘焙循环（position/normal map + aux image 创建 → accumulation → 目标采样数 → readback accumulation + aux → BakeDenoiser（含辅助通道）→ BC6H → KTX2）
+- [ ] `renderer_bake.cpp`：per-instance `sample_count` 独立计数（从 0 到 target SPP），全局 `frame_seed` 单调递增不重置
+- [ ] `renderer_bake.cpp`：baker push constant `max_clamp = 0`（禁用 firefly clamping）
+- [ ] `renderer_bake.cpp`：每帧帧流程 `fill_common_gpu_data()` → RG import Set 0 + TLAS → baker RT pass → ImGui render pass → present
 - [ ] `renderer.cpp`：render() switch 新增 Baking case
 - [ ] `debug_ui.cpp`：RenderMode combo 新增 Baking 选项
 
@@ -95,6 +98,7 @@
 - [ ] 新增 `passes/probe_baker_pass.cpp`：setup（编译 rgen + 创建 RT pipeline）+ record（6 次 dispatch per frame，每 face 一次）
 - [ ] Set 3 layout（per-dispatch）：binding 0 accumulation face view（cubemap 单层 2D view）+ binding 1 aux albedo（per-face 2D image）+ binding 2 aux normal（per-face 2D image）+ binding 3 Sobol
 - [ ] Aux image 管理：6 对 aux 2D image（或 2 个 image2DArray per-layer 2D view），per-probe 创建/销毁
+- [ ] 6 个 face 共享同一个 per-probe `sample_count`：每帧 6 次 dispatch 后 `sample_count` +1（不是 +6）
 
 ## Step 12：Probe 端到端流程
 

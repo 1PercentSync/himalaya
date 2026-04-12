@@ -216,6 +216,7 @@ Position/normal map 通过 `sampler2D`（nearest, clamp）采样而非 storage i
 
 - `DIMS_PER_BOUNCE` 常量从 raygen/closesthit 迁移到 `pt_common.glsl`（两者都引用它计算 Sobol 维度偏移）
 - trace_path() 包在 `#ifdef RAYGEN_SHADER` 内：raygen 在 `#include "rt/pt_common.glsl"` 前定义 `#define RAYGEN_SHADER`，closesthit 不定义。trace_path() 内调用 `traceRayEXT`（仅 raygen 可用），且引用 raygen 声明的 `payload` 变量（GLSL `#include` 是文本合并，同一编译单元内变量可见）
+- **include 重排**：当前 `reference_view.rgen` 先 include pt_common.glsl（line 25），后声明 push constant block（line 29）和 payload（line 47）。trace_path() 引用 `pc.xxx` 和 `payload`，必须在它们声明之后。解决：raygen 中将 push constant + payload 声明移到 `#include "rt/pt_common.glsl"` 之前（或让 pt_common.glsl 在 `#ifdef RAYGEN_SHADER` 区域内声明 push constant 和 payload，统一管理）
 - reference_view.rgen 重构为调用 trace_path()（行为不变，原 bounce loop 代码移入函数）
 
 ---
@@ -309,7 +310,7 @@ Probe 烘焙 RT pipeline + raygen shader + cubemap accumulation。
 
 Probe 逐面降噪（OIDN 不支持 cubemap 感知降噪）可能在 face 边缘产生接缝。M1 已知限制：prefilter mip chain 在高 roughness（>0.3）时模糊接缝；mip 0（完美镜面反射）在 2048 SPP + OIDN 下接缝可接受。
 
-Cache key 只含 glTF 固有信息，不包含烘焙参数。Lightmap: `hash(scene_file + mesh_geometry_hash + instance_transform_hash)`。Probe: `hash(scene_file + probe_position_hash)`。Phase 8 加载时用相同输入重建 cache key 定位文件。改烘焙参数 → 手动触发重新烘焙。
+Cache key 只含 glTF 固有信息，不包含烘焙参数。Lightmap: `content_hash(scene_file) + mesh_geometry_hash + instance_transform_hash`。Probe: `content_hash(scene_file) + probe_position_hash`。Phase 8 加载时用相同输入重建 cache key 定位文件。改烘焙参数 → 手动触发重新烘焙。
 
 ---
 
