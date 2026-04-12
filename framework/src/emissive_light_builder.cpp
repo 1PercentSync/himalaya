@@ -9,7 +9,6 @@
 
 #include <himalaya/framework/emissive_light_builder.h>
 
-#include <himalaya/rhi/context.h>
 #include <himalaya/rhi/resources.h>
 
 #include <glm/glm.hpp>
@@ -25,8 +24,7 @@ namespace himalaya::framework {
         }
     } // namespace
 
-    void EmissiveLightBuilder::build(rhi::Context &ctx,
-                                     rhi::ResourceManager &rm,
+    void EmissiveLightBuilder::build(rhi::ResourceManager &rm,
                                      const std::span<const Mesh> meshes,
                                      const std::span<const MeshInstance> instances,
                                      const std::span<const GPUMaterialData> gpu_materials,

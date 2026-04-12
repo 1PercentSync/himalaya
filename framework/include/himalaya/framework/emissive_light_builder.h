@@ -14,7 +14,6 @@
 #include <vector>
 
 namespace himalaya::rhi {
-    class Context;
     class ResourceManager;
 }
 
@@ -48,7 +47,6 @@ namespace himalaya::framework {
          * computes luminance(emissive_factor) x area power weights,
          * and builds a Vose's alias table.
          *
-         * @param ctx            Vulkan context.
          * @param rm             Resource manager for buffer creation and upload.
          * @param meshes         All loaded meshes.
          * @param instances      All scene mesh instances.
@@ -56,7 +54,7 @@ namespace himalaya::framework {
          * @param mesh_vertices  CPU vertex data per mesh (parallel to meshes).
          * @param mesh_indices   CPU index data per mesh (parallel to meshes).
          */
-        void build(rhi::Context &ctx, rhi::ResourceManager &rm,
+        void build(rhi::ResourceManager &rm,
                    std::span<const Mesh> meshes,
                    std::span<const MeshInstance> instances,
                    std::span<const GPUMaterialData> gpu_materials,
