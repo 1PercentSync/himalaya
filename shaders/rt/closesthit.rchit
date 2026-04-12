@@ -83,6 +83,12 @@ void main() {
         payload.throughput_update = vec3(1.0);
         payload.hit_distance = gl_HitTEXT;
         payload.env_mis_weight = 1.0;
+        // Propagate cone for pass-through (no curvature, ray continues straight)
+        float pt_cw = payload.cone_width;
+        float pt_cs = payload.cone_spread;
+        propagate_ray_cone(pt_cw, pt_cs, gl_HitTEXT);
+        payload.cone_width = pt_cw;
+        payload.cone_spread = pt_cs;
         return;
     }
 
@@ -92,18 +98,38 @@ void main() {
         N_interp = -N_interp;
     }
 
+    // ---- Ray Cone propagation + curvature estimation ----
+    float cone_width = payload.cone_width;
+    float cone_spread = payload.cone_spread;
+    propagate_ray_cone(cone_width, cone_spread, gl_HitTEXT);
+    float curvature = estimate_curvature(N_face, N_interp, gl_WorldRayDirectionEXT, cone_width);
+    cone_spread += 2.0 * curvature * cone_width;
+
+    // Texel density for this triangle (world area + UV area)
+    vec2 td = compute_texel_density(geo, gl_PrimitiveID, gl_ObjectToWorldEXT);
+
+    // Per-texture LOD from ray cone
+    float lod_bc = compute_ray_cone_lod(cone_width, td.x, td.y,
+        textureSize(textures[nonuniformEXT(mat.base_color_tex)], 0), pc.lod_max_level);
+    float lod_mr = compute_ray_cone_lod(cone_width, td.x, td.y,
+        textureSize(textures[nonuniformEXT(mat.metallic_roughness_tex)], 0), pc.lod_max_level);
+    float lod_nm = compute_ray_cone_lod(cone_width, td.x, td.y,
+        textureSize(textures[nonuniformEXT(mat.normal_tex)], 0), pc.lod_max_level);
+    float lod_em = compute_ray_cone_lod(cone_width, td.x, td.y,
+        textureSize(textures[nonuniformEXT(mat.emissive_tex)], 0), pc.lod_max_level);
+
     // Tangent: transforms like a direction (model matrix, not normal matrix)
     vec3 T_world = normalize(mat3(gl_ObjectToWorldEXT) * hit.tangent.xyz);
 
-    vec4 base_color = texture(textures[nonuniformEXT(mat.base_color_tex)], hit.uv0)
+    vec4 base_color = textureLod(textures[nonuniformEXT(mat.base_color_tex)], hit.uv0, lod_bc)
                       * mat.base_color_factor;
 
-    vec4 mr_texel = texture(textures[nonuniformEXT(mat.metallic_roughness_tex)], hit.uv0);
+    vec4 mr_texel = textureLod(textures[nonuniformEXT(mat.metallic_roughness_tex)], hit.uv0, lod_mr);
     float metallic  = mr_texel.b * mat.metallic_factor;
     float roughness = max(mr_texel.g * mat.roughness_factor, 0.04);
 
     // ---- Normal mapping + consistency correction ----
-    vec2 normal_rg = texture(textures[nonuniformEXT(mat.normal_tex)], hit.uv0).rg;
+    vec2 normal_rg = textureLod(textures[nonuniformEXT(mat.normal_tex)], hit.uv0, lod_nm).rg;
     vec3 N_shading = get_shading_normal(N_interp, vec4(T_world, hit.tangent.w),
                                         normal_rg, mat.normal_scale);
     N_shading = ensure_normal_consistency(N_shading, N_face);
@@ -123,7 +149,7 @@ void main() {
     }
 
     // ---- Emissive contribution (all bounces) ----
-    vec3 emissive_raw = texture(textures[nonuniformEXT(mat.emissive_tex)], hit.uv0).rgb
+    vec3 emissive_raw = textureLod(textures[nonuniformEXT(mat.emissive_tex)], hit.uv0, lod_em).rgb
                         * mat.emissive_factor.rgb;
 
     // MIS weight for BRDF-sampled ray hitting emissive surface:
@@ -316,7 +342,16 @@ void main() {
             if (shadow_payload.visible == 1u) {
                 // Emissive radiance at the sample point (textured emission)
                 vec2 light_uv = tri.uv0 * bary_w.x + tri.uv1 * bary_w.y + tri.uv2 * bary_w.z;
-                vec3 Le = texture(textures[nonuniformEXT(light_mat.emissive_tex)], light_uv).rgb
+
+                // Shadow ray cone LOD for emissive light texture
+                float nee_cw = cone_width + dist * cone_spread;
+                if (nee_cw < 0.0) { nee_cw = abs(nee_cw); }
+                float nee_uv_area = 0.5 * abs((tri.uv1.x - tri.uv0.x) * (tri.uv2.y - tri.uv0.y)
+                                              - (tri.uv2.x - tri.uv0.x) * (tri.uv1.y - tri.uv0.y));
+                float nee_lod = compute_ray_cone_lod(nee_cw, tri.area, nee_uv_area,
+                    textureSize(textures[nonuniformEXT(light_mat.emissive_tex)], 0), pc.lod_max_level);
+
+                vec3 Le = textureLod(textures[nonuniformEXT(light_mat.emissive_tex)], light_uv, nee_lod).rgb
                          * light_mat.emissive_factor.rgb;
 
                 // Evaluate full BRDF at light direction
@@ -443,4 +478,6 @@ void main() {
     payload.throughput_update = throughput_update;
     payload.hit_distance = gl_HitTEXT;
     payload.last_brdf_pdf = brdf_pdf_combined;
+    payload.cone_width = cone_width;
+    payload.cone_spread = cone_spread;
 }
