@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 12b 全部完成。下一项：Step 13 — Texture LOD（Ray Cones）
+Step 13 进行中。已完成：Ray Cone 工具函数（init/propagate/curvature/lod）。下一项：compute_texel_density()
 
 ---
 
