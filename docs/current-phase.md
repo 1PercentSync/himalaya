@@ -168,17 +168,21 @@ xatlas::Destroy(atlas);
 
 将 xatlas 输出应用到 Mesh 的 vertex/index buffer。
 
-- `scene_loader.cpp`：场景加载流程变更——load_meshes() 后、build_mesh_instances() 前，对每个无 TEXCOORD_1 的 mesh 调用 `generate_lightmap_uv()`（有 TEXCOORD_1 的 mesh 跳过调用，直接使用 uv1）：
-  - 返回 LightmapUVResult → 根据 remap table 构建新 vertex 数组（拆分顶点，`uv1` 写入 lightmap UV）+ 新 index 数组 → 销毁原 GPU buffer → 上传新 GPU buffer → 更新 Mesh 的 vertex_buffer / index_buffer / vertex_count / index_count
-- `scene_loader.cpp`：CPU 端 `cpu_vertices_` / `cpu_indices_` 同步更新（emissive light builder 等依赖 CPU 数据）
-- 加载顺序确认：glTF → xatlas UV → rebuild VB/IB → build BLAS/TLAS → build emissive lights
+- `scene_loader.cpp`：在 `load_meshes()` 内部、GPU buffer 创建/上传之前，对每个无 TEXCOORD_1 的 primitive 调用 `generate_lightmap_uv()`（有 TEXCOORD_1 的 mesh 跳过调用，直接使用 uv1）：
+  - 计算 mesh_hash：提取 positions (`vec3[]`) + indices (`uint32_t[]`) 拼成临时 buffer → `content_hash()`
+  - 返回 LightmapUVResult → 根据 remap table 构建新 vertex 数组（拆分顶点，`uv1` 写入 lightmap UV）+ 新 index 数组 → 替换原 vertices/indices 变量
+  - GPU buffer 创建和上传使用替换后的数据（只上传一次，无需 destroy + recreate）
+- `scene_loader.cpp`：`cpu_vertices_` / `cpu_indices_` 自然同步（push_back 的是替换后的 vectors）
+- 加载顺序确认：glTF parse → vertex/index construction → MikkTSpace tangent → TEXCOORD_1 read → xatlas UV (if needed) → GPU upload → build BLAS/TLAS → build emissive lights
 - 注意：lightmap 分辨率计算不在此 step——分辨率在烘焙触发时计算（Step 9），因为参数（texels_per_meter 等）在 UI 中可调
 
 **验证**：场景加载后光栅化渲染无回归（位置/法线/uv0 不变），PT 参考视图无回归，日志输出每个 mesh 的 lightmap UV 来源（TEXCOORD_1 / xatlas / cache）
 
 #### 设计要点
 
-xatlas 拆分顶点后新顶点的 position / normal / uv0 / tangent 从原始顶点复制（remap table 索引），只有 `uv1` 是 xatlas 生成的新值。BLAS 重建不是额外开销——在同一个场景加载 immediate scope 中完成。
+**为什么在 load_meshes() 内部而非之后**：`load_meshes()` 内部 `upload_buffer()` 会将 `vkCmdCopyBuffer` 录制到 immediate command buffer。如果在 `load_meshes()` 之后（`end_immediate()` 之前）调用 `destroy_buffer()` 销毁旧 VB/IB，已录制的拷贝命令将引用已释放的 Vulkan 资源（UB）。在 GPU upload 前应用 xatlas 避免此问题，且只上传一次更高效。
+
+xatlas 拆分顶点后新顶点的 position / normal / uv0 / tangent 从原始顶点复制（remap table 索引），只有 `uv1` 是 xatlas 生成的新值。local AABB 不变（xatlas 不改变 position）。退化 mesh（vertex_count == 0 或 index_count < 3）跳过 xatlas。BLAS 构建在另一个 immediate scope 中完成（`build_scene_rt()`），自然在 xatlas 之后。
 
 ---
 
