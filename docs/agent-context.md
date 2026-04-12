@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 12b 进行中。已完成：SSBO header 补充 total_power。下一小项：bindings.glsl 新增 EmissiveTriangle struct + binding 7/8 声明
+Step 12b 进行中。已完成：SSBO header total_power、bindings.glsl binding 7/8。下一小项：Push constant 新增 emissive_light_count
 
 ---
 
