@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 13 全部完成。阶段六全部完成。
+Step 13 进行中（Present Mode 改造）。已完成：Swapchain PresentMode 枚举。下一项：DebugUI combo box + Application 适配
 
 ---
 
