@@ -274,6 +274,52 @@ float compute_ray_cone_lod(float cone_width, float world_area, float uv_area,
     return clamp(lod, 0.0, float(lod_max_level));
 }
 
+/**
+ * Computes triangle texel density (world area and UV area) for LOD calculation.
+ *
+ * Re-reads the three triangle vertices via buffer_reference. The same addresses
+ * were just accessed by interpolate_hit() (closesthit) or inline UV interpolation
+ * (anyhit), so GPU L1 cache hit rate is near 100% — effectively free.
+ *
+ * World-space positions are computed by transforming object-space vertices with
+ * the instance transform, then computing the cross product area directly.
+ *
+ * @param geo            GeometryInfo for the hit geometry.
+ * @param primitiveID    gl_PrimitiveID of the hit triangle.
+ * @param objectToWorld  gl_ObjectToWorldEXT instance transform (mat4x3).
+ * @return vec2(world_area, uv_area). Both are half the parallelogram area
+ *         (true triangle area). Degenerate triangles return near-zero values;
+ *         compute_ray_cone_lod() handles the fallback.
+ */
+vec2 compute_texel_density(GeometryInfo geo, int primitiveID,
+                           mat4x3 objectToWorld) {
+    // Fetch triangle indices
+    IndexBuffer ib = IndexBuffer(geo.index_buffer_address);
+    uint i0 = ib.indices[3 * primitiveID + 0];
+    uint i1 = ib.indices[3 * primitiveID + 1];
+    uint i2 = ib.indices[3 * primitiveID + 2];
+
+    // Fetch vertices (L1 cache hit from prior interpolate_hit / UV interpolation)
+    VertexBuffer v0 = VertexBuffer(geo.vertex_buffer_address + uint64_t(i0) * VERTEX_STRIDE);
+    VertexBuffer v1 = VertexBuffer(geo.vertex_buffer_address + uint64_t(i1) * VERTEX_STRIDE);
+    VertexBuffer v2 = VertexBuffer(geo.vertex_buffer_address + uint64_t(i2) * VERTEX_STRIDE);
+
+    // World-space triangle area (transform positions, then cross product)
+    vec3 p0 = objectToWorld * vec4(v0.position, 1.0);
+    vec3 p1 = objectToWorld * vec4(v1.position, 1.0);
+    vec3 p2 = objectToWorld * vec4(v2.position, 1.0);
+    float world_area = 0.5 * length(cross(p1 - p0, p2 - p0));
+
+    // UV-space triangle area (2D cross product magnitude)
+    vec2 uv0 = v0.uv0;
+    vec2 uv1 = v1.uv0;
+    vec2 uv2 = v2.uv0;
+    float uv_area = 0.5 * abs((uv1.x - uv0.x) * (uv2.y - uv0.y)
+                             - (uv2.x - uv0.x) * (uv1.y - uv0.y));
+
+    return vec2(world_area, uv_area);
+}
+
 // ---- Multi-lobe BRDF Selection ----
 
 /**
