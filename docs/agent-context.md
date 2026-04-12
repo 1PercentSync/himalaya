@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 13 进行中。已完成：pt_common 工具函数 + raygen + closesthit。下一项：anyhit.rahit textureLod
+Step 13 进行中。已完成：全部 shader 改动。下一项：PrimaryPayload 新增 cone_width + cone_spread
 
 ---
 
