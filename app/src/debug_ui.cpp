@@ -168,7 +168,7 @@ namespace himalaya::app {
             int count = 0;
             int current_idx = 0;
 
-            mode_labels[count] = "VSync (FIFO)";
+            mode_labels[count] = "FIFO";
             mode_values[count] = rhi::PresentMode::Fifo;
             if (ctx.user_present_mode == rhi::PresentMode::Fifo) { current_idx = count; }
             ++count;
@@ -181,7 +181,7 @@ namespace himalaya::app {
             }
 
             if (ctx.swapchain.immediate_supported) {
-                mode_labels[count] = "Immediate (tearing)";
+                mode_labels[count] = "Immediate";
                 mode_values[count] = rhi::PresentMode::Immediate;
                 if (ctx.user_present_mode == rhi::PresentMode::Immediate) { current_idx = count; }
                 ++count;
