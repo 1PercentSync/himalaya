@@ -647,6 +647,18 @@ RT 纹理 mip 选择。架构决策见 `milestone-1/m1-rt-decisions.md`「Textur
 
 **验证**：RenderDoc 检查远处表面纹理采样 mip > 0，纹理带宽下降
 
+#### Present Mode 改造 + PT Uncap Framerate
+
+**动机**：Sunshine 等串流软件修改驱动设置，将 MAILBOX 的帧率限制在显示器刷新率，影响 PT 累积速度。需要 IMMEDIATE 模式解除帧率限制。
+
+**改动**：
+
+- `rhi/swapchain.h`：`bool vsync` → `PresentMode` 枚举（`Fifo` / `Mailbox` / `Immediate`），`init()` 和 `recreate()` 接受枚举，`choose_present_mode()` 适配。MAILBOX 或 IMMEDIATE 不可用时 fallback FIFO 并日志警告
+- DebugUI：VSync checkbox → Present Mode combo box（"VSync (FIFO)" / "Mailbox" / "Immediate (tearing)"），默认 Mailbox。`DebugUIActions::vsync_toggled` → `present_mode_changed`，`DebugUIContext` 对应调整
+- DebugUI PT 面板：新增 "Allow Tearing" checkbox（仅 PT 模式显示，启用时 PT 路径下自动覆盖 present mode 为 IMMEDIATE 绕过驱动帧率限制，切回光栅化时恢复用户选择的 present mode）
+- Application：present mode 变更处理替代原 `vsync_changed_` 逻辑；PT allow tearing 激活/恢复时触发 swapchain recreate
+- AppConfig 持久化：新增 `present_mode`（字符串 `"fifo"` / `"mailbox"` / `"immediate"`，默认 `"mailbox"`）+ `pt_allow_tearing`（bool，默认 `false`），config.cpp 序列化/反序列化
+
 ---
 
 ## 阶段六帧流程
