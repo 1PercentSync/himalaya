@@ -8,12 +8,12 @@
 
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
-- **Phase**：阶段六 — RT 基础设施 + PT 参考视图（规划完成，待实现）
-- **进度**：Step 9 已完成，进入 Step 10
+- **Phase**：阶段七 — PT 烘焙器
+- **进度**：规划完成，待实现
 
 ### 下一个任务
 
-Step 13 全部完成（含 Present Mode 改造 + 能力检测）。阶段六全部完成。
+Step 1：BC6H 压缩通用工具提取（从 IBL 重构为 framework 工具）。
 
 ---
 
@@ -24,11 +24,11 @@ CLAUDE.md 已自动加载，以下为额外必读：
 | 文档 | 说明 |
 |------|------|
 | `docs/milestone-1/milestone-1.md` | M1 范围、预期效果、已知局限性 |
-| `docs/current-phase.md` | 当前阶段实现步骤（阶段六） |
+| `docs/current-phase.md` | 当前阶段实现步骤（阶段七） |
 | `docs/milestone-1/m1-rt-decisions.md` | M1 RT 架构决策（阶段六~八） |
 | `docs/milestone-1/m1-interfaces.md` | M1 接口与目标结构：文件结构、关键接口与数据结构 |
 | `docs/milestone-1/m1-development-order.md` | M1 开发阶段顺序（含阶段六~十） |
-| `tasks/m1-phase6.md` | 阶段六任务清单（复选框进度跟踪） |
+| `tasks/m1-phase7.md` | 阶段七任务清单（复选框进度跟踪） |
 
 ## 按需文档
 
@@ -71,6 +71,8 @@ CLAUDE.md 已自动加载，以下为额外必读：
 | `docs/archive/m1-phase5-plan.md` | M1 阶段五实现步骤（已完成） |
 | `tasks/archive/m1-phase5.md` | M1 阶段五任务清单（已完成） |
 | `docs/archive/m1-phase5-decisions.md` | M1 阶段五设计决策（已完成） |
+| `docs/archive/m1-phase6-plan.md` | M1 阶段六实现步骤（已完成） |
+| `tasks/archive/m1-phase6.md` | M1 阶段六任务清单（已完成） |
 | `docs/archive/path-tracing-reference.md` | 实时路径追踪技术综述参考资料 |
 
 ---
