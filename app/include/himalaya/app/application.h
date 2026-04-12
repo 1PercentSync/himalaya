@@ -219,14 +219,14 @@ namespace himalaya::app {
         /** @brief Rendering subsystem (owns pipelines, buffers, shared resources). */
         Renderer renderer_{};
 
+        /** @brief Deferred present mode change flag — handled in end_frame() after present. */
+        bool present_mode_changed_ = false;
+
         /** @brief User-selected present mode from combo (may differ from effective when PT tearing overrides). */
         rhi::PresentMode user_present_mode_ = rhi::PresentMode::Mailbox;
 
         /** @brief PT allow tearing: override to IMMEDIATE while in PT mode. */
         bool pt_allow_tearing_ = false;
-
-        /** @brief Previous render mode for detecting PT ↔ Rasterization switches. */
-        framework::RenderMode prev_render_mode_ = framework::RenderMode::Rasterization;
 
         /** @brief Acquired swapchain image index for the current frame. */
         uint32_t image_index_ = 0;

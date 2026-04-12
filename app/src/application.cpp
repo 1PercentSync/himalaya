@@ -577,23 +577,15 @@ namespace himalaya::app {
         }
 
         // ---- Effective present mode (user preference + PT tearing override) ----
+        // Deferred to end_frame() after present — mid-frame recreate would
+        // invalidate the acquired image and renderer's swapchain references.
         rhi::PresentMode effective = user_present_mode_;
         if (render_mode_ == framework::RenderMode::PathTracing && pt_allow_tearing_) {
             effective = rhi::PresentMode::Immediate;
         }
         if (effective != swapchain_.present_mode) {
             swapchain_.present_mode = effective;
-            swapchain_.recreate(context_, window_);
-
-            if (render_mode_ == framework::RenderMode::PathTracing && pt_allow_tearing_) {
-                // PT tearing override: if IMMEDIATE fell back to FIFO, revert the checkbox
-                if (swapchain_.present_mode != rhi::PresentMode::Immediate) {
-                    pt_allow_tearing_ = false;
-                }
-            } else {
-                // User combo change: sync fallback result back to combo display
-                user_present_mode_ = swapchain_.present_mode;
-            }
+            present_mode_changed_ = true;
         }
 
         // ---- Persist present mode settings on change ----
@@ -700,7 +692,23 @@ namespace himalaya::app {
             std::abort();
         }
 
+        // Present mode change — deferred from update() to after present.
+        // Must go through handle_resize() for renderer swapchain hooks.
+        if (present_mode_changed_) {
+            present_mode_changed_ = false;
+            handle_resize();
 
+            // Post-recreate: fallback may have changed swapchain_.present_mode
+            if (render_mode_ == framework::RenderMode::PathTracing && pt_allow_tearing_) {
+                // PT tearing override: if IMMEDIATE fell back, revert checkbox
+                if (swapchain_.present_mode != rhi::PresentMode::Immediate) {
+                    pt_allow_tearing_ = false;
+                }
+            } else {
+                // User combo change: sync fallback result back to combo display
+                user_present_mode_ = swapchain_.present_mode;
+            }
+        }
 
         context_.advance_frame();
     }
