@@ -22,7 +22,7 @@
 
 - [x] 新增 `third_party/xatlas/`：复制 xatlas.h + xatlas.cpp（单文件库，MIT）
 - [x] `framework/CMakeLists.txt`：添加 xatlas.cpp 到源文件 + include path
-- [ ] 新增 `framework/lightmap_uv.h`：`LightmapUVResult` 结构体 + `generate_lightmap_uv()` 函数声明
+- [x] 新增 `framework/lightmap_uv.h`：`LightmapUVResult` 结构体 + `generate_lightmap_uv()` 函数声明
 - [ ] 新增 `framework/lightmap_uv.cpp`：xatlas 调用（Create → AddMesh → Generate → 提取结果）
 - [ ] `lightmap_uv.cpp`：缓存写入（header + lightmap UV 数组 + new index buffer + vertex remap table）
 - [ ] `lightmap_uv.cpp`：缓存读取（命中时跳过 xatlas）
