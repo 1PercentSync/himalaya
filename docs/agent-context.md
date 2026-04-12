@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 12a 进行中。已完成：至 alias table 构建。下一项：EmissiveTriangleBuffer SSBO 上传
+Step 12a 进行中。已完成：至 TriangleBuffer 上传。下一项：EmissiveAliasTable SSBO 上传
 
 ---
 

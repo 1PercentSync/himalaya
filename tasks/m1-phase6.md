@@ -192,7 +192,7 @@
 - [x] 新增 emissive_light_builder.h/.cpp：EmissiveLightBuilder 类（build / destroy / getters）
 - [x] build()：遍历 mesh primitive 识别 emissive（`any(emissive_factor > 0)`），收集世界空间顶点/UV/面积/emission，计算 power = luminance(emissive_factor) × area
 - [x] Power-weighted alias table 构建（Vose's algorithm，复用 Step 11 逻辑）
-- [ ] EmissiveTriangleBuffer SSBO 上传（96B/entry：v0/v1/v2 + emission + area + material_index + uv0/uv1/uv2）
+- [x] EmissiveTriangleBuffer SSBO 上传（96B/entry：v0/v1/v2 + emission + area + material_index + uv0/uv1/uv2）
 - [ ] EmissiveAliasTable SSBO 上传（header + `{float prob, uint alias}` 8B/entry）
 - [ ] 无 emissive 场景跳过构建（emissive_count() 返回 0）
 - [ ] DescriptorManager：Set 0 binding 7（EmissiveTriangleBuffer）+ binding 8（EmissiveAliasTable），`PARTIALLY_BOUND`，`rt_supported` 守卫
