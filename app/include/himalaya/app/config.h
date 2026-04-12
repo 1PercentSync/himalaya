@@ -48,6 +48,20 @@ namespace himalaya::app {
          * 0 means no user override — Renderer uses its built-in default (64).
          */
         uint32_t auto_denoise_interval = 0;
+
+        /**
+         * @brief Present mode preference ("fifo", "mailbox", "immediate").
+         *
+         * Empty string means no user override — defaults to "mailbox".
+         */
+        std::string present_mode;
+
+        /**
+         * @brief PT allow tearing: override to IMMEDIATE while path tracing.
+         *
+         * Bypasses driver-level frame rate caps (e.g. Sunshine streaming).
+         */
+        bool pt_allow_tearing = false;
     };
 
     /**
