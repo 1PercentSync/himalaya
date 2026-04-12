@@ -73,7 +73,9 @@ void main() {
     if (is_back_face && mat.double_sided == 0u) {
         // Single-sided material hit from behind: pass through the surface.
         // Consumes one bounce but throughput is unchanged — RR survives at 1.0.
-        vec3 pass_origin = world_pos + gl_WorldRayDirectionEXT * 0.001;
+        // Offset scales with hit distance to handle both small and large geometry.
+        float pass_eps = max(gl_HitTEXT * 1e-4, 1e-6);
+        vec3 pass_origin = gl_WorldRayOriginEXT + gl_WorldRayDirectionEXT * (gl_HitTEXT + pass_eps);
         payload.color = vec3(0.0);
         payload.next_origin = pass_origin;
         payload.next_direction = gl_WorldRayDirectionEXT;

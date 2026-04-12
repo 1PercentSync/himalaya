@@ -405,6 +405,10 @@ namespace himalaya::app {
                 resource_manager_->upload_buffer(vb, vertices.data(), vb_size);
                 resource_manager_->upload_buffer(ib, indices.data(), ib_size);
 
+                // Track buffers immediately so destroy() can free them on error
+                buffers_.push_back(vb);
+                buffers_.push_back(ib);
+
                 // Retain CPU data for EmissiveLightBuilder (freed in destroy())
                 cpu_vertices_.push_back(std::move(vertices));
                 cpu_indices_.push_back(std::move(indices));
@@ -424,9 +428,6 @@ namespace himalaya::app {
                     .group_id = static_cast<uint32_t>(mesh_idx),
                     .material_id = prim_material_id,
                 });
-
-                buffers_.push_back(vb);
-                buffers_.push_back(ib);
 
                 result.material_ids.push_back(prim_material_id);
                 result.local_bounds.push_back({local_min, local_max});
