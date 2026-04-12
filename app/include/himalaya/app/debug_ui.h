@@ -146,6 +146,9 @@ namespace himalaya::app {
         /** @brief Emissive area light NEE toggle. Mutable — checkbox. */
         bool& pt_emissive_nee;
 
+        /** @brief Ray cone LOD upper clamp (0 = full resolution). Mutable — slider. */
+        uint32_t& pt_lod_max_level;
+
         /** @brief Time elapsed since PT accumulation started, in seconds (read-only). */
         float pt_elapsed_time;
 

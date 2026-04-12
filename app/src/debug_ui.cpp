@@ -245,6 +245,17 @@ namespace himalaya::app {
                 // Emissive NEE toggle (area light importance sampling)
                 ImGui::Checkbox("Emissive NEE", &ctx.pt_emissive_nee);
 
+                // LOD Max Level slider (ray cone texture LOD clamp)
+                {
+                    int lod = static_cast<int>(ctx.pt_lod_max_level);
+                    if (ImGui::SliderInt("LOD Max Level", &lod, 0, 12)) {
+                        ctx.pt_lod_max_level = static_cast<uint32_t>(lod);
+                    }
+                    if (ImGui::IsItemHovered()) {
+                        ImGui::SetTooltip("Ray cone texture LOD upper clamp.\n0 = full resolution (debug), 4 = default.");
+                    }
+                }
+
                 // Directional Lights toggle (default off — env sampling handles sun)
                 ImGui::Checkbox("Directional Lights", &ctx.pt_directional_lights);
                 if (ImGui::IsItemHovered()) {

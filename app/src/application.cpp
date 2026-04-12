@@ -444,6 +444,7 @@ namespace himalaya::app {
             .pt_env_sampling = renderer_.pt_env_sampling(),
             .pt_directional_lights = renderer_.pt_directional_lights(),
             .pt_emissive_nee = renderer_.pt_emissive_nee(),
+            .pt_lod_max_level = renderer_.pt_lod_max_level(),
             .pt_elapsed_time = renderer_.pt_elapsed_time(),
             .denoise_enabled = renderer_.denoise_enabled(),
             .show_denoised = renderer_.show_denoised(),

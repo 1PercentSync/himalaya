@@ -86,6 +86,7 @@ namespace himalaya::app {
             env_sampling_ != prev_env_sampling_ ||
             directional_lights_ != prev_directional_lights_ ||
             emissive_nee_ != prev_emissive_nee_ ||
+            lod_max_level_ != prev_lod_max_level_ ||
             input.ibl_intensity != prev_ibl_intensity_) {
             reset_pt_accumulation();
         }
@@ -100,6 +101,7 @@ namespace himalaya::app {
         prev_env_sampling_ = env_sampling_;
         prev_directional_lights_ = directional_lights_;
         prev_emissive_nee_ = emissive_nee_;
+        prev_lod_max_level_ = lod_max_level_;
         prev_ibl_intensity_ = input.ibl_intensity;
 
         // --- Denoise trigger guard ---
@@ -199,6 +201,7 @@ namespace himalaya::app {
         reference_view_pass_.set_directional_lights(directional_lights_);
         reference_view_pass_.set_emissive_light_count(
             emissive_nee_ ? emissive_light_builder_.emissive_count() : 0u);
+        reference_view_pass_.set_lod_max_level(lod_max_level_);
 
         // Skip accumulation when target sample count is reached
         if (target_samples_ == 0 || reference_view_pass_.sample_count() < target_samples_) {
