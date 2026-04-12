@@ -46,7 +46,7 @@ hitAttributeEXT vec2 bary;
 
 // ---- Sobol dimension layout (must match raygen) ----
 
-const uint DIMS_PER_BOUNCE = 8; // lobe_select, brdf_xi0, brdf_xi1, rr, env_nee_r1..r4
+const uint DIMS_PER_BOUNCE = 12; // lobe_select, brdf_xi0, brdf_xi1, rr, env_nee_r1..r4, emissive_nee_r1..r4
 
 void main() {
     // ---- Geometry info lookup ----
@@ -235,6 +235,101 @@ void main() {
                 float mis_w = mis_power_heuristic(pdf_light, brdf_pdf);
 
                 nee_radiance += env_color * brdf_val * NdotL * mis_w / max(pdf_light, 1e-7);
+            }
+        }
+    }
+
+    // ---- NEE: Emissive area lights (alias table importance sampling + MIS) ----
+    if (pc.emissive_light_count > 0u) {
+        ivec2 px = ivec2(gl_LaunchIDEXT.xy);
+        uint emi_dim = 2u + payload.bounce * DIMS_PER_BOUNCE + 8u;
+        float emi_r1 = rand_pt(emi_dim, pc.sample_count, px,
+                               pc.frame_seed, pc.blue_noise_index);
+        float emi_r2 = rand_pt(emi_dim + 1u, pc.sample_count, px,
+                               pc.frame_seed, pc.blue_noise_index);
+        float emi_r3 = rand_pt(emi_dim + 2u, pc.sample_count, px,
+                               pc.frame_seed, pc.blue_noise_index);
+        float emi_r4 = rand_pt(emi_dim + 3u, pc.sample_count, px,
+                               pc.frame_seed, pc.blue_noise_index);
+
+        // Select emissive triangle from power-weighted alias table
+        uint tri_idx = sample_emissive_alias_table(emi_r1, emi_r2, pc.emissive_light_count);
+        EmissiveTriangle tri = emissive_triangles[tri_idx];
+
+        // Uniform sample point on triangle
+        vec3 bary_w = triangle_barycentric(emi_r3, emi_r4);
+        vec3 light_pos = tri.v0 * bary_w.x + tri.v1 * bary_w.y + tri.v2 * bary_w.z;
+
+        // Direction and distance to light sample
+        vec3 to_light = light_pos - offset_pos;
+        float dist2 = dot(to_light, to_light);
+        float dist = sqrt(dist2);
+        vec3 L = to_light / dist;
+
+        // Light triangle normal
+        vec3 light_normal = normalize(cross(tri.v1 - tri.v0, tri.v2 - tri.v0));
+        float cos_theta_light = dot(light_normal, -L);
+
+        // Double-sided handling: follow material double_sided flag
+        GPUMaterialData light_mat = materials[tri.material_index];
+        bool light_visible = cos_theta_light > 0.0;
+        if (!light_visible && light_mat.double_sided == 1u) {
+            cos_theta_light = -cos_theta_light;
+            light_visible = true;
+        }
+
+        float NdotL = dot(N_shading, L);
+
+        if (light_visible && NdotL > 0.0) {
+            // Shadow ray (tMax shortened to avoid hitting the target triangle itself)
+            shadow_payload.visible = 0;
+            traceRayEXT(
+                tlas,
+                gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsSkipClosestHitShaderEXT,
+                0xFF,
+                0, 0,
+                1,          // miss index 1 (shadow miss)
+                offset_pos,
+                0.0,
+                L,
+                dist * (1.0 - 1e-4),
+                1           // payload location 1
+            );
+
+            if (shadow_payload.visible == 1u) {
+                // Emissive radiance at the sample point (textured emission)
+                vec2 light_uv = tri.uv0 * bary_w.x + tri.uv1 * bary_w.y + tri.uv2 * bary_w.z;
+                vec3 Le = texture(textures[nonuniformEXT(light_mat.emissive_tex)], light_uv).rgb
+                         * light_mat.emissive_factor.rgb;
+
+                // Evaluate full BRDF at light direction
+                vec3 H = normalize(V + L);
+                float NdotH_l = max(dot(N_shading, H), 0.0);
+                float VdotH_l = max(dot(V, H), 0.0);
+
+                float D_l   = D_GGX(NdotH_l, roughness);
+                float Vis_l = V_SmithGGX(NdotV, NdotL, roughness);
+                vec3  F_l   = F_Schlick(VdotH_l, F0);
+
+                vec3 spec_l = D_l * Vis_l * F_l;
+                vec3 diff_l = (1.0 - F_l) * diffuse_color * INV_PI;
+                vec3 brdf_val = diff_l + spec_l;
+
+                // Light PDF: use raw emissive_factor luminance (matches alias table weights)
+                float emission_lum = dot(tri.emission, vec3(0.2126, 0.7152, 0.0722));
+                float light_pdf = emissive_light_pdf(emission_lum, dist,
+                                                     cos_theta_light, total_power);
+
+                // BRDF PDF (combined multi-lobe)
+                float local_p_spec = specular_probability(NdotV, F0);
+                float pdf_spec = pdf_ggx_vndf(NdotH_l, NdotV, VdotH_l, roughness);
+                float pdf_diff = NdotL * INV_PI;
+                float brdf_pdf = local_p_spec * pdf_spec + (1.0 - local_p_spec) * pdf_diff;
+
+                // MIS weight (light sampling strategy)
+                float mis_w = mis_power_heuristic(light_pdf, brdf_pdf);
+
+                nee_radiance += Le * brdf_val * NdotL * mis_w / max(light_pdf, 1e-7);
             }
         }
     }
