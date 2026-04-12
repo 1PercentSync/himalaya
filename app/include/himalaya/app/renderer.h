@@ -23,6 +23,7 @@
 #include <himalaya/passes/gtao_pass.h>
 #include <himalaya/passes/skybox_pass.h>
 #include <himalaya/passes/shadow_pass.h>
+#include <himalaya/passes/pos_normal_map_pass.h>
 #include <himalaya/passes/reference_view_pass.h>
 #include <himalaya/passes/tonemapping_pass.h>
 #include <himalaya/rhi/context.h>
@@ -376,6 +377,9 @@ namespace himalaya::app {
 
         /** @brief PT reference view pass (RT pipeline dispatch + accumulation). */
         passes::ReferenceViewPass reference_view_pass_{};
+
+        /** @brief UV-space rasterization pass for lightmap position/normal map generation. */
+        passes::PosNormalMapPass pos_normal_map_pass_{};
 
         /** @brief Acceleration structure manager (RT, initialized when rt_supported). */
         rhi::AccelerationStructureManager as_manager_{};

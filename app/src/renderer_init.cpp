@@ -447,6 +447,7 @@ namespace himalaya::app {
         if (ctx_->rt_supported) {
             reference_view_pass_.setup(*ctx_, *resource_manager_, *descriptor_manager_,
                                        shader_compiler_, sobol_buffer_, blue_noise_bindless_.index);
+            pos_normal_map_pass_.setup(*ctx_, *resource_manager_, shader_compiler_);
         }
 
         // --- Set 2 initial descriptor writes ---
@@ -465,6 +466,7 @@ namespace himalaya::app {
         as_manager_.destroy();
         if (ctx_->rt_supported) {
             reference_view_pass_.destroy();
+            pos_normal_map_pass_.destroy();
         }
         ibl_.destroy();
         material_system_.destroy();
@@ -708,6 +710,7 @@ namespace himalaya::app {
         contact_shadows_pass_.rebuild_pipelines();
         if (ctx_->rt_supported) {
             reference_view_pass_.rebuild_pipelines();
+            pos_normal_map_pass_.rebuild_pipelines();
         }
 
         spdlog::info("All shaders reloaded");
