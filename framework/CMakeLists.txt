@@ -10,7 +10,7 @@ target_sources(himalaya_framework PRIVATE
         src/culling.cpp
         src/ibl.cpp
         src/ibl_compute.cpp
-        src/ibl_compress.cpp
+        src/texture_compress.cpp
         src/imgui_backend.cpp
         src/material_system.cpp
         src/mesh.cpp

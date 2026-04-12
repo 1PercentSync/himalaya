@@ -1,9 +1,9 @@
 /**
- * @file ibl_compress.cpp
- * @brief IBL GPU BC6H compression via compute shader.
+ * @file texture_compress.cpp
+ * @brief GPU BC6H compression via compute shader.
  */
 
-#include <himalaya/framework/ibl.h>
+#include <himalaya/framework/texture_compress.h>
 #include <himalaya/rhi/context.h>
 #include <himalaya/rhi/resources.h>
 #include <himalaya/rhi/pipeline.h>
@@ -16,15 +16,11 @@
 #include <cassert>
 
 namespace himalaya::framework {
-    // -----------------------------------------------------------------------
-    // compress_cubemaps_bc6h — GPU BC6H compression via compute shader
-    // -----------------------------------------------------------------------
-
-    void IBL::compress_cubemaps_bc6h(
-        rhi::Context &ctx,
-        rhi::ShaderCompiler &sc,
-        std::initializer_list<std::pair<rhi::ImageHandle *, const char *> > handles,
-        DeferredCleanup &deferred) {
+    void compress_bc6h(rhi::Context &ctx,
+                       rhi::ResourceManager &rm,
+                       rhi::ShaderCompiler &sc,
+                       std::span<const BC6HCompressInput> inputs,
+                       std::vector<std::function<void()> > &deferred) {
         // --- Compile BC6H compute shader and create pipeline (once) ---
         auto spirv = sc.compile_from_file("compress/bc6h.comp",
                                           rhi::ShaderStage::Compute);
@@ -86,15 +82,15 @@ namespace himalaya::framework {
             .compare_enable = false,
             .compare_op = rhi::CompareOp::Never,
         };
-        const auto temp_sampler = rm_->create_sampler(sampler_desc, "BC6H Src Sampler");
-        deferred.emplace_back([temp_sampler, rm = rm_] { rm->destroy_sampler(temp_sampler); });
-        const VkSampler vk_sampler = rm_->get_sampler(temp_sampler).sampler;
+        const auto temp_sampler = rm.create_sampler(sampler_desc, "BC6H Src Sampler");
+        deferred.emplace_back([temp_sampler, &rm] { rm.destroy_sampler(temp_sampler); });
+        const VkSampler vk_sampler = rm.get_sampler(temp_sampler).sampler;
 
         // --- Create staging buffer sized for the largest base face across all inputs ---
         uint32_t max_blocks_w = 0;
         uint32_t max_blocks_h = 0;
-        for (const auto &[handle_ptr, name]: handles) {
-            const auto &img = rm_->get_image(*handle_ptr);
+        for (const auto &input: inputs) {
+            const auto &img = rm.get_image(*input.handle);
             max_blocks_w = std::max(max_blocks_w, (img.desc.width + 3) / 4);
             max_blocks_h = std::max(max_blocks_h, (img.desc.height + 3) / 4);
         }
@@ -119,33 +115,34 @@ namespace himalaya::framework {
 
         const rhi::CommandBuffer cmd(ctx.immediate_command_buffer);
 
-        // --- Compress each cubemap ---
-        for (const auto &[handle_ptr, debug_name]: handles) {
+        // --- Compress each input image ---
+        for (const auto &input: inputs) {
             // Capture source properties before create_image (which may reallocate the pool).
-            const auto &src_img = rm_->get_image(*handle_ptr);
+            const auto &src_img = rm.get_image(*input.handle);
             const uint32_t face_w = src_img.desc.width;
             const uint32_t face_h = src_img.desc.height;
             const uint32_t mip_count = src_img.desc.mip_levels;
+            const uint32_t face_count = src_img.desc.array_layers;
             const rhi::Format src_format = src_img.desc.format;
             const uint32_t src_bpp = rhi::format_bytes_per_block(src_format);
             const VkImage src_vk = src_img.image;
 
-            // Create BC6H destination cubemap
+            // Create BC6H destination image
             const rhi::ImageDesc bc6h_desc{
                 .width = face_w,
                 .height = face_h,
                 .depth = 1,
                 .mip_levels = mip_count,
-                .array_layers = 6,
+                .array_layers = face_count,
                 .sample_count = 1,
                 .format = rhi::Format::Bc6hUfloatBlock,
                 .usage = rhi::ImageUsage::Sampled
                          | rhi::ImageUsage::TransferSrc
                          | rhi::ImageUsage::TransferDst,
             };
-            auto bc6h_handle = rm_->create_image(bc6h_desc, debug_name);
+            auto bc6h_handle = rm.create_image(bc6h_desc, input.debug_name);
 
-            // Transition BC6H image UNDEFINED → TRANSFER_DST
+            // Transition BC6H image UNDEFINED -> TRANSFER_DST
             VkImageMemoryBarrier2 dst_to_xfer{};
             dst_to_xfer.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
             dst_to_xfer.srcStageMask = VK_PIPELINE_STAGE_2_NONE;
@@ -154,9 +151,9 @@ namespace himalaya::framework {
             dst_to_xfer.dstAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
             dst_to_xfer.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
             dst_to_xfer.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-            dst_to_xfer.image = rm_->get_image(bc6h_handle).image;
+            dst_to_xfer.image = rm.get_image(bc6h_handle).image;
             dst_to_xfer.subresourceRange = {
-                VK_IMAGE_ASPECT_COLOR_BIT, 0, mip_count, 0, 6
+                VK_IMAGE_ASPECT_COLOR_BIT, 0, mip_count, 0, face_count
             };
 
             VkDependencyInfo dep{};
@@ -167,7 +164,7 @@ namespace himalaya::framework {
 
             cmd.bind_compute_pipeline(pipeline);
 
-            // Per face × per mip: create view, dispatch, barrier, copy
+            // Per face x per mip: create view, dispatch, barrier, copy
             for (uint32_t mip = 0; mip < mip_count; ++mip) {
                 const uint32_t mip_w = std::max(1u, face_w >> mip);
                 const uint32_t mip_h = std::max(1u, face_h >> mip);
@@ -175,7 +172,7 @@ namespace himalaya::framework {
                 const uint32_t blocks_h = (mip_h + 3) / 4;
                 const VkDeviceSize mip_buf_size = static_cast<VkDeviceSize>(blocks_w) * blocks_h * 16;
 
-                for (uint32_t face = 0; face < 6; ++face) {
+                for (uint32_t face = 0; face < face_count; ++face) {
                     constexpr uint32_t kGroupSize = 8;
 
                     VkImageViewCreateInfo view_ci{};
@@ -237,7 +234,7 @@ namespace himalaya::framework {
                     const uint32_t groups_y = (blocks_h + kGroupSize - 1) / kGroupSize;
                     cmd.dispatch(groups_x, groups_y, 1);
 
-                    // Barrier: compute write → transfer read (SSBO)
+                    // Barrier: compute write -> transfer read (SSBO)
                     VkMemoryBarrier2 buf_barrier{};
                     buf_barrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2;
                     buf_barrier.srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
@@ -251,7 +248,7 @@ namespace himalaya::framework {
                     buf_dep.pMemoryBarriers = &buf_barrier;
                     cmd.pipeline_barrier(buf_dep);
 
-                    // Copy SSBO → BC6H cubemap face+mip
+                    // Copy SSBO -> BC6H image face+mip
                     VkBufferImageCopy2 copy_region{};
                     copy_region.sType = VK_STRUCTURE_TYPE_BUFFER_IMAGE_COPY_2;
                     copy_region.bufferOffset = 0;
@@ -266,13 +263,13 @@ namespace himalaya::framework {
                     VkCopyBufferToImageInfo2 copy_info{};
                     copy_info.sType = VK_STRUCTURE_TYPE_COPY_BUFFER_TO_IMAGE_INFO_2;
                     copy_info.srcBuffer = staging_buf;
-                    copy_info.dstImage = rm_->get_image(bc6h_handle).image;
+                    copy_info.dstImage = rm.get_image(bc6h_handle).image;
                     copy_info.dstImageLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
                     copy_info.regionCount = 1;
                     copy_info.pRegions = &copy_region;
                     cmd.copy_buffer_to_image(copy_info);
 
-                    // Barrier: transfer read → compute write (reuse SSBO next iteration)
+                    // Barrier: transfer read -> compute write (reuse SSBO next iteration)
                     VkMemoryBarrier2 reuse_barrier{};
                     reuse_barrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2;
                     reuse_barrier.srcStageMask = VK_PIPELINE_STAGE_2_COPY_BIT;
@@ -288,7 +285,7 @@ namespace himalaya::framework {
                 }
             }
 
-            // Transition BC6H cubemap TRANSFER_DST → SHADER_READ_ONLY
+            // Transition BC6H image TRANSFER_DST -> SHADER_READ_ONLY
             VkImageMemoryBarrier2 dst_to_read{};
             dst_to_read.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
             dst_to_read.srcStageMask = VK_PIPELINE_STAGE_2_COPY_BIT;
@@ -297,9 +294,9 @@ namespace himalaya::framework {
             dst_to_read.dstAccessMask = VK_ACCESS_2_SHADER_SAMPLED_READ_BIT;
             dst_to_read.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
             dst_to_read.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-            dst_to_read.image = rm_->get_image(bc6h_handle).image;
+            dst_to_read.image = rm.get_image(bc6h_handle).image;
             dst_to_read.subresourceRange = {
-                VK_IMAGE_ASPECT_COLOR_BIT, 0, mip_count, 0, 6
+                VK_IMAGE_ASPECT_COLOR_BIT, 0, mip_count, 0, face_count
             };
 
             VkDependencyInfo final_dep{};
@@ -309,9 +306,9 @@ namespace himalaya::framework {
             cmd.pipeline_barrier(final_dep);
 
             // Swap handles: BC6H replaces uncompressed
-            auto old_handle = *handle_ptr;
-            deferred.emplace_back([this, old_handle] { rm_->destroy_image(old_handle); });
-            *handle_ptr = bc6h_handle;
+            auto old_handle = *input.handle;
+            deferred.emplace_back([&rm, old_handle] { rm.destroy_image(old_handle); });
+            *input.handle = bc6h_handle;
 
             // Log compression ratio
             uint64_t uncompressed_bytes = 0;
@@ -319,12 +316,12 @@ namespace himalaya::framework {
             for (uint32_t m = 0; m < mip_count; ++m) {
                 const uint32_t mw = std::max(1u, face_w >> m);
                 const uint32_t mh = std::max(1u, face_h >> m);
-                uncompressed_bytes += static_cast<uint64_t>(mw) * mh * 6 * src_bpp;
-                compressed_bytes += static_cast<uint64_t>((mw + 3) / 4) * ((mh + 3) / 4) * 6 * 16;
+                uncompressed_bytes += static_cast<uint64_t>(mw) * mh * face_count * src_bpp;
+                compressed_bytes += static_cast<uint64_t>((mw + 3) / 4) * ((mh + 3) / 4) * face_count * 16;
             }
 
-            spdlog::info("IBL: BC6H compressed {} {}x{} ({} mips): {:.1f} MB -> {:.1f} MB",
-                         debug_name, face_w, face_h, mip_count,
+            spdlog::info("BC6H compressed {} {}x{} ({} faces, {} mips): {:.1f} MB -> {:.1f} MB",
+                         input.debug_name, face_w, face_h, face_count, mip_count,
                          static_cast<double>(uncompressed_bytes) / (1024.0 * 1024.0),
                          static_cast<double>(compressed_bytes) / (1024.0 * 1024.0));
         }

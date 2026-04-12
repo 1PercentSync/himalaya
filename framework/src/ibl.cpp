@@ -6,6 +6,7 @@
 #include <himalaya/framework/ibl.h>
 #include <himalaya/framework/cache.h>
 #include <himalaya/framework/ktx2.h>
+#include <himalaya/framework/texture_compress.h>
 #include <himalaya/rhi/context.h>
 #include <himalaya/rhi/resources.h>
 #include <himalaya/rhi/descriptors.h>
@@ -338,12 +339,11 @@ namespace himalaya::framework {
                 // Replace with mip-0-only copy to free ~25% of cubemap memory.
                 strip_skybox_mips(ctx, deferred);
                 // GPU BC6H compression: replace uncompressed cubemaps with BC6H.
-                compress_cubemaps_bc6h(ctx, sc,
-                                       {
-                                           {&cubemap_, "IBL Skybox BC6H"},
-                                           {&prefiltered_cubemap_, "IBL Prefiltered BC6H"}
-                                       },
-                                       deferred);
+                const BC6HCompressInput bc6h_inputs[] = {
+                    {&cubemap_, "IBL Skybox BC6H"},
+                    {&prefiltered_cubemap_, "IBL Prefiltered BC6H"},
+                };
+                compress_bc6h(ctx, *rm_, sc, bc6h_inputs, deferred);
             } else {
                 create_fallback_cubemaps(ctx);
             }
