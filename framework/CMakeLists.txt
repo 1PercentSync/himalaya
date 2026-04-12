@@ -21,6 +21,7 @@ target_sources(himalaya_framework PRIVATE
         src/shadow.cpp
         src/stb_impl.cpp
         src/texture.cpp
+        src/lightmap_uv.cpp
 )
 
 target_include_directories(himalaya_framework PUBLIC include)

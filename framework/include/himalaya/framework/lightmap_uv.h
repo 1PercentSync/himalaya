@@ -32,12 +32,6 @@ namespace himalaya::framework {
 
         /** @brief new_vertex -> original_vertex mapping. */
         std::vector<uint32_t> vertex_remap;
-
-        /** @brief xatlas computed atlas width in texels. */
-        uint32_t atlas_width;
-
-        /** @brief xatlas computed atlas height in texels. */
-        uint32_t atlas_height;
     };
 
     /**
@@ -57,8 +51,7 @@ namespace himalaya::framework {
      * @param mesh_hash  Pre-computed content hash of positions + indices.
      * @return LightmapUVResult with generated lightmap UVs, new indices, and remap table.
      */
-    [[nodiscard]] LightmapUVResult
-    generate_lightmap_uv(std::span<const Vertex> vertices,
-                         std::span<const uint32_t> indices,
-                         const std::string &mesh_hash);
+    [[nodiscard]] LightmapUVResult generate_lightmap_uv(std::span<const Vertex> vertices,
+                                                        std::span<const uint32_t> indices,
+                                                        const std::string &mesh_hash);
 } // namespace himalaya::framework
