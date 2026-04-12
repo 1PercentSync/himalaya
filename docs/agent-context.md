@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 12b 进行中。剩余：DebugUI Emissive NEE checkbox。编译验证后继续
+Step 12b 全部完成。下一项：Step 13 — Texture LOD（Ray Cones）
 
 ---
 
