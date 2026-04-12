@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 12a 进行中。已完成：double_sided + closesthit 背面透传 + max_bounces 16。下一项：EmissiveLightBuilder 类
+Step 12a 进行中。已完成：double_sided + closesthit 背面透传 + max_bounces 16 + EmissiveLightBuilder 类。下一项：build() 遍历 emissive primitive
 
 ---
 
