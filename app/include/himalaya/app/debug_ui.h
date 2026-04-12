@@ -9,9 +9,10 @@
 #include <string>
 #include <vector>
 
+#include <himalaya/rhi/swapchain.h>
+
 namespace himalaya::rhi {
     class Context;
-    class Swapchain;
 } // namespace himalaya::rhi
 
 namespace himalaya::framework {
@@ -53,8 +54,11 @@ namespace himalaya::app {
         /** @brief Vulkan context for GPU name and VRAM queries. */
         rhi::Context& context;
 
-        /** @brief Swapchain for resolution and VSync state. */
+        /** @brief Swapchain for resolution display. */
         rhi::Swapchain& swapchain;
+
+        /** @brief User-selected present mode (combo box). May differ from swapchain.present_mode when PT tearing overrides. */
+        rhi::PresentMode& user_present_mode;
 
         // --- Camera (display + control) ---
 
@@ -148,6 +152,9 @@ namespace himalaya::app {
 
         /** @brief Ray cone LOD upper clamp (0 = full resolution). Mutable — slider. */
         uint32_t& pt_lod_max_level;
+
+        /** @brief Allow tearing in PT mode (override to IMMEDIATE). Mutable — checkbox. */
+        bool& pt_allow_tearing;
 
         /** @brief Time elapsed since PT accumulation started, in seconds (read-only). */
         float pt_elapsed_time;

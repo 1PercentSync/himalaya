@@ -163,9 +163,9 @@ namespace himalaya::app {
         ImGui::Separator();
         {
             const char* present_mode_names[] = { "VSync (FIFO)", "Mailbox", "Immediate (tearing)" };
-            int current_mode = static_cast<int>(ctx.swapchain.present_mode);
+            int current_mode = static_cast<int>(ctx.user_present_mode);
             if (ImGui::Combo("Present Mode", &current_mode, present_mode_names, 3)) {
-                ctx.swapchain.present_mode = static_cast<rhi::PresentMode>(current_mode);
+                ctx.user_present_mode = static_cast<rhi::PresentMode>(current_mode);
                 actions.present_mode_changed = true;
             }
         }
@@ -267,6 +267,13 @@ namespace himalaya::app {
                     ImGui::SetTooltip("HDR sun directional light is an approximation of the sun in the environment map.\n"
                                       "With Env Importance Sampling enabled, the environment map already provides\n"
                                       "accurate sun lighting — enabling this may cause double illumination artifacts.");
+                }
+
+                // Allow Tearing — override present mode to IMMEDIATE in PT
+                ImGui::Checkbox("Allow Tearing", &ctx.pt_allow_tearing);
+                if (ImGui::IsItemHovered()) {
+                    ImGui::SetTooltip("Force IMMEDIATE present mode while in PT to bypass\n"
+                                      "driver frame rate limits (e.g. Sunshine streaming).");
                 }
 
                 // Target Samples input (0 = unlimited)

@@ -54,7 +54,9 @@ namespace himalaya::app {
 
         context_.init(window_);
         rhi::CommandBuffer::init_debug_functions(context_.instance);
-        swapchain_.init(context_, window_);
+        swapchain_.init(context_, window_, user_present_mode_);
+        // Sync fallback: if requested mode was unavailable, reflect actual mode
+        user_present_mode_ = swapchain_.present_mode;
 
         // Framebuffer resize detection via GLFW callback
         glfwSetWindowUserPointer(window_, &framebuffer_resized_);
@@ -435,6 +437,7 @@ namespace himalaya::app {
             .hdr_sun_cast_shadows = hdr_sun_cast_shadows_,
             .equirect_width = renderer_.ibl().equirect_width(),
             .equirect_height = renderer_.ibl().equirect_height(),
+            .user_present_mode = user_present_mode_,
             .render_mode = render_mode_,
             .rt_supported = context_.rt_supported,
             .pt_sample_count = renderer_.pt_sample_count(),
@@ -445,6 +448,7 @@ namespace himalaya::app {
             .pt_directional_lights = renderer_.pt_directional_lights(),
             .pt_emissive_nee = renderer_.pt_emissive_nee(),
             .pt_lod_max_level = renderer_.pt_lod_max_level(),
+            .pt_allow_tearing = pt_allow_tearing_,
             .pt_elapsed_time = renderer_.pt_elapsed_time(),
             .denoise_enabled = renderer_.denoise_enabled(),
             .show_denoised = renderer_.show_denoised(),
@@ -650,13 +654,20 @@ namespace himalaya::app {
         if (const VkResult present_result = vkQueuePresentKHR(context_.graphics_queue, &present_info);
             present_result == VK_ERROR_OUT_OF_DATE_KHR ||
             present_result == VK_SUBOPTIMAL_KHR ||
-            framebuffer_resized_ ||
-            present_mode_changed_) {
+            framebuffer_resized_) {
             framebuffer_resized_ = false;
-            present_mode_changed_ = false;
             handle_resize();
         } else if (present_result != VK_SUCCESS) {
             std::abort();
+        }
+
+        // Present mode change — swapchain recreate without resize
+        if (present_mode_changed_) {
+            present_mode_changed_ = false;
+            swapchain_.present_mode = user_present_mode_;
+            swapchain_.recreate(context_, window_);
+            // Sync fallback result back so combo displays the actual active mode
+            user_present_mode_ = swapchain_.present_mode;
         }
 
         context_.advance_frame();

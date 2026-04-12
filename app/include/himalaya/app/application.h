@@ -222,6 +222,15 @@ namespace himalaya::app {
         /** @brief Whether present mode changed this frame (triggers swapchain recreate). */
         bool present_mode_changed_ = false;
 
+        /** @brief User-selected present mode from combo (may differ from effective when PT tearing overrides). */
+        rhi::PresentMode user_present_mode_ = rhi::PresentMode::Mailbox;
+
+        /** @brief PT allow tearing: override to IMMEDIATE while in PT mode. */
+        bool pt_allow_tearing_ = false;
+
+        /** @brief Previous render mode for detecting PT ↔ Rasterization switches. */
+        framework::RenderMode prev_render_mode_ = framework::RenderMode::Rasterization;
+
         /** @brief Acquired swapchain image index for the current frame. */
         uint32_t image_index_ = 0;
 
