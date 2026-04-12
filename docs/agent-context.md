@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 1 已完成，待用户验证编译和运行。下一个任务：Step 2 Cubemap prefilter 通用工具提取。
+Step 2 进行中：cubemap_filter.h 已完成，下一小项：cubemap_filter.cpp 实现。
 
 ---
 
