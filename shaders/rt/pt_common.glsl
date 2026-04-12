@@ -322,6 +322,28 @@ vec2 compute_texel_density(GeometryInfo geo, int primitiveID,
     return vec2(world_area, uv_area);
 }
 
+// ---- Orthonormal Basis Construction ----
+
+/**
+ * Builds an orthonormal basis (T, B) from a unit normal N.
+ *
+ * Uses a robust branch that avoids near-parallel cross products:
+ * when N is nearly aligned with +Z, crosses with +X instead.
+ * Shared by closesthit BRDF sampling and baker raygen initial ray generation.
+ *
+ * @param N  Unit normal (must be normalized).
+ * @param T  Output tangent vector (perpendicular to N).
+ * @param B  Output bitangent vector (perpendicular to N and T).
+ */
+void build_orthonormal_basis(vec3 N, out vec3 T, out vec3 B) {
+    if (abs(N.z) < 0.999) {
+        T = normalize(cross(vec3(0.0, 0.0, 1.0), N));
+    } else {
+        T = normalize(cross(vec3(1.0, 0.0, 0.0), N));
+    }
+    B = cross(N, T);
+}
+
 // ---- Multi-lobe BRDF Selection ----
 
 /**
