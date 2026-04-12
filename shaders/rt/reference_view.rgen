@@ -76,6 +76,11 @@ void main() {
     payload.env_mis_weight = 1.0; // Bounce 0 miss: no MIS (direct sky view)
     payload.last_brdf_pdf = 0.0;  // Bounce 0 hit emissive: weight 1.0 (no previous BRDF sample)
 
+    // Ray cone initialization: zero width at camera, pixel angular extent as spread
+    float pixel_spread = init_ray_cone(float(size.y));
+    payload.cone_width  = 0.0;
+    payload.cone_spread = pixel_spread;
+
     for (uint bounce = 0; bounce < pc.max_bounces; ++bounce) {
         // Russian Roulette (bounce >= 2, based on accumulated throughput)
         if (bounce >= 2u) {
