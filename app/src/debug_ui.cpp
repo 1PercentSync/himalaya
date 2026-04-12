@@ -161,8 +161,13 @@ namespace himalaya::app {
                     static_cast<double>(vram.budget) / (1024.0 * 1024.0));
 
         ImGui::Separator();
-        if (ImGui::Checkbox("VSync", &ctx.swapchain.vsync)) {
-            actions.vsync_toggled = true;
+        {
+            const char* present_mode_names[] = { "VSync (FIFO)", "Mailbox", "Immediate (tearing)" };
+            int current_mode = static_cast<int>(ctx.swapchain.present_mode);
+            if (ImGui::Combo("Present Mode", &current_mode, present_mode_names, 3)) {
+                ctx.swapchain.present_mode = static_cast<rhi::PresentMode>(current_mode);
+                actions.present_mode_changed = true;
+            }
         }
 
         // Path Tracing toggle

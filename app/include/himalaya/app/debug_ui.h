@@ -245,8 +245,8 @@ namespace himalaya::app {
      * Application inspects these after each draw() call to apply side effects.
      */
     struct DebugUIActions {
-        /** @brief True if the VSync checkbox was toggled this frame. */
-        bool vsync_toggled = false;
+        /** @brief True if the present mode combo selection changed this frame. */
+        bool present_mode_changed = false;
 
         /** @brief True if the MSAA sample count was changed this frame. */
         bool msaa_changed = false;

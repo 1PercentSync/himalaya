@@ -219,8 +219,8 @@ namespace himalaya::app {
         /** @brief Rendering subsystem (owns pipelines, buffers, shared resources). */
         Renderer renderer_{};
 
-        /** @brief Whether VSync was toggled this frame (triggers swapchain recreate). */
-        bool vsync_changed_ = false;
+        /** @brief Whether present mode changed this frame (triggers swapchain recreate). */
+        bool present_mode_changed_ = false;
 
         /** @brief Acquired swapchain image index for the current frame. */
         uint32_t image_index_ = 0;

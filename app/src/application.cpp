@@ -486,8 +486,8 @@ namespace himalaya::app {
             error_message_.clear();
         }
 
-        if (actions.vsync_toggled) {
-            vsync_changed_ = true;
+        if (actions.present_mode_changed) {
+            present_mode_changed_ = true;
         }
 
         if (actions.reload_shaders) {
@@ -651,9 +651,9 @@ namespace himalaya::app {
             present_result == VK_ERROR_OUT_OF_DATE_KHR ||
             present_result == VK_SUBOPTIMAL_KHR ||
             framebuffer_resized_ ||
-            vsync_changed_) {
+            present_mode_changed_) {
             framebuffer_resized_ = false;
-            vsync_changed_ = false;
+            present_mode_changed_ = false;
             handle_resize();
         } else if (present_result != VK_SUCCESS) {
             std::abort();

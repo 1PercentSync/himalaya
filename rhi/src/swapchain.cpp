@@ -49,6 +49,16 @@ namespace himalaya::rhi {
 
         const auto [surface_format, color_space] = choose_surface_format(context.physical_device, context.surface);
         const auto vk_present_mode = choose_present_mode(context.physical_device, context.surface, present_mode);
+
+        // Reflect actual mode back (fallback if requested mode was unavailable)
+        if (vk_present_mode == VK_PRESENT_MODE_FIFO_KHR) {
+            present_mode = PresentMode::Fifo;
+        } else if (vk_present_mode == VK_PRESENT_MODE_MAILBOX_KHR) {
+            present_mode = PresentMode::Mailbox;
+        } else if (vk_present_mode == VK_PRESENT_MODE_IMMEDIATE_KHR) {
+            present_mode = PresentMode::Immediate;
+        }
+
         extent = choose_extent(capabilities, window);
         format = surface_format;
 
