@@ -214,7 +214,7 @@ resolution = clamp(round(sqrt(world_surface_area) * texels_per_meter), min_res, 
 1. glTF 自带 TEXCOORD_1（通过 `fastgltf::Primitive::findAttribute("TEXCOORD_1")` 检测）→ 直接使用 `Vertex::uv1`，拓扑不变，跳过 xatlas
 2. 无 TEXCOORD_1 → xatlas 运行时生成（或从缓存加载）
 
-检测基于 glTF attribute 存在性而非 uv1 数值是否全零——合法的 TEXCOORD_1 数据可能包含零值。SceneLoader 加载时记录每个 mesh 是否有 TEXCOORD_1（`bool has_lightmap_uv` flag），传递给 lightmap UV generator。
+检测基于 glTF attribute 存在性而非 uv1 数值是否全零——合法的 TEXCOORD_1 数据可能包含零值。SceneLoader 加载时通过 `findAttribute("TEXCOORD_1")` 判断，有则跳过 xatlas 调用（直接使用 uv1），无则调用 `generate_lightmap_uv()` 生成。
 
 ### xatlas 集成
 

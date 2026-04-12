@@ -2423,15 +2423,14 @@ struct LightmapUVResult {
 };
 
 /// Generates lightmap UV for a mesh using xatlas, or loads from cache.
-/// If mesh already has TEXCOORD_1 (has_lightmap_uv flag from SceneLoader), returns nullopt
-/// (caller uses existing uv1 as lightmap UV, no topology change).
+/// The caller is responsible for skipping this call when the mesh already
+/// has TEXCOORD_1 (no topology change needed in that case).
 ///
 /// Cache key: xxHash of mesh vertex positions + indices.
 /// Cache hit: load from disk, skip xatlas. Cache miss: run xatlas, save to disk.
-[[nodiscard]] std::optional<LightmapUVResult>
+[[nodiscard]] LightmapUVResult
 generate_lightmap_uv(std::span<const Vertex> vertices,
                      std::span<const uint32_t> indices,
-                     bool has_lightmap_uv,
                      const std::string& mesh_hash);
 
 }  // namespace himalaya::framework

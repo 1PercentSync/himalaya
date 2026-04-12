@@ -101,12 +101,11 @@ Step 13: ImGui 烘焙控制面板
 - `framework/CMakeLists.txt`：`target_link_libraries` 添加 `xatlas`
 - 新增 `framework/lightmap_uv.h`：`LightmapUVResult` 结构体 + `generate_lightmap_uv()` 函数声明
 - 新增 `framework/lightmap_uv.cpp`：
-  - TEXCOORD_1 检测：接受 `bool has_lightmap_uv` flag（SceneLoader 通过 `findAttribute("TEXCOORD_1")` 检测并传递），而非检查 uv1 数值
   - 缓存查找：`cache_path("lightmap_uv", mesh_hash, ".bin")`，命中则加载返回
   - xatlas 调用：`xatlas::Create()` → `xatlas::AddMesh()` → `xatlas::Generate()` → 提取 UV + remap + new indices
   - 缓存写入：header（magic + version + source mesh hash + atlas size + vertex/index counts）+ lightmap UV 数组 + new index buffer + vertex remap table
 
-**验证**：无 TEXCOORD_1 的 mesh → xatlas 生成 lightmap UV + 缓存文件写入 + 二次加载命中缓存；有 TEXCOORD_1 → 返回 nullopt
+**验证**：xatlas 生成 lightmap UV + 缓存文件写入 + 二次加载命中缓存
 
 #### 设计要点
 
@@ -169,8 +168,7 @@ xatlas::Destroy(atlas);
 
 将 xatlas 输出应用到 Mesh 的 vertex/index buffer。
 
-- `scene_loader.cpp`：场景加载流程变更——load_meshes() 后、build_mesh_instances() 前，对每个 mesh 调用 `generate_lightmap_uv()`：
-  - 返回 nullopt（有 TEXCOORD_1）→ 不改动
+- `scene_loader.cpp`：场景加载流程变更——load_meshes() 后、build_mesh_instances() 前，对每个无 TEXCOORD_1 的 mesh 调用 `generate_lightmap_uv()`（有 TEXCOORD_1 的 mesh 跳过调用，直接使用 uv1）：
   - 返回 LightmapUVResult → 根据 remap table 构建新 vertex 数组（拆分顶点，`uv1` 写入 lightmap UV）+ 新 index 数组 → 销毁原 GPU buffer → 上传新 GPU buffer → 更新 Mesh 的 vertex_buffer / index_buffer / vertex_count / index_count
 - `scene_loader.cpp`：CPU 端 `cpu_vertices_` / `cpu_indices_` 同步更新（emissive light builder 等依赖 CPU 数据）
 - 加载顺序确认：glTF → xatlas UV → rebuild VB/IB → build BLAS/TLAS → build emissive lights
