@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 12a 进行中。已完成：至 DescriptorManager binding 7/8。下一项：Renderer 集成 EmissiveLightBuilder
+Step 12a 全部完成。下一项：Step 12b — Shader NEE Emissive + MIS
 
 ---
 

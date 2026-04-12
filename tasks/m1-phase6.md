@@ -196,7 +196,7 @@
 - [x] EmissiveAliasTable SSBO 上传（header + `{float prob, uint alias}` 8B/entry）
 - [x] 无 emissive 场景跳过构建（emissive_count() 返回 0）
 - [x] DescriptorManager：Set 0 binding 7（EmissiveTriangleBuffer）+ binding 8（EmissiveAliasTable），`PARTIALLY_BOUND`，`rt_supported` 守卫
-- [ ] Renderer：场景加载后调用 EmissiveLightBuilder::build() + 写入 Set 0 binding 7/8
+- [x] Renderer：场景加载后调用 EmissiveLightBuilder::build() + 写入 Set 0 binding 7/8
 
 ## Step 12b：Shader NEE Emissive + MIS
 
