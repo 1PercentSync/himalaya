@@ -242,6 +242,9 @@ namespace himalaya::app {
                 // Env Importance Sampling toggle
                 ImGui::Checkbox("Env Importance Sampling", &ctx.pt_env_sampling);
 
+                // Emissive NEE toggle (area light importance sampling)
+                ImGui::Checkbox("Emissive NEE", &ctx.pt_emissive_nee);
+
                 // Directional Lights toggle (default off — env sampling handles sun)
                 ImGui::Checkbox("Directional Lights", &ctx.pt_directional_lights);
                 if (ImGui::IsItemHovered()) {

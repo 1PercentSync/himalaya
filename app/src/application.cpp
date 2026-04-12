@@ -443,6 +443,7 @@ namespace himalaya::app {
             .pt_max_clamp = renderer_.pt_max_clamp(),
             .pt_env_sampling = renderer_.pt_env_sampling(),
             .pt_directional_lights = renderer_.pt_directional_lights(),
+            .pt_emissive_nee = renderer_.pt_emissive_nee(),
             .pt_elapsed_time = renderer_.pt_elapsed_time(),
             .denoise_enabled = renderer_.denoise_enabled(),
             .show_denoised = renderer_.show_denoised(),

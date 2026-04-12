@@ -143,6 +143,9 @@ namespace himalaya::app {
         /** @brief Directional lights enabled in PT. Mutable — checkbox. */
         bool& pt_directional_lights;
 
+        /** @brief Emissive area light NEE toggle. Mutable — checkbox. */
+        bool& pt_emissive_nee;
+
         /** @brief Time elapsed since PT accumulation started, in seconds (read-only). */
         float pt_elapsed_time;
 

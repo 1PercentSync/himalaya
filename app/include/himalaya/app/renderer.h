@@ -277,6 +277,9 @@ namespace himalaya::app {
         /** @brief Mutable reference to PT directional lights toggle. */
         bool& pt_directional_lights();
 
+        /** @brief Mutable reference to emissive NEE toggle. */
+        bool& pt_emissive_nee();
+
         /** @brief Mutable reference to target sample count (0 = unlimited). */
         uint32_t& pt_target_samples();
 
@@ -478,6 +481,9 @@ namespace himalaya::app {
         /** @brief Directional lights enabled in PT (default false — env sampling replaces them). */
         bool directional_lights_ = false;
 
+        /** @brief Emissive area light NEE toggle (default true, exposed via UI). */
+        bool emissive_nee_ = true;
+
         /** @brief PT target sample count (0 = unlimited, exposed via UI Step 10). */
         uint32_t target_samples_ = 2048;
 
@@ -501,6 +507,9 @@ namespace himalaya::app {
 
         /** @brief Cached directional lights from previous PT frame (change detection → reset). */
         bool prev_directional_lights_ = false;
+
+        /** @brief Cached emissive NEE from previous PT frame (change detection → reset). */
+        bool prev_emissive_nee_ = true;
 
         /** @brief Cached IBL intensity from previous PT frame (change detection → reset). */
         float prev_ibl_intensity_ = 1.0f;
