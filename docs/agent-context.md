@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 13 进行中（Present Mode 改造）。已完成：Swapchain + combo + PT Allow Tearing + 编排逻辑。下一项：AppConfig 持久化
+Step 13 全部完成。阶段六全部完成。
 
 ---
 
