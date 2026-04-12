@@ -636,10 +636,10 @@ Shader 侧 emissive NEE 采样 + MIS 权重计算。
 
 RT 纹理 mip 选择。架构决策见 `milestone-1/m1-rt-decisions.md`「Texture LOD / Ray Cones」。
 
-- pt_common.glsl 新增 Ray Cone 工具函数（`init_ray_cone`、`propagate_ray_cone`、`estimate_curvature`、`compute_ray_cone_lod`）
+- pt_common.glsl 新增 Ray Cone 工具函数（`init_ray_cone`、`propagate_ray_cone`（含焦点穿越处理）、`estimate_curvature`、`compute_ray_cone_lod`）
 - pt_common.glsl 新增 `compute_texel_density()`：独立函数，通过 buffer_reference 重新读取三角形三个顶点的世界坐标和 UV（GPU L1 cache 命中，`interpolate_hit()` 刚访问过相同地址），返回 world area 和 UV area。退化三角形（面积接近零）回退 LOD 0
 - reference_view.rgen：初始化 `payload.cone_width = 0`、`payload.cone_spread = pixel_spread`，FOV 从 `abs(global.inv_projection[1][1])` 推导（不新增 UBO 字段）
-- closesthit.rchit：propagate cone（`cone_width = payload.cone_width + gl_HitTEXT × payload.cone_spread`），估算表面曲率（face_normal vs interpolated_normal）修正 spread angle，compute per-triangle `base_lod` 一次，每个材质纹理加 `0.5 × log2(tex_w × tex_h)` 得到 per-texture LOD（通过 `textureSize()` 取分辨率），LOD clamp 到 `lod_max_level`（push constant，防止过度模糊），所有材质纹理 `texture()` → `textureLod(tex, uv, lod)`（~4 处）。NEE emissive 光源纹理采样保持 `texture()`（ray cone footprint 不适用于 NEE 采样的目标三角形）
+- closesthit.rchit：propagate cone（含焦点穿越：cone_width < 0 时取绝对值并翻转 spread），估算表面曲率（face_normal vs interpolated_normal）修正 spread angle（允许负值，不 clamp），compute per-triangle `base_lod` 一次，每个材质纹理加 `0.5 × log2(tex_w × tex_h)` 得到 per-texture LOD（通过 `textureSize()` 取分辨率），LOD clamp 到 `lod_max_level`（push constant，防止过度模糊），所有材质纹理 `texture()` → `textureLod(tex, uv, lod)`（~4 处）。NEE emissive 光源纹理同样使用 ray cone LOD（shadow ray cone width + EmissiveTriangle texel density）
 - anyhit.rahit：alpha 纹理采样 `texture()` → `textureLod()`（~1 处），因 anyhit 无法访问 payload，使用近似 cone width = `gl_HitTEXT × pixel_spread`（primary ray 精确，bounce ray 为保守下界——偏向高分辨率 mip，alpha test 安全）
 - PrimaryPayload 新增 `float cone_width` + `float cone_spread` 两个字段（64B → 72B），cone_width = 累积宽度，cone_spread = 当前扩展角（含曲率修正，不再是常量）
 - Push constant 新增 `uint lod_max_level`（32B → 36B，默认 4，0 = 强制全分辨率）
@@ -814,5 +814,5 @@ shaders/
 | OIDN Aux Buffers | bounce 0 closesthit imageStore aux albedo（base_color × (1-metallic)，不含 emissive，R16G16B16A16Sfloat）+ aux normal（shading normal，R16G16B16A16Sfloat）。Set 3 binding 1/2 push descriptor。两张 aux 统一 RGBA16F 格式，OIDN 直接读取 HALF3 + pixelStride=8，零格式转换 |
 | Area Light NEE | EmissiveLightBuilder 构建 emissive triangle list + power-weighted alias table。Set 0 binding 7/8。MIS：NEE emissive + BRDF 命中 emissive 用 power heuristic 平衡。push constant `emissive_light_count`（0=skip）。双面跟随 glTF doubleSided |
 | EmissiveTriangle | std430 96B：v0/v1/v2(vec3) + emission(vec3, raw factor) + area(float) + material_index(uint) + uv0/uv1/uv2(vec2)。存 UV 以精确采样纹理 emissive |
-| Texture LOD | Ray Cones（Akenine-Möller 2021）。表面曲率从 face_normal vs interpolated_normal 估算，per-bounce 修正 spread angle（凹面收窄、凸面发散）。`compute_texel_density()` 独立函数重新读取顶点算 world/UV 面积比（GPU L1 cache 命中，不改 GeometryInfo/HitAttributes），退化三角形回退 LOD 0。per-texture LOD 通过 `textureSize()` 取纹理分辨率，LOD clamp 到 `lod_max_level`（push constant，默认 4，可调）防止过度模糊。anyhit 使用近似 cone width（`gl_HitTEXT × pixel_spread`，无 payload 访问，保守下界）。NEE emissive 纹理保持 `texture()`。PrimaryPayload `cone_width`（累积宽度）+ `cone_spread`（扩展角，含曲率修正）跨 bounce 传递 |
+| Texture LOD | Ray Cones（Akenine-Möller 2021）。表面曲率从 face_normal vs interpolated_normal 估算，per-bounce 修正 spread angle（允许负值，凹面聚焦穿越焦点后重新发散）。`compute_texel_density()` 独立函数重新读取顶点算 world/UV 面积比（GPU L1 cache 命中，不改 GeometryInfo/HitAttributes），退化三角形回退 LOD 0。per-texture LOD 通过 `textureSize()` 取纹理分辨率，LOD clamp 到 `lod_max_level`（push constant，默认 4，可调）防止过度模糊。anyhit 使用近似 cone width（`gl_HitTEXT × pixel_spread`，无 payload 访问，保守下界）。NEE emissive 纹理使用 shadow ray cone width + EmissiveTriangle texel density 算 LOD。PrimaryPayload `cone_width`（累积宽度）+ `cone_spread`（扩展角，含曲率修正，可负）跨 bounce 传递 |
 | Set 0 binding 7/8 | EmissiveTriangleBuffer(binding 7) + EmissiveAliasTable(binding 8)，`PARTIALLY_BOUND`，`rt_supported` 守卫。无 emissive 场景时不写入 |
