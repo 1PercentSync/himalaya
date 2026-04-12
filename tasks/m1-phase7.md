@@ -62,7 +62,7 @@
 
 ## Step 8：Lightmap Baker Pass
 
-- [ ] `pt_common.glsl`：`DIMS_PER_BOUNCE` 常量从 raygen/closesthit 迁移到此处
+- [x] `pt_common.glsl`：`DIMS_PER_BOUNCE` 常量从 raygen/closesthit 迁移到此处
 - [ ] `pt_common.glsl`：从 reference_view.rgen 提取共享 `trace_path()` 函数（`#ifdef RAYGEN_SHADER` 守卫，三个 raygen 共用）
 - [ ] `reference_view.rgen`：重构为 `#define RAYGEN_SHADER` + 调用 `trace_path()`（行为不变）。push constant + payload 声明移到 `#include "rt/pt_common.glsl"` 之前（trace_path() 引用 `pc.xxx` 和 `payload`）
 - [ ] 新增 `shaders/rt/lightmap_baker.rgen`：读 position/normal map → 逐 texel 发射射线 → 调用共享 bounce loop → accumulation
