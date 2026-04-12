@@ -202,7 +202,23 @@ namespace himalaya::framework {
 
         spdlog::info("EmissiveLightBuilder: alias table built (total power {:.2f})", power_sum);
 
-        // TODO: Phase 3 — SSBO upload (subsequent task items)
+        // ---- Phase 3a: Upload EmissiveTriangleBuffer SSBO (Set 0, Binding 7) ----
+
+        const auto tri_buffer_size = static_cast<uint64_t>(emissive_count_) * sizeof(EmissiveTriangle);
+
+        triangle_buffer_ = rm.create_buffer({
+            .size = tri_buffer_size,
+            .usage = rhi::BufferUsage::StorageBuffer | rhi::BufferUsage::TransferDst,
+            .memory = rhi::MemoryUsage::GpuOnly,
+        }, "Emissive Triangle Buffer");
+
+        rm.upload_buffer(triangle_buffer_, triangles.data(), tri_buffer_size);
+
+        spdlog::info("EmissiveLightBuilder: triangle buffer uploaded ({} entries, {:.1f} KB)",
+                     emissive_count_,
+                     static_cast<double>(tri_buffer_size) / 1024.0);
+
+        // TODO: Phase 3b — EmissiveAliasTable SSBO upload (next task item)
     }
 
     void EmissiveLightBuilder::destroy() {
