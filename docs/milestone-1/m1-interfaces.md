@@ -546,7 +546,7 @@ struct EmissiveTriangle {
 // Step 6:  56B — color(12) + next_origin(12) + next_direction(12) + throughput_update(12) + hit_distance(4) + bounce(4)
 // Step 11: 60B — + env_mis_weight(4)
 // Step 12: 64B — + last_brdf_pdf(4)
-// Step 13: 68B — + cone_spread(4)
+// Step 13: 72B — + cone_width(4) + cone_spread(4)
 ```
 
 ---
@@ -2257,8 +2257,9 @@ struct PrimaryPayload {             // location 0
     uint  bounce;                   // 当前 bounce 索引（raygen 设置，OIDN aux bounce 0 判断用）
     // Step 11: float env_mis_weight     // BRDF 采样方向的 env MIS 权重
     // Step 12: float last_brdf_pdf      // 上一个 bounce 的 BRDF PDF（emissive MIS 用）
-    // Step 13: float cone_spread        // Ray Cone 累积宽度（世界空间，非角度）
-};  // Step 6: 56B, Step 11: 60B, Step 12: 64B, Step 13: 68B
+    // Step 13: float cone_width          // Ray Cone 累积宽度（世界空间）
+    // Step 13: float cone_spread         // Ray Cone 扩展角（rad，含曲率修正，非常量）
+};  // Step 6: 56B, Step 11: 60B, Step 12: 64B, Step 13: 72B
 ```
 
 #### DebugUIContext / DebugUIActions PT 扩展（阶段六）
