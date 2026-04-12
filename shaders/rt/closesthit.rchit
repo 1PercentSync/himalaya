@@ -65,17 +65,32 @@ void main() {
     // Interpolated vertex normal for shading (TBN, lighting)
     vec3 N_interp = normalize(hit.normal * mat3(gl_WorldToObjectEXT));
 
-    // Flip both normals to face the incoming ray (back-face handling)
-    if (dot(N_face, gl_WorldRayDirectionEXT) > 0.0) {
+    // ---- Back-face detection + single-sided pass-through ----
+    // Early material lookup for double_sided check (before normal flip)
+    GPUMaterialData mat = materials[geo.material_buffer_offset];
+    bool is_back_face = dot(N_face, gl_WorldRayDirectionEXT) > 0.0;
+
+    if (is_back_face && mat.double_sided == 0u) {
+        // Single-sided material hit from behind: pass through the surface.
+        // Consumes one bounce but throughput is unchanged — RR survives at 1.0.
+        vec3 pass_origin = world_pos + gl_WorldRayDirectionEXT * 0.001;
+        payload.color = vec3(0.0);
+        payload.next_origin = pass_origin;
+        payload.next_direction = gl_WorldRayDirectionEXT;
+        payload.throughput_update = vec3(1.0);
+        payload.hit_distance = gl_HitTEXT;
+        payload.env_mis_weight = 1.0;
+        return;
+    }
+
+    // Flip both normals to face the incoming ray (double-sided back-face handling)
+    if (is_back_face) {
         N_face = -N_face;
         N_interp = -N_interp;
     }
 
     // Tangent: transforms like a direction (model matrix, not normal matrix)
     vec3 T_world = normalize(mat3(gl_ObjectToWorldEXT) * hit.tangent.xyz);
-
-    // ---- Material lookup ----
-    GPUMaterialData mat = materials[geo.material_buffer_offset];
 
     vec4 base_color = texture(textures[nonuniformEXT(mat.base_color_tex)], hit.uv0)
                       * mat.base_color_factor;
