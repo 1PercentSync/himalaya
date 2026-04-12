@@ -540,7 +540,7 @@ struct EmissiveTriangle {
 // Step 6:  20B — max_bounces(u32) + sample_count(u32) + frame_seed(u32) + blue_noise_index(u32) + max_clamp(f32)
 // Step 11: 28B — + env_sampling(u32) + directional_lights(u32)
 // Step 12: 32B — + emissive_light_count(u32)
-// Step 13: 36B — + lod_bias(f32)
+// Step 13: 36B — + lod_max_level(u32)
 
 // PrimaryPayload — 逐步演进（raygen ↔ closesthit 通信）
 // Step 6:  56B — color(12) + next_origin(12) + next_direction(12) + throughput_update(12) + hit_distance(4) + bounce(4)
@@ -2241,7 +2241,7 @@ layout(push_constant) uniform PTPushConstants {
     // Step 11: uint env_sampling          // offset 20 (1 = env importance sampling)
     // Step 11: uint directional_lights    // offset 24 (1 = directional lights in PT)
     // Step 12: uint emissive_light_count  // offset 28 (0 = skip NEE emissive)
-    // Step 13: float lod_bias             // offset 32 (Ray Cones LOD offset, default 0.0)
+    // Step 13: uint  lod_max_level         // offset 32 (Ray Cones LOD clamp, default 4)
 };  // Step 6: 20 bytes, Step 11: 28 bytes, Step 12: 32 bytes, Step 13: 36 bytes
 ```
 
