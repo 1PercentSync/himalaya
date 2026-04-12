@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 11 全部完成。下一项：Step 12a — EmissiveLightBuilder + 基础设施
+Step 12a 进行中。已完成：GPUMaterialData double_sided。下一项：closesthit 背面透传
 
 ---
 
