@@ -203,7 +203,7 @@
 - [x] EmissiveAliasTable SSBO header 补充 `float total_power`（header 4B → 8B：`[uint entry_count, float total_power]`，light PDF 计算必需）
 - [x] bindings.glsl `#ifdef HIMALAYA_RT` 新增 `EmissiveTriangle` struct + binding 7/8 声明
 - [x] Push constant 新增 `uint emissive_light_count`（28B → 32B，0 = 跳过 NEE emissive）
-- [ ] pt_common.glsl 新增三角形均匀采样（重心坐标）+ emissive alias table 采样 + light PDF 计算
+- [x] pt_common.glsl 新增三角形均匀采样（重心坐标）+ emissive alias table 采样 + light PDF 计算
 - [ ] closesthit.rchit 新增 NEE emissive：alias table 采样 → 三角形采样点 → shadow ray（tMax = `distance * (1-1e-4)`）→ MIS 加权。Emissive 双面跟随 double_sided
 - [ ] closesthit.rchit BRDF 采样后写入 `payload.last_brdf_pdf`
 - [ ] closesthit.rchit 命中 emissive 表面时（bounce > 0）：读 last_brdf_pdf + 算 light_pdf → MIS 权重。Bounce 0 直视权重 1.0
