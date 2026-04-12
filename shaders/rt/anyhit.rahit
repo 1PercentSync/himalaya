@@ -60,8 +60,18 @@ void main() {
     float w0 = 1.0 - bary.x - bary.y;
     vec2 uv = v0.uv0 * w0 + v1.uv0 * bary.x + v2.uv0 * bary.y;
 
+    // ---- Alpha texture LOD (approximate ray cone) ----
+    // Anyhit cannot access payload; approximate cone width from hit distance.
+    // Primary ray: exact. Bounce ray: lower bound (conservative, biases toward
+    // higher resolution mip). lod_max_level clamp catches rare overestimates.
+    float ah_pixel_spread = init_ray_cone(float(gl_LaunchSizeEXT.y));
+    float ah_cone_width = gl_HitTEXT * ah_pixel_spread;
+    vec2 ah_td = compute_texel_density(geo, gl_PrimitiveID, gl_ObjectToWorldEXT);
+    float ah_lod = compute_ray_cone_lod(ah_cone_width, ah_td.x, ah_td.y,
+        textureSize(textures[nonuniformEXT(mat.base_color_tex)], 0), pc.lod_max_level);
+
     // ---- Sample alpha from base color texture ----
-    float texel_alpha = texture(textures[nonuniformEXT(mat.base_color_tex)], uv).a
+    float texel_alpha = textureLod(textures[nonuniformEXT(mat.base_color_tex)], uv, ah_lod).a
                         * mat.base_color_factor.a;
 
     if (mat.alpha_mode == 1u) {
