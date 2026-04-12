@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 12a 进行中。已完成：至 TriangleBuffer 上传。下一项：EmissiveAliasTable SSBO 上传
+Step 12a 进行中。已完成：至 AliasTable 上传。下一项：无 emissive 场景跳过构建
 
 ---
 
