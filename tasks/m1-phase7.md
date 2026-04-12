@@ -54,7 +54,7 @@
 ## Step 7：Position/Normal Map 光栅化 pass
 
 - [x] 新增 `shaders/bake/pos_normal_map.vert`：uv1 → NDC 映射 + 世界空间 position/normal 输出
-- [ ] 新增 `shaders/bake/pos_normal_map.frag`：写入两个 RGBA32F color attachment
+- [x] 新增 `shaders/bake/pos_normal_map.frag`：写入两个 RGBA32F color attachment
 - [ ] `renderer_bake.cpp`：position/normal map graphics pipeline 创建（Dynamic Rendering，2 color attachment，无 depth）
 - [ ] `renderer_bake.cpp`：录制函数（给定 mesh + transform + lightmap 分辨率 → 创建 image + draw call）
 
