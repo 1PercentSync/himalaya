@@ -24,7 +24,7 @@
 // ---- Ray Payloads ----
 
 /**
- * Primary ray payload (location 0, 64 bytes).
+ * Primary ray payload (location 0, 72 bytes).
  * Closesthit fills all fields; raygen reads them to accumulate path contribution.
  */
 struct PrimaryPayload {
@@ -36,6 +36,8 @@ struct PrimaryPayload {
     uint  bounce;             // Current bounce index (set by raygen, read by closesthit)
     float env_mis_weight;     // MIS weight for env map when BRDF-sampled ray misses (1.0 = no MIS)
     float last_brdf_pdf;      // Combined multi-lobe BRDF PDF from previous bounce (emissive MIS)
+    float cone_width;         // Ray cone accumulated width (world-space length)
+    float cone_spread;        // Ray cone spread angle (radians, may be negative after concave reflection)
 };
 
 /** Shadow ray payload (location 1, 4 bytes). */
