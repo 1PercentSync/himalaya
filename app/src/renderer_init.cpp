@@ -460,6 +460,7 @@ namespace himalaya::app {
     }
 
     void Renderer::destroy() {
+        emissive_light_builder_.destroy();
         scene_as_builder_.destroy();
         as_manager_.destroy();
         if (ctx_->rt_supported) {
@@ -539,14 +540,19 @@ namespace himalaya::app {
         unregister_swapchain_images();
     }
 
-    // ---- RT acceleration structure ----
+    // ---- RT scene data (acceleration structures + emissive lights) ----
 
-    void Renderer::build_scene_as(const std::span<const framework::Mesh> meshes,
+    void Renderer::build_scene_rt(const std::span<const framework::Mesh> meshes,
                                   const std::span<const framework::MeshInstance> instances,
-                                  const std::span<const framework::MaterialInstance> materials) {
+                                  const std::span<const framework::MaterialInstance> materials,
+                                  const std::span<const framework::GPUMaterialData> gpu_materials,
+                                  const std::span<const std::vector<framework::Vertex>> mesh_vertices,
+                                  const std::span<const std::vector<uint32_t>> mesh_indices) {
         if (!ctx_->rt_supported) {
             return;
         }
+
+        // ---- Acceleration structures (BLAS/TLAS + GeometryInfo) ----
 
         scene_as_builder_.build(*ctx_, *resource_manager_, as_manager_, meshes, instances, materials);
 
@@ -560,6 +566,21 @@ namespace himalaya::app {
         const auto geo_buf = scene_as_builder_.geometry_info_buffer();
         const auto &buf_data = resource_manager_->get_buffer(geo_buf);
         descriptor_manager_->write_set0_buffer(5, geo_buf, buf_data.desc.size);
+
+        // ---- Emissive light data (triangle buffer + alias table) ----
+
+        emissive_light_builder_.build(*resource_manager_, meshes, instances,
+                                      gpu_materials, mesh_vertices, mesh_indices);
+
+        if (emissive_light_builder_.emissive_count() > 0) {
+            const auto tri_buf = emissive_light_builder_.triangle_buffer();
+            const auto &tri_data = resource_manager_->get_buffer(tri_buf);
+            descriptor_manager_->write_set0_emissive_triangles(tri_buf, tri_data.desc.size);
+
+            const auto alias_buf = emissive_light_builder_.alias_table_buffer();
+            const auto &alias_data = resource_manager_->get_buffer(alias_buf);
+            descriptor_manager_->write_set0_emissive_alias_table(alias_buf, alias_data.desc.size);
+        }
     }
 
     // ---- Environment reload ----

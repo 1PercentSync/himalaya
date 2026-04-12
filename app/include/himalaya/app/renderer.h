@@ -10,6 +10,7 @@
 #include <himalaya/framework/ibl.h>
 #include <himalaya/framework/material_system.h>
 #include <himalaya/framework/render_graph.h>
+#include <himalaya/framework/emissive_light_builder.h>
 #include <himalaya/framework/scene_as_builder.h>
 #include <himalaya/framework/scene_data.h>
 #include <himalaya/framework/texture.h>
@@ -186,20 +187,27 @@ namespace himalaya::app {
         void handle_shadow_resolution_changed(uint32_t new_resolution);
 
         /**
-         * @brief Builds scene acceleration structures for RT path.
+         * @brief Builds scene RT data: acceleration structures + emissive light tables.
          *
          * Must be called within a Context::begin_immediate() / end_immediate() scope.
-         * Builds BLAS, TLAS, and Geometry Info SSBO, then writes Set 0 binding 4/5.
-         * Safe to call multiple times (auto-destroys previous AS).
+         * Builds BLAS, TLAS, Geometry Info SSBO (Set 0 binding 4/5), and
+         * EmissiveLightBuilder triangle + alias table SSBOs (Set 0 binding 7/8).
+         * Safe to call multiple times (auto-destroys previous resources).
          * No-op if RT is not supported.
          *
-         * @param meshes    All loaded meshes.
-         * @param instances All scene mesh instances.
-         * @param materials All loaded material instances.
+         * @param meshes         All loaded meshes.
+         * @param instances      All scene mesh instances.
+         * @param materials      All loaded material instances.
+         * @param gpu_materials  GPU material data (emissive_factor lookup).
+         * @param mesh_vertices  CPU vertex data per mesh (parallel to meshes).
+         * @param mesh_indices   CPU index data per mesh (parallel to meshes).
          */
-        void build_scene_as(std::span<const framework::Mesh> meshes,
+        void build_scene_rt(std::span<const framework::Mesh> meshes,
                             std::span<const framework::MeshInstance> instances,
-                            std::span<const framework::MaterialInstance> materials);
+                            std::span<const framework::MaterialInstance> materials,
+                            std::span<const framework::GPUMaterialData> gpu_materials,
+                            std::span<const std::vector<framework::Vertex>> mesh_vertices,
+                            std::span<const std::vector<uint32_t>> mesh_indices);
 
         /**
          * @brief Recompiles all shaders from disk and rebuilds every pipeline.
@@ -368,6 +376,9 @@ namespace himalaya::app {
 
         /** @brief Scene acceleration structure builder (RT, builds BLAS/TLAS/GeometryInfo). */
         framework::SceneASBuilder scene_as_builder_{};
+
+        /** @brief Emissive face light builder (RT, builds emissive triangle + alias table SSBOs). */
+        framework::EmissiveLightBuilder emissive_light_builder_{};
 
         /** @brief HDR color buffer (R16G16B16A16F, 1x, managed, auto-rebuilt on resize). */
         framework::RGManagedHandle managed_hdr_color_;
