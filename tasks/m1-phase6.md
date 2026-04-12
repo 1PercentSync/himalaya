@@ -213,7 +213,7 @@
 ## Step 13：Texture LOD（Ray Cones）
 
 - [x] pt_common.glsl 新增 Ray Cone 工具函数（`init_ray_cone`、`propagate_ray_cone`（含焦点穿越处理）、`estimate_curvature`、`compute_ray_cone_lod`）
-- [ ] pt_common.glsl 新增 `compute_texel_density()`：独立函数，通过 buffer_reference 重新读取三角形顶点（GPU L1 cache 命中），返回 world area + UV area。退化三角形（面积接近零）回退 LOD 0
+- [x] pt_common.glsl 新增 `compute_texel_density()`：独立函数，通过 buffer_reference 重新读取三角形顶点（GPU L1 cache 命中），返回 world area + UV area。退化三角形（面积接近零）回退 LOD 0
 - [ ] reference_view.rgen：初始化 `payload.cone_width = 0`、`payload.cone_spread = pixel_spread` + FOV 从 `abs(global.inv_projection[1][1])` 推导
 - [ ] closesthit.rchit：propagate cone（含焦点穿越）+ 估算曲率修正 spread（允许负值）+ compute per-triangle `base_lod` + per-texture LOD（`textureSize()` 取分辨率）+ LOD clamp 到 `lod_max_level`（push constant）+ 材质纹理 `texture()` → `textureLod()`（~4 处）+ NEE emissive 光源纹理 `texture()` → `textureLod()`（shadow ray cone width + EmissiveTriangle texel density）
 - [ ] anyhit.rahit：alpha 纹理 `texture()` → `textureLod()`（~1 处，近似 cone width = `gl_HitTEXT × pixel_spread`，无 payload 访问）

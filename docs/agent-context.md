@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 13 进行中。已完成：Ray Cone 工具函数（init/propagate/curvature/lod）。下一项：compute_texel_density()
+Step 13 进行中。已完成：Ray Cone 工具函数 + compute_texel_density()。下一项：reference_view.rgen cone 初始化
 
 ---
 
