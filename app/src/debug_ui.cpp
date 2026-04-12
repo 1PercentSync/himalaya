@@ -162,12 +162,39 @@ namespace himalaya::app {
 
         ImGui::Separator();
         {
-            const char* present_mode_names[] = { "VSync (FIFO)", "Mailbox", "Immediate (tearing)" };
-            int current_mode = static_cast<int>(ctx.user_present_mode);
-            if (ImGui::Combo("Present Mode", &current_mode, present_mode_names, 3)) {
-                ctx.user_present_mode = static_cast<rhi::PresentMode>(current_mode);
-                actions.present_mode_changed = true;
+            // Build list of supported present modes (FIFO always available)
+            const char* mode_labels[3];
+            rhi::PresentMode mode_values[3];
+            int count = 0;
+            int current_idx = 0;
+
+            mode_labels[count] = "VSync (FIFO)";
+            mode_values[count] = rhi::PresentMode::Fifo;
+            if (ctx.user_present_mode == rhi::PresentMode::Fifo) { current_idx = count; }
+            ++count;
+
+            if (ctx.swapchain.mailbox_supported) {
+                mode_labels[count] = "Mailbox";
+                mode_values[count] = rhi::PresentMode::Mailbox;
+                if (ctx.user_present_mode == rhi::PresentMode::Mailbox) { current_idx = count; }
+                ++count;
             }
+
+            if (ctx.swapchain.immediate_supported) {
+                mode_labels[count] = "Immediate (tearing)";
+                mode_values[count] = rhi::PresentMode::Immediate;
+                if (ctx.user_present_mode == rhi::PresentMode::Immediate) { current_idx = count; }
+                ++count;
+            }
+
+            const bool only_fifo = (count == 1);
+            if (only_fifo) { ImGui::BeginDisabled(); }
+
+            if (ImGui::Combo("Present Mode", &current_idx, mode_labels, count)) {
+                ctx.user_present_mode = mode_values[current_idx];
+            }
+
+            if (only_fifo) { ImGui::EndDisabled(); }
         }
 
         // Path Tracing toggle
@@ -270,10 +297,17 @@ namespace himalaya::app {
                 }
 
                 // Allow Tearing — override present mode to IMMEDIATE in PT
-                ImGui::Checkbox("Allow Tearing", &ctx.pt_allow_tearing);
-                if (ImGui::IsItemHovered()) {
-                    ImGui::SetTooltip("Force IMMEDIATE present mode while in PT to bypass\n"
-                                      "driver frame rate limits (e.g. Sunshine streaming).");
+                {
+                    const bool can_tear = ctx.swapchain.immediate_supported;
+                    if (!can_tear) { ImGui::BeginDisabled(); }
+                    ImGui::Checkbox("Allow Tearing", &ctx.pt_allow_tearing);
+                    if (ImGui::IsItemHovered()) {
+                        ImGui::SetTooltip(can_tear
+                            ? "Force IMMEDIATE present mode while in PT to bypass\n"
+                              "driver frame rate limits (e.g. Sunshine streaming)."
+                            : "IMMEDIATE present mode not supported by this surface.");
+                    }
+                    if (!can_tear) { ImGui::EndDisabled(); }
                 }
 
                 // Target Samples input (0 = unlimited)

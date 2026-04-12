@@ -584,8 +584,14 @@ namespace himalaya::app {
         if (effective != swapchain_.present_mode) {
             swapchain_.present_mode = effective;
             swapchain_.recreate(context_, window_);
-            // Sync fallback only when not under PT override (preserve user combo selection)
-            if (!(render_mode_ == framework::RenderMode::PathTracing && pt_allow_tearing_)) {
+
+            if (render_mode_ == framework::RenderMode::PathTracing && pt_allow_tearing_) {
+                // PT tearing override: if IMMEDIATE fell back to FIFO, revert the checkbox
+                if (swapchain_.present_mode != rhi::PresentMode::Immediate) {
+                    pt_allow_tearing_ = false;
+                }
+            } else {
+                // User combo change: sync fallback result back to combo display
                 user_present_mode_ = swapchain_.present_mode;
             }
         }

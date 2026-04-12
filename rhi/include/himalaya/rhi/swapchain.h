@@ -60,6 +60,12 @@ namespace himalaya::rhi {
         /** @brief Current present mode. Read by recreate() to preserve the setting. */
         PresentMode present_mode = PresentMode::Mailbox;
 
+        /** @brief Whether MAILBOX present mode is supported by the surface. */
+        bool mailbox_supported = false;
+
+        /** @brief Whether IMMEDIATE present mode is supported by the surface. */
+        bool immediate_supported = false;
+
         /** @brief Swapchain handle. */
         VkSwapchainKHR swapchain = VK_NULL_HANDLE;
 

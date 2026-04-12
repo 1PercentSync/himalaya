@@ -48,6 +48,21 @@ namespace himalaya::rhi {
         vkGetPhysicalDeviceSurfaceCapabilitiesKHR(context.physical_device, context.surface, &capabilities);
 
         const auto [surface_format, color_space] = choose_surface_format(context.physical_device, context.surface);
+
+        // Cache supported present modes (surface doesn't change, result is stable)
+        {
+            uint32_t mode_count = 0;
+            vkGetPhysicalDeviceSurfacePresentModesKHR(context.physical_device, context.surface, &mode_count, nullptr);
+            std::vector<VkPresentModeKHR> modes(mode_count);
+            vkGetPhysicalDeviceSurfacePresentModesKHR(context.physical_device, context.surface, &mode_count, modes.data());
+            mailbox_supported = false;
+            immediate_supported = false;
+            for (const auto m : modes) {
+                if (m == VK_PRESENT_MODE_MAILBOX_KHR) { mailbox_supported = true; }
+                if (m == VK_PRESENT_MODE_IMMEDIATE_KHR) { immediate_supported = true; }
+            }
+        }
+
         const auto vk_present_mode = choose_present_mode(context.physical_device, context.surface, present_mode);
 
         // Reflect actual mode back (fallback if requested mode was unavailable)
