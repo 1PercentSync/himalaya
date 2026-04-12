@@ -199,7 +199,7 @@ Lightmap Baker Pass (RT Pipeline)
         Lightmap Accumulation Buffer（上一帧累积）
   输出：Lightmap Accumulation Buffer（本帧 1 SPP 累积后）
   说明：baker raygen 按 texel 坐标读 position/normal map，发射射线，
-        复用 closesthit/miss/anyhit（baker_mode=1 跳过 OIDN aux 写入），
+        复用 closesthit/miss/anyhit（aux imageStore 无条件执行，绑定 baker 自己的 aux image），
         running average 累积到 RGBA32F buffer
 
 ImGui Bake Preview
@@ -209,7 +209,7 @@ ImGui Bake Preview
 --- 达到目标采样数后（GPU idle） ---
 
 BakeDenoiser（同步）
-  输入：Accumulation Buffer readback + albedo/normal 辅助通道（如有）
+  输入：Accumulation Buffer readback + aux albedo + aux normal（closesthit bounce 0 写入的辅助通道）
   输出：Denoised RGBA32F CPU 内存
 
 BC6H 压缩（GPU compute）
@@ -233,7 +233,7 @@ Probe Baker Pass (RT Pipeline)
         TLAS、Geometry Info SSBO、材质、光源数组、IBL Cubemap、
         Probe Accumulation Cubemap（上一帧累积，RGBA32F，6 face）
   输出：Probe Accumulation Cubemap（本帧 1 SPP 累积后）
-  说明：raygen 从 probe 位置向 6 面方向发射射线（baker_mode=1）
+  说明：raygen 从 probe 位置（push constant）向 6 面方向发射射线，aux 无条件写入
 
 ImGui Bake Preview
   输入：当前 Accumulation Cubemap（展示一个 face 或展开图）

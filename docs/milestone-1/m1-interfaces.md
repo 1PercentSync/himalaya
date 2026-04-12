@@ -2534,11 +2534,14 @@ layout(push_constant) uniform PushConstants {
     uint  directional_lights;   // 24
     uint  emissive_light_count; // 28
     uint  lod_max_level;        // 32
-    // ---- 阶段七新增 ----
-    uint  baker_mode;           // 36 — 0 = reference view, 1 = baker
-    uint  lightmap_width;       // 40 — baker 专属（position/normal map 尺寸）
-    uint  lightmap_height;      // 44 — baker 专属
-};  // 48 bytes
+    // ---- 阶段七新增（baker 专属，raygen 读取，closesthit 不读） ----
+    uint  lightmap_width;       // 36 — lightmap baker: position/normal map 尺寸
+    uint  lightmap_height;      // 40
+    float probe_pos_x;          // 44 — probe baker: 世界空间位置
+    float probe_pos_y;          // 48
+    float probe_pos_z;          // 52
+    uint  _pad;                 // 56
+};  // 60 bytes
 ```
 
-超集布局：reference view 和 baker 两个 RT pipeline 共用同一个 struct。
+超集布局：reference view、lightmap baker、probe baker 三个 RT pipeline 共用同一个 struct。各 raygen 只读自己需要的字段。Closesthit 不需要 `baker_mode`——aux imageStore 无条件执行，各 pipeline 通过 Set 3 push descriptor 绑定各自的 aux image。
