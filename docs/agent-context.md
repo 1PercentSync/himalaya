@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 3 进行中：lightmap_uv.h 已完成，下一小项：lightmap_uv.cpp xatlas 调用。
+Step 3 完成，下一步：Step 4 Lightmap UV 拓扑应用。
 
 ---
 
