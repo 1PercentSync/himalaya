@@ -7,9 +7,9 @@
 ## Step 1：BC6H 压缩通用工具提取
 
 - [x] 新增 `framework/texture_compress.h`：`BC6HCompressInput` 结构体 + `compress_bc6h()` 函数声明
-- [ ] 新增 `framework/texture_compress.cpp`：从 `ibl_compress.cpp` 迁移核心逻辑，泛化签名接受 `std::span<const BC6HCompressInput>`
-- [ ] `ibl_compress.cpp`：`IBL::compress_cubemaps_bc6h()` 改为调用 `compress_bc6h()`（thin wrapper 或直接替换调用方）
-- [ ] `framework/CMakeLists.txt`：添加 `texture_compress.cpp` 源文件
+- [x] 新增 `framework/texture_compress.cpp`：从 `ibl_compress.cpp` 迁移核心逻辑，泛化签名接受 `std::span<const BC6HCompressInput>`
+- [x] `ibl_compress.cpp`：`IBL::compress_cubemaps_bc6h()` 改为调用 `compress_bc6h()`（thin wrapper 或直接替换调用方）
+- [x] `framework/CMakeLists.txt`：添加 `texture_compress.cpp` 源文件
 
 ## Step 2：Cubemap Prefilter 通用工具提取
 
