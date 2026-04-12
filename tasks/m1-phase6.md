@@ -212,11 +212,11 @@
 
 ## Step 13：Texture LOD（Ray Cones）
 
-- [ ] pt_common.glsl 新增 Ray Cone 工具函数（init_cone、propagate_cone、compute_lod）
-- [ ] pt_common.glsl 新增 `compute_texel_density()`：从三角形顶点位置 + UV 运行时算 world/UV 面积比
-- [ ] reference_view.rgen：初始化 cone spread（`atan(2 × tan(fov/2) / screen_height)`）+ 循环内设 `payload.cone_spread`
-- [ ] closesthit.rchit：propagate cone + compute LOD + 所有材质纹理 `texture()` → `textureLod(tex, uv, lod + lod_bias)`（~5-6 处）
-- [ ] anyhit.rahit：alpha 纹理 `texture()` → `textureLod()`（~1 处）
-- [ ] PrimaryPayload 新增 `float cone_spread` 字段（64B → 68B）
+- [ ] pt_common.glsl 新增 Ray Cone 工具函数（`init_ray_cone`、`propagate_ray_cone`、`compute_ray_cone_lod`）
+- [ ] pt_common.glsl 新增 `compute_texel_density()`：独立函数，通过 buffer_reference 重新读取三角形顶点（GPU L1 cache 命中），返回 world area + UV area
+- [ ] reference_view.rgen：初始化 `payload.cone_spread = 0` + FOV 从 `abs(global.inv_projection[1][1])` 推导
+- [ ] closesthit.rchit：propagate cone + compute per-triangle `base_lod` + per-texture LOD（`textureSize()` 取分辨率） + 材质纹理 `texture()` → `textureLod()`（~4 处，NEE emissive 光源纹理保持 `texture()`）
+- [ ] anyhit.rahit：alpha 纹理 `texture()` → `textureLod()`（~1 处，近似 cone width = `gl_HitTEXT × pixel_spread`，无 payload 访问）
+- [ ] PrimaryPayload 新增 `float cone_spread` 字段（64B → 68B，语义为累积 cone width）
 - [ ] Push constant 新增 `float lod_bias`（32B → 36B，默认 0.0）
 - [ ] Step 10 ImGui 面板新增 LOD Bias slider

@@ -671,31 +671,69 @@ RT shader 中 `texture()` 默认采样 mip 0（最高分辨率）。所有纹理
 
 Akenine-Möller et al. 2021。追踪每条射线的锥体扩展角（spread angle），命中时根据锥体宽度和三角形纹理密度估算 texture LOD。
 
-- **初始化**（raygen，bounce 0）：`spread_angle = atan(2 × tan(fov/2) / screen_height)`
-- **传播**（每个 bounce）：`spread += hit_distance × spread_angle`（cone 随距离扩散）
-- **LOD 计算**（closesthit）：从 cone width + 三角形 UV/world 面积比算出 mip level
+- **初始化**（raygen，bounce 0）：`pixel_spread = atan(2 × tan(fov/2) / screen_height)`，`payload.cone_spread = 0`（锥在起点无宽度）
+- **传播**（每个 bounce）：`cone_width = payload.cone_spread + hit_distance × pixel_spread`（cone 随距离扩散）
+- **LOD 计算**（closesthit）：从 cone width + 三角形 UV/world 面积比 + 纹理分辨率算出 mip level
 
 **简化决策**：
 - **表面曲率**：忽略。Cone 只按距离扩散，不因反射面曲率收缩/扩张。M1 累积掩盖误差
 - **纹理密度**：运行时从已读取的顶点位置 + UV 算三角形的 world/UV 面积比，不预存到 GeometryInfo
 - **间接 bounce LOD**：纯累积 cone，不加额外 bias
 
+### FOV 获取
+
+`tan(fov_y/2) = abs(global.inv_projection[1][1])`，从已有 GlobalUBO 推导，不新增字段。Vulkan Y-flip 不影响此元素的绝对值。raygen 和 closesthit 均可访问 GlobalUBO。
+
+### Texel Density 计算
+
+`compute_texel_density()` 作为 pt_common.glsl 中的独立工具函数，接收 `GeometryInfo`、`gl_PrimitiveID`、`gl_ObjectToWorldEXT`，内部通过 buffer_reference 重新读取三角形三个顶点的位置和 UV。
+
+选择重新读取而非扩展 HitAttributes 的理由：`interpolate_hit()` 刚访问过完全相同的内存地址，GPU L1 cache 命中率极高（实质等同寄存器读取）。避免为单个 Step 的需求污染通用数据结构。直接在世界空间计算边叉积得到面积，无需处理 object → world 的 determinant 转换。
+
+### Per-texture LOD
+
+LOD 公式拆为两部分：
+
+```
+lod = log2(cone_width × sqrt(uv_area / world_area)) + 0.5 × log2(tex_w × tex_h) + lod_bias
+      ─────────── per-triangle base_lod ───────────   ────── per-texture 分辨率项 ──────
+```
+
+`base_lod` 只跟三角形几何属性和 cone width 有关，每次命中算一次。每个纹理通过 `textureSize()` 取各自分辨率（描述符元数据读取，开销极小），确保不同分辨率的纹理得到正确的 mip level。
+
+### Anyhit LOD（近似方案）
+
+Vulkan spec 限制 anyhit 不能读写 payload，无法获取真实 cone width。使用近似：`cone_width ≈ gl_HitTEXT × pixel_spread`（`pixel_spread` 从 `inv_projection` + `screen_size` 重新计算）。
+
+- Primary ray：精确（cone_spread = 0 时等价于真实公式）
+- Bounce ray：下界（忽略前几段累积的宽度），LOD 偏向高分辨率 mip
+
+下界意味着 alpha test 保守安全（不会错误采用过低分辨率导致 alpha 判断失误），唯一 tradeoff 是 non-opaque 几何体的带宽节省未达理想值。anyhit 中已读取 v0/v1/v2 做 UV 插值，顺便计算 texel density 零额外内存访问。
+
+### NEE Emissive 纹理采样
+
+closesthit 中 NEE 采样 emissive 光源纹理保持 `texture()`（隐式 mip 0）。Ray cone footprint 描述的是当前着色点的屏幕覆盖范围，不适用于 NEE 主动采样的目标三角形表面。
+
 ### LOD Bias 调参
 
-Push constant 新增 `float lod_bias`，应用时 `final_lod = ray_cone_lod + lod_bias`。默认 0.0，正值保守（模糊，省带宽），负值锐利。Step 13 ImGui 面板加 slider。
+Push constant 新增 `float lod_bias`，应用时 `final_lod = base_lod + per_texture_term + lod_bias`。默认 0.0，正值保守（模糊，省带宽），负值锐利。Step 13 ImGui 面板加 slider。
 
 ### PrimaryPayload
 
-新增 `float cone_spread`。raygen 初始化，每个 bounce 传递并更新。
+新增 `float cone_spread`（64B → 68B）。语义为**累积 cone width**（世界空间长度），非角度。raygen 初始化为 0，closesthit 每次 bounce 更新为 `cone_width`（= 旧值 + 本段距离 × pixel_spread）。Angular spread（pixel_spread）为常量，任何 shader 均可从 `inv_projection` + `screen_size` 重新计算，不需要跨 bounce 传递。
 
 ### Shader 改动
 
-closesthit 中所有材质纹理采样（~5-6 处 `texture()` → `textureLod()`）+ anyhit 中 alpha 纹理采样（~1 处）。pt_common.glsl 新增 cone 工具函数（init、propagate、compute_lod）。
+- **pt_common.glsl**：新增 `init_ray_cone()`、`propagate_ray_cone()`、`compute_texel_density()`、`compute_ray_cone_lod()`
+- **closesthit**：材质纹理采样 `texture()` → `textureLod()`（~4 处：base_color、metallic_roughness、normal、emissive）。NEE emissive 光源纹理采样保持 `texture()`
+- **anyhit**：alpha 纹理采样 `texture()` → `textureLod()`（~1 处，近似 cone width）
+- **raygen**：初始化 `payload.cone_spread = 0`
 
 ### M2 演进备注
 
 - M2 实时 PT（单帧有限 SPP）对 LOD 精度要求更高，可升级加入表面曲率
 - 间接 bounce 可加正 bias 减少闪烁
+- anyhit 近似可升级为 per-pixel SSBO 传递精确 cone width（M1 中 non-opaque 比例小，不值得）
 
 ---
 

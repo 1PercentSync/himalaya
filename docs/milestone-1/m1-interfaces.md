@@ -2238,9 +2238,11 @@ layout(push_constant) uniform PTPushConstants {
     uint  frame_seed;        // offset  8
     uint  blue_noise_index;  // offset 12 — bindless textures[] index
     float max_clamp;         // offset 16 — firefly clamping threshold (0 = disabled)
-    // Step 12: uint emissive_light_count  // offset 20 (0 = skip NEE emissive)
-    // Step 13: float lod_bias             // offset 24 (Ray Cones LOD offset, default 0.0)
-};  // Step 6: 20 bytes, Step 12: 24 bytes, Step 13: 28 bytes
+    // Step 11: uint env_sampling          // offset 20 (1 = env importance sampling)
+    // Step 11: uint directional_lights    // offset 24 (1 = directional lights in PT)
+    // Step 12: uint emissive_light_count  // offset 28 (0 = skip NEE emissive)
+    // Step 13: float lod_bias             // offset 32 (Ray Cones LOD offset, default 0.0)
+};  // Step 6: 20 bytes, Step 11: 28 bytes, Step 12: 32 bytes, Step 13: 36 bytes
 ```
 
 #### PrimaryPayload 布局（阶段六）
@@ -2255,7 +2257,7 @@ struct PrimaryPayload {             // location 0
     uint  bounce;                   // 当前 bounce 索引（raygen 设置，OIDN aux bounce 0 判断用）
     // Step 11: float env_mis_weight     // BRDF 采样方向的 env MIS 权重
     // Step 12: float last_brdf_pdf      // 上一个 bounce 的 BRDF PDF（emissive MIS 用）
-    // Step 13: float cone_spread        // Ray Cone 扩展角
+    // Step 13: float cone_spread        // Ray Cone 累积宽度（世界空间，非角度）
 };  // Step 6: 56B, Step 11: 60B, Step 12: 64B, Step 13: 68B
 ```
 
