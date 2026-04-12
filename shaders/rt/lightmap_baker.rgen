@@ -1,0 +1,88 @@
+#version 460
+
+/**
+ * @file lightmap_baker.rgen
+ * @brief Lightmap baker raygen shader — UV-space per-texel path tracing.
+ *
+ * Dispatched at lightmap resolution (lightmap_width x lightmap_height).
+ * Each invocation reads the precomputed world-space position and normal from
+ * rasterized maps (Set 3 binding 4/5), emits a cosine-weighted ray from the
+ * surface into the normal hemisphere, and delegates the bounce loop to the
+ * shared trace_path() function.
+ *
+ * Uncovered texels (position.a == 0.0) are skipped — the accumulation buffer
+ * stays black there. Ray cone is initialized to (0, 0) because offline baking
+ * at 4096 SPP always samples full-resolution textures.
+ */
+
+#define HIMALAYA_RT
+#define RAYGEN_SHADER
+#include "common/bindings.glsl"
+#include "rt/pt_common.glsl"
+
+// ---- Accumulation buffer (push descriptor, Set 3 binding 0) ----
+
+layout(set = 3, binding = 0, rgba32f) uniform image2D accumulation_image;
+
+// ---- Position / Normal maps (push descriptor, Set 3 binding 4/5) ----
+
+layout(set = 3, binding = 4) uniform sampler2D position_map;
+layout(set = 3, binding = 5) uniform sampler2D normal_map;
+
+void main() {
+    const ivec2 texel = ivec2(gl_LaunchIDEXT.xy);
+
+    // ---- Read precomputed world-space position and normal ----
+    vec4 pos_data = texelFetch(position_map, texel, 0);
+    vec4 nrm_data = texelFetch(normal_map, texel, 0);
+
+    // Skip uncovered texels (alpha == 0.0 means no triangle coverage)
+    if (pos_data.a == 0.0) {
+        return;
+    }
+
+    vec3 world_pos = pos_data.xyz;
+    vec3 world_normal = normalize(nrm_data.xyz);
+
+    // ---- Build TBN frame from surface normal ----
+    vec3 T, B;
+    build_orthonormal_basis(world_normal, T, B);
+
+    // ---- Cosine-weighted initial ray direction ----
+    // Use Sobol dims 0-1 for hemisphere sampling (no subpixel jitter for lightmap)
+    float r0 = rand_pt(0, pc.sample_count, texel, pc.frame_seed, pc.blue_noise_index);
+    float r1 = rand_pt(1, pc.sample_count, texel, pc.frame_seed, pc.blue_noise_index);
+    vec3 local_dir = sample_cosine_hemisphere(vec2(r0, r1));
+
+    // Transform from tangent space to world space
+    vec3 ray_direction = normalize(T * local_dir.x + B * local_dir.y + world_normal * local_dir.z);
+
+    // Offset origin to avoid self-intersection
+    vec3 ray_origin = offset_ray_origin(world_pos, world_normal);
+
+    // ---- Path trace (shared bounce loop) ----
+    // Ray cone: width=0, spread=0 — offline baking always samples full-resolution textures
+    vec3 total_radiance = trace_path(ray_origin, ray_direction, 0.0, 0.0, texel);
+
+    // Cosine-weighted hemisphere PDF = cos(theta) / PI
+    // Lambertian BRDF = 1 / PI
+    // Rendering equation integrand: Lo = integral(Li * (1/PI) * cos(theta) * dw)
+    // Cosine-weighted sampling: weight = Li * (1/PI) / (cos(theta)/PI) = Li
+    // So trace_path result is already correctly weighted (closesthit applies BRDF).
+    // However, the initial ray represents a diffuse irradiance gather — the path
+    // throughput from trace_path already accounts for the BRDF at secondary bounces,
+    // but the first bounce is a bare hemisphere sample. The cosine factor cancels
+    // with the cosine-weighted PDF, leaving just Li — which is what trace_path returns.
+
+    // ---- Running average accumulation ----
+    if (pc.sample_count == 0u) {
+        // First sample: overwrite
+        imageStore(accumulation_image, texel, vec4(total_radiance, 1.0));
+    } else {
+        // Incremental running average: mix(old, new, 1/(n+1))
+        vec4 old_value = imageLoad(accumulation_image, texel);
+        float weight = 1.0 / float(pc.sample_count + 1u);
+        vec3 result = mix(old_value.rgb, total_radiance, weight);
+        imageStore(accumulation_image, texel, vec4(result, 1.0));
+    }
+}
