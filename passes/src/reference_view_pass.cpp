@@ -31,9 +31,15 @@ namespace himalaya::passes {
         uint32_t directional_lights;     ///< 1 = directional lights enabled in PT, 0 = disabled
         uint32_t emissive_light_count;   ///< number of emissive triangles (0 = skip NEE emissive)
         uint32_t lod_max_level;          ///< ray cone LOD upper clamp (0 = full resolution, default 4)
+        uint32_t lightmap_width;         ///< lightmap texel width (0 for reference view)
+        uint32_t lightmap_height;        ///< lightmap texel height (0 for reference view)
+        float probe_pos_x;              ///< probe world position x (0 for non-probe)
+        float probe_pos_y;              ///< probe world position y (0 for non-probe)
+        float probe_pos_z;              ///< probe world position z (0 for non-probe)
+        uint32_t face_index;            ///< probe cubemap face 0-5 (0 for non-probe)
     };
 
-    static_assert(sizeof(PTPushConstants) == 36);
+    static_assert(sizeof(PTPushConstants) == 60);
 
     // Default PT parameters (overridden at runtime via Renderer setters)
     constexpr uint32_t kDefaultMaxBounces = 8;
@@ -300,6 +306,12 @@ namespace himalaya::passes {
                              .directional_lights = directional_lights_ ? 1u : 0u,
                              .emissive_light_count = emissive_light_count_,
                              .lod_max_level = lod_max_level_,
+                             .lightmap_width = 0,
+                             .lightmap_height = 0,
+                             .probe_pos_x = 0.0f,
+                             .probe_pos_y = 0.0f,
+                             .probe_pos_z = 0.0f,
+                             .face_index = 0,
                          };
                          cmd.push_constants(
                              rt_pipeline_.layout,
