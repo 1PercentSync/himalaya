@@ -508,4 +508,69 @@ float mis_power_heuristic(float pdf_a, float pdf_b) {
     return a2 / (a2 + pdf_b * pdf_b);
 }
 
+// ---- Emissive Triangle Sampling ----
+
+/**
+ * Computes uniform barycentric coordinates on a triangle.
+ *
+ * Uses the standard square-to-triangle mapping (Turk 1990):
+ * sqrt(r1) partitions area correctly so that the point is uniform.
+ * Returned weights (x, y, z) correspond to vertices (v0, v1, v2).
+ *
+ * @param r1 Uniform random in [0, 1).
+ * @param r2 Uniform random in [0, 1).
+ * @return Barycentric weights (u, v, w) with u + v + w = 1.
+ */
+vec3 triangle_barycentric(float r1, float r2) {
+    float sqrt_r1 = sqrt(r1);
+    float u = 1.0 - sqrt_r1;
+    float v = r2 * sqrt_r1;
+    return vec3(u, v, 1.0 - u - v);
+}
+
+/**
+ * Samples an emissive triangle from the power-weighted alias table.
+ *
+ * Uses Vose's alias table for O(1) selection proportional to
+ * luminance(emissive_factor) x area weights.
+ *
+ * @param rand1 Uniform random in [0, 1) — bin selection.
+ * @param rand2 Uniform random in [0, 1) — accept/reject.
+ * @param N     Number of emissive triangles (emissive_count from SSBO header).
+ * @return Index of the selected emissive triangle.
+ */
+uint sample_emissive_alias_table(float rand1, float rand2, uint N) {
+    uint idx = min(uint(rand1 * float(N)), N - 1u);
+    EmissiveAliasEntry e = emissive_alias_entries[idx];
+    return (rand2 < e.prob) ? idx : e.alias_index;
+}
+
+/**
+ * Computes the solid-angle PDF of sampling a specific emissive triangle
+ * via the power-weighted alias table + uniform triangle point.
+ *
+ * The alias table selects triangle i with probability:
+ *   P(i) = power_i / total_power = luminance(emission_i) * area_i / total_power
+ *
+ * Combined with uniform point sampling (1/area_i), the area-measure PDF is:
+ *   pdf_area = luminance(emission_i) / total_power
+ *
+ * Converting to solid-angle measure:
+ *   pdf_omega = pdf_area * dist^2 / |cos_theta_light|
+ *
+ * @param emission_luminance luminance(emissive_factor) of the triangle.
+ * @param dist               Distance from shading point to light sample point.
+ * @param cos_theta_light    |dot(light_normal, direction_to_shading_point)|.
+ * @param total_pow          Total power sum from alias table SSBO header.
+ * @return Solid-angle PDF (clamped to >= 1e-7).
+ */
+float emissive_light_pdf(float emission_luminance, float dist,
+                         float cos_theta_light, float total_pow) {
+    if (total_pow <= 0.0 || cos_theta_light <= 0.0) {
+        return 1e-7;
+    }
+    float pdf_area = emission_luminance / total_pow;
+    return max(pdf_area * dist * dist / cos_theta_light, 1e-7);
+}
+
 #endif // PT_COMMON_GLSL
