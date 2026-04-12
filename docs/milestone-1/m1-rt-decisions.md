@@ -218,7 +218,7 @@ resolution = clamp(round(sqrt(world_surface_area) * texels_per_meter), min_res, 
 
 ### xatlas 集成
 
-xatlas 通过 vcpkg manifest 引入（vcpkg 有 `xatlas` 端口）。per-mesh 按需生成：M1 全部静态 mesh 标记需要 lightmap UV。
+xatlas 通过 `third_party/xatlas/` 手动集成（单文件库：`xatlas.h` + `xatlas.cpp`，MIT 许可，vcpkg 无端口）。framework CMakeLists.txt 将 `xatlas.cpp` 加入源文件列表。per-mesh 按需生成：M1 全部静态 mesh 标记需要 lightmap UV。
 
 ### xatlas 拓扑变更处理
 
@@ -490,9 +490,9 @@ raygen shader 的 push constant 逐步演进：
 - Step 12（32B）：+ `emissive_light_count`（uint，0 = 跳过 NEE emissive）
 - Step 13（36B）：+ `lod_max_level`（uint，Ray Cones LOD clamp 上限，默认 4）
 - 阶段七 lightmap（44B）：+ `uint lightmap_width` + `uint lightmap_height`（baker raygen 专属，reference view 忽略）
-- 阶段七 probe（64B）：+ `float probe_pos_x` + `float probe_pos_y` + `float probe_pos_z` + `uint _pad`（probe baker raygen 专属）
+- 阶段七 probe（60B）：+ `float probe_pos_x` + `float probe_pos_y` + `float probe_pos_z` + `uint _pad`（probe baker raygen 专属）
 
-阶段七采用**超集布局**：reference view、lightmap baker、probe baker 三个 RT pipeline 共用同一个 push constant struct。各 raygen 只读自己需要的字段，closesthit 只读共享字段。64B 远在 Vulkan 最低 128B 保证之内。closesthit 不需要 `baker_mode` 字段——aux imageStore 无条件执行，各 pipeline 通过 Set 3 push descriptor 绑定各自的 aux image。
+阶段七采用**超集布局**：reference view、lightmap baker、probe baker 三个 RT pipeline 共用同一个 push constant struct。各 raygen 只读自己需要的字段，closesthit 只读共享字段。60B 远在 Vulkan 最低 128B 保证之内。closesthit 不需要 `baker_mode` 字段——aux imageStore 无条件执行，各 pipeline 通过 Set 3 push descriptor 绑定各自的 aux image。
 
 相机逆矩阵（`inv_view`、`inv_projection`）从 GlobalUBO 读取。理由：Vulkan 保证 `maxPushConstantsSize` ≥ 128 字节，两个 mat4 = 128 字节会逼近下限；且与现有 compute pass 的轻量 push constant 模式一致。GlobalUBO 阶段六新增 `inv_view` 字段（`inv_projection` 阶段五已有）。
 

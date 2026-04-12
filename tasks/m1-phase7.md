@@ -18,15 +18,16 @@
 - [ ] `ibl_compute.cpp`：`IBL::compute_prefiltered()` 改为调用 `prefilter_cubemap()`
 - [ ] `framework/CMakeLists.txt`：添加 `cubemap_filter.cpp` 源文件
 
-## Step 3：xatlas vcpkg 集成 + Lightmap UV 生成器
+## Step 3：xatlas 集成 + Lightmap UV 生成器
 
-- [ ] `vcpkg.json`：添加 `xatlas` 依赖
+- [ ] 新增 `third_party/xatlas/`：复制 xatlas.h + xatlas.cpp（单文件库，MIT）
+- [ ] `framework/CMakeLists.txt`：添加 xatlas.cpp 到源文件 + include path
 - [ ] 新增 `framework/lightmap_uv.h`：`LightmapUVResult` 结构体 + `generate_lightmap_uv()` 函数声明
 - [ ] 新增 `framework/lightmap_uv.cpp`：TEXCOORD_1 检测（接受 `bool has_lightmap_uv` flag，由 SceneLoader 通过 `findAttribute("TEXCOORD_1")` 检测传递）
 - [ ] `lightmap_uv.cpp`：xatlas 调用（Create → AddMesh → Generate → 提取结果）
 - [ ] `lightmap_uv.cpp`：缓存写入（header + lightmap UV 数组 + new index buffer + vertex remap table）
 - [ ] `lightmap_uv.cpp`：缓存读取（命中时跳过 xatlas）
-- [ ] `framework/CMakeLists.txt`：添加 `lightmap_uv.cpp` + link xatlas
+- [ ] `framework/CMakeLists.txt`：添加 `lightmap_uv.cpp`
 
 ## Step 4：Lightmap UV 拓扑应用
 
@@ -45,7 +46,7 @@
 
 ## Step 6：PT Push Constants 扩展
 
-- [ ] RT shader PushConstants struct 追加 `uint lightmap_width`（36B → 40B）+ `uint lightmap_height`（40B → 44B）+ `float probe_pos_x/y/z`（44B → 56B）+ `uint _pad`（56B → 60B）
+- [ ] RT shader PushConstants struct 追加 `uint lightmap_width` + `uint lightmap_height` + `float probe_pos_x/y/z` + `uint _pad`（36B → 60B）
 - [ ] `reference_view_pass.cpp`：push constant 填充追加 baker 字段为 0
 - [ ] `reference_view_pass.h`：push constant range 更新为 60B
 - [ ] closesthit.rchit 不改动（aux imageStore 保持无条件执行）
@@ -59,7 +60,8 @@
 
 ## Step 8：Lightmap Baker Pass
 
-- [ ] 新增 `shaders/rt/lightmap_baker.rgen`：读 position/normal map → 逐 texel 发射射线 → accumulation
+- [ ] `pt_common.glsl`：从 reference_view.rgen 提取共享 bounce loop 函数（三个 raygen 共用）
+- [ ] 新增 `shaders/rt/lightmap_baker.rgen`：读 position/normal map → 逐 texel 发射射线 → 调用共享 bounce loop → accumulation
 - [ ] 新增 `passes/lightmap_baker_pass.h`：LightmapBakerPass 类声明
 - [ ] 新增 `passes/lightmap_baker_pass.cpp`：setup（编译 rgen + 创建 RT pipeline）+ record（RG pass + push descriptors + trace_rays）
 - [ ] Set 3 layout：binding 0 accumulation + binding 1 aux albedo (lightmap 分辨率) + binding 2 aux normal (lightmap 分辨率) + binding 3 Sobol + binding 4 position map + binding 5 normal map
@@ -85,8 +87,9 @@
 
 - [ ] 新增 `shaders/rt/probe_baker.rgen`：从 probe 位置向 6 面方向发射射线 + accumulation
 - [ ] 新增 `passes/probe_baker_pass.h`：ProbeBakerPass 类声明
-- [ ] 新增 `passes/probe_baker_pass.cpp`：setup（编译 rgen + 创建 RT pipeline）+ record（RG pass + trace_rays）
-- [ ] Set 3 layout：binding 0 accumulation cubemap（image2DArray storage）+ binding 1 aux albedo (per-face 分辨率) + binding 2 aux normal (per-face 分辨率) + binding 3 Sobol
+- [ ] 新增 `passes/probe_baker_pass.cpp`：setup（编译 rgen + 创建 RT pipeline）+ record（6 次 dispatch per frame，每 face 一次）
+- [ ] Set 3 layout（per-dispatch）：binding 0 accumulation face view（cubemap 单层 2D view）+ binding 1 aux albedo（per-face 2D image）+ binding 2 aux normal（per-face 2D image）+ binding 3 Sobol
+- [ ] Aux image 管理：6 对 aux 2D image（或 2 个 image2DArray per-layer 2D view），per-probe 创建/销毁
 
 ## Step 12：Probe 端到端流程
 
