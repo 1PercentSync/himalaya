@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 13 进行中（Present Mode 改造）。已完成：Swapchain 枚举 + DebugUI combo。下一项：PT Allow Tearing checkbox
+Step 13 进行中（Present Mode 改造）。已完成：Swapchain 枚举 + combo + PT Allow Tearing UI。下一项：Application 编排逻辑（PT override 激活/恢复）
 
 ---
 

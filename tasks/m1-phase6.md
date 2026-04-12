@@ -222,6 +222,6 @@
 - [x] Step 10 ImGui 面板新增 LOD Max Level slider
 - [x] `rhi/swapchain.h`：`bool vsync` → `PresentMode` 枚举（Fifo / Mailbox / Immediate），`choose_present_mode()` 适配，不可用模式 fallback FIFO
 - [x] DebugUI：VSync checkbox → Present Mode combo box（三选项，默认 Mailbox），`DebugUIActions::vsync_toggled` → `present_mode_changed`
-- [ ] DebugUI PT 面板新增 "Allow Tearing" checkbox（PT 模式下覆盖 present mode 为 IMMEDIATE 绕过驱动帧率限制，切回光栅化时恢复用户选择）
+- [x] DebugUI PT 面板新增 "Allow Tearing" checkbox（PT 模式下覆盖 present mode 为 IMMEDIATE 绕过驱动帧率限制，切回光栅化时恢复用户选择）
 - [ ] Application：present mode 变更处理替代 `vsync_changed_` 逻辑，PT uncap 激活/恢复触发 swapchain recreate
 - [ ] AppConfig 持久化 `present_mode`（字符串，默认 `"mailbox"`）+ `pt_allow_tearing`（bool，默认 false），config.cpp 序列化/反序列化
