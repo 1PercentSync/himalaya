@@ -9,6 +9,7 @@
 #include <himalaya/rhi/resources.h>
 
 #include <himalaya/framework/cache.h>
+#include <himalaya/framework/lightmap_uv.h>
 #include <himalaya/framework/texture.h>
 
 #include <fastgltf/core.hpp>
@@ -365,14 +366,52 @@ namespace himalaya::app {
                 }
 
                 // TEXCOORD_1 (optional, filled after MikkTSpace per design spec)
+                bool has_texcoord_1 = false;
                 if (const auto it = primitive.findAttribute("TEXCOORD_1");
                     it != primitive.attributes.end()) {
+                    has_texcoord_1 = true;
                     const auto &accessor = gltf.accessors[it->accessorIndex];
                     size_t i = 0;
                     for (auto uv: fastgltf::iterateAccessor<fastgltf::math::fvec2>(gltf, accessor)) {
                         vertices[i].uv1 = {uv.x(), uv.y()};
                         ++i;
                     }
+                }
+
+                // Lightmap UV generation via xatlas (skip if TEXCOORD_1 present or degenerate)
+                if (has_texcoord_1) {
+                    spdlog::info("  Prim {}: lightmap UV from TEXCOORD_1", meshes_.size());
+                } else if (vertices.size() >= 3 && indices.size() >= 3) {
+                    // Compute mesh_hash from positions + indices (geometry topology only)
+                    const auto pos_bytes = vertices.size() * sizeof(glm::vec3);
+                    const auto idx_bytes = indices.size() * sizeof(uint32_t);
+                    std::vector<uint8_t> hash_buf(pos_bytes + idx_bytes);
+                    {
+                        auto *dst = hash_buf.data();
+                        for (const auto &v : vertices) {
+                            std::memcpy(dst, &v.position, sizeof(glm::vec3));
+                            dst += sizeof(glm::vec3);
+                        }
+                        std::memcpy(dst, indices.data(), idx_bytes);
+                    }
+                    const auto mesh_hash = framework::content_hash(hash_buf.data(), hash_buf.size());
+
+                    auto uv_result = framework::generate_lightmap_uv(vertices, indices, mesh_hash);
+
+                    // Rebuild vertex array: copy attributes from original via remap, write xatlas uv1
+                    const auto new_vert_count = uv_result.vertex_remap.size();
+                    std::vector<framework::Vertex> new_vertices(new_vert_count);
+                    for (size_t i = 0; i < new_vert_count; ++i) {
+                        new_vertices[i] = vertices[uv_result.vertex_remap[i]];
+                        new_vertices[i].uv1 = uv_result.lightmap_uvs[i];
+                    }
+
+                    spdlog::info("  Prim {}: lightmap UV from xatlas ({} -> {} verts, {} indices)",
+                                 meshes_.size(), vertices.size(), new_vert_count,
+                                 uv_result.new_indices.size());
+
+                    vertices = std::move(new_vertices);
+                    indices = std::move(uv_result.new_indices);
                 }
 
                 // Create GPU vertex and index buffers
