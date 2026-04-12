@@ -103,7 +103,7 @@ Step 13: ImGui 烘焙控制面板
 - 新增 `framework/lightmap_uv.cpp`：
   - 缓存查找：`cache_path("lightmap_uv", mesh_hash, ".bin")`，命中则加载返回
   - xatlas 调用：`xatlas::Create()` → `xatlas::AddMesh()` → `xatlas::Generate()` → 提取 UV + remap + new indices
-  - 缓存写入：header（magic + version + source mesh hash + atlas size + vertex/index counts）+ lightmap UV 数组 + new index buffer + vertex remap table
+  - 缓存写入：header（vertex/index counts）+ lightmap UV 数组 + new index buffer + vertex remap table，write-to-temp + rename 原子写入，文件大小校验
 
 **验证**：xatlas 生成 lightmap UV + 缓存文件写入 + 二次加载命中缓存
 

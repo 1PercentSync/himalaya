@@ -2415,11 +2415,9 @@ namespace himalaya::framework {
 
 /// Per-mesh xatlas output (or loaded from cache).
 struct LightmapUVResult {
-    std::vector<glm::vec2> lightmap_uvs;    ///< Per-vertex lightmap UV coordinates.
+    std::vector<glm::vec2> lightmap_uvs;    ///< Per-vertex lightmap UV coordinates (normalized [0,1]).
     std::vector<uint32_t> new_indices;       ///< New index buffer (topology may change).
     std::vector<uint32_t> vertex_remap;      ///< new_vertex → original_vertex mapping.
-    uint32_t atlas_width;                    ///< xatlas computed atlas width.
-    uint32_t atlas_height;                   ///< xatlas computed atlas height.
 };
 
 /// Generates lightmap UV for a mesh using xatlas, or loads from cache.
