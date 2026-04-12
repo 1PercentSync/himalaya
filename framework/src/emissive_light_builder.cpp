@@ -131,7 +131,77 @@ namespace himalaya::framework {
 
         spdlog::info("EmissiveLightBuilder: collected {} emissive triangles", emissive_count_);
 
-        // TODO: Phase 2 — Alias table construction (next task item)
+        // ---- Phase 2: Power-weighted alias table (Vose's algorithm, O(N)) ----
+
+        struct AliasEntry {
+            float prob;
+            uint32_t alias;
+        };
+
+        std::vector<AliasEntry> table(emissive_count_);
+
+        // Sum total power for normalization
+        double power_sum = 0.0;
+        for (const float p : powers) {
+            power_sum += static_cast<double>(p);
+        }
+
+        // Normalize weights so average = 1.0
+        const double avg = power_sum / static_cast<double>(emissive_count_);
+        std::vector<float> normalized(emissive_count_);
+        for (uint32_t i = 0; i < emissive_count_; ++i) {
+            normalized[i] = (avg > 0.0)
+                ? static_cast<float>(static_cast<double>(powers[i]) / avg)
+                : 1.0f;
+        }
+
+        // Partition into small (< 1) and large (>= 1) work lists
+        std::vector<uint32_t> small, large;
+        small.reserve(emissive_count_);
+        large.reserve(emissive_count_);
+        for (uint32_t i = 0; i < emissive_count_; ++i) {
+            if (normalized[i] < 1.0f) {
+                small.push_back(i);
+            } else {
+                large.push_back(i);
+            }
+        }
+
+        // Build alias table
+        while (!small.empty() && !large.empty()) {
+            const uint32_t s = small.back();
+            small.pop_back();
+            const uint32_t l = large.back();
+            large.pop_back();
+
+            table[s].prob = normalized[s];
+            table[s].alias = l;
+
+            normalized[l] = (normalized[l] + normalized[s]) - 1.0f;
+
+            if (normalized[l] < 1.0f) {
+                small.push_back(l);
+            } else {
+                large.push_back(l);
+            }
+        }
+
+        // Remaining entries get probability 1.0 (numerical cleanup)
+        while (!large.empty()) {
+            const uint32_t l = large.back();
+            large.pop_back();
+            table[l].prob = 1.0f;
+            table[l].alias = l;
+        }
+        while (!small.empty()) {
+            const uint32_t s = small.back();
+            small.pop_back();
+            table[s].prob = 1.0f;
+            table[s].alias = s;
+        }
+
+        spdlog::info("EmissiveLightBuilder: alias table built (total power {:.2f})", power_sum);
+
         // TODO: Phase 3 — SSBO upload (subsequent task items)
     }
 
