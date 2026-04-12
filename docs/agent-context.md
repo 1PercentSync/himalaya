@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 13 进行中。已完成：pt_common 工具函数 + raygen cone 初始化。下一项：closesthit.rchit textureLod 改造
+Step 13 进行中。已完成：pt_common 工具函数 + raygen + closesthit。下一项：anyhit.rahit textureLod
 
 ---
 
