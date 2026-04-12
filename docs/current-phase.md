@@ -97,8 +97,8 @@ Step 13: ImGui 烘焙控制面板
 
 引入 xatlas 依赖，实现 lightmap UV 生成 + 缓存。
 
-- 新增 `third_party/xatlas/`：从 [jpcy/xatlas](https://github.com/jpcy/xatlas) 复制 `xatlas.h` + `xatlas.cpp`（单文件库，MIT 许可）。vcpkg 无 xatlas 端口，手动集成（与 OIDN 类似的模式，但更简单——无预编译二进制）
-- `framework/CMakeLists.txt`：添加 `xatlas.cpp` 到源文件列表 + include path
+- 新增 `third_party/xatlas/`：从 [jpcy/xatlas](https://github.com/jpcy/xatlas) 复制 `xatlas.h` + `xatlas.cpp`（单文件库，MIT 许可）。按 `third_party/` 统一规范集成（自带 CMakeLists.txt，`include/himalaya/xatlas/` 头文件路径）
+- `framework/CMakeLists.txt`：`target_link_libraries` 添加 `xatlas`
 - 新增 `framework/lightmap_uv.h`：`LightmapUVResult` 结构体 + `generate_lightmap_uv()` 函数声明
 - 新增 `framework/lightmap_uv.cpp`：
   - TEXCOORD_1 检测：接受 `bool has_lightmap_uv` flag（SceneLoader 通过 `findAttribute("TEXCOORD_1")` 检测并传递），而非检查 uv1 数值

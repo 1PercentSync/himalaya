@@ -144,12 +144,27 @@ himalaya/
 │   ├── CMakeLists.txt
 │   ├── include/himalaya/app/
 │   └── src/
+├── third_party/         # 非 vcpkg 第三方依赖
+│   ├── bc7enc/          # 源码编译（ISPC + C++）
+│   ├── xatlas/          # 源码编译（单文件库）
+│   └── oidn/            # 预编译二进制（SHARED IMPORTED）
 ├── shaders/
 ├── docs/
 └── tasks/
 ```
 
 禁止反向依赖：`rhi/` 不引用 `framework/`，`framework/` 不引用 `passes/`，`passes/` 各 pass 之间不互相引用。
+
+### 第三方库集成规范
+
+vcpkg 有端口的库通过 `vcpkg.json` 管理。vcpkg 无端口的库放入 `third_party/<name>/`，每个库自带 `CMakeLists.txt`，顶层 `CMakeLists.txt` 通过 `add_subdirectory()` 引入，消费方只需 `target_link_libraries()` 链接目标名。
+
+| 类型 | 目录结构 | 示例 |
+|------|----------|------|
+| 源码编译 | `include/himalaya/<name>/` + `src/` | bc7enc, xatlas |
+| 预编译二进制 | `include/` + `lib/` + `bin/`（保持上游布局） | oidn |
+
+源码编译库的头文件放入 `include/himalaya/<name>/` 以统一 include 路径风格（`#include <himalaya/<name>/xxx.h>`）。PRIVATE include 指向头文件目录，解决源文件中的相对路径引用。第三方代码统一禁用编译器警告（MSVC `/W0`，GCC/Clang `-w`）。
 
 ---
 
