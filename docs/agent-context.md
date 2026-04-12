@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 12a 全部完成。下一项：Step 12b — Shader NEE Emissive + MIS
+Step 12a 全部完成。下一项：Step 12b — Shader NEE Emissive + MIS（第一小项：EmissiveAliasTable SSBO header 补充 total_power）
 
 ---
 

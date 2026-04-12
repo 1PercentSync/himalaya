@@ -618,9 +618,10 @@ C++ 侧 emissive 面光源数据构建 + descriptor 扩展。架构决策见 `mi
 
 Shader 侧 emissive NEE 采样 + MIS 权重计算。
 
+- EmissiveAliasTable SSBO header 补充 `float total_power`（header 4B → 8B：`[uint entry_count, float total_power]`）。light PDF = luminance(emission) * dist^2 / (total_power * |cos_light|)，Step 12a 遗漏此字段，在 `emissive_light_builder.cpp` 补充写入
 - bindings.glsl `#ifdef HIMALAYA_RT` 新增 `EmissiveTriangle` struct + binding 7/8 声明
-- Push constant 新增 `uint emissive_light_count`（20B → 24B，0 = 跳过 NEE emissive）
-- pt_common.glsl 新增三角形均匀采样（重心坐标）+ emissive alias table 采样 + light PDF 计算
+- Push constant 新增 `uint emissive_light_count`（28B → 32B，0 = 跳过 NEE emissive）。注：Step 11 已新增 env_sampling + directional_lights 使得当前实际为 28B，非原始设计中的 20B
+- pt_common.glsl 新增三角形均匀采样（重心坐标）+ emissive alias table 采样 + light PDF 计算。DIMS_PER_BOUNCE 从 8 增至 12（emissive NEE 新增 4 维随机数）
 - closesthit.rchit 新增 NEE emissive 步骤：alias table 采样 → 三角形上均匀采样点 → shadow ray（tMax = `distance * (1 - 1e-4)`）→ MIS 加权贡献。Emissive 双面跟随 `double_sided` 标志
 - closesthit.rchit BRDF 采样后写入 `payload.last_brdf_pdf`
 - closesthit.rchit 命中 emissive 表面时（bounce > 0）：读 `payload.last_brdf_pdf` + 算 light_pdf → MIS 权重。Bounce 0 直视权重 1.0

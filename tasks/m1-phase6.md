@@ -200,8 +200,9 @@
 
 ## Step 12b：Shader NEE Emissive + MIS
 
+- [ ] EmissiveAliasTable SSBO header 补充 `float total_power`（header 4B → 8B：`[uint entry_count, float total_power]`，light PDF 计算必需）
 - [ ] bindings.glsl `#ifdef HIMALAYA_RT` 新增 `EmissiveTriangle` struct + binding 7/8 声明
-- [ ] Push constant 新增 `uint emissive_light_count`（20B → 24B，0 = 跳过 NEE emissive）
+- [ ] Push constant 新增 `uint emissive_light_count`（28B → 32B，0 = 跳过 NEE emissive）
 - [ ] pt_common.glsl 新增三角形均匀采样（重心坐标）+ emissive alias table 采样 + light PDF 计算
 - [ ] closesthit.rchit 新增 NEE emissive：alias table 采样 → 三角形采样点 → shadow ray（tMax = `distance * (1-1e-4)`）→ MIS 加权。Emissive 双面跟随 double_sided
 - [ ] closesthit.rchit BRDF 采样后写入 `payload.last_brdf_pdf`
@@ -216,5 +217,5 @@
 - [ ] closesthit.rchit：propagate cone + compute LOD + 所有材质纹理 `texture()` → `textureLod(tex, uv, lod + lod_bias)`（~5-6 处）
 - [ ] anyhit.rahit：alpha 纹理 `texture()` → `textureLod()`（~1 处）
 - [ ] PrimaryPayload 新增 `float cone_spread` 字段（64B → 68B）
-- [ ] Push constant 新增 `float lod_bias`（24B → 28B，默认 0.0）
+- [ ] Push constant 新增 `float lod_bias`（32B → 36B，默认 0.0）
 - [ ] Step 10 ImGui 面板新增 LOD Bias slider

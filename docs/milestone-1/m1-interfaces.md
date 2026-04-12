@@ -538,8 +538,9 @@ struct EmissiveTriangle {
 
 // PT Push Constants — 逐步演进（阶段六 raygen/closesthit/anyhit 共用）
 // Step 6:  20B — max_bounces(u32) + sample_count(u32) + frame_seed(u32) + blue_noise_index(u32) + max_clamp(f32)
-// Step 12: 24B — + emissive_light_count(u32)
-// Step 13: 28B — + lod_bias(f32)
+// Step 11: 28B — + env_sampling(u32) + directional_lights(u32)
+// Step 12: 32B — + emissive_light_count(u32)
+// Step 13: 36B — + lod_bias(f32)
 
 // PrimaryPayload — 逐步演进（raygen ↔ closesthit 通信）
 // Step 6:  56B — color(12) + next_origin(12) + next_direction(12) + throughput_update(12) + hit_distance(4) + bounce(4)
