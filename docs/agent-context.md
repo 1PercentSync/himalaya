@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 12b 进行中。已完成：SSBO header total_power、bindings.glsl binding 7/8。下一小项：Push constant 新增 emissive_light_count
+Step 12b 进行中。已完成：total_power、bindings 7/8、push constant。下一小项：pt_common.glsl 三角形均匀采样 + alias table 采样 + light PDF
 
 ---
 
