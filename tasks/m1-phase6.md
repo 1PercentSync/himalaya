@@ -218,5 +218,5 @@
 - [x] closesthit.rchit：propagate cone（含焦点穿越）+ 估算曲率修正 spread（允许负值）+ compute per-triangle `base_lod` + per-texture LOD（`textureSize()` 取分辨率）+ LOD clamp 到 `lod_max_level`（push constant）+ 材质纹理 `texture()` → `textureLod()`（~4 处）+ NEE emissive 光源纹理 `texture()` → `textureLod()`（shadow ray cone width + EmissiveTriangle texel density）
 - [x] anyhit.rahit：alpha 纹理 `texture()` → `textureLod()`（~1 处，近似 cone width = `gl_HitTEXT × pixel_spread`，无 payload 访问）
 - [x] PrimaryPayload 新增 `float cone_width` + `float cone_spread` 两个字段（64B → 72B，cone_width = 累积宽度，cone_spread = 扩展角含曲率修正）
-- [ ] Push constant 新增 `uint lod_max_level`（32B → 36B，默认 4，0 = 强制全分辨率）
+- [x] Push constant 新增 `uint lod_max_level`（32B → 36B，默认 4，0 = 强制全分辨率）
 - [ ] Step 10 ImGui 面板新增 LOD Max Level slider

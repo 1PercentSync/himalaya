@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 13 进行中。已完成：全部 shader + payload。下一项：Push constant 新增 lod_max_level（shader + C++）
+Step 13 进行中。已完成：全部 shader + payload + push constant。下一项：ImGui LOD Max Level slider（最后一项）
 
 ---
 
