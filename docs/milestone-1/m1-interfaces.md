@@ -162,7 +162,8 @@ shaders/
 │   └── shadow_miss.rmiss        # Shadow miss shader（未遮挡标记）
 ├── bake/                        # 烘焙 shader（阶段七引入）
 │   ├── pos_normal_map.vert      # UV 空间光栅化（lightmap UV → NDC，输出 world pos/normal）
-│   └── pos_normal_map.frag      # 写入 position + normal render target
+│   ├── pos_normal_map.frag      # 写入 position + normal render target
+│   └── probe_filter.comp        # Probe 几何过滤（rayQueryEXT，剔除墙内探针）
 ```
 
 - `shaders/common/bindings.glsl` 定义全局绑定布局，所有 shader 通过 `#include` 引用，确保绑定一致性

@@ -80,6 +80,7 @@
 
 ## Step 10：Probe 自动放置
 
+- [ ] 新增 `shaders/bake/probe_filter.comp`：rayQueryEXT 几何过滤 compute shader
 - [ ] 新增 `framework/probe_placement.h`：`ProbeGrid` 结构体 + `generate_probe_grid()` 函数声明
 - [ ] 新增 `framework/probe_placement.cpp`：均匀网格候选点生成（场景 AABB 内，grid spacing 间距）
 - [ ] `probe_placement.cpp`：RT 几何过滤（compute shader + `rayQueryEXT`，6 轴对齐射线，>= 5/6 短距离命中 → 剔除）

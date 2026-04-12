@@ -193,7 +193,7 @@ Lightmap 烘焙 RT pipeline + raygen shader + accumulation。
   - 读 position/normal map（push descriptor Set 3 binding 4/5）
   - `position.a == 0.0` → 跳过（未覆盖 texel，alpha 通道标记）
   - 从 world position 沿 normal 半球发射射线（cosine-weighted initial direction，TBN frame 从 N 用 frisvad/duff 构建）
-  - 后续 bounce 调用 `pt_common.glsl` 中提取的 `trace_path(origin, direction, initial_env_mis_weight, initial_cone_width, initial_cone_spread, pixel, sample_count, frame_seed, blue_noise_index) → vec3 total_radiance`。从 reference_view.rgen:89-150 提取，三个 raygen 共用。Raygen 职责仅为：计算初始 origin/direction → 调用 trace_path() → 写 accumulation
+  - 后续 bounce 调用 `pt_common.glsl` 中提取的 `vec3 trace_path(vec3 origin, vec3 direction, float initial_cone_width, float initial_cone_spread, ivec2 pixel)`。函数内部直接读 `pc.max_bounces`/`pc.sample_count`/`pc.frame_seed`/`pc.blue_noise_index`/`pc.max_clamp`（push constant 是 per-dispatch uniform，不需要参数传递）。`env_mis_weight`/`last_brdf_pdf` 初始值三个 raygen 相同（1.0/0.0），hardcode 在函数内部。Baker 通过 `pc.max_clamp = 0` 禁用 firefly clamping（烘焙求无偏）。从 reference_view.rgen:89-150 提取，三个 raygen 共用。Raygen 职责仅为：计算初始 origin/direction/cone → 调用 trace_path() → 写 accumulation
   - Running average 累积到 accumulation buffer（Set 3 binding 0）
   - Push constant：共享 60B 超集 struct（lightmap_width/height 填入实际值，probe 字段为 0）
 - 新增 `passes/lightmap_baker_pass.h/.cpp`：
@@ -226,6 +226,9 @@ Position/normal map 通过 `sampler2D`（nearest, clamp）采样而非 storage i
     - `Complete`：所有烘焙完成
   - Position/normal map + aux albedo/normal image 创建 / 销毁（per-instance，lightmap 分辨率）
   - Accumulation buffer 创建 / 销毁（per-instance，lightmap 分辨率）
+  - `sample_count`：per-instance 独立计数（每个 instance 从 0 开始累积到 target SPP），通过 `pc.sample_count` 传入
+  - `frame_seed`：全局单调递增计数器（不 per-instance 重置），保证不同 dispatch 种子唯一
+  - Baker push constant：`pc.max_clamp = 0`（禁用 firefly clamping，烘焙求无偏）
   - `render_baking()` 每帧帧流程：`fill_common_gpu_data()`（closesthit 需要 GlobalUBO 中的 IBL/光源数据）→ RG import Set 0 资源 + TLAS → baker RT pass → ImGui render pass → swapchain present
 - `app/renderer.cpp`：`render()` switch 新增 `RenderMode::Baking` → `render_baking()`
 - `app/debug_ui.cpp`：Rendering section 的 RenderMode combo 新增 Baking（仅 rt_supported 时显示）
@@ -238,10 +241,11 @@ Position/normal map 通过 `sampler2D`（nearest, clamp）采样而非 storage i
 
 均匀网格 + RT 几何过滤。
 
+- 新增 `shaders/bake/probe_filter.comp`：compute shader，每个 invocation 处理一个候选点 × 6 方向 `rayQueryEXT`，输出 pass/fail 到 SSBO
 - 新增 `framework/probe_placement.h`：`ProbeGrid` 结构体（positions vector + grid params）+ `generate_probe_grid()` 函数
 - 新增 `framework/probe_placement.cpp`：
   - 在场景 AABB 内按 grid spacing 放置 3D 网格候选点
-  - 对每个候选点向 6 个轴对齐方向（+X/-X/+Y/-Y/+Z/-Z）发射射线（compute shader 中使用 `rayQueryEXT`）
+  - dispatch `probe_filter.comp`（`rayQueryEXT`），读回结果剔除墙内探针
   - 若 >= 5/6 个方向在极短距离内命中几何体（< 0.1m）→ 判定为墙内，剔除
   - 返回有效 probe 位置列表
 - `framework/CMakeLists.txt`：添加源文件
@@ -293,7 +297,9 @@ Probe 烘焙 RT pipeline + raygen shader + cubemap accumulation。
 
 #### 设计要点
 
-Probe 逐面降噪（OIDN 不支持 cubemap 感知降噪）可能在 face 边缘产生接缝。M1 已知限制：prefilter mip chain 在高 roughness（>0.3）时模糊接缝；mip 0（完美镜面反射）在 2048 SPP + OIDN 下接缝可接受。烘焙产物 cache key = `hash(scene_path + probe_position + bake_params)`。Lightmap 的 cache key = `hash(scene_path + mesh_geometry_hash + instance_index + bake_params)`。Phase 8 加载时用相同输入重建 cache key 定位文件。
+Probe 逐面降噪（OIDN 不支持 cubemap 感知降噪）可能在 face 边缘产生接缝。M1 已知限制：prefilter mip chain 在高 roughness（>0.3）时模糊接缝；mip 0（完美镜面反射）在 2048 SPP + OIDN 下接缝可接受。
+
+Cache key 只含 glTF 固有信息，不包含烘焙参数。Lightmap: `hash(scene_file + mesh_geometry_hash + instance_transform_hash)`。Probe: `hash(scene_file + probe_position_hash)`。Phase 8 加载时用相同输入重建 cache key 定位文件。改烘焙参数 → 手动触发重新烘焙。
 
 ---
 
