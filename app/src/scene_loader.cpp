@@ -409,10 +409,6 @@ namespace himalaya::app {
                 buffers_.push_back(vb);
                 buffers_.push_back(ib);
 
-                // Retain CPU data for EmissiveLightBuilder (freed in destroy())
-                cpu_vertices_.push_back(std::move(vertices));
-                cpu_indices_.push_back(std::move(indices));
-
                 // Material index is required before push (used for group_id/material_id)
                 if (!primitive.materialIndex.has_value()) {
                     throw std::runtime_error("Mesh '" + std::string(gltf_mesh.name)
@@ -428,6 +424,11 @@ namespace himalaya::app {
                     .group_id = static_cast<uint32_t>(mesh_idx),
                     .material_id = prim_material_id,
                 });
+
+                // Retain CPU data for EmissiveLightBuilder (freed in destroy())
+                // Must be after meshes_.push_back — std::move empties the vectors.
+                cpu_vertices_.push_back(std::move(vertices));
+                cpu_indices_.push_back(std::move(indices));
 
                 result.material_ids.push_back(prim_material_id);
                 result.local_bounds.push_back({local_min, local_max});
