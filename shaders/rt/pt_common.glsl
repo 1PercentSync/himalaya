@@ -344,6 +344,11 @@ void build_orthonormal_basis(vec3 N, out vec3 T, out vec3 B) {
     B = cross(N, T);
 }
 
+// ---- Sobol dimension allocation ----
+// dims 0-1: subpixel jitter (x, y)
+// per-bounce base = 2 + bounce * DIMS_PER_BOUNCE
+const uint DIMS_PER_BOUNCE = 12; // lobe_select, brdf_xi0, brdf_xi1, rr, env_nee_r1..r4, emissive_nee_r1..r4
+
 // ---- Multi-lobe BRDF Selection ----
 
 /**

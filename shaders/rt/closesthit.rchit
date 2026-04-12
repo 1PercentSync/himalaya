@@ -51,10 +51,6 @@ layout(location = 1) rayPayloadEXT ShadowPayload shadow_payload;
 
 hitAttributeEXT vec2 bary;
 
-// ---- Sobol dimension layout (must match raygen) ----
-
-const uint DIMS_PER_BOUNCE = 12; // lobe_select, brdf_xi0, brdf_xi1, rr, env_nee_r1..r4, emissive_nee_r1..r4
-
 void main() {
     // ---- Geometry info lookup ----
     GeometryInfo geo = geometry_infos[gl_InstanceCustomIndexEXT + gl_GeometryIndexEXT];
