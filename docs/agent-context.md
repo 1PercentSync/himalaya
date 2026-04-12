@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 12b 进行中。已完成：total_power、bindings 7/8、push constant、pt_common.glsl 采样函数。下一小项：closesthit.rchit NEE emissive
+Step 12b 进行中。已完成：total_power、bindings 7/8、push constant、pt_common 采样、NEE emissive。下一小项：closesthit.rchit BRDF 采样后写入 last_brdf_pdf
 
 ---
 
