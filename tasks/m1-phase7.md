@@ -66,7 +66,7 @@
 - [x] `pt_common.glsl`：从 reference_view.rgen 提取共享 `trace_path()` 函数（`#ifdef RAYGEN_SHADER` 守卫，三个 raygen 共用）
 - [x] `reference_view.rgen`：重构为 `#define RAYGEN_SHADER` + 调用 `trace_path()`（行为不变）。push constant + payload 声明由 pt_common.glsl `#ifdef RAYGEN_SHADER` 区域统一管理
 - [x] 新增 `shaders/rt/lightmap_baker.rgen`：读 position/normal map → 逐 texel 发射射线 → 调用共享 bounce loop → accumulation
-- [ ] 新增 `passes/lightmap_baker_pass.h`：LightmapBakerPass 类声明
+- [x] 新增 `passes/lightmap_baker_pass.h`：LightmapBakerPass 类声明
 - [ ] 新增 `passes/lightmap_baker_pass.cpp`：setup（编译 rgen + 创建 RT pipeline）+ record（RG pass + push descriptors + trace_rays）
 - [ ] Set 3 layout：binding 0 accumulation + binding 1 aux albedo (lightmap 分辨率) + binding 2 aux normal (lightmap 分辨率) + binding 3 Sobol + binding 4 position map + binding 5 normal map
 
