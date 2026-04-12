@@ -494,7 +494,7 @@ float env_pdf(vec3 world_dir) {
 // ---- MIS Power Heuristic ----
 
 /**
- * Balance heuristic for multiple importance sampling (power = 2).
+ * Power heuristic for multiple importance sampling (beta = 2).
  *
  * Returns the MIS weight for strategy A given two PDFs.
  * Defined in Step 6a; used from Step 11 (environment map sampling) onward.

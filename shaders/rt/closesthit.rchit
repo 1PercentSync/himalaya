@@ -128,7 +128,7 @@ void main() {
 
     // MIS weight for BRDF-sampled ray hitting emissive surface:
     // Bounce 0 (direct view): weight 1.0 — primary ray is not a BRDF sample.
-    // Bounce > 0 with NEE active: balance heuristic(brdf_pdf, light_pdf).
+    // Bounce > 0 with NEE active: power heuristic(brdf_pdf, light_pdf).
     // Bounce > 0 without NEE: weight 1.0 — no competing strategy.
     vec3 emissive = emissive_raw;
     if (payload.bounce > 0u && pc.emissive_light_count > 0u) {
