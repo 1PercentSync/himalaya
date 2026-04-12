@@ -490,10 +490,6 @@ namespace himalaya::app {
             error_message_.clear();
         }
 
-        if (actions.present_mode_changed) {
-            present_mode_changed_ = true;
-        }
-
         if (actions.reload_shaders) {
             renderer_.reload_shaders();
         }
@@ -568,6 +564,20 @@ namespace himalaya::app {
 
         if (actions.pt_denoise_requested) {
             renderer_.request_manual_denoise();
+        }
+
+        // ---- Effective present mode (user preference + PT tearing override) ----
+        rhi::PresentMode effective = user_present_mode_;
+        if (render_mode_ == framework::RenderMode::PathTracing && pt_allow_tearing_) {
+            effective = rhi::PresentMode::Immediate;
+        }
+        if (effective != swapchain_.present_mode) {
+            swapchain_.present_mode = effective;
+            swapchain_.recreate(context_, window_);
+            // Sync fallback only when not under PT override (preserve user combo selection)
+            if (!(render_mode_ == framework::RenderMode::PathTracing && pt_allow_tearing_)) {
+                user_present_mode_ = swapchain_.present_mode;
+            }
         }
     }
 
@@ -661,14 +671,7 @@ namespace himalaya::app {
             std::abort();
         }
 
-        // Present mode change — swapchain recreate without resize
-        if (present_mode_changed_) {
-            present_mode_changed_ = false;
-            swapchain_.present_mode = user_present_mode_;
-            swapchain_.recreate(context_, window_);
-            // Sync fallback result back so combo displays the actual active mode
-            user_present_mode_ = swapchain_.present_mode;
-        }
+
 
         context_.advance_frame();
     }

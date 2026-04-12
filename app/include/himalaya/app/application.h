@@ -219,9 +219,6 @@ namespace himalaya::app {
         /** @brief Rendering subsystem (owns pipelines, buffers, shared resources). */
         Renderer renderer_{};
 
-        /** @brief Whether present mode changed this frame (triggers swapchain recreate). */
-        bool present_mode_changed_ = false;
-
         /** @brief User-selected present mode from combo (may differ from effective when PT tearing overrides). */
         rhi::PresentMode user_present_mode_ = rhi::PresentMode::Mailbox;
 
