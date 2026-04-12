@@ -455,8 +455,8 @@ namespace himalaya::app {
         /** @brief Display denoised result (true) or raw accumulation (false). */
         bool show_denoised_ = true;
 
-        /** @brief PT max bounce depth (default 8, range 1-32, exposed via UI Step 10). */
-        uint32_t max_bounces_ = 8;
+        /** @brief PT max bounce depth (default 16, range 1-32, exposed via UI Step 10). */
+        uint32_t max_bounces_ = 16;
 
         /** @brief PT firefly clamp threshold (default 10.0, 0 = disabled, exposed via UI Step 10). */
         float max_clamp_ = 10.0f;
@@ -480,7 +480,7 @@ namespace himalaya::app {
         bool manual_denoise_requested_ = false;
 
         /** @brief Cached max bounces from previous PT frame (change detection → reset). */
-        uint32_t prev_max_bounces_ = 8;
+        uint32_t prev_max_bounces_ = 16;
 
         /** @brief Cached max clamp from previous PT frame (change detection → reset). */
         float prev_max_clamp_ = 10.0f;
