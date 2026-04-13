@@ -114,8 +114,8 @@
 - [x] `renderer_bake.cpp`：`start_bake()` 末尾调用 `begin_bake_instance(0)`（guard `bake_total_instances_ > 0`，0 时直接 Complete）；文档标注需 immediate scope
 - [x] `renderer_bake.cpp`：`begin_bake_instance()` 中 accumulation / aux 创建后 barrier UNDEFINED→GENERAL + accumulation clear vec4(0)（aux 暂转 GENERAL，9.5c 改为 TRANSFER_DST + blit + GENERAL）
 - [x] `closesthit.rchit`：aux imageStore 加 `if (pc.lightmap_width == 0u)` 守卫（lightmap baker 跳过，reference view / probe baker 保留）
-- [ ] `pos_normal_map.vert`：新增 `frag_uv0` 输出（pass through `in_uv0`）
-- [ ] `pos_normal_map.frag`：引入 `bindings.glsl`，从 MaterialBuffer 采样 base color，新增第三输出 `out_albedo`
+- [x] `pos_normal_map.vert`：新增 `frag_uv0` 输出（pass through `in_uv0`）+ `material_index` push constant
+- [x] `pos_normal_map.frag`：引入 `bindings.glsl`，从 MaterialBuffer 采样 base color，新增第三输出 `out_albedo`
 - [ ] `pos_normal_map_pass.h/.cpp`：`setup()` 新增 `DescriptorManager&`；push constants 新增 `material_index`（116B）；pipeline 3 color attachment（RGBA32F, RGBA32F, RGBA16F）；`record()` 新增 `material_index` + `frame_index` 参数，绑定 Set 0/1
 - [ ] `renderer.h`：新增 `bake_albedo_map_` 成员
 - [ ] `renderer_bake.cpp`：`begin_bake_instance()` 创建 albedo_map（RGBA16F），扩展 barrier 序列（3 批次），光栅化 3 attachment，blit albedo_map→aux_albedo + normal_map→aux_normal 预填充正确 aux
