@@ -203,6 +203,9 @@ namespace himalaya::app {
             .base_thickness = 0.01f,
         };
 
+        /** @brief Path tracing configuration parameters. */
+        framework::PTConfig pt_config_{};
+
         // --- Left-click drag state (IBL rotation or fallback light direction) ---
 
         /** @brief Previous cursor X for left-click drag delta. */

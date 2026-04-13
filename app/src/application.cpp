@@ -443,13 +443,7 @@ namespace himalaya::app {
             .render_mode = render_mode_,
             .rt_supported = context_.rt_supported,
             .pt_sample_count = renderer_.pt_sample_count(),
-            .pt_target_samples = renderer_.pt_target_samples(),
-            .pt_max_bounces = renderer_.pt_max_bounces(),
-            .pt_max_clamp = renderer_.pt_max_clamp(),
-            .pt_env_sampling = renderer_.pt_env_sampling(),
-            .pt_directional_lights = renderer_.pt_directional_lights(),
-            .pt_emissive_nee = renderer_.pt_emissive_nee(),
-            .pt_lod_max_level = renderer_.pt_lod_max_level(),
+            .pt_config = pt_config_,
             .pt_allow_tearing = pt_allow_tearing_,
             .pt_elapsed_time = renderer_.pt_elapsed_time(),
             .denoise_enabled = renderer_.denoise_enabled(),
@@ -611,6 +605,7 @@ namespace himalaya::app {
             .shadow_config = shadow_config_,
             .ao_config = ao_config_,
             .contact_shadow_config = contact_shadow_config_,
+            .pt_config = pt_config_,
             .scene_bounds = scene_loader_.scene_bounds(),
         };
 

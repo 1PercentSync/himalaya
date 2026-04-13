@@ -243,10 +243,10 @@ namespace himalaya::app {
             ImGui::Separator();
             if (ImGui::CollapsingHeader("Path Tracing##settings", ImGuiTreeNodeFlags_DefaultOpen)) {
                 // Status line
-                const bool target_reached = ctx.pt_target_samples > 0 &&
-                                            ctx.pt_sample_count >= ctx.pt_target_samples;
-                if (ctx.pt_target_samples > 0) {
-                    ImGui::Text("Samples: %u / %u", ctx.pt_sample_count, ctx.pt_target_samples);
+                const bool target_reached = ctx.pt_config.target_samples > 0 &&
+                                            ctx.pt_sample_count >= ctx.pt_config.target_samples;
+                if (ctx.pt_config.target_samples > 0) {
+                    ImGui::Text("Samples: %u / %u", ctx.pt_sample_count, ctx.pt_config.target_samples);
                 } else {
                     ImGui::Text("Samples: %u", ctx.pt_sample_count);
                 }
@@ -259,29 +259,29 @@ namespace himalaya::app {
                 }
 
                 // Max Bounces slider (1-32)
-                auto bounces = static_cast<int>(ctx.pt_max_bounces);
+                auto bounces = static_cast<int>(ctx.pt_config.max_bounces);
                 if (ImGui::SliderInt("Max Bounces", &bounces, 1, 32)) {
-                    ctx.pt_max_bounces = static_cast<uint32_t>(bounces);
+                    ctx.pt_config.max_bounces = static_cast<uint32_t>(bounces);
                 }
 
                 // Firefly Clamp slider (0 = Off)
-                slider_float_deferred("Firefly Clamp", &ctx.pt_max_clamp,
+                slider_float_deferred("Firefly Clamp", &ctx.pt_config.max_clamp,
                                       0.0f, 100.0f, "%.1f");
-                if (ctx.pt_max_clamp == 0.0f && ImGui::IsItemHovered()) {
+                if (ctx.pt_config.max_clamp == 0.0f && ImGui::IsItemHovered()) {
                     ImGui::SetTooltip("Firefly clamping disabled");
                 }
 
                 // Env Importance Sampling toggle
-                ImGui::Checkbox("Env Importance Sampling", &ctx.pt_env_sampling);
+                ImGui::Checkbox("Env Importance Sampling", &ctx.pt_config.env_sampling);
 
                 // Emissive NEE toggle (area light importance sampling)
-                ImGui::Checkbox("Emissive NEE", &ctx.pt_emissive_nee);
+                ImGui::Checkbox("Emissive NEE", &ctx.pt_config.emissive_nee);
 
                 // LOD Max Level slider (ray cone texture LOD clamp)
                 {
-                    int lod = static_cast<int>(ctx.pt_lod_max_level);
+                    int lod = static_cast<int>(ctx.pt_config.lod_max_level);
                     if (ImGui::SliderInt("LOD Max Level", &lod, 0, 12)) {
-                        ctx.pt_lod_max_level = static_cast<uint32_t>(lod);
+                        ctx.pt_config.lod_max_level = static_cast<uint32_t>(lod);
                     }
                     if (ImGui::IsItemHovered()) {
                         ImGui::SetTooltip("Ray cone texture LOD upper clamp.\n0 = full resolution (debug), 4 = default.");
@@ -289,7 +289,7 @@ namespace himalaya::app {
                 }
 
                 // Directional Lights toggle (default off — env sampling handles sun)
-                ImGui::Checkbox("Directional Lights", &ctx.pt_directional_lights);
+                ImGui::Checkbox("Directional Lights", &ctx.pt_config.directional_lights);
                 if (ImGui::IsItemHovered()) {
                     ImGui::SetTooltip("HDR sun directional light is an approximation of the sun in the environment map.\n"
                                       "With Env Importance Sampling enabled, the environment map already provides\n"
@@ -311,7 +311,7 @@ namespace himalaya::app {
                 }
 
                 // Target Samples input (0 = unlimited)
-                ImGui::InputScalar("Target Samples", ImGuiDataType_U32, &ctx.pt_target_samples);
+                ImGui::InputScalar("Target Samples", ImGuiDataType_U32, &ctx.pt_config.target_samples);
                 if (ImGui::IsItemHovered()) {
                     ImGui::SetTooltip("0 = unlimited");
                 }

@@ -75,18 +75,20 @@ namespace himalaya::app {
             light_color_shadow = glm::vec4(l.color, l.cast_shadows ? 1.0f : 0.0f);
         }
 
+        const auto &pt = input.pt_config;
+
         if (input.camera.view_projection != prev_pt_view_projection_ ||
             input.ibl_rotation_sin != prev_pt_ibl_rotation_sin_ ||
             input.ibl_rotation_cos != prev_pt_ibl_rotation_cos_ ||
             light_count != prev_pt_light_count_ ||
             light_dir_intensity != prev_pt_light_dir_intensity_ ||
             light_color_shadow != prev_pt_light_color_shadow_ ||
-            max_bounces_ != prev_max_bounces_ ||
-            max_clamp_ != prev_max_clamp_ ||
-            env_sampling_ != prev_env_sampling_ ||
-            directional_lights_ != prev_directional_lights_ ||
-            emissive_nee_ != prev_emissive_nee_ ||
-            lod_max_level_ != prev_lod_max_level_ ||
+            pt.max_bounces != prev_max_bounces_ ||
+            pt.max_clamp != prev_max_clamp_ ||
+            pt.env_sampling != prev_env_sampling_ ||
+            pt.directional_lights != prev_directional_lights_ ||
+            pt.emissive_nee != prev_emissive_nee_ ||
+            pt.lod_max_level != prev_lod_max_level_ ||
             input.ibl_intensity != prev_ibl_intensity_) {
             reset_pt_accumulation();
         }
@@ -96,12 +98,12 @@ namespace himalaya::app {
         prev_pt_light_count_ = light_count;
         prev_pt_light_dir_intensity_ = light_dir_intensity;
         prev_pt_light_color_shadow_ = light_color_shadow;
-        prev_max_bounces_ = max_bounces_;
-        prev_max_clamp_ = max_clamp_;
-        prev_env_sampling_ = env_sampling_;
-        prev_directional_lights_ = directional_lights_;
-        prev_emissive_nee_ = emissive_nee_;
-        prev_lod_max_level_ = lod_max_level_;
+        prev_max_bounces_ = pt.max_bounces;
+        prev_max_clamp_ = pt.max_clamp;
+        prev_env_sampling_ = pt.env_sampling;
+        prev_directional_lights_ = pt.directional_lights;
+        prev_emissive_nee_ = pt.emissive_nee;
+        prev_lod_max_level_ = pt.lod_max_level;
         prev_ibl_intensity_ = input.ibl_intensity;
 
         // --- Denoise trigger guard ---
@@ -193,23 +195,23 @@ namespace himalaya::app {
         descriptor_manager_->update_render_target(input.frame_index, 0, hdr_backing, default_sampler_);
 
         // --- Record passes ---
-        reference_view_pass_.set_max_bounces(max_bounces_);
-        reference_view_pass_.set_max_clamp(max_clamp_);
+        reference_view_pass_.set_max_bounces(pt.max_bounces);
+        reference_view_pass_.set_max_clamp(pt.max_clamp);
         // Env sampling requires a valid alias table (no HDR fallback)
-        const bool effective_env_sampling = env_sampling_ && ibl_.alias_table_buffer().valid();
+        const bool effective_env_sampling = pt.env_sampling && ibl_.alias_table_buffer().valid();
         reference_view_pass_.set_env_sampling(effective_env_sampling);
-        reference_view_pass_.set_directional_lights(directional_lights_);
+        reference_view_pass_.set_directional_lights(pt.directional_lights);
         reference_view_pass_.set_emissive_light_count(
-            emissive_nee_ ? emissive_light_builder_.emissive_count() : 0u);
-        reference_view_pass_.set_lod_max_level(lod_max_level_);
+            pt.emissive_nee ? emissive_light_builder_.emissive_count() : 0u);
+        reference_view_pass_.set_lod_max_level(pt.lod_max_level);
 
         // Skip accumulation when target sample count is reached
-        if (target_samples_ == 0 || reference_view_pass_.sample_count() < target_samples_) {
+        if (pt.target_samples == 0 || reference_view_pass_.sample_count() < pt.target_samples) {
             reference_view_pass_.record(render_graph_, frame_ctx);
 
             // Record finish time on the frame that reaches the target
-            if (target_samples_ > 0 &&
-                reference_view_pass_.sample_count() >= target_samples_ &&
+            if (pt.target_samples > 0 &&
+                reference_view_pass_.sample_count() >= pt.target_samples &&
                 pt_finish_time_ <= pt_start_time_) {
                 pt_finish_time_ = std::chrono::steady_clock::now();
             }

@@ -227,15 +227,8 @@ namespace himalaya::app {
         pt_finish_time_ = pt_start_time_;
     }
 
-    // ---- PT parameter accessors (for DebugUIContext binding) ----
+    // ---- Denoiser parameter accessors (for DebugUIContext binding) ----
 
-    uint32_t& Renderer::pt_max_bounces() { return max_bounces_; }
-    float& Renderer::pt_max_clamp() { return max_clamp_; }
-    bool& Renderer::pt_env_sampling() { return env_sampling_; }
-    bool& Renderer::pt_directional_lights() { return directional_lights_; }
-    bool& Renderer::pt_emissive_nee() { return emissive_nee_; }
-    uint32_t& Renderer::pt_lod_max_level() { return lod_max_level_; }
-    uint32_t& Renderer::pt_target_samples() { return target_samples_; }
     bool& Renderer::denoise_enabled() { return denoise_enabled_; }
     bool& Renderer::show_denoised() { return show_denoised_; }
     bool& Renderer::auto_denoise() { return auto_denoise_; }

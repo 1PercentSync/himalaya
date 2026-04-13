@@ -113,6 +113,9 @@ namespace himalaya::app {
         /** @brief Contact Shadows configuration parameters. */
         const framework::ContactShadowConfig &contact_shadow_config;
 
+        /** @brief Path tracing configuration parameters. */
+        const framework::PTConfig &pt_config;
+
         /** @brief Scene world-space AABB for shadow Z range extension. */
         const framework::AABB &scene_bounds;
     };
@@ -264,28 +267,7 @@ namespace himalaya::app {
         /** @brief Requests a manual denoise trigger (consumed in next render_path_tracing). */
         void request_manual_denoise();
 
-        // --- PT parameter accessors (for DebugUIContext binding) ---
-
-        /** @brief Mutable reference to max bounce depth (default 8, range 1-32). */
-        uint32_t& pt_max_bounces();
-
-        /** @brief Mutable reference to firefly clamp threshold (default 10.0, 0 = disabled). */
-        float& pt_max_clamp();
-
-        /** @brief Mutable reference to env map importance sampling toggle. */
-        bool& pt_env_sampling();
-
-        /** @brief Mutable reference to PT directional lights toggle. */
-        bool& pt_directional_lights();
-
-        /** @brief Mutable reference to emissive NEE toggle. */
-        bool& pt_emissive_nee();
-
-        /** @brief Mutable reference to ray cone LOD max level. */
-        uint32_t& pt_lod_max_level();
-
-        /** @brief Mutable reference to target sample count (0 = unlimited). */
-        uint32_t& pt_target_samples();
+        // --- Denoiser parameter accessors (for DebugUIContext binding) ---
 
         /** @brief Mutable reference to denoise enabled flag. */
         bool& denoise_enabled();
@@ -475,27 +457,6 @@ namespace himalaya::app {
 
         /** @brief Display denoised result (true) or raw accumulation (false). */
         bool show_denoised_ = true;
-
-        /** @brief PT max bounce depth (default 16, range 1-32, exposed via UI Step 10). */
-        uint32_t max_bounces_ = 16;
-
-        /** @brief PT firefly clamp threshold (default 0 = disabled, OIDN denoise suffices). */
-        float max_clamp_ = 0.0f;
-
-        /** @brief Environment map importance sampling toggle (default true, exposed via UI). */
-        bool env_sampling_ = true;
-
-        /** @brief Directional lights enabled in PT (default false — env sampling replaces them). */
-        bool directional_lights_ = false;
-
-        /** @brief Emissive area light NEE toggle (default true, exposed via UI). */
-        bool emissive_nee_ = true;
-
-        /** @brief Ray cone LOD upper clamp (default 4, 0 = full resolution). */
-        uint32_t lod_max_level_ = 4;
-
-        /** @brief PT target sample count (0 = unlimited, exposed via UI Step 10). */
-        uint32_t target_samples_ = 2048;
 
         /** @brief Time point when PT accumulation (re)started, for elapsed time display. */
         std::chrono::steady_clock::time_point pt_start_time_{};

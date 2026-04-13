@@ -261,6 +261,35 @@ namespace himalaya::framework {
         float base_thickness;
     };
 
+    /**
+     * @brief Path tracing runtime configuration parameters.
+     *
+     * Application holds the instance, DebugUI modifies fields directly,
+     * Renderer reads via RenderInput and forwards to ReferenceViewPass.
+     */
+    struct PTConfig {
+        /** @brief Maximum ray bounce depth (1-32). */
+        uint32_t max_bounces = 16;
+
+        /** @brief Firefly clamp threshold (0 = disabled, OIDN denoise suffices). */
+        float max_clamp = 0.0f;
+
+        /** @brief Environment map importance sampling toggle. */
+        bool env_sampling = true;
+
+        /** @brief Directional lights enabled in PT (default off — env sampling handles sun). */
+        bool directional_lights = false;
+
+        /** @brief Emissive area light NEE toggle. */
+        bool emissive_nee = true;
+
+        /** @brief Ray cone LOD upper clamp (0 = full resolution). */
+        uint32_t lod_max_level = 4;
+
+        /** @brief Target sample count (0 = unlimited). */
+        uint32_t target_samples = 2048;
+    };
+
     // ---- GPU Data Structures ----
     // Must match shader layouts in shaders/common/bindings.glsl exactly.
 

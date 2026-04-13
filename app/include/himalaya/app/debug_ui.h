@@ -20,6 +20,7 @@ namespace himalaya::framework {
     struct Camera;
     struct ContactShadowConfig;
     enum class DenoiseState : uint8_t;
+    struct PTConfig;
     enum class RenderMode : uint8_t;
     struct RenderFeatures;
     struct ShadowConfig;
@@ -132,26 +133,8 @@ namespace himalaya::app {
         /** @brief Number of PT samples accumulated so far (read-only display). */
         uint32_t pt_sample_count;
 
-        /** @brief Target sample count (0 = unlimited). Mutable — input field. */
-        uint32_t& pt_target_samples;
-
-        /** @brief Maximum ray bounce depth (1-32). Mutable — slider. */
-        uint32_t& pt_max_bounces;
-
-        /** @brief Firefly clamping threshold (0 = disabled). Mutable — slider. */
-        float& pt_max_clamp;
-
-        /** @brief Environment map importance sampling toggle. Mutable — checkbox. */
-        bool& pt_env_sampling;
-
-        /** @brief Directional lights enabled in PT. Mutable — checkbox. */
-        bool& pt_directional_lights;
-
-        /** @brief Emissive area light NEE toggle. Mutable — checkbox. */
-        bool& pt_emissive_nee;
-
-        /** @brief Ray cone LOD upper clamp (0 = full resolution). Mutable — slider. */
-        uint32_t& pt_lod_max_level;
+        /** @brief Path tracing configuration (mutable — DebugUI modifies fields directly). */
+        framework::PTConfig &pt_config;
 
         /** @brief Allow tearing in PT mode (override to IMMEDIATE). Mutable — checkbox. */
         bool& pt_allow_tearing;
