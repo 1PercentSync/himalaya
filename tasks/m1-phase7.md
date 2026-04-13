@@ -144,10 +144,20 @@
 
 ## Step 12：Probe 端到端流程
 
-- [ ] `renderer_bake.cpp`：BakingProbes 状态扩展（probe_placement → 写入 manifest.bin → 逐 probe 烘焙循环）
-- [ ] manifest.bin 写入：`uint32 probe_count` + `vec3[probe_count] positions`（probe position 是 bake 产物）
-- [ ] 烘焙循环：accumulation + aux cubemap 创建 → dispatch → 目标采样数 → readback accumulation + aux → BakeDenoiser（6 face 逐面，含辅助通道）→ prefilter_cubemap() → compress_bc6h() → write_ktx2()（文件名 `<set_hash>_rot<NNN>_probe<III>.ktx2`）
-- [ ] 所有 probe 完成 → BakeState::Complete
+- [ ] 前置重构：`bake_finalize()` → `lightmap_bake_finalize()`，`bake_finalize_pending_` → `lightmap_finalize_pending_`（方法名 + 成员名 + header doc + Application 调用侧）
+- [ ] `renderer.h`：新增 probe bake 状态字段（`bake_probe_positions_` / `bake_probe_total_` / `bake_current_probe_` / `bake_probe_accumulation_` / `bake_probe_aux_albedo_` / `bake_probe_aux_normal_` / `bake_probe_finalize_pending_` / `bake_probe_placement_pending_`）
+- [ ] `renderer_bake.cpp`：状态机转换——BakingLightmaps 完成或 `bake_total_instances_ == 0` 时设 `bake_state_ = BakingProbes` + `bake_probe_placement_pending_ = true`（不在 immediate scope 内调用 placement）
+- [ ] `renderer_bake.cpp`：`render_baking()` BakingProbes 首帧——检测 `placement_pending` → `generate_probe_grid()` → manifest.bin 原子写入 → `begin_immediate()` → `begin_probe_bake_instance(0)` → `end_immediate()` → 清除 pending
+- [ ] `renderer_bake.cpp`：`begin_probe_bake_instance()`——创建 3 个 CUBE_COMPATIBLE cubemap（accumulation RGBA32F + aux RGBA16F × 2）→ barrier UNDEFINED→GENERAL → clear accumulation → `probe_baker_pass_.set_probe_images()` + `set_probe_position()` + `reset_accumulation()`
+- [ ] `renderer_bake.cpp`：`render_baking()` BakingProbes 后续帧——dispatch `probe_baker_pass_.record()` → 达到 `probe_spp` 时设 `bake_probe_finalize_pending_`
+- [ ] `renderer_bake.cpp`：`render_baking()` BakingProbes RG 预览——十字展开（4×3 grid，6 次 `vkCmdBlitImage` via `srcSubresource.baseArrayLayer`）缩放居中到 hdr_color
+- [ ] `application.cpp`：`begin_frame()` 后检测 `bake_probe_finalize_pending_` → 调用 `probe_bake_finalize()`
+- [ ] `renderer_bake.cpp`：`probe_bake_finalize()` Scope 1——readback accumulation + aux（layerCount=6，一次 copy）
+- [ ] `renderer_bake.cpp`：`probe_bake_finalize()` CPU——OIDN × 6 face 逐面降噪
+- [ ] `renderer_bake.cpp`：`probe_bake_finalize()` Scope 2——upload 降噪结果 → `prefilter_cubemap()`（创建 RGBA16F dst cubemap with mip chain）→ `compress_bc6h()`（cubemap 6 face × N mip）→ readback BC6H
+- [ ] `renderer_bake.cpp`：`probe_bake_finalize()` 写入 `<set_hash>_rot<NNN>_probe<III>.ktx2`（`face_count=6`，`levels=N`）→ cleanup → advance 或 Complete
+- [ ] `renderer_bake.cpp`：`destroy_probe_bake_instance_images()`——`probe_baker_pass_.destroy_face_views()` + 销毁 3 个 cubemap。`cancel_bake()` 和 `Renderer::destroy()` 中调用
+- [ ] `renderer_bake.cpp`：manifest.bin 写入（`uint32 probe_count` + `vec3[N] positions`，原子写入）
 
 ## Step 13：ImGui 烘焙控制面板
 

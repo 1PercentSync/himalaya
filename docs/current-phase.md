@@ -496,23 +496,180 @@ Probe 烘焙 RT pipeline + raygen shader + cubemap accumulation。
 
 ### Step 12：Probe 端到端流程
 
-将 probe 烘焙串联进烘焙状态机。
+将 probe 烘焙串联进烘焙状态机。包含前置重命名重构和 probe 完整管线。
 
-- `renderer_bake.cpp` 状态机扩展：
-  - `BakingLightmaps` 完成后 → `BakingProbes`
-  - `BakingProbes`：调用 probe_placement 获取 probe 列表 → 写入 manifest.bin（probe_count + positions）→ 逐 probe 烘焙：
-    - 创建 accumulation cubemap（RGBA32F, face_w × face_w × 6 face）+ aux albedo/normal cubemap（RGBA16F × 6 face）
-    - 每帧 dispatch probe_baker_pass_.record()
-    - 达到目标采样�� → GPU idle → readback accumulation + aux → BakeDenoiser（6 face 逐面降噪，含辅助通道）→ upload → prefilter_cubemap() → compress_bc6h() → readback → write_ktx2() → 释放 → 下一个 probe
-  - 所有 probe 完成 → `Complete`
+#### 前置重构：Lightmap finalize 重命名
 
-**验证**：触发烘焙 → lightmap 全部完成 → probe 逐个烘焙 → 每个 probe 的 KTX2 文件出现在 cache → read_ktx2() 加载正确（BC6H cubemap with mip chain）→ 状态转 Complete
+- `bake_finalize()` → `lightmap_bake_finalize()`：方法名、header doc、Application 调用侧同步更新
+- `bake_finalize_pending()` → `lightmap_finalize_pending()`（及对应成员 `bake_finalize_pending_` → `lightmap_finalize_pending_`）
+- 重命名原因：probe finalize 逻辑差异大（6 face readback、逐面降噪、prefilter mip chain、cubemap BC6H），独立为 `probe_bake_finalize()` 更清晰。两者不宜合并
 
-#### 设计要点
+#### Probe 状态字段
 
-Probe 逐面降噪（OIDN 不支持 cubemap 感知降噪）可能在 face 边缘产生接缝。M1 已知限制：prefilter mip chain 在高 roughness（>0.3）时模糊接缝；mip 0（完美镜面反射）在 2048 SPP + OIDN 下接缝可接受。
+`renderer.h` 新增成员（与 lightmap bake 状态平行，`probe_` 前缀区分）：
 
-Cache key 和文件命名详见 Step 9。Probe position 是 bake 产物（`generate_probe_grid()` 计算结果），存储在 `<probe_set_hash>_rot<NNN>_manifest.bin` 中，Phase 8 加载时直接读取，不重新运行 placement。
+```cpp
+std::vector<glm::vec3> bake_probe_positions_;      // generate_probe_grid() 结果
+uint32_t bake_probe_total_ = 0;                    // probe 总数
+uint32_t bake_current_probe_ = 0;                  // 当前 probe index
+rhi::ImageHandle bake_probe_accumulation_;          // RGBA32F cubemap (6 layer)
+rhi::ImageHandle bake_probe_aux_albedo_;            // RGBA16F cubemap (6 layer)
+rhi::ImageHandle bake_probe_aux_normal_;            // RGBA16F cubemap (6 layer)
+bool bake_probe_finalize_pending_ = false;          // 当前 probe 达到目标 SPP
+bool bake_probe_placement_pending_ = false;         // 延迟 placement 标志
+```
+
+#### 状态机扩展
+
+```
+BakingLightmaps 完成（或 bake_total_instances_ == 0）
+  → bake_state_ = BakingProbes
+  → bake_probe_placement_pending_ = true
+
+render_baking() BakingProbes 首帧（检测 placement_pending）:
+  generate_probe_grid()（自管 immediate scope，不嵌套）
+  → 写入 manifest.bin（原子写入）
+  → bake_probe_positions_ / bake_probe_total_ 赋值
+  → begin_immediate() → begin_probe_bake_instance(0) → end_immediate()
+  → 清除 placement_pending
+
+render_baking() BakingProbes 后续帧:
+  probe_baker_pass_.sample_count() < target_spp → dispatch（RG 录制）
+  达到目标 → bake_probe_finalize_pending_ = true
+
+Application begin_frame() 后:
+  检测 bake_probe_finalize_pending_ → 调用 probe_bake_finalize()
+
+所有 probe 完成 → BakeState::Complete
+```
+
+**scope 嵌套规避**：`start_bake()` 在外部 immediate scope 内执行（`begin_bake_instance()` 需要录制光栅化命令）。当 `bake_total_instances_ == 0` 时，不在此处调用 `generate_probe_grid()`（其自管 immediate scope 会嵌套），而是设 pending 标志，由 `render_baking()` 首帧在 scope 外处理。
+
+#### Cubemap image 创建规格
+
+`begin_probe_bake_instance()` 创建 per-probe 图像：
+
+| 图像 | 格式 | 尺寸 | Layers | Flags | Usage |
+|------|------|------|--------|-------|-------|
+| accumulation | RGBA32F | face_res² | 6 | CUBE_COMPATIBLE | Storage \| TransferSrc \| TransferDst \| Sampled |
+| aux_albedo | RGBA16F | face_res² | 6 | CUBE_COMPATIBLE | Storage \| TransferSrc |
+| aux_normal | RGBA16F | face_res² | 6 | CUBE_COMPATIBLE | Storage \| TransferSrc |
+
+- accumulation：Storage（RT dispatch）+ TransferSrc（readback + blit 预览）+ TransferDst（upload 降噪结果）+ Sampled（prefilter 采样 + BC6H compress 采样）
+- aux：Storage（RT dispatch 写入）+ TransferSrc（readback）
+- 三个图像均需 `VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT`（`prefilter_cubemap()` 需 cubemap sampler 采样 src）
+
+`begin_probe_bake_instance()` 流程：创建 3 个 cubemap → barrier UNDEFINED→GENERAL → clear accumulation vec4(0) → `probe_baker_pass_.set_probe_images()` 创建 18 个 per-face view → `probe_baker_pass_.set_probe_position(pos)` → `probe_baker_pass_.reset_accumulation()`
+
+#### `probe_bake_finalize()` 管线
+
+自管多个 immediate scope，不在外部 scope 内调用。
+
+**Scope 1：Readback**
+
+```
+创建 staging buffer：
+  rb_beauty  = face_res² × 6 × 16B (RGBA32F, GpuToCpu)
+  rb_albedo  = face_res² × 6 × 8B  (RGBA16F, GpuToCpu)
+  rb_normal  = face_res² × 6 × 8B  (RGBA16F, GpuToCpu)
+
+begin_immediate()
+  barrier: accumulation + aux → TRANSFER_SRC
+  vkCmdCopyImageToBuffer × 3（subresource layerCount=6，整个 cubemap 一次 copy）
+end_immediate()
+```
+
+**CPU：OIDN × 6 face**
+
+```
+for face 0..5:
+  beauty_face_ptr = rb_beauty  + face × (face_res² × 16)
+  albedo_face_ptr = rb_albedo  + face × (face_res² × 8)
+  normal_face_ptr = rb_normal  + face × (face_res² × 8)
+  output_face_ptr = upload_buf + face × (face_res² × 16)
+  BakeDenoiser::denoise(beauty, albedo, normal, output, face_res, face_res)
+```
+
+已知限制：逐面降噪在 face 边缘产生接缝。prefilter mip chain 在高 roughness（>0.3）时模糊接缝；mip 0 在 2048 SPP + OIDN 下接缝可接受。
+
+**Scope 2：Upload → Prefilter → BC6H Compress → Readback**
+
+```
+创建 prefilter 目标 cubemap：
+  格式: RGBA16F（与 IBL prefiltered cubemap 一致）
+  尺寸: face_res²，layers: 6，CUBE_COMPATIBLE
+  mip_count: floor(log2(face_res)) + 1
+  usage: Storage | Sampled | TransferSrc
+
+创建 upload buffer: face_res² × 6 × 16B (RGBA32F, CpuToGpu)
+
+begin_immediate()
+  barrier: accumulation TRANSFER_SRC → TRANSFER_DST
+  vkCmdCopyBufferToImage: upload 降噪结果 → accumulation（layerCount=6）
+  barrier: accumulation TRANSFER_DST → SHADER_READ_ONLY
+
+  prefilter_cubemap(src=accumulation, dst=prefilter_target, mip_count, deferred)
+  // 内部: per-mip dispatch，结束后 dst 在 SHADER_READ_ONLY
+
+  compress_bc6h(&prefilter_target, deferred)
+  // 内部: 6 face × N mip dispatch，替换 handle 为 BC6H cubemap
+
+  barrier: BC6H → TRANSFER_SRC
+  vkCmdCopyImageToBuffer: readback BC6H 全量（6 face × N mip）
+end_immediate()
+
+执行 deferred cleanup（销毁旧 prefilter + compress 临时资源）
+```
+
+**CPU：Write KTX2**
+
+```
+write_ktx2(path, Bc6hUfloatBlock, face_res, face_res, face_count=6, levels)
+// levels[0] = base mip (6 face 拼接), levels[N-1] = 1×1 mip (6 face 拼接)
+// 文件名: <probe_set_hash>_rot<NNN>_probe<III>.ktx2
+```
+
+**Cleanup + Advance**
+
+```
+销毁 staging buffers + BC6H image
+probe_baker_pass_.destroy_face_views()
+销毁 probe instance images（accumulation + aux）
+if (next_probe < total) → begin_immediate() → begin_probe_bake_instance(next) → end_immediate()
+else → BakeState::Complete
+```
+
+#### Probe 预览：十字展开
+
+`render_baking()` 在 BakingProbes 阶段的 RG 预览管线：
+
+```
+水平十字布局（4×3 grid，6 次 vkCmdBlitImage）:
+
+          [+Y]
+    [-X]  [+Z]  [+X]  [-Z]
+          [-Y]
+
+Face → grid 位置:
+  0(+X): col=2, row=1    1(-X): col=0, row=1
+  2(+Y): col=1, row=0    3(-Y): col=1, row=2
+  4(+Z): col=1, row=1    5(-Z): col=3, row=1
+```
+
+十字总尺寸 = `4 × face_res` 宽 × `3 × face_res` 高。缩放居中到 hdr_color（与 lightmap 预览相同的宽高比保持逻辑）。6 次 `vkCmdBlitImage`，每次 `srcSubresource.baseArrayLayer = face_index`，dst 偏移按 grid 位置 × 缩放因子计算。不需要额外 face view——blit 通过 subresource layer 直接选择。
+
+#### Manifest 格式
+
+`<probe_set_hash>_rot<NNN>_manifest.bin`，原子写入（write-to-temp + rename）：
+
+| 偏移 | 类型 | 内容 |
+|------|------|------|
+| 0 | uint32_t | probe_count |
+| 4 | vec3[probe_count] | positions (x, y, z × N) |
+
+Phase 8 加载时直接读取 manifest 获取 probe 位置，不重新运行 placement。
+
+**验证**：触发烘焙 → lightmap 全部完成 → probe placement 日志（候选/Rule1/Rule2/通过）→ manifest.bin 写入 → probe 逐个烘焙（十字展开预览实时更新）→ 每个 probe 的 KTX2 文件出现在 cache → `read_ktx2()` 加载正确（BC6H cubemap with mip chain）→ 状态转 Complete
 
 ---
 
