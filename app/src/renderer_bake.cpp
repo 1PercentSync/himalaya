@@ -108,15 +108,191 @@ namespace himalaya::app {
                      bake_total_instances_, mesh_instances.size());
     }
 
+    void Renderer::begin_bake_instance(
+        const uint32_t instance_index,
+        const std::span<const framework::MeshInstance> mesh_instances,
+        const std::span<const framework::Mesh> meshes) {
+
+        bake_current_instance_ = instance_index;
+        const uint32_t scene_idx = bake_instance_indices_[instance_index];
+        const auto &inst = mesh_instances[scene_idx];
+        const auto &mesh = meshes[inst.mesh_id];
+        const uint32_t res = bake_lightmap_sizes_[instance_index];
+
+        bake_lightmap_width_ = res;
+        bake_lightmap_height_ = res;
+
+        // Create per-instance images
+        bake_accumulation_ = resource_manager_->create_image({
+            .width = res, .height = res, .depth = 1,
+            .mip_levels = 1, .array_layers = 1, .sample_count = 1,
+            .format = rhi::Format::R32G32B32A32Sfloat,
+            .usage = rhi::ImageUsage::Storage | rhi::ImageUsage::TransferSrc |
+                     rhi::ImageUsage::TransferDst | rhi::ImageUsage::Sampled,
+        }, "bake_accumulation");
+
+        bake_position_map_ = resource_manager_->create_image({
+            .width = res, .height = res, .depth = 1,
+            .mip_levels = 1, .array_layers = 1, .sample_count = 1,
+            .format = rhi::Format::R32G32B32A32Sfloat,
+            .usage = rhi::ImageUsage::ColorAttachment | rhi::ImageUsage::Sampled,
+        }, "bake_position_map");
+
+        bake_normal_map_ = resource_manager_->create_image({
+            .width = res, .height = res, .depth = 1,
+            .mip_levels = 1, .array_layers = 1, .sample_count = 1,
+            .format = rhi::Format::R32G32B32A32Sfloat,
+            .usage = rhi::ImageUsage::ColorAttachment | rhi::ImageUsage::Sampled,
+        }, "bake_normal_map");
+
+        bake_aux_albedo_ = resource_manager_->create_image({
+            .width = res, .height = res, .depth = 1,
+            .mip_levels = 1, .array_layers = 1, .sample_count = 1,
+            .format = rhi::Format::R16G16B16A16Sfloat,
+            .usage = rhi::ImageUsage::Storage | rhi::ImageUsage::TransferSrc,
+        }, "bake_aux_albedo");
+
+        bake_aux_normal_ = resource_manager_->create_image({
+            .width = res, .height = res, .depth = 1,
+            .mip_levels = 1, .array_layers = 1, .sample_count = 1,
+            .format = rhi::Format::R16G16B16A16Sfloat,
+            .usage = rhi::ImageUsage::Storage | rhi::ImageUsage::TransferSrc,
+        }, "bake_aux_normal");
+
+        // Render position/normal map (must be called within immediate scope)
+        rhi::CommandBuffer imm_cmd(ctx_->immediate_command_buffer);
+
+        // Barrier: UNDEFINED → COLOR_ATTACHMENT for pos/normal maps
+        const std::array<VkImageMemoryBarrier2, 2> to_attachment = {{
+            {
+                .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+                .srcStageMask = VK_PIPELINE_STAGE_2_NONE,
+                .srcAccessMask = VK_ACCESS_2_NONE,
+                .dstStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                .dstAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+                .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+                .newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                .image = resource_manager_->get_image(bake_position_map_).image,
+                .subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1},
+            },
+            {
+                .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+                .srcStageMask = VK_PIPELINE_STAGE_2_NONE,
+                .srcAccessMask = VK_ACCESS_2_NONE,
+                .dstStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                .dstAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+                .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+                .newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                .image = resource_manager_->get_image(bake_normal_map_).image,
+                .subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1},
+            },
+        }};
+        VkDependencyInfo dep_to_attach{};
+        dep_to_attach.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+        dep_to_attach.imageMemoryBarrierCount = static_cast<uint32_t>(to_attachment.size());
+        dep_to_attach.pImageMemoryBarriers = to_attachment.data();
+        imm_cmd.pipeline_barrier(dep_to_attach);
+
+        // Compute normal matrix
+        const glm::mat3 normal_matrix = glm::transpose(glm::inverse(glm::mat3(inst.transform)));
+
+        // Rasterize pos/normal map
+        pos_normal_map_pass_.record(imm_cmd, mesh, inst.transform, normal_matrix,
+                                    bake_position_map_, bake_normal_map_, res, res);
+
+        // Barrier: COLOR_ATTACHMENT → SHADER_READ_ONLY for baker sampling
+        const std::array<VkImageMemoryBarrier2, 2> to_read = {{
+            {
+                .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+                .srcStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                .srcAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+                .dstStageMask = VK_PIPELINE_STAGE_2_RAY_TRACING_SHADER_BIT_KHR,
+                .dstAccessMask = VK_ACCESS_2_SHADER_SAMPLED_READ_BIT,
+                .oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                .newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                .image = resource_manager_->get_image(bake_position_map_).image,
+                .subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1},
+            },
+            {
+                .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+                .srcStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                .srcAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+                .dstStageMask = VK_PIPELINE_STAGE_2_RAY_TRACING_SHADER_BIT_KHR,
+                .dstAccessMask = VK_ACCESS_2_SHADER_SAMPLED_READ_BIT,
+                .oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                .newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                .image = resource_manager_->get_image(bake_normal_map_).image,
+                .subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1},
+            },
+        }};
+        VkDependencyInfo dep_to_read{};
+        dep_to_read.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+        dep_to_read.imageMemoryBarrierCount = static_cast<uint32_t>(to_read.size());
+        dep_to_read.pImageMemoryBarriers = to_read.data();
+        imm_cmd.pipeline_barrier(dep_to_read);
+
+        // Configure baker pass with the new images
+        lightmap_baker_pass_.reset_accumulation();
+        lightmap_baker_pass_.set_baker_images(
+            bake_accumulation_, bake_aux_albedo_, bake_aux_normal_,
+            bake_position_map_, bake_normal_map_, res, res);
+
+        // Set baker parameters from locked config
+        lightmap_baker_pass_.set_max_bounces(bake_locked_config_.max_bounces);
+        lightmap_baker_pass_.set_env_sampling(
+            bake_locked_config_.env_sampling && ibl_.alias_table_buffer().valid());
+        lightmap_baker_pass_.set_emissive_light_count(
+            bake_locked_config_.emissive_nee ? emissive_light_builder_.emissive_count() : 0u);
+
+        bake_finalize_pending_ = false;
+        bake_instance_start_time_ = std::chrono::steady_clock::now();
+
+        spdlog::info("Bake instance {} started: scene_idx={}, mesh_id={}, resolution={}x{}",
+                     instance_index, scene_idx, inst.mesh_id, res, res);
+    }
+
+    void Renderer::destroy_bake_instance_images() {
+        if (bake_accumulation_.valid()) {
+            resource_manager_->destroy_image(bake_accumulation_);
+            bake_accumulation_ = {};
+        }
+        if (bake_position_map_.valid()) {
+            resource_manager_->destroy_image(bake_position_map_);
+            bake_position_map_ = {};
+        }
+        if (bake_normal_map_.valid()) {
+            resource_manager_->destroy_image(bake_normal_map_);
+            bake_normal_map_ = {};
+        }
+        if (bake_aux_albedo_.valid()) {
+            resource_manager_->destroy_image(bake_aux_albedo_);
+            bake_aux_albedo_ = {};
+        }
+        if (bake_aux_normal_.valid()) {
+            resource_manager_->destroy_image(bake_aux_normal_);
+            bake_aux_normal_ = {};
+        }
+        bake_lightmap_width_ = 0;
+        bake_lightmap_height_ = 0;
+    }
+
     // ---- Per-frame bake rendering ----
 
     void Renderer::render_baking(rhi::CommandBuffer &cmd, const RenderInput &input) {
         draw_call_count_ = 0;
 
         switch (bake_state_) {
-            case BakeState::BakingLightmaps:
-                // TODO: per-instance lightmap bake loop (Step 9 later items)
+            case BakeState::BakingLightmaps: {
+                // Each frame: dispatch one sample of the baker RT pass
+                const uint32_t target_spp = bake_locked_config_.lightmap_spp;
+                if (lightmap_baker_pass_.sample_count() < target_spp) {
+                    // Baker dispatch is recorded into the render graph below
+                } else if (!bake_finalize_pending_) {
+                    // Target SPP reached — signal Application to finalize
+                    bake_finalize_pending_ = true;
+                }
                 break;
+            }
 
             case BakeState::BakingProbes:
                 // TODO: per-probe bake loop (Step 12)
@@ -134,9 +310,7 @@ namespace himalaya::app {
                 break;
         }
 
-        // --- Preview: blit accumulation to managed_hdr_color_ + tonemapping + ImGui ---
-        // (filled in when per-instance bake loop is implemented)
-
+        // --- Build render graph ---
         render_graph_.clear();
 
         const auto swapchain_image = render_graph_.import_image(
@@ -145,6 +319,20 @@ namespace himalaya::app {
             VK_IMAGE_LAYOUT_UNDEFINED,
             VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 
+        // Baker RT dispatch (if actively accumulating)
+        const bool actively_baking = bake_state_ == BakeState::BakingLightmaps
+                                     && !bake_finalize_pending_
+                                     && lightmap_baker_pass_.sample_count() < bake_locked_config_.lightmap_spp;
+        if (actively_baking) {
+            lightmap_baker_pass_.record(render_graph_, {
+                .swapchain = {},
+                .hdr_color = {},
+                .frame_index = input.frame_index,
+                .frame_number = frame_counter_,
+            });
+        }
+
+        // --- Preview pipeline: clear hdr → blit accumulation → tonemapping → ImGui ---
         const auto hdr_resource = render_graph_.use_managed_image(
             managed_hdr_color_, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, false);
 
@@ -181,7 +369,6 @@ namespace himalaya::app {
                                });
 
         // TODO: blit accumulation buffer into hdr_color (centered, aspect-ratio preserved)
-        // when a bake instance is active.
 
         // Update Set 2 binding 0 with hdr_color for tonemapping
         const auto hdr_backing = render_graph_.get_managed_backing_image(managed_hdr_color_);

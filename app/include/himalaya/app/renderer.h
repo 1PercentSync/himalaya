@@ -296,6 +296,29 @@ namespace himalaya::app {
                         std::span<const std::vector<framework::Vertex>> cpu_vertices,
                         std::span<const std::vector<uint32_t>> cpu_indices);
 
+        /**
+         * @brief Prepares a bake instance: creates per-instance images and renders
+         *        position/normal maps. Must be called within an active immediate scope.
+         *
+         * Called by Application for instance 0 after start_bake(), and for
+         * subsequent instances as part of the finalize-then-advance flow.
+         *
+         * @param instance_index Index into bake_instance_indices_ (0-based).
+         * @param mesh_instances Scene mesh instances (for transform lookup).
+         * @param meshes         Loaded meshes (for VB/IB handles).
+         */
+        void begin_bake_instance(uint32_t instance_index,
+                                 std::span<const framework::MeshInstance> mesh_instances,
+                                 std::span<const framework::Mesh> meshes);
+
+        /**
+         * @brief Destroys the current bake instance's per-instance images.
+         *
+         * Called during finalize before advancing to the next instance,
+         * or on cancel to clean up. Safe to call when no instance is active.
+         */
+        void destroy_bake_instance_images();
+
         // --- Denoiser parameter accessors (for DebugUIContext binding) ---
 
         /** @brief Mutable reference to denoise enabled flag. */
