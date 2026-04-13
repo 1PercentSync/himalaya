@@ -205,6 +205,10 @@ namespace himalaya::passes {
 
     void LightmapBakerPass::record(framework::RenderGraph &rg,
                                    const framework::FrameContext &ctx) {
+        if (rt_pipeline_.pipeline == VK_NULL_HANDLE) {
+            return;
+        }
+
         // Import baker images into RG (per-instance, set via set_baker_images)
         auto rg_accum = rg.import_image(
             "baker_accumulation", accumulation_,

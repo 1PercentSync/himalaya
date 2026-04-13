@@ -164,13 +164,14 @@ namespace himalaya::app {
             const uint32_t resolution = align_to_4(clamped);
 
             // Compute per-instance lightmap cache key:
-            // scene_hash + geometry_hash + transform_hash + hdr_hash + scene_textures_hash
+            // scene_hash + vertices_hash + indices_hash + transform_hash + hdr_hash + scene_textures_hash
             const auto &verts = cpu_vertices[inst.mesh_id];
             const auto &idxs = cpu_indices[inst.mesh_id];
-            const auto geometry_hash = framework::content_hash(verts.data(), verts.size() * sizeof(framework::Vertex));
+            const auto vertices_hash = framework::content_hash(verts.data(), verts.size() * sizeof(framework::Vertex));
+            const auto indices_hash = framework::content_hash(idxs.data(), idxs.size() * sizeof(uint32_t));
             const auto transform_hash = framework::content_hash(&inst.transform, sizeof(glm::mat4));
-            const std::string key_input = scene_hash + geometry_hash + transform_hash
-                                          + hdr_hash + scene_textures_hash;
+            const std::string key_input = scene_hash + vertices_hash + indices_hash
+                                          + transform_hash + hdr_hash + scene_textures_hash;
             const auto lm_key = framework::content_hash(key_input.data(), key_input.size());
 
             bake_instance_indices_.push_back(i);

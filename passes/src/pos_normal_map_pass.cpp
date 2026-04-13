@@ -110,6 +110,10 @@ namespace himalaya::passes {
                                  const rhi::ImageHandle normal_map,
                                  const uint32_t width,
                                  const uint32_t height) const {
+        if (pipeline_.pipeline == VK_NULL_HANDLE) {
+            return;
+        }
+
         const auto &pos_image = rm_->get_image(position_map);
         const auto &nrm_image = rm_->get_image(normal_map);
 
