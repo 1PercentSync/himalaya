@@ -73,6 +73,12 @@ namespace himalaya::app {
         // Rotation encoded as integer degrees 0-359
         bake_rotation_int_ = static_cast<uint32_t>(std::round(ibl_rotation_deg)) % 360;
 
+        // Probe set cache key: scene + hdr + scene_textures (no position — positions are bake output)
+        {
+            const std::string probe_key_input = scene_hash + hdr_hash + scene_textures_hash;
+            bake_probe_set_key_ = framework::content_hash(probe_key_input.data(), probe_key_input.size());
+        }
+
         // Filter bakeable instances: skip degenerate and transparent
         bake_instance_indices_.clear();
         bake_lightmap_sizes_.clear();

@@ -719,6 +719,9 @@ namespace himalaya::app {
         /** @brief IBL rotation encoded as integer degrees 0-359 for cache file naming. */
         uint32_t bake_rotation_int_ = 0;
 
+        /** @brief Probe set cache key hash (scene + hdr + scene_textures, no position). */
+        std::string bake_probe_set_key_;
+
         /** @brief Snapshotted BakeConfig at bake start (locked during bake session). */
         framework::BakeConfig bake_locked_config_{};
 
