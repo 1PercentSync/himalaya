@@ -59,8 +59,9 @@ namespace himalaya::framework {
      *   is below the enclosure threshold → cull (small enclosed volume).
      *
      * The compute pipeline is created and destroyed within this call (one-shot).
-     * Must be called within an active immediate command scope (begin_immediate /
-     * end_immediate bracket).
+     * Internally opens and closes its own immediate command scope
+     * (begin_immediate / end_immediate) for the GPU dispatch + readback.
+     * Must NOT be called while another immediate scope is active.
      *
      * @param ctx                    RHI context (device, immediate command buffer, allocator).
      * @param rm                     Resource manager for buffer creation.
