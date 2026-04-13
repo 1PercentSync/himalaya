@@ -97,7 +97,7 @@
 - [x] `renderer_bake.cpp`：probe set cache key（`scene + hdr + scene_textures`）+ 文件 `<set_hash>_rot<NNN>_probe<III>.ktx2` + manifest.bin（probe_count + positions）
 - [x] `renderer_bake.cpp`：进入 Baking 前调用 `abort_denoise()`（参考视图异步 Denoiser 归 Idle）
 - [x] `renderer_bake.cpp`：完整性校验（逐角度检查所有 lightmap + manifest + probe 文件齐全）
-- [ ] `renderer_bake.cpp`：退化 instance（vertex_count=0/index_count<3）和透明 instance（AlphaMode::Blend）跳过 lightmap bake
+- [x] `renderer_bake.cpp`：退化 instance（vertex_count=0/index_count<3）和透明 instance（AlphaMode::Blend）跳过 lightmap bake
 - [ ] `renderer_bake.cpp`：KTX2 / manifest 原子写入（write-to-temp + rename）
 - [ ] `renderer_bake.cpp`：`rotation_int = round(angle_deg) % 360`（0-359）
 - [ ] `renderer_bake.cpp`：每帧帧流程 `fill_common_gpu_data()` → RG import Set 0 + TLAS → baker RT pass → clear `managed_hdr_color_` + blit accumulation（居中保持宽高比）→ tonemapping → ImGui render pass → present
