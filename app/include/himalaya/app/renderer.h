@@ -356,8 +356,10 @@ namespace himalaya::app {
          * @brief Finalizes the current bake instance: readback, denoise, compress,
          *        write KTX2, destroy images, and advance to the next instance.
          *
-         * Must be called within an active immediate scope. Application calls
-         * this when bake_finalize_pending() returns true.
+         * Manages its own immediate scopes internally (multiple GPU-CPU
+         * round-trips: readback, upload, BC6H compress). Must NOT be called
+         * while another immediate scope is active. Application calls this
+         * when bake_finalize_pending() returns true, after fence wait.
          *
          * @param meshes         All loaded meshes (for next instance begin).
          * @param mesh_instances All scene mesh instances (for next instance begin).
