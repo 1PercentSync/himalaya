@@ -84,7 +84,7 @@
 - [x] 新增 `scene_data.h`：BakeConfig 结构体（texels_per_meter / min_res / max_res / lightmap_spp / probe_face_res / probe_spacing / probe_spp / max_bounces / env_sampling / emissive_nee / allow_tearing）+ RenderInput 新增 `const BakeConfig&`
 - [x] `scene_data.h`：RenderMode 新增 Baking
 - [x] `renderer.h`：BakeState 枚举 + 烘焙状态字段 + `render_baking()` 私有方法
-- [ ] 新增 `renderer_bake.cpp`：烘焙状态机（BakingLightmaps → BakingProbes → Complete）
+- [x] 新增 `renderer_bake.cpp`：烘焙状态机（BakingLightmaps → BakingProbes → Complete）
 - [ ] `renderer_bake.cpp`：烘焙触发时计算 per-instance lightmap 分辨率（世界空间表面积 × texels_per_meter，对齐到 4）
 - [ ] `renderer_bake.cpp`：per-instance lightmap 烘焙循环（position/normal map + aux image 创建 → accumulation → 目标采样数 → 设 finalize pending flag）
 - [ ] `application.cpp`：bake finalize 时机——`begin_frame()` fence wait 后、`render()` 前检查 flag，Application 驱动 `begin_immediate()` / `end_immediate()`（readback → BakeDenoiser → upload → BC6H → readback → KTX2 → 释放资源 → 推进到下一个 instance）
