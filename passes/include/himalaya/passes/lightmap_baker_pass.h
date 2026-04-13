@@ -166,7 +166,7 @@ namespace himalaya::passes {
 
         // ---- PT parameters ----
 
-        uint32_t max_bounces_ = 8;
+        uint32_t max_bounces_ = 32;
         bool env_sampling_ = true;
         bool directional_lights_ = false;
         uint32_t emissive_light_count_ = 0;
