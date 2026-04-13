@@ -76,7 +76,7 @@
 - [x] `pos_normal_map_pass.h`：`destroy()` 去掉 const（与所有其他 Pass 一致）
 - [x] `reference_view_pass.cpp`：删除未使用的 `kDefaultMaxBounces` / `kDefaultMaxClamp` 常量
 - [x] 新增 `passes/include/himalaya/passes/pt_push_constants.h`：PTPushConstants 共享定义，reference_view_pass.cpp 和 lightmap_baker_pass.cpp 删除各自的重复定义
-- [ ] `bake_denoiser.h/.cpp`：`denoise()` 的 albedo/normal 参数移除 nullable 语义，入口 assert 非空
+- [x] `bake_denoiser.h/.cpp`：`denoise()` 的 albedo/normal 参数移除 nullable 语义，入口 assert 非空
 
 ## Step 9：烘焙模式渲染路径 + Lightmap 端到端
 
