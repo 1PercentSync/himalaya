@@ -127,6 +127,7 @@ namespace himalaya::framework {
     enum class RenderMode : uint8_t {
         Rasterization, ///< Multi-pass rasterization pipeline (default).
         PathTracing,   ///< RT path-traced reference view with accumulation.
+        Baking,        ///< Lightmap/probe bake mode (GPU full-time baking).
     };
 
     /**
