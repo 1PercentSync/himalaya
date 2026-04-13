@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <himalaya/app/renderer.h>
 
+#include <himalaya/framework/cache.h>
 #include <himalaya/framework/frame_context.h>
 #include <himalaya/framework/imgui_backend.h>
 #include <himalaya/framework/mesh.h>
@@ -60,14 +61,22 @@ namespace himalaya::app {
         const std::span<const framework::Mesh> meshes,
         const std::span<const framework::MaterialInstance> materials,
         const std::span<const std::vector<framework::Vertex>> cpu_vertices,
-        const std::span<const std::vector<uint32_t>> cpu_indices) {
+        const std::span<const std::vector<uint32_t>> cpu_indices,
+        const std::string &scene_hash,
+        const std::string &hdr_hash,
+        const std::string &scene_textures_hash,
+        const float ibl_rotation_deg) {
 
         // Snapshot config (locked for the duration of this bake session)
         bake_locked_config_ = config;
 
+        // Rotation encoded as integer degrees 0-359
+        bake_rotation_int_ = static_cast<uint32_t>(std::round(ibl_rotation_deg)) % 360;
+
         // Filter bakeable instances: skip degenerate and transparent
         bake_instance_indices_.clear();
         bake_lightmap_sizes_.clear();
+        bake_lightmap_keys_.clear();
 
         for (uint32_t i = 0; i < static_cast<uint32_t>(mesh_instances.size()); ++i) {
             const auto &inst = mesh_instances[i];
@@ -91,11 +100,22 @@ namespace himalaya::app {
             const uint32_t clamped = std::clamp(raw, config.min_resolution, config.max_resolution);
             const uint32_t resolution = align_to_4(clamped);
 
+            // Compute per-instance lightmap cache key:
+            // scene_hash + geometry_hash + transform_hash + hdr_hash + scene_textures_hash
+            const auto &verts = cpu_vertices[inst.mesh_id];
+            const auto &idxs = cpu_indices[inst.mesh_id];
+            const auto geometry_hash = framework::content_hash(verts.data(), verts.size() * sizeof(framework::Vertex));
+            const auto transform_hash = framework::content_hash(&inst.transform, sizeof(glm::mat4));
+            const std::string key_input = scene_hash + geometry_hash + transform_hash
+                                          + hdr_hash + scene_textures_hash;
+            const auto lm_key = framework::content_hash(key_input.data(), key_input.size());
+
             bake_instance_indices_.push_back(i);
             bake_lightmap_sizes_.push_back(resolution);
+            bake_lightmap_keys_.push_back(lm_key);
 
-            spdlog::info("Bake instance {}: mesh_id={}, area={:.2f}m², resolution={}",
-                         i, inst.mesh_id, static_cast<double>(area), resolution);
+            spdlog::info("Bake instance {}: mesh_id={}, area={:.2f}m², resolution={}, key={}",
+                         i, inst.mesh_id, static_cast<double>(area), resolution, lm_key);
         }
 
         bake_total_instances_ = static_cast<uint32_t>(bake_instance_indices_.size());
@@ -105,8 +125,8 @@ namespace himalaya::app {
         bake_start_time_ = std::chrono::steady_clock::now();
         bake_instance_start_time_ = bake_start_time_;
 
-        spdlog::info("Bake started: {} bakeable instances out of {} total",
-                     bake_total_instances_, mesh_instances.size());
+        spdlog::info("Bake started: {} bakeable instances, rotation={}°",
+                     bake_total_instances_, bake_rotation_int_);
     }
 
     void Renderer::begin_bake_instance(

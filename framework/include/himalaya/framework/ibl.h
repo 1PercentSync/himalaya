@@ -97,6 +97,9 @@ namespace himalaya::framework {
         /** @brief Alias table buffer handle for Set 0 binding 6. Invalid if no HDR loaded. */
         [[nodiscard]] rhi::BufferHandle alias_table_buffer() const;
 
+        /** @brief Content hash of the HDR file (XXH3_128, hex). Empty if fallback. */
+        [[nodiscard]] const std::string &hdr_hash() const;
+
         /** @brief Environment total luminance (sin-weighted). 0 if no HDR loaded. */
         [[nodiscard]] float total_luminance() const;
 
@@ -275,6 +278,9 @@ namespace himalaya::framework {
         // --- Original equirect dimensions (for HDR Sun coordinate conversion) ---
         uint32_t equirect_width_ = 0;
         uint32_t equirect_height_ = 0;
+
+        // --- HDR content hash (bake cache key component) ---
+        std::string hdr_hash_;
 
         // --- Env alias table (Step 11, importance sampling) ---
 

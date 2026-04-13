@@ -230,6 +230,9 @@ namespace himalaya::app {
 
         spdlog::info("Loading scene: {}", path);
 
+        // Compute scene file content hash (for bake cache keys)
+        scene_hash_ = framework::content_hash(std::filesystem::path(path));
+
         try {
             if (!std::filesystem::exists(path)) {
                 throw std::runtime_error("Scene file not found: " + path);
@@ -774,6 +777,7 @@ namespace himalaya::app {
         cpu_indices_.clear();
         gpu_materials_.clear();
         scene_bounds_ = {glm::vec3(0.0f), glm::vec3(0.0f)};
+        scene_hash_.clear();
         scene_textures_hash_.clear();
 
         resource_manager_ = nullptr;
@@ -814,6 +818,10 @@ namespace himalaya::app {
 
     const framework::AABB &SceneLoader::scene_bounds() const {
         return scene_bounds_;
+    }
+
+    const std::string &SceneLoader::scene_hash() const {
+        return scene_hash_;
     }
 
     const std::string &SceneLoader::scene_textures_hash() const {

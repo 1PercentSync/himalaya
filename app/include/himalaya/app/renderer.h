@@ -286,15 +286,23 @@ namespace himalaya::app {
          * @param mesh_instances All scene mesh instances.
          * @param meshes        All loaded meshes (vertex/index counts).
          * @param materials     All material instances (alpha mode filtering).
-         * @param cpu_vertices  Per-mesh CPU vertex data (surface area calculation).
-         * @param cpu_indices   Per-mesh CPU index data (surface area calculation).
+         * @param cpu_vertices       Per-mesh CPU vertex data (surface area calculation).
+         * @param cpu_indices        Per-mesh CPU index data (surface area calculation).
+         * @param scene_hash         Content hash of the scene file.
+         * @param hdr_hash           Content hash of the HDR environment file.
+         * @param scene_textures_hash Composite hash of all scene texture source bytes.
+         * @param ibl_rotation_deg   Current IBL rotation angle in degrees.
          */
         void start_bake(const framework::BakeConfig &config,
                         std::span<const framework::MeshInstance> mesh_instances,
                         std::span<const framework::Mesh> meshes,
                         std::span<const framework::MaterialInstance> materials,
                         std::span<const std::vector<framework::Vertex>> cpu_vertices,
-                        std::span<const std::vector<uint32_t>> cpu_indices);
+                        std::span<const std::vector<uint32_t>> cpu_indices,
+                        const std::string &scene_hash,
+                        const std::string &hdr_hash,
+                        const std::string &scene_textures_hash,
+                        float ibl_rotation_deg);
 
         /**
          * @brief Finalizes the current bake instance: readback, denoise, compress,
@@ -704,6 +712,12 @@ namespace himalaya::app {
 
         /** @brief Per-bakeable-instance lightmap resolution (parallel to bake_instance_indices_). */
         std::vector<uint32_t> bake_lightmap_sizes_;
+
+        /** @brief Per-bakeable-instance lightmap cache key hash (parallel to bake_instance_indices_). */
+        std::vector<std::string> bake_lightmap_keys_;
+
+        /** @brief IBL rotation encoded as integer degrees 0-359 for cache file naming. */
+        uint32_t bake_rotation_int_ = 0;
 
         /** @brief Snapshotted BakeConfig at bake start (locked during bake session). */
         framework::BakeConfig bake_locked_config_{};

@@ -266,6 +266,7 @@ namespace himalaya::framework {
 
         // --- Phase 1: Check caches (CPU only, before any GPU work) ---
         const auto hdr_hash = content_hash(std::filesystem::path(hdr_path));
+        hdr_hash_ = hdr_hash;
 
         // Try reading cubemap KTX2 files (all 3 must succeed for cache hit)
         std::optional<Ktx2Data> skybox_ktx2, irr_ktx2, pref_ktx2;
@@ -868,6 +869,10 @@ namespace himalaya::framework {
 
     uint32_t IBL::prefiltered_mip_count() const {
         return prefiltered_mip_count_;
+    }
+
+    const std::string &IBL::hdr_hash() const {
+        return hdr_hash_;
     }
 
     uint32_t IBL::equirect_width() const {

@@ -106,6 +106,14 @@ namespace himalaya::app {
         [[nodiscard]] const framework::AABB &scene_bounds() const;
 
         /**
+         * @brief Content hash of the scene file (XXH3_128, hex).
+         *
+         * Computed at load time from the glTF/GLB file bytes. Empty if
+         * no scene loaded. Used as part of bake cache keys.
+         */
+        [[nodiscard]] const std::string &scene_hash() const;
+
+        /**
          * @brief Composite hash of all scene texture source bytes.
          *
          * Computed at load time by concatenating per-texture source hashes
@@ -152,6 +160,9 @@ namespace himalaya::app {
 
         /** @brief Union AABB of all mesh instance world_bounds, computed at load time. */
         framework::AABB scene_bounds_{};
+
+        /** @brief Content hash of the scene file (XXH3_128, hex). */
+        std::string scene_hash_;
 
         /** @brief Composite hash of all scene texture source bytes (XXH3_128, hex). */
         std::string scene_textures_hash_;
