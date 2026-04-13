@@ -597,17 +597,21 @@ namespace himalaya::app {
         rhi::CommandBuffer cmd(frame.command_buffer);
         cmd.begin();
 
+        // Baking mode overrides: normalized IBL intensity, no directional lights
+        const bool is_baking = render_mode_ == framework::RenderMode::Baking;
+
         const RenderInput input{
             .image_index = image_index_,
             .frame_index = context_.frame_index,
             .render_mode = render_mode_,
             .camera = camera_,
-            .lights = scene_render_data_.directional_lights,
+            .lights = is_baking ? std::span<const framework::DirectionalLight>{}
+                                : scene_render_data_.directional_lights,
             .cull_result = cull_result_,
             .meshes = scene_loader_.meshes(),
             .materials = scene_loader_.material_instances(),
             .mesh_instances = scene_render_data_.mesh_instances,
-            .ibl_intensity = ibl_intensity_,
+            .ibl_intensity = is_baking ? 1.0f : ibl_intensity_,
             .exposure = std::pow(2.0f, ev_),
             .ibl_rotation_sin = std::sin(ibl_yaw_),
             .ibl_rotation_cos = std::cos(ibl_yaw_),
