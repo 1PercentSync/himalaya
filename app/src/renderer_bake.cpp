@@ -268,7 +268,7 @@ namespace himalaya::app {
         // Batch 1: initial layout transitions for all per-instance images
         //   pos/normal/albedo maps → COLOR_ATTACHMENT (rasterization target)
         //   accumulation           → GENERAL (RT storage + clear)
-        //   aux_albedo/normal      → GENERAL (RT storage; Step 9.5c will rework to TRANSFER_DST + blit)
+        //   aux_albedo/normal      → TRANSFER_DST (blit pre-fill from albedo/normal maps)
         const std::array<VkImageMemoryBarrier2, 6> initial_barriers = {{
             {
                 .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
@@ -314,16 +314,15 @@ namespace himalaya::app {
                 .image = resource_manager_->get_image(bake_accumulation_).image,
                 .subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1},
             },
-            // aux images → GENERAL (RT dispatch storage write target).
-            // Step 9.5c will change this to TRANSFER_DST + blit pre-fill + GENERAL.
+            // aux images → TRANSFER_DST (blit pre-fill target from albedo/normal maps)
             {
                 .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
                 .srcStageMask = VK_PIPELINE_STAGE_2_NONE,
                 .srcAccessMask = VK_ACCESS_2_NONE,
-                .dstStageMask = VK_PIPELINE_STAGE_2_RAY_TRACING_SHADER_BIT_KHR,
-                .dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+                .dstStageMask = VK_PIPELINE_STAGE_2_BLIT_BIT,
+                .dstAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT,
                 .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-                .newLayout = VK_IMAGE_LAYOUT_GENERAL,
+                .newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                 .image = resource_manager_->get_image(bake_aux_albedo_).image,
                 .subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1},
             },
@@ -331,10 +330,10 @@ namespace himalaya::app {
                 .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
                 .srcStageMask = VK_PIPELINE_STAGE_2_NONE,
                 .srcAccessMask = VK_ACCESS_2_NONE,
-                .dstStageMask = VK_PIPELINE_STAGE_2_RAY_TRACING_SHADER_BIT_KHR,
-                .dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+                .dstStageMask = VK_PIPELINE_STAGE_2_BLIT_BIT,
+                .dstAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT,
                 .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-                .newLayout = VK_IMAGE_LAYOUT_GENERAL,
+                .newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                 .image = resource_manager_->get_image(bake_aux_normal_).image,
                 .subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1},
             },
@@ -363,8 +362,11 @@ namespace himalaya::app {
                                     bake_position_map_, bake_normal_map_, bake_albedo_map_,
                                     inst.material_id, 0, res, res);
 
-        // Barrier: COLOR_ATTACHMENT → SHADER_READ_ONLY for baker sampling
-        const std::array<VkImageMemoryBarrier2, 2> to_read = {{
+        // Batch 2: post-rasterize → blit source preparation
+        //   pos_map    → SHADER_READ_ONLY (baker raygen sampling, final layout)
+        //   normal_map → TRANSFER_SRC (blit source for aux_normal pre-fill)
+        //   albedo_map → TRANSFER_SRC (blit source for aux_albedo pre-fill)
+        const std::array<VkImageMemoryBarrier2, 3> pre_blit = {{
             {
                 .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
                 .srcStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
@@ -380,19 +382,102 @@ namespace himalaya::app {
                 .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
                 .srcStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
                 .srcAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+                .dstStageMask = VK_PIPELINE_STAGE_2_BLIT_BIT,
+                .dstAccessMask = VK_ACCESS_2_TRANSFER_READ_BIT,
+                .oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                .newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                .image = resource_manager_->get_image(bake_normal_map_).image,
+                .subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1},
+            },
+            {
+                .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+                .srcStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                .srcAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+                .dstStageMask = VK_PIPELINE_STAGE_2_BLIT_BIT,
+                .dstAccessMask = VK_ACCESS_2_TRANSFER_READ_BIT,
+                .oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                .newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                .image = resource_manager_->get_image(bake_albedo_map_).image,
+                .subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1},
+            },
+        }};
+        VkDependencyInfo dep_pre_blit{};
+        dep_pre_blit.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+        dep_pre_blit.imageMemoryBarrierCount = static_cast<uint32_t>(pre_blit.size());
+        dep_pre_blit.pImageMemoryBarriers = pre_blit.data();
+        imm_cmd.pipeline_barrier(dep_pre_blit);
+
+        // Blit rasterized maps → aux images (correct per-texel surface data for OIDN)
+        //   albedo_map (RGBA16F) → aux_albedo (RGBA16F): direct copy
+        //   normal_map (RGBA32F) → aux_normal (RGBA16F): format conversion via blit
+        {
+            VkImageBlit region{};
+            region.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+            region.srcOffsets[0] = {0, 0, 0};
+            region.srcOffsets[1] = {static_cast<int32_t>(res), static_cast<int32_t>(res), 1};
+            region.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+            region.dstOffsets[0] = {0, 0, 0};
+            region.dstOffsets[1] = {static_cast<int32_t>(res), static_cast<int32_t>(res), 1};
+
+            vkCmdBlitImage(imm_cmd.handle(),
+                           resource_manager_->get_image(bake_albedo_map_).image,
+                           VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                           resource_manager_->get_image(bake_aux_albedo_).image,
+                           VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                           1, &region, VK_FILTER_NEAREST);
+
+            vkCmdBlitImage(imm_cmd.handle(),
+                           resource_manager_->get_image(bake_normal_map_).image,
+                           VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                           resource_manager_->get_image(bake_aux_normal_).image,
+                           VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                           1, &region, VK_FILTER_NEAREST);
+        }
+
+        // Batch 3: post-blit → RT ready
+        //   normal_map  → SHADER_READ_ONLY (baker raygen sampling, final layout)
+        //   aux_albedo  → GENERAL (Set 3 binding, closesthit guard skips writes)
+        //   aux_normal  → GENERAL (Set 3 binding, closesthit guard skips writes)
+        const std::array<VkImageMemoryBarrier2, 3> post_blit = {{
+            {
+                .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+                .srcStageMask = VK_PIPELINE_STAGE_2_BLIT_BIT,
+                .srcAccessMask = VK_ACCESS_2_TRANSFER_READ_BIT,
                 .dstStageMask = VK_PIPELINE_STAGE_2_RAY_TRACING_SHADER_BIT_KHR,
                 .dstAccessMask = VK_ACCESS_2_SHADER_SAMPLED_READ_BIT,
-                .oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                .oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                 .newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                 .image = resource_manager_->get_image(bake_normal_map_).image,
                 .subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1},
             },
+            {
+                .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+                .srcStageMask = VK_PIPELINE_STAGE_2_BLIT_BIT,
+                .srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT,
+                .dstStageMask = VK_PIPELINE_STAGE_2_RAY_TRACING_SHADER_BIT_KHR,
+                .dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT,
+                .oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                .newLayout = VK_IMAGE_LAYOUT_GENERAL,
+                .image = resource_manager_->get_image(bake_aux_albedo_).image,
+                .subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1},
+            },
+            {
+                .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+                .srcStageMask = VK_PIPELINE_STAGE_2_BLIT_BIT,
+                .srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT,
+                .dstStageMask = VK_PIPELINE_STAGE_2_RAY_TRACING_SHADER_BIT_KHR,
+                .dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT,
+                .oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                .newLayout = VK_IMAGE_LAYOUT_GENERAL,
+                .image = resource_manager_->get_image(bake_aux_normal_).image,
+                .subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1},
+            },
         }};
-        VkDependencyInfo dep_to_read{};
-        dep_to_read.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-        dep_to_read.imageMemoryBarrierCount = static_cast<uint32_t>(to_read.size());
-        dep_to_read.pImageMemoryBarriers = to_read.data();
-        imm_cmd.pipeline_barrier(dep_to_read);
+        VkDependencyInfo dep_post_blit{};
+        dep_post_blit.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+        dep_post_blit.imageMemoryBarrierCount = static_cast<uint32_t>(post_blit.size());
+        dep_post_blit.pImageMemoryBarriers = post_blit.data();
+        imm_cmd.pipeline_barrier(dep_post_blit);
 
         // Configure baker pass with the new images
         lightmap_baker_pass_.reset_accumulation();
