@@ -88,7 +88,7 @@
 - [x] `renderer_bake.cpp`：烘焙触发时计算 per-instance lightmap 分辨率（世界空间表面积 × texels_per_meter，对齐到 4）
 - [x] `renderer_bake.cpp`：per-instance lightmap 烘焙循环（position/normal map + aux image 创建 → accumulation → 目标采样数 → 设 finalize pending flag）
 - [x] `application.cpp`：bake finalize 时机——`begin_frame()` fence wait 后、`render()` 前检查 flag，Application 驱动 `begin_immediate()` / `end_immediate()`（readback → BakeDenoiser → upload → BC6H → readback → KTX2 → 释放资源 → 推进到下一个 instance）
-- [ ] `renderer_bake.cpp`：per-instance `sample_count` 独立计数（从 0 到 target SPP），全局 `frame_seed` 单调递增不重置
+- [x] `renderer_bake.cpp`：per-instance `sample_count` 独立计数（从 0 到 target SPP），全局 `frame_seed` 单调递增不重置
 - [ ] `renderer_bake.cpp`：baker push constant hardcode（`max_clamp = 0`、`lod_max_level = 0`）；`directional_lights = 0` 和 `ibl_intensity = 1.0` 由 Application 在 RenderInput 中设置
 - [ ] `renderer_bake.cpp`：baker 独立 push constant（`max_bounces` / `env_sampling` / `emissive_light_count` 从 BakeConfig 读取）
 - [ ] `application.cpp`：baker allow tearing（BakeConfig::allow_tearing，Application 层设置 present mode，沿用 PT allow tearing 模式）
