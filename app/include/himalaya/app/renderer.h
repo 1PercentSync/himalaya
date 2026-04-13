@@ -308,6 +308,7 @@ namespace himalaya::app {
          * @param hdr_hash           Content hash of the HDR environment file.
          * @param scene_textures_hash Composite hash of all scene texture source bytes.
          * @param ibl_rotation_deg   Current IBL rotation angle in degrees.
+         * @param pre_bake_mode     RenderMode to restore on cancel/complete.
          */
         void start_bake(const framework::BakeConfig &config,
                         std::span<const framework::MeshInstance> mesh_instances,
@@ -318,7 +319,27 @@ namespace himalaya::app {
                         const std::string &scene_hash,
                         const std::string &hdr_hash,
                         const std::string &scene_textures_hash,
-                        float ibl_rotation_deg);
+                        float ibl_rotation_deg,
+                        framework::RenderMode pre_bake_mode);
+
+        /**
+         * @brief Cancels the current bake session: destroys per-instance images,
+         *        resets state to Idle. Application should restore RenderMode to
+         *        bake_pre_mode() after calling this.
+         */
+        void cancel_bake();
+
+        /**
+         * @brief Returns the RenderMode recorded before entering Baking.
+         *
+         * Application restores this after cancel or complete.
+         */
+        [[nodiscard]] framework::RenderMode bake_pre_mode() const;
+
+        /**
+         * @brief Returns the current bake state.
+         */
+        [[nodiscard]] BakeState bake_state() const;
 
         /**
          * @brief Finalizes the current bake instance: readback, denoise, compress,

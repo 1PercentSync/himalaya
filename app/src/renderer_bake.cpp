@@ -115,7 +115,11 @@ namespace himalaya::app {
         const std::string &scene_hash,
         const std::string &hdr_hash,
         const std::string &scene_textures_hash,
-        const float ibl_rotation_deg) {
+        const float ibl_rotation_deg,
+        const framework::RenderMode pre_bake_mode) {
+
+        // Record pre-bake mode for cancel/complete restoration
+        bake_pre_mode_ = pre_bake_mode;
 
         // Ensure reference view async denoiser is idle before baking
         abort_denoise();
@@ -384,6 +388,26 @@ namespace himalaya::app {
         }
         bake_lightmap_width_ = 0;
         bake_lightmap_height_ = 0;
+    }
+
+    void Renderer::cancel_bake() {
+        spdlog::info("Bake cancelled. {}/{} instances completed.",
+                     bake_current_instance_, bake_total_instances_);
+
+        destroy_bake_instance_images();
+        bake_state_ = BakeState::Idle;
+        bake_finalize_pending_ = false;
+        bake_instance_indices_.clear();
+        bake_lightmap_sizes_.clear();
+        bake_lightmap_keys_.clear();
+    }
+
+    Renderer::BakeState Renderer::bake_state() const {
+        return bake_state_;
+    }
+
+    framework::RenderMode Renderer::bake_pre_mode() const {
+        return bake_pre_mode_;
     }
 
     // ---- Per-frame bake rendering ----
