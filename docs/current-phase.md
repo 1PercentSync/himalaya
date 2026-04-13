@@ -30,6 +30,8 @@ Step 8: Lightmap Baker Pass（raygen shader + RT pipeline + accumulation）
     ↓
 Step 9: 烘焙模式渲染路径 + Lightmap 端到端流程
     ↓
+Step 9.5: 审查修复（bug 修复 + aux 正确性 + finalize 管线）
+    ↓
 Step 10: Probe 自动放置
     ↓
 Step 11: Probe Baker Pass（raygen shader + RT pipeline + cubemap accumulation）
@@ -52,6 +54,7 @@ Step 13: ImGui 烘焙控制面板
 | 7 | Position/Normal Map pass | RenderDoc：position map 和 normal map 在 UV 空间正确渲染（非零 texel 覆盖三角形区域） |
 | 8 | Lightmap Baker Pass | RenderDoc：accumulation buffer 逐帧亮度增加，UV 空间可见光照分布 |
 | 9 | 烘焙模式 + Lightmap 端到端 | 触发烘焙 → accumulation 全屏显示（居中保持宽高比，经 tonemapping）→ 累积 → 降噪 → BC6H → KTX2 写入磁盘，文件可被 read_ktx2() 正确加载 |
+| 9.5 | 审查修复 | 无 validation 报错，参考视图行为不变，bake finalize 输出 KTX2，RenderDoc 确认 aux 包含正确的 texel albedo/normal |
 | 10 | Probe 自动放置 | 日志输出 probe 数量 + 位置列表，墙内探针被正确剔除 |
 | 11 | Probe Baker Pass | RenderDoc：probe accumulation cubemap 逐帧亮度增加 |
 | 12 | Probe 端到端 | 触发烘焙 → 累积 → 降噪 → prefilter → BC6H → KTX2 写入磁盘 |
@@ -326,6 +329,104 @@ Position/normal map 通过 `sampler2D`（nearest, clamp）采样而非 storage i
 - Cancel 后显示信息："Bake cancelled. N/M instances completed. Incomplete angle will not appear in available list."
 
 **验证**：切换到 Baking 模式 → accumulation 全屏显示（居中保持宽高比，经 tonemapping）→ lightmap 逐 instance 烘焙（跳过退化/透明 instance）→ 每个 instance 烘焙完成后 KTX2 文件出现在 cache 目录 → `read_ktx2()` 能正确加载 → 所有 instance 完成后状态转 Complete
+
+---
+
+### Step 9.5：审查修复（Steps 1-9 回顾）
+
+Steps 1-9 完成后全面审查发现的 bug 修复、同步正确性修复和 aux 通道正确性改造。
+
+#### 9.5a：杂项修复
+
+- `renderer.h`：删除未使用的 `bake_frame_seed_` 成员（`LightmapBakerPass` 内部自行管理 `frame_seed_`）
+- `pos_normal_map_pass.cpp`：`record()` 入口检查 `pipeline_.pipeline != VK_NULL_HANDLE`，无效时 early return
+- `lightmap_baker_pass.cpp`：`record()` 入口检查 `rt_pipeline_.pipeline != VK_NULL_HANDLE`，无效时 early return
+- `renderer_bake.cpp`：lightmap cache key 的 `geometry_hash` 扩展为 `vertices_hash + indices_hash`（分别 hash 再拼接，与 `scene_textures_hash` 风格一致），修复仅 hash 顶点而遗漏索引的问题
+
+#### 9.5b：首个 instance 启动 + 图像初始化
+
+- `renderer_bake.cpp`：`start_bake()` 末尾调用 `begin_bake_instance(0, mesh_instances, meshes)`，guard `bake_total_instances_ > 0`（无 bakeable instance 时直接 `BakeState::Complete`）。`start_bake()` 需在 immediate scope 内调用（Step 13 的 Application 调用侧 `begin_immediate()` / `end_immediate()` 包裹）
+- `renderer_bake.cpp`：`begin_bake_instance()` 中 accumulation 创建后 barrier UNDEFINED→GENERAL + `vkCmdClearColorImage` vec4(0)（清除未覆盖 texel 的 VRAM 垃圾）；aux 图像 barrier UNDEFINED→TRANSFER_DST（为 9.5c 的 blit 预填充准备）
+
+#### 9.5c：Baker aux 通道正确性
+
+**问题**：closesthit 无条件写入 aux albedo/normal，写入的是射线命中面的属性——对 lightmap baker 语义错误（应是被 bake texel 自身的表面属性）。OIDN 设置 `cleanAux=true`，错误的 aux 会引入伪影。
+
+**方案**：closesthit 加守卫跳过 lightmap baker 的 aux 写入，PosNormalMap pass 扩展为 3 render target 输出 albedo map，blit 预填充 aux 图像。
+
+**closesthit 守卫**：
+
+```glsl
+if (pc.lightmap_width == 0u) {
+    imageStore(aux_albedo_image, ivec2(gl_LaunchIDEXT.xy), vec4(albedo, 0.0));
+    imageStore(aux_normal_image, ivec2(gl_LaunchIDEXT.xy), vec4(N, 0.0));
+}
+```
+
+Uniform branch（push constant），零开销。Reference view 和 probe baker（`lightmap_width == 0`）保持原有行为。
+
+**PosNormalMap pass 扩展**：
+
+- `pos_normal_map.vert`：新增 `layout(location = 2) out vec2 frag_uv0;`，pass through `in_uv0`
+- `pos_normal_map.frag`：引入 `bindings.glsl`（MaterialBuffer + bindless textures），新增 `layout(location = 2) out vec4 out_albedo;`。从 `material_buffer[material_index]` 读 `base_color_factor` + `base_color_texture_index`，有纹理时采样 `textures[index]` 乘以 factor，输出 `vec4(base_color.rgb, 1.0)`
+- `PosNormalMapPushConstants`：新增 `uint32_t material_index`（112→116 字节，仍在 128B 限制内）
+- `PosNormalMapPass::setup()`：新增 `DescriptorManager&` 参数（获取 Set 0/1 layout 构建 pipeline layout）
+- `PosNormalMapPass` pipeline：3 个 color attachment `{RGBA32F, RGBA32F, RGBA16F}`
+- `PosNormalMapPass::record()`：新增 `material_index` + `frame_index` 参数，绑定 Set 0/1
+
+**Aux 预填充（begin_bake_instance）**：
+
+新增 `bake_albedo_map_`（RGBA16F，usage: ColorAttachment | TransferSrc），与其他 per-instance 图像统一在 `destroy_bake_instance_images()` 中销毁。
+
+Barrier 和操作序列（全在 immediate scope 内）：
+
+```
+Batch 1（创建后初始转换）:
+  pos_map, normal_map, albedo_map  →  COLOR_ATTACHMENT_OPTIMAL
+  accumulation                     →  GENERAL  + clear vec4(0)
+  aux_albedo, aux_normal           →  TRANSFER_DST_OPTIMAL
+
+Rasterize（3 color attachment：pos_map, normal_map, albedo_map）
+
+Batch 2（光栅化后 → blit 前）:
+  pos_map     →  SHADER_READ_ONLY
+  normal_map  →  TRANSFER_SRC_OPTIMAL
+  albedo_map  →  TRANSFER_SRC_OPTIMAL
+
+Blit  albedo_map → aux_albedo    （RGBA16F → RGBA16F）
+Blit  normal_map → aux_normal    （RGBA32F → RGBA16F，vkCmdBlitImage 自动格式转换）
+
+Batch 3（blit 后 → RT 就绪）:
+  normal_map  →  SHADER_READ_ONLY
+  aux_albedo  →  GENERAL
+  aux_normal  →  GENERAL
+```
+
+blit 后 aux 图像包含正确的 per-texel 表面属性。closesthit 守卫确保 RT dispatch 不覆写。
+
+#### 9.5d：RG 单次 import
+
+- `LightmapBakerPass::record()` 接口改为接受外部 RG resource ID（accumulation / aux_albedo / aux_normal / position_map / normal_map），移除内部 `import_image()` 调用
+- `render_baking()` 统一 import baker 图像一次，传 RG resource ID 给 `lightmap_baker_pass_.record()` 和 blit preview pass，消除同一 VkImage 被 RG 双重 import 导致的 barrier 缺失
+
+#### 9.5e：Finalize 管线
+
+`bake_finalize()` 实现完整管线（在 immediate scope 内执行）：
+
+1. Readback accumulation（RGBA32F）→ CPU beauty buffer
+2. Readback aux_albedo（RGBA16F）→ CPU albedo buffer（blit 预填充的正确数据）
+3. Readback aux_normal（RGBA16F）→ CPU normal buffer（blit 预填充的正确数据）
+4. `BakeDenoiser::denoise(beauty, albedo, normal, output, w, h)`（cleanAux=true，aux 来自光栅化，确实干净）
+5. Upload 降噪结果到 accumulation buffer（覆写原始累积数据）
+6. `compress_bc6h()` 采样 accumulation → BC6H image
+7. Readback BC6H → CPU buffer
+8. `write_ktx2()` 原子写入（write-to-temp + rename）
+9. 释放当前 instance 图像
+10. 推进到下一个 instance（`begin_bake_instance(next)`）或转 Complete
+
+所有子系统已就绪：BakeDenoiser（Step 5）、compress_bc6h（Step 1）、write_ktx2（Phase 6 已有）。
+
+**验证**：无 validation 报错，参考视图行为无回归，触发烘焙 → accumulation 正确显示（无垃圾 texel）→ finalize 输出 KTX2 → `read_ktx2()` 能正确加载。RenderDoc 捕获 begin_bake_instance 帧：position map（alpha 通道覆盖区）、normal map（法线方向可视化）、albedo map（材质颜色，比较 forward pass 确认一致）、aux_albedo/aux_normal（blit 后与 albedo_map/normal_map 内容一致）
 
 ---
 

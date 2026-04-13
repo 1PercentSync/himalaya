@@ -87,7 +87,7 @@
 - [x] 新增 `renderer_bake.cpp`：烘焙状态机（BakingLightmaps → BakingProbes → Complete）
 - [x] `renderer_bake.cpp`：烘焙触发时计算 per-instance lightmap 分辨率（世界空间表面积 × texels_per_meter，对齐到 4）
 - [x] `renderer_bake.cpp`：per-instance lightmap 烘焙循环（position/normal map + aux image 创建 → accumulation → 目标采样数 → 设 finalize pending flag）
-- [x] `application.cpp`：bake finalize 时机——`begin_frame()` fence wait 后、`render()` 前检查 flag，Application 驱动 `begin_immediate()` / `end_immediate()`（readback → BakeDenoiser → upload → BC6H → readback → KTX2 → 释放资源 → 推进到下一个 instance）
+- [x] `application.cpp`：bake finalize 时机——`begin_frame()` fence wait 后、`render()` 前检查 flag，Application 驱动 `begin_immediate()` / `end_immediate()`；`bake_finalize()` 框架（清理当前 instance 图像 → 推进到下一个 instance 或标记 Complete）
 - [x] `renderer_bake.cpp`：per-instance `sample_count` 独立计数（从 0 到 target SPP），全局 `frame_seed` 单调递增不重置
 - [x] `renderer_bake.cpp`：baker push constant hardcode（`max_clamp = 0`、`lod_max_level = 0`）；`directional_lights = 0` 和 `ibl_intensity = 1.0` 由 Application 在 RenderInput 中设置
 - [x] `renderer_bake.cpp`：baker 独立 push constant（`max_bounces` / `env_sampling` / `emissive_light_count` 从 BakeConfig 读取）
@@ -104,6 +104,24 @@
 - [x] `renderer_bake.cpp`：进入 Baking 前记录当前 RenderMode，Cancel/Complete 后恢复
 - [x] `renderer_bake.cpp`：Cancel 后显示信息（"Bake cancelled. N/M instances completed."）
 - [x] `renderer.cpp`：render() switch 新增 Baking case
+
+## Step 9.5：审查修复（Steps 1-9 回顾）
+
+- [ ] `renderer.h`：删除未使用的 `bake_frame_seed_` 成员
+- [ ] `pos_normal_map_pass.cpp`：`record()` 入口检查 `pipeline_.pipeline != VK_NULL_HANDLE`，无效时 early return
+- [ ] `lightmap_baker_pass.cpp`：`record()` 入口检查 `rt_pipeline_.pipeline != VK_NULL_HANDLE`，无效时 early return
+- [ ] `renderer_bake.cpp`：lightmap cache key 的 `geometry_hash` 扩展为 vertices + indices 分别 hash 再拼接
+- [ ] `renderer_bake.cpp`：`start_bake()` 末尾调用 `begin_bake_instance(0)`（guard `bake_total_instances_ > 0`，0 时直接 Complete）；文档标注需 immediate scope
+- [ ] `renderer_bake.cpp`：`begin_bake_instance()` 中 accumulation 创建后 barrier UNDEFINED→GENERAL + clear vec4(0)；aux 图像 barrier UNDEFINED→TRANSFER_DST（为 blit 预填充准备）
+- [ ] `closesthit.rchit`：aux imageStore 加 `if (pc.lightmap_width == 0u)` 守卫（lightmap baker 跳过，reference view / probe baker 保留）
+- [ ] `pos_normal_map.vert`：新增 `frag_uv0` 输出（pass through `in_uv0`）
+- [ ] `pos_normal_map.frag`：引入 `bindings.glsl`，从 MaterialBuffer 采样 base color，新增第三输出 `out_albedo`
+- [ ] `pos_normal_map_pass.h/.cpp`：`setup()` 新增 `DescriptorManager&`；push constants 新增 `material_index`（116B）；pipeline 3 color attachment（RGBA32F, RGBA32F, RGBA16F）；`record()` 新增 `material_index` + `frame_index` 参数，绑定 Set 0/1
+- [ ] `renderer.h`：新增 `bake_albedo_map_` 成员
+- [ ] `renderer_bake.cpp`：`begin_bake_instance()` 创建 albedo_map（RGBA16F），扩展 barrier 序列（3 批次），光栅化 3 attachment，blit albedo_map→aux_albedo + normal_map→aux_normal 预填充正确 aux
+- [ ] `lightmap_baker_pass.h/.cpp`：`record()` 接口改为接受外部 RG resource ID（5 个 baker 图像），移除内部 `import_image()` 调用
+- [ ] `renderer_bake.cpp`：`render_baking()` 统一 import baker 图像一次，传 RG resource ID 给 `lightmap_baker_pass_.record()` 和 blit pass
+- [ ] `renderer_bake.cpp`：`bake_finalize()` 实现完整管线（readback accumulation + aux_albedo + aux_normal → BakeDenoiser::denoise() → upload 降噪结果 → compress_bc6h() → readback BC6H → write_ktx2() → 释放 → 推进）
 
 ## Step 10：Probe 自动放置
 
