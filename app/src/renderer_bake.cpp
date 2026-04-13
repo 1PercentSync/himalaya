@@ -478,7 +478,72 @@ namespace himalaya::app {
                                                         &clear_color, 1, &range);
                                });
 
-        // TODO: blit accumulation buffer into hdr_color (centered, aspect-ratio preserved)
+        // Blit accumulation preview into hdr_color (centered, aspect-ratio preserved)
+        if (bake_accumulation_.valid() && bake_lightmap_width_ > 0) {
+            auto rg_accum_blit = render_graph_.import_image(
+                "bake_accum_blit", bake_accumulation_,
+                VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
+
+            const std::array blit_resources = {
+                framework::RGResourceUsage{
+                    hdr_resource,
+                    framework::RGAccessType::Write,
+                    framework::RGStage::Transfer,
+                },
+                framework::RGResourceUsage{
+                    rg_accum_blit,
+                    framework::RGAccessType::Read,
+                    framework::RGStage::Transfer,
+                },
+            };
+
+            const uint32_t lm_w = bake_lightmap_width_;
+            const uint32_t lm_h = bake_lightmap_height_;
+
+            render_graph_.add_pass("Bake Blit Preview", blit_resources,
+                                   [this, lm_w, lm_h](const rhi::CommandBuffer &pass_cmd) {
+                                       const auto hdr_handle = render_graph_.get_managed_backing_image(
+                                           managed_hdr_color_);
+                                       const auto &hdr_img = resource_manager_->get_image(hdr_handle);
+                                       const auto &accum_img = resource_manager_->get_image(bake_accumulation_);
+
+                                       const auto screen_w = static_cast<float>(hdr_img.desc.width);
+                                       const auto screen_h = static_cast<float>(hdr_img.desc.height);
+                                       const float lm_aspect = static_cast<float>(lm_w) / static_cast<float>(lm_h);
+                                       const float screen_aspect = screen_w / screen_h;
+
+                                       // Fit lightmap into screen, centered
+                                       float dst_w, dst_h;
+                                       if (lm_aspect > screen_aspect) {
+                                           dst_w = screen_w;
+                                           dst_h = screen_w / lm_aspect;
+                                       } else {
+                                           dst_h = screen_h;
+                                           dst_w = screen_h * lm_aspect;
+                                       }
+                                       const auto dst_x = static_cast<int32_t>((screen_w - dst_w) * 0.5f);
+                                       const auto dst_y = static_cast<int32_t>((screen_h - dst_h) * 0.5f);
+
+                                       VkImageBlit region{};
+                                       region.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+                                       region.srcOffsets[0] = {0, 0, 0};
+                                       region.srcOffsets[1] = {
+                                           static_cast<int32_t>(lm_w),
+                                           static_cast<int32_t>(lm_h), 1
+                                       };
+                                       region.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+                                       region.dstOffsets[0] = {dst_x, dst_y, 0};
+                                       region.dstOffsets[1] = {
+                                           dst_x + static_cast<int32_t>(dst_w),
+                                           dst_y + static_cast<int32_t>(dst_h), 1
+                                       };
+
+                                       vkCmdBlitImage(pass_cmd.handle(),
+                                                      accum_img.image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                                                      hdr_img.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                                                      1, &region, VK_FILTER_LINEAR);
+                                   });
+        }
 
         // Update Set 2 binding 0 with hdr_color for tonemapping
         const auto hdr_backing = render_graph_.get_managed_backing_image(managed_hdr_color_);
