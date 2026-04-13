@@ -51,10 +51,11 @@ namespace himalaya::framework {
 
         const glm::vec3 extent = scene_bounds.max - scene_bounds.min;
 
-        // Guard against degenerate AABB or invalid spacing
-        if (grid_spacing <= 0.0f || extent.x < 0.0f || extent.y < 0.0f || extent.z < 0.0f) {
-            spdlog::warn("Probe placement: invalid parameters (spacing={:.2f}, extent=[{:.1f}, {:.1f}, {:.1f}])",
-                         grid_spacing, extent.x, extent.y, extent.z);
+        // Guard against degenerate AABB, invalid spacing, or zero ray count
+        if (grid_spacing <= 0.0f || ray_count == 0
+            || extent.x < 0.0f || extent.y < 0.0f || extent.z < 0.0f) {
+            spdlog::warn("Probe placement: invalid parameters (spacing={:.2f}, rays={}, extent=[{:.1f}, {:.1f}, {:.1f}])",
+                         grid_spacing, ray_count, extent.x, extent.y, extent.z);
             return {};
         }
 
