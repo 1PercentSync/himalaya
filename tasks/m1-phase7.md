@@ -80,16 +80,19 @@
 
 ## Step 9：烘焙模式渲染路径 + Lightmap 端到端
 
+- [ ] 重构：PT 参数从 Renderer 迁移到 Application（新增 `scene_data.h` PTConfig 结构体，沿用 ShadowConfig 模式；RenderInput 新增 `const PTConfig&`；移除 Renderer 上的 mutable reference accessors）
+- [ ] 新增 `scene_data.h`：BakeConfig 结构体（texels_per_meter / min_res / max_res / lightmap_spp / probe_face_res / probe_spacing / probe_spp / max_bounces / env_sampling / emissive_nee / allow_tearing）+ RenderInput 新增 `const BakeConfig&`
 - [ ] `scene_data.h`：RenderMode 新增 Baking
 - [ ] `renderer.h`：BakeState 枚举 + 烘焙状态字段 + `render_baking()` 私有方法
 - [ ] 新增 `renderer_bake.cpp`：烘焙状态机（BakingLightmaps → BakingProbes → Complete）
 - [ ] `renderer_bake.cpp`：烘焙触发时计算 per-instance lightmap 分辨率（世界空间表面积 × texels_per_meter，对齐到 4）
-- [ ] `renderer_bake.cpp`：per-instance lightmap 烘焙循环（position/normal map + aux image 创建 → accumulation → 目标采样数 → readback accumulation + aux → BakeDenoiser（含辅助通道）→ BC6H → KTX2）
+- [ ] `renderer_bake.cpp`：per-instance lightmap 烘焙循环（position/normal map + aux image 创建 → accumulation → 目标采样数 → 设 finalize pending flag）
+- [ ] `application.cpp`：bake finalize 时机——`begin_frame()` fence wait 后、`render()` 前检查 flag，Application 驱动 `begin_immediate()` / `end_immediate()`（readback → BakeDenoiser → upload → BC6H → readback → KTX2 → 释放资源 → 推进到下一个 instance）
 - [ ] `renderer_bake.cpp`：per-instance `sample_count` 独立计数（从 0 到 target SPP），全局 `frame_seed` 单调递增不重置
-- [ ] `renderer_bake.cpp`：baker push constant hardcode（`max_clamp = 0`、`directional_lights = 0`、`lod_max_level = 0`）+ GlobalUBO override（`ibl_intensity = 1.0`）
-- [ ] `renderer_bake.cpp`：baker 独立 push constant（`max_bounces` / `env_sampling` / `emissive_light_count` 从 baker 面板参数读取）
-- [ ] `renderer_bake.cpp`：baker allow tearing（烘焙期间可选强制 IMMEDIATE present mode）
-- [ ] `scene_loader.cpp`：纹理加载时收集 per-texture content_hash，按 glTF 索引顺序拼接 hash 为 `scene_textures_hash`，存储在 SceneLoader 上
+- [ ] `renderer_bake.cpp`：baker push constant hardcode（`max_clamp = 0`、`lod_max_level = 0`）；`directional_lights = 0` 和 `ibl_intensity = 1.0` 由 Application 在 RenderInput 中设置
+- [ ] `renderer_bake.cpp`：baker 独立 push constant（`max_bounces` / `env_sampling` / `emissive_light_count` 从 BakeConfig 读取）
+- [ ] `application.cpp`：baker allow tearing（BakeConfig::allow_tearing，Application 层设置 present mode，沿用 PT allow tearing 模式）
+- [ ] `scene_loader.cpp`：纹理加载时复用已有的 `source_hashes`（纹理缓存 pipeline 已算），按 glTF 纹理索引顺序拼接 hash 为 `scene_textures_hash`，存储在 SceneLoader 上
 - [ ] `renderer_bake.cpp`：lightmap cache key（`scene + geometry + transform + hdr + scene_textures`）+ 文件 `<lm_hash>_rot<NNN>.ktx2`
 - [ ] `renderer_bake.cpp`：probe set cache key（`scene + hdr + scene_textures`）+ 文件 `<set_hash>_rot<NNN>_probe<III>.ktx2` + manifest.bin（probe_count + positions）
 - [ ] `renderer_bake.cpp`：进入 Baking 前调用 `abort_denoise()`（参考视图异步 Denoiser 归 Idle）
@@ -97,7 +100,7 @@
 - [ ] `renderer_bake.cpp`：退化 instance（vertex_count=0/index_count<3）和透明 instance（AlphaMode::Blend）跳过 lightmap bake
 - [ ] `renderer_bake.cpp`：KTX2 / manifest 原子写入（write-to-temp + rename）
 - [ ] `renderer_bake.cpp`：`rotation_int = round(angle_deg) % 360`（0-359）
-- [ ] `renderer_bake.cpp`：每帧帧流程 `fill_common_gpu_data()`（方向光不写入）→ RG import Set 0 + TLAS → baker RT pass → ImGui render pass → present
+- [ ] `renderer_bake.cpp`：每帧帧流程 `fill_common_gpu_data()` → RG import Set 0 + TLAS → baker RT pass → clear `managed_hdr_color_` + blit accumulation（居中保持宽高比）→ tonemapping → ImGui render pass → present
 - [ ] `renderer_bake.cpp`：进入 Baking 前记录当前 RenderMode，Cancel/Complete 后恢复
 - [ ] `renderer_bake.cpp`：Cancel 后显示信息（"Bake cancelled. N/M instances completed."）
 - [ ] `renderer.cpp`：render() switch 新增 Baking case
@@ -132,7 +135,6 @@
 - [ ] `debug_ui.cpp`：Start Bake 按钮（唯一入口，旁显当前角度 + tooltip）+ Cancel 按钮（恢复原 RenderMode + 显示取消信息）
 - [ ] `debug_ui.cpp`：Bake 期间 UI 锁定（bake 参数 slider + Load Scene + Load HDR + Reload Shaders + PT checkbox 全部灰显，PT 面板不显示）
 - [ ] `debug_ui.cpp`：进度显示（阶段 + 当前项/总数 + 采样数/目标 + 吞吐量 SPP/s + 当前项耗时 + 总进度百分比 + 总耗时）
-- [ ] `debug_ui.cpp`：ImGui::Image() accumulation 预览
 - [ ] `debug_ui.cpp`：已 bake 角度列表（目录扫描 `<hash>_rot*.ktx2`，显示角度 + lightmap/probe 数量，点击切换）
 - [ ] `debug_ui.cpp`：Cache 面板新增 Clear Bake Cache 按钮
 - [ ] `renderer.h`：暴露烘焙状态（BakeState、current index、sample count、吞吐量、耗时等）给 DebugUIContext
