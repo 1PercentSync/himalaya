@@ -432,26 +432,42 @@ blit 后 aux 图像包含正确的 per-texel 表面属性。closesthit 守卫确
 
 ### Step 10：Probe 自动放置
 
-均匀网格 + RT 几何过滤。
+均匀网格 + 两级 RT 几何过滤（面朝向 + 封闭体检测）。
 
-- 新增 `shaders/bake/probe_filter.comp`：compute shader，每个 invocation 处理一个候选点 × 6 方向 `rayQueryEXT`，输出 pass/fail 到 SSBO
-- 新增 `framework/probe_placement.h`：`ProbeGrid` 结构体（positions vector + grid params）+ `generate_probe_grid()` 函数
+- 新增 `shaders/bake/probe_filter.comp`：compute shader，每个 invocation 处理一个候选点 × N 条蒙特卡洛射线 `rayQueryEXT`，输出 pass/fail 到 SSBO
+- 新增 `framework/probe_placement.h`：`ProbeGrid` 结构体（positions vector + grid params + filter stats）+ `generate_probe_grid()` 函数
 - 新增 `framework/probe_placement.cpp`：
   - 在场景 AABB 内按 grid spacing 放置 3D 网格候选点
-  - dispatch `probe_filter.comp`（`rayQueryEXT`），读回结果剔除墙内探针
-  - 若 >= 5/6 个方向在极短距离内命中几何体（< 0.1m）→ 判定为墙内，剔除
-  - 返回有效 probe 位置列表
+  - 计算封闭体判定阈值：`enclosure_threshold = enclosure_threshold_factor * AABB_longest_edge`
+  - dispatch `probe_filter.comp`（蒙特卡洛球面采样 + `rayQueryEXT`），读回结果执行两级过滤：
+    - **Rule 1（一票否决）**：任一射线命中 single-sided 几何体的**背面** → 判定为几何体内部，剔除
+    - **Rule 2（封闭体检测）**：所有射线均命中 + 全部命中面为 double-sided + 最大命中距离 < `enclosure_threshold` → 判定为 double-sided 封闭体内部，剔除
+  - 返回有效 probe 位置列表 + 过滤统计（候选数、Rule 1 剔除数、Rule 2 剔除数、通过数）
 - `framework/CMakeLists.txt`：添加源文件
 
-**验证**：Sponza 场景，grid spacing 1m → 日志输出候选/通过/剔除数量，墙内探针被正确剔除（可通过临时 ImGui 3D 可视化或日志坐标人工验证）
+**验证**：Sponza 场景，grid spacing 1m → 日志输出候选/Rule 1 剔除/Rule 2 剔除/通过数量，墙内探针被正确剔除（可通过临时 ImGui 3D 可视化或日志坐标人工验证）
 
 #### 设计要点
 
-RT 几何过滤在烘焙触发时执行（非场景加载时——grid spacing 等参数在 UI 中可调）。Compute shader 使用 `rayQueryEXT`（Vulkan 1.2+ ray query 扩展，Phase 6 Step 1 已启用）+ `gl_RayFlagsTerminateOnFirstHitEXT`（只需 hit/miss）。单次 dispatch 处理全部候选点（每个 invocation 一个候选点 × 6 方向射线）。
+**前置假设**：场景中 non-double-sided 几何体的背面不会出现在合法渲染区域内。此假设对标准场景（Sponza 等）成立，允许 Rule 1 零误判。
+
+**射线方向**：Fibonacci 球面均匀采样（quasi-random，比纯随机覆盖更均匀），射线数量通过 `BakeConfig::filter_ray_count` 可调（默认 64）。采样方向在 shader 内部由 invocation index 确定性生成，无需额外 buffer。
+
+**每条射线的判定流程**：
+1. `rayQueryEXT` 获取 committed closest hit（不使用 `TerminateOnFirstHitEXT`——需要最近命中点的准确距离和面朝向）
+2. Miss → 标记为"开放方向"
+3. Hit → 通过 `rayQueryGetIntersectionFrontFaceEXT` 判断正面/背面，通过 `rayQueryGetIntersectionInstanceCustomIndexEXT` + MaterialBuffer 查询 `double_sided` 标志
+4. Hit single-sided 背面 → Rule 1 立即判定剔除（整个 invocation 可 early-out）
+5. Hit double-sided → 记录距离，累计 double-sided 命中数
+6. Hit single-sided 正面 → 标记存在非 double-sided 命中（Rule 2 不可能触发）
+
+**封闭体阈值**：`enclosure_threshold = enclosure_threshold_factor * AABB_longest_edge`。系数通过 `BakeConfig::enclosure_threshold_factor` 可调（默认 0.05）。ImGui 参数面板在系数 slider 旁显示计算出的绝对阈值（如 "= 1.50 m"）。
+
+RT 几何过滤在烘焙触发时执行（非场景加载时——grid spacing 等参数在 UI 中可调）。Compute shader 使用 `rayQueryEXT`（Vulkan 1.2+ ray query 扩展，Phase 6 Step 1 已启用）+ `gl_RayFlagsOpaqueEXT`（所有几何体视为不透明，traversal 自动提交最近命中）。单次 dispatch 处理全部候选点（每个 invocation 一个候选点 × N 条射线）。
 
 Compute pipeline 为一次性使用：烘焙触发时在 immediate scope 内创建 → dispatch → 读回结果 → 销毁 pipeline。与 pos/normal map pipeline（持久存活）不同——placement 只执行一次，不值得持久占用资源。
 
-TLAS 访问：`probe_filter.comp` 共用 `bindings.glsl` 的 Set 0 声明，通过 `bind_compute_descriptor_sets()` 绑定已有 Set 0（TLAS 在 binding 4，`build_scene_rt()` 后已有效）。与现有 compute pass（GTAO 等）访问 Set 0 的模式一致。
+TLAS 访问：`probe_filter.comp` 共用 `bindings.glsl` 的 Set 0 声明，通过 `bind_compute_descriptor_sets()` 绑定已有 Set 0（TLAS 在 binding 4，`build_scene_rt()` 后已有效）。MaterialBuffer 在 Set 0 binding 1，已包含 `double_sided` 标志。与现有 compute pass（GTAO 等）访问 Set 0 的模式一致。
 
 ---
 
@@ -503,7 +519,7 @@ Cache key 和文件命名详见 Step 9。Probe position 是 bake 产物（`gener
 ### Step 13：ImGui 烘焙控制面板
 
 - `app/debug_ui.cpp`：新增 Baking collapsing header（始终显示，默认折叠）：
-  - **参数配置**（默认值见 `m1-rt-decisions.md` 烘焙参数表）：lightmap texels_per_meter(10) + min_resolution(32) + max_resolution(2048) + lightmap SPP(4096) + probe face 分辨率(512) + probe grid spacing(1m) + probe SPP(2048) + baker max_bounces(32) + baker env_sampling(ON) + baker emissive_nee(ON) + baker allow_tearing(OFF)
+  - **参数配置**（默认值见 `m1-rt-decisions.md` 烘焙参数表）：lightmap texels_per_meter(10) + min_resolution(32) + max_resolution(2048) + lightmap SPP(4096) + probe face 分辨率(512) + probe grid spacing(1m) + probe filter ray count(64) + probe enclosure threshold factor(0.05)（slider 旁显示 "= X.XX m" 绝对阈值）+ probe SPP(2048) + baker max_bounces(32) + baker env_sampling(ON) + baker emissive_nee(ON) + baker allow_tearing(OFF)
   - **烘焙触发**：Start Bake 按钮（仅 rt_supported + 有场景 + 有 HDR + RenderMode != Baking + IBL 模式时可用）。按钮旁显示当前 IBL 旋转角度（round 后整数度），tooltip 说明"将以此角度 bake，结果按角度缓存"。点击后切换 RenderMode 到 Baking（进入 Baking 模式是唯一入口，不通过 RenderMode combo）
   - **Bake 期间 UI 锁定**：所有 bake 参数 slider 灰显、Start Bake 灰显、Load Scene / Load HDR / Reload Shaders / PT checkbox 灰显、PT 面板不显示、Allow Tearing 不支持 IMMEDIATE 时灰显
   - **进度显示**：当前阶段（Lightmaps / Probes / Complete）+ 当前项编号/总数 + 采样数/目标 + 吞吐量（SPP/s）+ 当前项耗时 + 总进度百分比 + 总耗时

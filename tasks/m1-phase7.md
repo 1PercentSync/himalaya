@@ -125,10 +125,11 @@
 
 ## Step 10：Probe 自动放置
 
-- [ ] 新增 `shaders/bake/probe_filter.comp`：rayQueryEXT 几何过滤 compute shader
-- [ ] 新增 `framework/probe_placement.h`：`ProbeGrid` 结构体 + `generate_probe_grid()` 函数声明
+- [ ] 新增 `shaders/bake/probe_filter.comp`：蒙特卡洛球面采样 + `rayQueryEXT` 两级过滤 compute shader（Fibonacci lattice 方向生成 + MaterialBuffer double_sided 查询 + Rule 1 背面一票否决 + Rule 2 封闭体检测）
+- [ ] 新增 `framework/probe_placement.h`：`ProbeGrid` 结构体（positions + filter stats）+ `generate_probe_grid()` 函数声明
 - [ ] 新增 `framework/probe_placement.cpp`：均匀网格候选点生成（场景 AABB 内，grid spacing 间距）
-- [ ] `probe_placement.cpp`：RT 几何过滤（compute shader + `rayQueryEXT`，6 轴对齐射线，>= 5/6 短距离命中 → 剔除）
+- [ ] `probe_placement.cpp`：两级 RT 几何过滤（compute shader dispatch + readback + Rule 1/Rule 2 统计日志）
+- [ ] `scene_data.h`：BakeConfig 新增 `filter_ray_count`(64) + `enclosure_threshold_factor`(0.05f)
 - [ ] `framework/CMakeLists.txt`：添加 `probe_placement.cpp`
 
 ## Step 11：Probe Baker Pass
@@ -149,11 +150,11 @@
 
 ## Step 13：ImGui 烘焙控制面板
 
-- [ ] `debug_ui.cpp`：Baking collapsing header（始终显示，默认折叠）— 参数配置（texels_per_meter / min_res / max_res / lightmap SPP / probe face res / probe spacing / probe SPP / baker max_bounces / baker env_sampling / baker emissive_nee / baker allow_tearing）
+- [ ] `debug_ui.cpp`：Baking collapsing header（始终显示，默认折叠）— 参数配置（texels_per_meter / min_res / max_res / lightmap SPP / probe face res / probe spacing / filter ray count / enclosure threshold factor + 绝对阈值显示 / probe SPP / baker max_bounces / baker env_sampling / baker emissive_nee / baker allow_tearing）
 - [ ] `debug_ui.cpp`：Start Bake 按钮（唯一入口，旁显当前角度 + tooltip）+ Cancel 按钮（恢复原 RenderMode + 显示取消信息）
 - [ ] `debug_ui.cpp`：Bake 期间 UI 锁定（bake 参数 slider + Load Scene + Load HDR + Reload Shaders + PT checkbox 全部灰显，PT 面板不显示）
 - [ ] `debug_ui.cpp`：进度显示（阶段 + 当前项/总数 + 采样数/目标 + 吞吐量 SPP/s + 当前项耗时 + 总进度百分比 + 总耗时）
 - [ ] `debug_ui.cpp`：已 bake 角度列表（目录扫描 `<hash>_rot*.ktx2`，显示角度 + lightmap/probe 数量，点击切换）
 - [ ] `debug_ui.cpp`：Cache 面板新增 Clear Bake Cache 按钮
 - [ ] `renderer.h`：暴露烘焙状态（BakeState、current index、sample count、吞吐量、耗时等）给 DebugUIContext
-- [ ] `config.cpp`：烘焙参数持久化（texels_per_meter、probe spacing、baker max_bounces、env_sampling、emissive_nee、allow_tearing）
+- [ ] `config.cpp`：烘焙参数持久化（texels_per_meter、probe spacing、filter_ray_count、enclosure_threshold_factor、baker max_bounces、env_sampling、emissive_nee、allow_tearing）
