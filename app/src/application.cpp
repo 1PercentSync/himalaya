@@ -573,11 +573,12 @@ namespace himalaya::app {
             renderer_.request_manual_denoise();
         }
 
-        // ---- Effective present mode (user preference + PT tearing override) ----
+        // ---- Effective present mode (user preference + PT/Bake tearing override) ----
         // Deferred to end_frame() after present — mid-frame recreate would
         // invalidate the acquired image and renderer's swapchain references.
         rhi::PresentMode effective = user_present_mode_;
-        if (render_mode_ == framework::RenderMode::PathTracing && pt_allow_tearing_) {
+        if ((render_mode_ == framework::RenderMode::PathTracing && pt_allow_tearing_) ||
+            (render_mode_ == framework::RenderMode::Baking && bake_config_.allow_tearing)) {
             effective = rhi::PresentMode::Immediate;
         }
         if (effective != swapchain_.present_mode) {
@@ -699,6 +700,11 @@ namespace himalaya::app {
                 // PT tearing override: if IMMEDIATE fell back, revert checkbox
                 if (swapchain_.present_mode != rhi::PresentMode::Immediate) {
                     pt_allow_tearing_ = false;
+                }
+            } else if (render_mode_ == framework::RenderMode::Baking && bake_config_.allow_tearing) {
+                // Bake tearing override: if IMMEDIATE fell back, revert flag
+                if (swapchain_.present_mode != rhi::PresentMode::Immediate) {
+                    bake_config_.allow_tearing = false;
                 }
             } else {
                 // User combo change: sync fallback result back to combo display
