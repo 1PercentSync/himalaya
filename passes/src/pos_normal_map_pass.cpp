@@ -94,7 +94,7 @@ namespace himalaya::passes {
         create_pipeline();
     }
 
-    void PosNormalMapPass::destroy() const {
+    void PosNormalMapPass::destroy() {
         if (pipeline_.pipeline != VK_NULL_HANDLE) {
             pipeline_.destroy(ctx_->device);
         }

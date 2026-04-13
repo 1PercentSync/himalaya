@@ -77,7 +77,7 @@ namespace himalaya::passes {
         void rebuild_pipelines();
 
         /** @brief Destroy pipeline and release owned resources. */
-        void destroy() const;
+        void destroy();
 
     private:
         /** @brief Create (or recreate) the graphics pipeline. */
