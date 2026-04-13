@@ -144,8 +144,11 @@ void main() {
     vec3 V = -gl_WorldRayDirectionEXT;
     float NdotV = max(dot(N_shading, V), 1e-4);
 
-    // ---- OIDN auxiliary output (bounce 0 only) ----
-    if (payload.bounce == 0u) {
+    // ---- OIDN auxiliary output (bounce 0, non-lightmap only) ----
+    // Lightmap baker pre-fills aux via rasterized albedo/normal maps (Step 9.5c);
+    // closesthit would overwrite with the wrong surface (first hemisphere hit).
+    // Reference view and probe baker write aux normally (lightmap_width == 0).
+    if (payload.bounce == 0u && pc.lightmap_width == 0u) {
         ivec2 pixel = ivec2(gl_LaunchIDEXT.xy);
         imageStore(aux_albedo_image, pixel, vec4(diffuse_color, 1.0));
         imageStore(aux_normal_image, pixel, vec4(N_shading, 1.0));
