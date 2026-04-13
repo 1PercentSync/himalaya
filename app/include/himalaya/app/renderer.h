@@ -23,6 +23,7 @@
 #include <himalaya/passes/gtao_pass.h>
 #include <himalaya/passes/skybox_pass.h>
 #include <himalaya/passes/shadow_pass.h>
+#include <himalaya/passes/lightmap_baker_pass.h>
 #include <himalaya/passes/pos_normal_map_pass.h>
 #include <himalaya/passes/reference_view_pass.h>
 #include <himalaya/passes/tonemapping_pass.h>
@@ -270,6 +271,9 @@ namespace himalaya::app {
         /** @brief Requests a manual denoise trigger (consumed in next render_path_tracing). */
         void request_manual_denoise();
 
+        /** @brief Returns true when the current bake instance needs finalize (Application drives immediate scope). */
+        [[nodiscard]] bool bake_finalize_pending() const;
+
         // --- Denoiser parameter accessors (for DebugUIContext binding) ---
 
         /** @brief Mutable reference to denoise enabled flag. */
@@ -365,6 +369,9 @@ namespace himalaya::app {
 
         /** @brief UV-space rasterization pass for lightmap position/normal map generation. */
         passes::PosNormalMapPass pos_normal_map_pass_{};
+
+        /** @brief Lightmap baker RT pass (UV-space dispatch with accumulation). */
+        passes::LightmapBakerPass lightmap_baker_pass_{};
 
         /** @brief Acceleration structure manager (RT, initialized when rt_supported). */
         rhi::AccelerationStructureManager as_manager_{};
@@ -585,6 +592,67 @@ namespace himalaya::app {
         /** @brief Cached light color+shadow from the previous PT frame (accumulation reset detection). */
         glm::vec4 prev_pt_light_color_shadow_{0.0f};
 
+        // --- Bake state ---
+
+        /** @brief Bake pipeline state machine. */
+        enum class BakeState : uint8_t {
+            Idle,             ///< No bake in progress.
+            BakingLightmaps,  ///< Lightmap bake loop running.
+            BakingProbes,     ///< Probe bake loop running (Step 12).
+            Complete,         ///< All bake work finished.
+        };
+
+        /** @brief Current bake state machine position. */
+        BakeState bake_state_ = BakeState::Idle;
+
+        /** @brief Index of the current instance being baked (into bakeable instance list). */
+        uint32_t bake_current_instance_ = 0;
+
+        /** @brief Total number of bakeable instances (excludes degenerate/transparent). */
+        uint32_t bake_total_instances_ = 0;
+
+        /** @brief Per-instance accumulation buffer (RGBA32F, lightmap resolution). */
+        rhi::ImageHandle bake_accumulation_;
+
+        /** @brief Per-instance position map (RGBA32F, lightmap resolution). */
+        rhi::ImageHandle bake_position_map_;
+
+        /** @brief Per-instance normal map (RGBA32F, lightmap resolution). */
+        rhi::ImageHandle bake_normal_map_;
+
+        /** @brief Per-instance OIDN auxiliary albedo (RGBA16F, lightmap resolution). */
+        rhi::ImageHandle bake_aux_albedo_;
+
+        /** @brief Per-instance OIDN auxiliary normal (RGBA16F, lightmap resolution). */
+        rhi::ImageHandle bake_aux_normal_;
+
+        /** @brief Current instance lightmap width. */
+        uint32_t bake_lightmap_width_ = 0;
+
+        /** @brief Current instance lightmap height. */
+        uint32_t bake_lightmap_height_ = 0;
+
+        /** @brief True when the current instance reached target SPP and awaits finalize. */
+        bool bake_finalize_pending_ = false;
+
+        /** @brief Global monotonically increasing frame seed (never reset across instances). */
+        uint32_t bake_frame_seed_ = 0;
+
+        /** @brief RenderMode recorded before entering Baking, restored on cancel/complete. */
+        framework::RenderMode bake_pre_mode_ = framework::RenderMode::Rasterization;
+
+        /** @brief Indices of bakeable instances (non-degenerate, non-Blend). */
+        std::vector<uint32_t> bake_instance_indices_;
+
+        /** @brief Snapshotted BakeConfig at bake start (locked during bake session). */
+        framework::BakeConfig bake_locked_config_{};
+
+        /** @brief Time point when the current bake session started (for total elapsed). */
+        std::chrono::steady_clock::time_point bake_start_time_{};
+
+        /** @brief Time point when the current instance started baking. */
+        std::chrono::steady_clock::time_point bake_instance_start_time_{};
+
         // --- Private helpers ---
 
         /**
@@ -612,6 +680,11 @@ namespace himalaya::app {
          * @brief Path tracing render path: Reference View Pass + Tonemapping + ImGui.
          */
         void render_path_tracing(rhi::CommandBuffer &cmd, const RenderInput &input);
+
+        /**
+         * @brief Bake render path: lightmap/probe baker dispatch + preview blit + tonemapping + ImGui.
+         */
+        void render_baking(rhi::CommandBuffer &cmd, const RenderInput &input);
 
         /** @brief Updates Set 2 binding 0 with the current hdr_color backing image. */
         void update_hdr_color_descriptor() const;
