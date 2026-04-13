@@ -137,9 +137,10 @@
 - [x] 新增 `shaders/rt/probe_baker.rgen`：从 probe 位置向 6 面方向发射射线 + accumulation
 - [x] 新增 `passes/probe_baker_pass.h`：ProbeBakerPass 类声明
 - [x] 新增 `passes/probe_baker_pass.cpp`：setup（编译 rgen + 创建 RT pipeline）+ record（6 次 dispatch per frame，每 face 一次）
-- [ ] Set 3 layout（per-dispatch）：binding 0 accumulation face view（cubemap 单层 2D view）+ binding 1 aux albedo（per-face 2D image）+ binding 2 aux normal（per-face 2D image）+ binding 3 Sobol
-- [ ] Aux image 管理：2 个 RGBA16F image2DArray × 6 layer（albedo + normal）。Per-face 2D view per-probe 一次性创建（18 个 = 6 face × 3 images），所有 dispatch 复用，probe 完成时随 image 销毁
-- [ ] 6 个 face 共享同一个 per-probe `sample_count`：每帧 6 次 dispatch 后 `sample_count` +1（不是 +6）
+- [x] Set 3 layout（per-dispatch）：binding 0 accumulation face view（cubemap 单层 2D view）+ binding 1 aux albedo（per-face 2D image）+ binding 2 aux normal（per-face 2D image）+ binding 3 Sobol
+- [x] Aux image 管理：2 个 RGBA16F image2DArray × 6 layer（albedo + normal）。Per-face 2D view per-probe 一次性创建（18 个 = 6 face × 3 images），所有 dispatch 复用，probe 完成时随 image 销毁
+- [x] 6 个 face 共享同一个 per-probe `sample_count`：每帧 6 次 dispatch 后 `sample_count` +1（不是 +6）
+- [ ] `renderer.h` + `renderer_init.cpp`：持有 `ProbeBakerPass` 实例，setup/destroy/rebuild 统一调用
 
 ## Step 12：Probe 端到端流程
 
