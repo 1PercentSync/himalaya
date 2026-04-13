@@ -125,7 +125,7 @@
 
 ## Step 10：Probe 自动放置
 
-- [ ] 新增 `shaders/bake/probe_filter.comp`：蒙特卡洛球面采样 + `rayQueryEXT` 两级过滤 compute shader（Fibonacci lattice 方向生成 + MaterialBuffer double_sided 查询 + Rule 1 背面一票否决 + Rule 2 封闭体检测）
+- [x] 新增 `shaders/bake/probe_filter.comp`：蒙特卡洛球面采样 + `rayQueryEXT` 两级过滤 compute shader（Fibonacci lattice 方向生成 + MaterialBuffer double_sided 查询 + Rule 1 背面一票否决 + Rule 2 封闭体检测）
 - [ ] 新增 `framework/probe_placement.h`：`ProbeGrid` 结构体（positions + filter stats）+ `generate_probe_grid()` 函数声明
 - [ ] 新增 `framework/probe_placement.cpp`：均匀网格候选点生成（场景 AABB 内，grid spacing 间距）
 - [ ] `probe_placement.cpp`：两级 RT 几何过滤（compute shader dispatch + readback + Rule 1/Rule 2 统计日志）
