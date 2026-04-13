@@ -185,7 +185,7 @@ namespace himalaya::framework {
                     .layout = access == RGAccessType::Read
                                   ? VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
                                   : VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                    .stage = VK_PIPELINE_STAGE_2_COPY_BIT,
+                    .stage = VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT,
                     .access = access == RGAccessType::Read
                                   ? VK_ACCESS_2_TRANSFER_READ_BIT
                                   : VK_ACCESS_2_TRANSFER_WRITE_BIT,
