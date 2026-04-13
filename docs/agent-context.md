@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段七 — PT 烘焙器
-- **进度**：Step 9 进行中（前 14 小项完成）
+- **进度**：Step 9 进行中（前 15 小项完成）
 
 ### 下一个任务
 
-Step 9 第十五小项：`renderer_bake.cpp` probe set cache key（scene + hdr + scene_textures）+ 文件命名。
+Step 9 第十六小项：`renderer_bake.cpp` 进入 Baking 前调用 abort_denoise()（参考视图异步 Denoiser 归 Idle）。
 
 ---
 
