@@ -67,6 +67,9 @@ namespace himalaya::app {
         const std::string &scene_textures_hash,
         const float ibl_rotation_deg) {
 
+        // Ensure reference view async denoiser is idle before baking
+        abort_denoise();
+
         // Snapshot config (locked for the duration of this bake session)
         bake_locked_config_ = config;
 
