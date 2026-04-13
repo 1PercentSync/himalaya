@@ -7,16 +7,109 @@
 
 #include <himalaya/framework/frame_context.h>
 #include <himalaya/framework/imgui_backend.h>
+#include <himalaya/framework/mesh.h>
 #include <himalaya/rhi/commands.h>
 #include <himalaya/rhi/descriptors.h>
 #include <himalaya/rhi/resources.h>
 #include <himalaya/rhi/swapchain.h>
 
 #include <array>
+#include <cmath>
 
+#include <glm/glm.hpp>
 #include <spdlog/spdlog.h>
 
 namespace himalaya::app {
+    // ---- Helpers ----
+
+    /**
+     * @brief Computes world-space surface area of a mesh instance.
+     *
+     * Sums the area of every triangle after applying the instance's
+     * world-space transform. Used to derive lightmap resolution:
+     * resolution = sqrt(area) * texels_per_meter.
+     */
+    static float compute_world_surface_area(
+        const std::vector<framework::Vertex> &vertices,
+        const std::vector<uint32_t> &indices,
+        const glm::mat4 &transform) {
+        float area = 0.0f;
+        const auto tri_count = static_cast<uint32_t>(indices.size()) / 3;
+        for (uint32_t t = 0; t < tri_count; ++t) {
+            const auto &v0 = glm::vec3(transform * glm::vec4(vertices[indices[t * 3 + 0]].position, 1.0f));
+            const auto &v1 = glm::vec3(transform * glm::vec4(vertices[indices[t * 3 + 1]].position, 1.0f));
+            const auto &v2 = glm::vec3(transform * glm::vec4(vertices[indices[t * 3 + 2]].position, 1.0f));
+            area += 0.5f * glm::length(glm::cross(v1 - v0, v2 - v0));
+        }
+        return area;
+    }
+
+    /**
+     * @brief Aligns a value up to the nearest multiple of 4.
+     */
+    static uint32_t align_to_4(const uint32_t v) {
+        return (v + 3u) & ~3u;
+    }
+
+    // ---- Bake session management ----
+
+    void Renderer::start_bake(
+        const framework::BakeConfig &config,
+        const std::span<const framework::MeshInstance> mesh_instances,
+        const std::span<const framework::Mesh> meshes,
+        const std::span<const framework::MaterialInstance> materials,
+        const std::span<const std::vector<framework::Vertex>> cpu_vertices,
+        const std::span<const std::vector<uint32_t>> cpu_indices) {
+
+        // Snapshot config (locked for the duration of this bake session)
+        bake_locked_config_ = config;
+
+        // Filter bakeable instances: skip degenerate and transparent
+        bake_instance_indices_.clear();
+        bake_lightmap_sizes_.clear();
+
+        for (uint32_t i = 0; i < static_cast<uint32_t>(mesh_instances.size()); ++i) {
+            const auto &inst = mesh_instances[i];
+            const auto &mesh = meshes[inst.mesh_id];
+
+            // Skip degenerate meshes
+            if (mesh.vertex_count == 0 || mesh.index_count < 3) {
+                continue;
+            }
+
+            // Skip transparent instances (AlphaMode::Blend)
+            if (materials[inst.material_id].alpha_mode == framework::AlphaMode::Blend) {
+                continue;
+            }
+
+            // Compute lightmap resolution from world-space surface area
+            const float area = compute_world_surface_area(
+                cpu_vertices[inst.mesh_id], cpu_indices[inst.mesh_id], inst.transform);
+            const auto raw = static_cast<uint32_t>(
+                std::round(std::sqrt(area) * config.texels_per_meter));
+            const uint32_t clamped = std::clamp(raw, config.min_resolution, config.max_resolution);
+            const uint32_t resolution = align_to_4(clamped);
+
+            bake_instance_indices_.push_back(i);
+            bake_lightmap_sizes_.push_back(resolution);
+
+            spdlog::info("Bake instance {}: mesh_id={}, area={:.2f}m², resolution={}",
+                         i, inst.mesh_id, static_cast<double>(area), resolution);
+        }
+
+        bake_total_instances_ = static_cast<uint32_t>(bake_instance_indices_.size());
+        bake_current_instance_ = 0;
+        bake_finalize_pending_ = false;
+        bake_state_ = BakeState::BakingLightmaps;
+        bake_start_time_ = std::chrono::steady_clock::now();
+        bake_instance_start_time_ = bake_start_time_;
+
+        spdlog::info("Bake started: {} bakeable instances out of {} total",
+                     bake_total_instances_, mesh_instances.size());
+    }
+
+    // ---- Per-frame bake rendering ----
+
     void Renderer::render_baking(rhi::CommandBuffer &cmd, const RenderInput &input) {
         draw_call_count_ = 0;
 

@@ -274,6 +274,28 @@ namespace himalaya::app {
         /** @brief Returns true when the current bake instance needs finalize (Application drives immediate scope). */
         [[nodiscard]] bool bake_finalize_pending() const;
 
+        /**
+         * @brief Initiates a bake session: filters bakeable instances, computes
+         *        per-instance lightmap resolutions, and transitions to BakingLightmaps.
+         *
+         * Called by Application when the user clicks Start Bake. Must be called
+         * before the first render() in Baking mode. Caller is responsible for
+         * setting RenderMode to Baking and calling abort_denoise() beforehand.
+         *
+         * @param config        Bake parameters (snapshotted and locked).
+         * @param mesh_instances All scene mesh instances.
+         * @param meshes        All loaded meshes (vertex/index counts).
+         * @param materials     All material instances (alpha mode filtering).
+         * @param cpu_vertices  Per-mesh CPU vertex data (surface area calculation).
+         * @param cpu_indices   Per-mesh CPU index data (surface area calculation).
+         */
+        void start_bake(const framework::BakeConfig &config,
+                        std::span<const framework::MeshInstance> mesh_instances,
+                        std::span<const framework::Mesh> meshes,
+                        std::span<const framework::MaterialInstance> materials,
+                        std::span<const std::vector<framework::Vertex>> cpu_vertices,
+                        std::span<const std::vector<uint32_t>> cpu_indices);
+
         // --- Denoiser parameter accessors (for DebugUIContext binding) ---
 
         /** @brief Mutable reference to denoise enabled flag. */
@@ -643,6 +665,9 @@ namespace himalaya::app {
 
         /** @brief Indices of bakeable instances (non-degenerate, non-Blend). */
         std::vector<uint32_t> bake_instance_indices_;
+
+        /** @brief Per-bakeable-instance lightmap resolution (parallel to bake_instance_indices_). */
+        std::vector<uint32_t> bake_lightmap_sizes_;
 
         /** @brief Snapshotted BakeConfig at bake start (locked during bake session). */
         framework::BakeConfig bake_locked_config_{};
