@@ -467,6 +467,13 @@ namespace himalaya::app {
     }
 
     void Renderer::destroy() {
+        // Clean up any in-progress bake state (per-instance images + vectors)
+        destroy_bake_instance_images();
+        bake_instance_indices_.clear();
+        bake_lightmap_sizes_.clear();
+        bake_lightmap_keys_.clear();
+        bake_state_ = BakeState::Idle;
+
         emissive_light_builder_.destroy();
         scene_as_builder_.destroy();
         as_manager_.destroy();
