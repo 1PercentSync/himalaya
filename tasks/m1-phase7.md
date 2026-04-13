@@ -103,7 +103,7 @@
 - [x] `renderer_bake.cpp`：每帧帧流程 `fill_common_gpu_data()` → RG import Set 0 + TLAS → baker RT pass → clear `managed_hdr_color_` + blit accumulation（居中保持宽高比）→ tonemapping → ImGui render pass → present
 - [x] `renderer_bake.cpp`：进入 Baking 前记录当前 RenderMode，Cancel/Complete 后恢复
 - [x] `renderer_bake.cpp`：Cancel 后显示信息（"Bake cancelled. N/M instances completed."）
-- [ ] `renderer.cpp`：render() switch 新增 Baking case
+- [x] `renderer.cpp`：render() switch 新增 Baking case
 
 ## Step 10：Probe 自动放置
 
