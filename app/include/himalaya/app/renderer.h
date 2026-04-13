@@ -116,6 +116,9 @@ namespace himalaya::app {
         /** @brief Path tracing configuration parameters. */
         const framework::PTConfig &pt_config;
 
+        /** @brief Bake configuration parameters. */
+        const framework::BakeConfig &bake_config;
+
         /** @brief Scene world-space AABB for shadow Z range extension. */
         const framework::AABB &scene_bounds;
     };

@@ -206,6 +206,9 @@ namespace himalaya::app {
         /** @brief Path tracing configuration parameters. */
         framework::PTConfig pt_config_{};
 
+        /** @brief Bake configuration parameters. */
+        framework::BakeConfig bake_config_{};
+
         // --- Left-click drag state (IBL rotation or fallback light direction) ---
 
         /** @brief Previous cursor X for left-click drag delta. */

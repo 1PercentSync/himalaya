@@ -606,6 +606,7 @@ namespace himalaya::app {
             .ao_config = ao_config_,
             .contact_shadow_config = contact_shadow_config_,
             .pt_config = pt_config_,
+            .bake_config = bake_config_,
             .scene_bounds = scene_loader_.scene_bounds(),
         };
 

@@ -290,6 +290,48 @@ namespace himalaya::framework {
         uint32_t target_samples = 2048;
     };
 
+    /**
+     * @brief Bake runtime configuration parameters.
+     *
+     * Application holds the instance, DebugUI modifies fields directly,
+     * Renderer reads via RenderInput when baking. All values are
+     * snapshotted at bake start and locked during the bake session.
+     */
+    struct BakeConfig {
+        /** @brief Global lightmap density (texels per world-space meter). */
+        float texels_per_meter = 10.0f;
+
+        /** @brief Minimum lightmap resolution per instance (aligned to 4). */
+        uint32_t min_resolution = 32;
+
+        /** @brief Maximum lightmap resolution per instance (aligned to 4). */
+        uint32_t max_resolution = 2048;
+
+        /** @brief Lightmap target sample count (SPP). */
+        uint32_t lightmap_spp = 4096;
+
+        /** @brief Probe cubemap face resolution in texels. */
+        uint32_t probe_face_resolution = 512;
+
+        /** @brief Probe grid spacing in meters. */
+        float probe_spacing = 1.0f;
+
+        /** @brief Probe target sample count (SPP). */
+        uint32_t probe_spp = 2048;
+
+        /** @brief Baker max ray bounce depth (independent from PT reference view). */
+        uint32_t max_bounces = 32;
+
+        /** @brief Baker environment map importance sampling toggle. */
+        bool env_sampling = true;
+
+        /** @brief Baker emissive area light NEE toggle. */
+        bool emissive_nee = true;
+
+        /** @brief Override present mode to IMMEDIATE during baking (bypass VSync). */
+        bool allow_tearing = false;
+    };
+
     // ---- GPU Data Structures ----
     // Must match shader layouts in shaders/common/bindings.glsl exactly.
 
