@@ -1,0 +1,93 @@
+#version 460
+
+/**
+ * @file probe_baker.rgen
+ * @brief Probe baker raygen shader — cubemap face per-texel path tracing.
+ *
+ * Dispatched at probe_face_resolution x probe_face_resolution, once per face
+ * per frame (6 dispatches total).  The probe world position and current face
+ * index are read from push constants (shared 60-byte superset).
+ *
+ * Each invocation computes a world-space ray direction through the cubemap
+ * face texel, traces a full path via the shared trace_path() function, and
+ * accumulates the result into a running average on the per-face 2D view of
+ * the cubemap accumulation image (Set 3 binding 0).
+ *
+ * Ray cone is initialized with spread = atan(2 / face_resolution), matching
+ * the texel angular extent of the cubemap face (analogous to reference view's
+ * pixel spread derived from screen resolution).
+ *
+ * All 6 faces share the same per-probe sample_count: after all 6 dispatches
+ * in a frame, sample_count increments by 1 (not 6).
+ */
+
+#define HIMALAYA_RT
+#define RAYGEN_SHADER
+#include "common/bindings.glsl"
+#include "rt/pt_common.glsl"
+
+// ---- Accumulation buffer (push descriptor, Set 3 binding 0) ----
+// Per-face 2D view of the cubemap accumulation image.
+
+layout(set = 3, binding = 0, rgba32f) uniform image2D accumulation_image;
+
+// ---- Cubemap face direction ----
+
+/**
+ * Computes the world-space ray direction for a cubemap face texel.
+ *
+ * Standard Vulkan cubemap convention (layer index -> face):
+ *   0 = +X, 1 = -X, 2 = +Y, 3 = -Y, 4 = +Z, 5 = -Z.
+ *
+ * Texel center is mapped to [-1, 1]^2, then combined with the face basis
+ * to produce a normalized direction.  The mapping matches vkCmdBlitImage
+ * and cubemap sampler conventions: u runs left-to-right, v runs top-to-bottom
+ * in Vulkan image coordinates.
+ *
+ * @param face   Cubemap face index (0-5).
+ * @param texel  Texel coordinate within the face.
+ * @param res    Face resolution in texels (assumed square).
+ * @return Normalized world-space direction.
+ */
+vec3 cubemap_face_direction(uint face, ivec2 texel, float res) {
+    float u = 2.0 * (float(texel.x) + 0.5) / res - 1.0;
+    float v = 2.0 * (float(texel.y) + 0.5) / res - 1.0;
+
+    vec3 dir;
+    switch (face) {
+        case 0u: dir = vec3( 1.0,   -v,   -u); break; // +X
+        case 1u: dir = vec3(-1.0,   -v,    u); break; // -X
+        case 2u: dir = vec3(   u,  1.0,    v); break; // +Y
+        case 3u: dir = vec3(   u, -1.0,   -v); break; // -Y
+        case 4u: dir = vec3(   u,   -v,  1.0); break; // +Z
+        case 5u: dir = vec3(  -u,   -v, -1.0); break; // -Z
+        default: dir = vec3( 0.0,  0.0,  1.0); break;
+    }
+    return normalize(dir);
+}
+
+void main() {
+    const ivec2 texel = ivec2(gl_LaunchIDEXT.xy);
+    const float face_res = float(gl_LaunchSizeEXT.x);
+
+    // ---- Ray from probe position through cubemap face texel ----
+    vec3 ray_origin = vec3(pc.probe_pos_x, pc.probe_pos_y, pc.probe_pos_z);
+    vec3 ray_direction = cubemap_face_direction(pc.face_index, texel, face_res);
+
+    // ---- Path trace (shared bounce loop) ----
+    // Ray cone: width=0, spread = cubemap texel angular extent
+    float cone_spread = atan(2.0 / face_res);
+    vec3 total_radiance = trace_path(ray_origin, ray_direction, 0.0, cone_spread, texel);
+
+    // ---- Running average accumulation ----
+    if (pc.sample_count == 0u) {
+        // First sample: overwrite
+        imageStore(accumulation_image, texel, vec4(total_radiance, 1.0));
+    } else {
+        // Incremental running average: mix(old, new, 1/(n+1))
+        vec4 old_value = imageLoad(accumulation_image, texel);
+        float weight = 1.0 / float(pc.sample_count + 1u);
+        vec3 result = mix(old_value.rgb, total_radiance, weight);
+        imageStore(accumulation_image, texel, vec4(result, 1.0));
+    }
+}
