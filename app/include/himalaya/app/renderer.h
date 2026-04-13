@@ -292,11 +292,12 @@ namespace himalaya::app {
 
         /**
          * @brief Initiates a bake session: filters bakeable instances, computes
-         *        per-instance lightmap resolutions, and transitions to BakingLightmaps.
+         *        per-instance lightmap resolutions, and starts the first instance.
          *
          * Called by Application when the user clicks Start Bake. Must be called
-         * before the first render() in Baking mode. Caller is responsible for
-         * setting RenderMode to Baking and calling abort_denoise() beforehand.
+         * within an active immediate command scope (begin_immediate / end_immediate),
+         * because begin_bake_instance() records position/normal map rasterization
+         * into the immediate command buffer.
          *
          * @param config        Bake parameters (snapshotted and locked).
          * @param mesh_instances All scene mesh instances.

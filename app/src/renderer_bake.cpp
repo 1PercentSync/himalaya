@@ -185,12 +185,21 @@ namespace himalaya::app {
         bake_total_instances_ = static_cast<uint32_t>(bake_instance_indices_.size());
         bake_current_instance_ = 0;
         bake_finalize_pending_ = false;
-        bake_state_ = BakeState::BakingLightmaps;
         bake_start_time_ = std::chrono::steady_clock::now();
         bake_instance_start_time_ = bake_start_time_;
 
         spdlog::info("Bake started: {} bakeable instances, rotation={}°",
                      bake_total_instances_, bake_rotation_int_);
+
+        // Start first instance (caller must be in immediate scope)
+        if (bake_total_instances_ > 0) {
+            bake_state_ = BakeState::BakingLightmaps;
+            begin_bake_instance(0, mesh_instances, meshes);
+        } else {
+            spdlog::info("No bakeable instances, skipping lightmap baking");
+            // Step 12 will transition to BakingProbes here
+            bake_state_ = BakeState::Complete;
+        }
     }
 
     void Renderer::begin_bake_instance(
@@ -234,21 +243,26 @@ namespace himalaya::app {
             .width = res, .height = res, .depth = 1,
             .mip_levels = 1, .array_layers = 1, .sample_count = 1,
             .format = rhi::Format::R16G16B16A16Sfloat,
-            .usage = rhi::ImageUsage::Storage | rhi::ImageUsage::TransferSrc,
+            .usage = rhi::ImageUsage::Storage | rhi::ImageUsage::TransferSrc
+                     | rhi::ImageUsage::TransferDst,
         }, "bake_aux_albedo");
 
         bake_aux_normal_ = resource_manager_->create_image({
             .width = res, .height = res, .depth = 1,
             .mip_levels = 1, .array_layers = 1, .sample_count = 1,
             .format = rhi::Format::R16G16B16A16Sfloat,
-            .usage = rhi::ImageUsage::Storage | rhi::ImageUsage::TransferSrc,
+            .usage = rhi::ImageUsage::Storage | rhi::ImageUsage::TransferSrc
+                     | rhi::ImageUsage::TransferDst,
         }, "bake_aux_normal");
 
         // Render position/normal map (must be called within immediate scope)
         rhi::CommandBuffer imm_cmd(ctx_->immediate_command_buffer);
 
-        // Barrier: UNDEFINED → COLOR_ATTACHMENT for pos/normal maps
-        const std::array<VkImageMemoryBarrier2, 2> to_attachment = {{
+        // Batch 1: initial layout transitions for all per-instance images
+        //   pos/normal maps   → COLOR_ATTACHMENT (rasterization target)
+        //   accumulation      → GENERAL (RT storage + clear)
+        //   aux_albedo/normal → GENERAL (RT storage; Step 9.5c will rework to TRANSFER_DST + blit)
+        const std::array<VkImageMemoryBarrier2, 5> initial_barriers = {{
             {
                 .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
                 .srcStageMask = VK_PIPELINE_STAGE_2_NONE,
@@ -271,12 +285,57 @@ namespace himalaya::app {
                 .image = resource_manager_->get_image(bake_normal_map_).image,
                 .subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1},
             },
+            {
+                .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+                .srcStageMask = VK_PIPELINE_STAGE_2_NONE,
+                .srcAccessMask = VK_ACCESS_2_NONE,
+                .dstStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+                .dstAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT,
+                .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+                .newLayout = VK_IMAGE_LAYOUT_GENERAL,
+                .image = resource_manager_->get_image(bake_accumulation_).image,
+                .subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1},
+            },
+            // aux images → GENERAL (RT dispatch storage write target).
+            // Step 9.5c will change this to TRANSFER_DST + blit pre-fill + GENERAL.
+            {
+                .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+                .srcStageMask = VK_PIPELINE_STAGE_2_NONE,
+                .srcAccessMask = VK_ACCESS_2_NONE,
+                .dstStageMask = VK_PIPELINE_STAGE_2_RAY_TRACING_SHADER_BIT_KHR,
+                .dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+                .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+                .newLayout = VK_IMAGE_LAYOUT_GENERAL,
+                .image = resource_manager_->get_image(bake_aux_albedo_).image,
+                .subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1},
+            },
+            {
+                .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+                .srcStageMask = VK_PIPELINE_STAGE_2_NONE,
+                .srcAccessMask = VK_ACCESS_2_NONE,
+                .dstStageMask = VK_PIPELINE_STAGE_2_RAY_TRACING_SHADER_BIT_KHR,
+                .dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+                .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+                .newLayout = VK_IMAGE_LAYOUT_GENERAL,
+                .image = resource_manager_->get_image(bake_aux_normal_).image,
+                .subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1},
+            },
         }};
-        VkDependencyInfo dep_to_attach{};
-        dep_to_attach.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-        dep_to_attach.imageMemoryBarrierCount = static_cast<uint32_t>(to_attachment.size());
-        dep_to_attach.pImageMemoryBarriers = to_attachment.data();
-        imm_cmd.pipeline_barrier(dep_to_attach);
+        VkDependencyInfo dep_initial{};
+        dep_initial.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+        dep_initial.imageMemoryBarrierCount = static_cast<uint32_t>(initial_barriers.size());
+        dep_initial.pImageMemoryBarriers = initial_barriers.data();
+        imm_cmd.pipeline_barrier(dep_initial);
+
+        // Clear accumulation to black (uncovered texels must be zero, not VRAM garbage)
+        {
+            VkClearColorValue clear_color{};
+            VkImageSubresourceRange range{VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+            vkCmdClearColorImage(imm_cmd.handle(),
+                                resource_manager_->get_image(bake_accumulation_).image,
+                                VK_IMAGE_LAYOUT_GENERAL,
+                                &clear_color, 1, &range);
+        }
 
         // Compute normal matrix
         const glm::mat3 normal_matrix = glm::transpose(glm::inverse(glm::mat3(inst.transform)));
