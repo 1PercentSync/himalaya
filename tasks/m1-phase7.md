@@ -74,7 +74,7 @@
 - [x] `lightmap_baker_pass.h/.cpp`：移除 `set_directional_lights()` 接口和 `directional_lights_` 成员，record() 中 hardcode `directional_lights = 0`（与 `max_clamp = 0.0f` 一致的 hardcode 策略）
 - [x] `pos_normal_map_pass.cpp`：`rebuild_pipelines()` 去掉双重编译，直接调 `create_pipeline()`（与 ReferenceViewPass/LightmapBakerPass 一致）
 - [x] `pos_normal_map_pass.h`：`destroy()` 去掉 const（与所有其他 Pass 一致）
-- [ ] `reference_view_pass.cpp`：删除未使用的 `kDefaultMaxBounces` / `kDefaultMaxClamp` 常量
+- [x] `reference_view_pass.cpp`：删除未使用的 `kDefaultMaxBounces` / `kDefaultMaxClamp` 常量
 - [ ] 新增 `passes/include/himalaya/passes/pt_push_constants.h`：PTPushConstants 共享定义，reference_view_pass.cpp 和 lightmap_baker_pass.cpp 删除各自的重复定义
 - [ ] `bake_denoiser.h/.cpp`：`denoise()` 的 albedo/normal 参数移除 nullable 语义，入口 assert 非空
 
