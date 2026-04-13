@@ -111,8 +111,8 @@
 - [x] `pos_normal_map_pass.cpp`：`record()` 入口检查 `pipeline_.pipeline != VK_NULL_HANDLE`，无效时 early return
 - [x] `lightmap_baker_pass.cpp`：`record()` 入口检查 `rt_pipeline_.pipeline != VK_NULL_HANDLE`，无效时 early return
 - [x] `renderer_bake.cpp`：lightmap cache key 的 `geometry_hash` 扩展为 vertices + indices 分别 hash 再拼接
-- [ ] `renderer_bake.cpp`：`start_bake()` 末尾调用 `begin_bake_instance(0)`（guard `bake_total_instances_ > 0`，0 时直接 Complete）；文档标注需 immediate scope
-- [ ] `renderer_bake.cpp`：`begin_bake_instance()` 中 accumulation 创建后 barrier UNDEFINED→GENERAL + clear vec4(0)；aux 图像 barrier UNDEFINED→TRANSFER_DST（为 blit 预填充准备）
+- [x] `renderer_bake.cpp`：`start_bake()` 末尾调用 `begin_bake_instance(0)`（guard `bake_total_instances_ > 0`，0 时直接 Complete）；文档标注需 immediate scope
+- [x] `renderer_bake.cpp`：`begin_bake_instance()` 中 accumulation / aux 创建后 barrier UNDEFINED→GENERAL + accumulation clear vec4(0)（aux 暂转 GENERAL，9.5c 改为 TRANSFER_DST + blit + GENERAL）
 - [ ] `closesthit.rchit`：aux imageStore 加 `if (pc.lightmap_width == 0u)` 守卫（lightmap baker 跳过，reference view / probe baker 保留）
 - [ ] `pos_normal_map.vert`：新增 `frag_uv0` 输出（pass through `in_uv0`）
 - [ ] `pos_normal_map.frag`：引入 `bindings.glsl`，从 MaterialBuffer 采样 base color，新增第三输出 `out_albedo`
