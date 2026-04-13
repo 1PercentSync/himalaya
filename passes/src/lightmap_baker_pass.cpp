@@ -204,31 +204,17 @@ namespace himalaya::passes {
     // ---- Per-frame recording ----
 
     void LightmapBakerPass::record(framework::RenderGraph &rg,
-                                   const framework::FrameContext &ctx) {
+                                   const framework::FrameContext &ctx,
+                                   const framework::RGResourceId rg_accum,
+                                   const framework::RGResourceId rg_aux_albedo,
+                                   const framework::RGResourceId rg_aux_normal,
+                                   const framework::RGResourceId rg_pos_map,
+                                   const framework::RGResourceId rg_nrm_map) {
         if (rt_pipeline_.pipeline == VK_NULL_HANDLE) {
             return;
         }
 
-        // Import baker images into RG (per-instance, set via set_baker_images)
-        auto rg_accum = rg.import_image(
-            "baker_accumulation", accumulation_,
-            VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
-        auto rg_aux_albedo = rg.import_image(
-            "baker_aux_albedo", aux_albedo_,
-            VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
-        auto rg_aux_normal = rg.import_image(
-            "baker_aux_normal", aux_normal_,
-            VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
-        auto rg_pos_map = rg.import_image(
-            "baker_position_map", position_map_,
-            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-        auto rg_nrm_map = rg.import_image(
-            "baker_normal_map", normal_map_,
-            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-
-        // Declare resource usage
+        // Declare resource usage (caller imports images, we just declare how we use them)
         const std::array resources = {
             framework::RGResourceUsage{
                 rg_accum,

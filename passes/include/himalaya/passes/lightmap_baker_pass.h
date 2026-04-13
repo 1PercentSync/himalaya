@@ -17,6 +17,7 @@
  *   binding 5 — normal map   (combined image sampler, nearest + clamp)
  */
 
+#include <himalaya/framework/render_graph.h>
 #include <himalaya/rhi/rt_pipeline.h>
 #include <himalaya/rhi/types.h>
 
@@ -30,11 +31,6 @@ namespace himalaya::rhi {
     class DescriptorManager;
     class ShaderCompiler;
 } // namespace himalaya::rhi
-
-namespace himalaya::framework {
-    class RenderGraph;
-    struct FrameContext;
-} // namespace himalaya::framework
 
 namespace himalaya::passes {
     /**
@@ -67,13 +63,24 @@ namespace himalaya::passes {
         /**
          * @brief Register RG resource usage and provide the RT dispatch callback.
          *
-         * Caller must call set_baker_images() with valid handles before each
-         * record() invocation.
+         * Caller imports baker images into the RG once and passes the resource IDs.
+         * This avoids double-import of the same VkImage (which would break RG
+         * barrier tracking between baker dispatch and blit preview).
          *
-         * @param rg  Render graph to add the pass to.
-         * @param ctx Per-frame context (frame_index for global descriptor sets).
+         * @param rg              Render graph to add the pass to.
+         * @param ctx             Per-frame context (frame_index for global descriptor sets).
+         * @param rg_accumulation RG resource for accumulation buffer (ReadWrite).
+         * @param rg_aux_albedo   RG resource for aux albedo (Write).
+         * @param rg_aux_normal   RG resource for aux normal (Write).
+         * @param rg_position_map RG resource for position map (Read).
+         * @param rg_normal_map   RG resource for normal map (Read).
          */
-        void record(framework::RenderGraph &rg, const framework::FrameContext &ctx);
+        void record(framework::RenderGraph &rg, const framework::FrameContext &ctx,
+                    framework::RGResourceId rg_accumulation,
+                    framework::RGResourceId rg_aux_albedo,
+                    framework::RGResourceId rg_aux_normal,
+                    framework::RGResourceId rg_position_map,
+                    framework::RGResourceId rg_normal_map);
 
         /**
          * @brief Rebuild RT pipeline by recompiling shaders from disk.
