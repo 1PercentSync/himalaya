@@ -86,7 +86,7 @@ Phase 8 在光栅化渲染内引入两种间接光照模式：
 | IBL 模式 | IBL Split-Sum 近似（无 lightmap/probe） | 自由旋转 | IBL 环境光强度 |
 | Lightmap/Probe 模式 | 烘焙 lightmap + reflection probe | 只能在已 bake 角度间跳切 | 间接光整体增益（含 emissive，乘法补偿） |
 
-**总开关**切换两种模式。无已 bake 角度时总开关不可用（灰显）。清除 bake 缓存后若当前处于 Lightmap/Probe 模式，自动回退到 IBL 模式。
+**总开关**切换两种模式。无已 bake 角度时总开关不可用（灰显）。清除 bake 缓存后若当前处于 Lightmap/Probe 模式，自动回退到 IBL 模式。Bake 完成后开启总开关时自动选中刚 bake 的角度。
 
 **角度切换 UX**：Lightmap/Probe 模式下左键拖拽 IBL 旋转在已 bake 角度间跳变（需拖过阈值才触发切换），UI 同时显示已 bake 角度列表可点击直接跳转。
 

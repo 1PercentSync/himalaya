@@ -302,8 +302,12 @@ Position/normal map 通过 `sampler2D`（nearest, clamp）采样而非 storage i
   - `render_baking()` 每帧帧流程：`fill_common_gpu_data()`（closesthit 需要 GlobalUBO 中的 IBL 数据，方向光不写入）→ RG import Set 0 资源 + TLAS → baker RT pass → ImGui render pass → swapchain present
 - `app/renderer.cpp`：`render()` switch 新增 `RenderMode::Baking` → `render_baking()`
 - `app/debug_ui.cpp`：Rendering section 的 RenderMode combo 新增 Baking（仅 rt_supported 时显示）
+- 退化 instance（vertex_count=0 / index_count<3）和透明 instance（AlphaMode::Blend）跳过 lightmap bake
+- KTX2 / manifest 写入使用 write-to-temp + rename 原子写入
+- `rotation_int = round(angle_deg) % 360`（0-359）
+- Bake 期间：Load Scene / Load HDR 灰显禁止，bake 参数 slider 灰显锁定，resize 不中断 bake
 
-**验证**：切换到 Baking 模式 → lightmap 逐 instance 烘焙 → 每个 instance 烘焙完成后 KTX2 文件出现在 cache 目录 → `read_ktx2()` 能正确加载 → 所有 instance 完成后状态转 Complete
+**验证**：切换到 Baking 模式 → lightmap 逐 instance 烘焙（跳过退化/透明 instance）→ 每个 instance 烘焙完成后 KTX2 文件出现在 cache 目录 → `read_ktx2()` 能正确加载 → 所有 instance 完成后状态转 Complete
 
 ---
 
@@ -379,7 +383,8 @@ Cache key 和文件命名详见 Step 9。Probe position 是 bake 产物（`gener
 
 - `app/debug_ui.cpp`：新增 Baking collapsing header：
   - **参数配置**：lightmap texels_per_meter slider + min/max resolution + lightmap 目标采样数 + probe face 分辨率 + probe grid spacing + probe 目标采样数 + baker max bounces + baker env sampling + baker emissive NEE + baker allow tearing
-  - **烘焙触发**：Start Bake 按钮（仅 rt_supported + RenderMode != Baking + IBL 模式时可用）→ 以当前 IBL 旋转角度（round 到整数度）触发烘焙，切换 RenderMode 到 Baking
+  - **烘焙触发**：Start Bake 按钮（仅 rt_supported + 有场景 + 有 HDR + RenderMode != Baking + IBL 模式时可用）→ 以当前 IBL 旋转角度（round 到整数度 % 360）触发烘焙，切换 RenderMode 到 Baking
+  - **Bake 期间 UI 锁定**：所有 bake 参数 slider 灰显、Start Bake 灰显、Load Scene / Load HDR 灰显、Allow Tearing 不支持 IMMEDIATE 时灰显
   - **进度显示**：当前阶段（Lightmaps / Probes / Complete）+ 当前项编号/总数 + 采样数/目标 + 吞吐量（SPP/s）+ 当前项耗时 + 总进度百分比 + 总耗时
   - **Accumulation 预览**：ImGui::Image() 显示当前 accumulation buffer（注册为 ImGui 纹理 descriptor）
   - **取消**：Cancel 按钮 → 中止烘焙，RenderMode 恢复 Rasterization
