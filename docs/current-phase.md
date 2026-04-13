@@ -296,8 +296,9 @@ Position/normal map 通过 `sampler2D`（nearest, clamp）采样而非 storage i
   - Baker GlobalUBO override：`ibl_intensity = 1.0`（归一化烘焙，运行时乘法补偿）
   - Baker 独立 push constant：`pc.max_bounces` / `pc.env_sampling` / `pc.emissive_light_count` 从 baker 面板参数读取（独立于参考视图）
   - Baker allow tearing：烘焙期间可选强制 IMMEDIATE present mode 解除 VSync 帧率限制
-  - Cache key 扩展：lightmap key = `scene_hash + geometry_hash + transform_hash + hdr_hash + rotation_int`，probe key = `scene_hash + position_hash + hdr_hash + rotation_int`。`rotation_int` 为整数度数（0-359）
-  - 文件命名：`<content_hash>_rot<NNN>.ktx2`（content_hash = 除 rotation 以外的 key 部分，NNN = 零填充三位度数）。同一角度重新 bake 覆盖旧文件
+  - Cache key 扩展：lightmap key = `scene_hash + geometry_hash + transform_hash + hdr_hash`（per-instance），probe set key = `scene_hash + hdr_hash`（不含 position——位置是 bake 产物）。`rotation_int`（0-359 整数度数）编码在文件名后缀
+  - Lightmap 文件：`<lm_hash>_rot<NNN>.ktx2`；Probe 文件：`<probe_set_hash>_rot<NNN>_probe<III>.ktx2` + `<probe_set_hash>_rot<NNN>_manifest.bin`（存 probe_count + positions vec3[]）。同一角度重新 bake 覆盖旧文件
+  - 完整性校验：Phase 8 逐角度检查所有 instance lightmap 文件 + manifest + 所有 probe 文件齐全才视为有效角度
   - `render_baking()` 每帧帧流程：`fill_common_gpu_data()`（closesthit 需要 GlobalUBO 中的 IBL 数据，方向光不写入）→ RG import Set 0 资源 + TLAS → baker RT pass → ImGui render pass → swapchain present
 - `app/renderer.cpp`：`render()` switch 新增 `RenderMode::Baking` → `render_baking()`
 - `app/debug_ui.cpp`：Rendering section 的 RenderMode combo 新增 Baking（仅 rt_supported 时显示）
@@ -358,7 +359,7 @@ Probe 烘焙 RT pipeline + raygen shader + cubemap accumulation。
 
 - `renderer_bake.cpp` 状态机扩展：
   - `BakingLightmaps` 完成后 → `BakingProbes`
-  - `BakingProbes`：调用 probe_placement 获取 probe 列表 → 逐 probe 烘焙：
+  - `BakingProbes`：调用 probe_placement 获取 probe 列表 → 写入 manifest.bin（probe_count + positions）→ 逐 probe 烘焙：
     - 创建 accumulation cubemap（RGBA32F, face_w × face_w × 6 face）+ aux albedo/normal cubemap（RGBA16F × 6 face）
     - 每帧 dispatch probe_baker_pass_.record()
     - 达到目标采样�� → GPU idle → readback accumulation + aux → BakeDenoiser（6 face 逐面降噪，含辅助通道）→ upload → prefilter_cubemap() → compress_bc6h() → readback → write_ktx2() → 释放 → 下一个 probe
@@ -370,7 +371,7 @@ Probe 烘焙 RT pipeline + raygen shader + cubemap accumulation。
 
 Probe 逐面降噪（OIDN 不支持 cubemap 感知降噪）可能在 face 边缘产生接缝。M1 已知限制：prefilter mip chain 在高 roughness（>0.3）时模糊接缝；mip 0（完美镜面反射）在 2048 SPP + OIDN 下接缝可接受。
 
-Cache key 只含 glTF 固有信息，不包含烘焙参数。Lightmap: `content_hash(scene_file) + mesh_geometry_hash + instance_transform_hash`。Probe: `content_hash(scene_file) + probe_position_hash`。Phase 8 加载时用相同输入重建 cache key 定位文件。改烘焙参数 → 手动触发重新烘焙。
+Cache key 和文件命名详见 Step 9。Probe position 是 bake 产物（`generate_probe_grid()` 计算结果），存储在 `<probe_set_hash>_rot<NNN>_manifest.bin` 中，Phase 8 加载时直接读取，不重新运行 placement。
 
 ---
 

@@ -81,7 +81,9 @@
 - [ ] `renderer_bake.cpp`：baker push constant hardcode（`max_clamp = 0`、`directional_lights = 0`、`lod_max_level = 0`）+ GlobalUBO override（`ibl_intensity = 1.0`）
 - [ ] `renderer_bake.cpp`：baker 独立 push constant（`max_bounces` / `env_sampling` / `emissive_light_count` 从 baker 面板参数读取）
 - [ ] `renderer_bake.cpp`：baker allow tearing（烘焙期间可选强制 IMMEDIATE present mode）
-- [ ] `renderer_bake.cpp`：cache key 扩展（加入 `hdr_content_hash` + `ibl_rotation_int`），文件命名 `<content_hash>_rot<NNN>.ktx2`
+- [ ] `renderer_bake.cpp`：lightmap cache key（`scene + geometry + transform + hdr`）+ 文件 `<lm_hash>_rot<NNN>.ktx2`
+- [ ] `renderer_bake.cpp`：probe set cache key（`scene + hdr`）+ 文件 `<set_hash>_rot<NNN>_probe<III>.ktx2` + manifest.bin（probe_count + positions）
+- [ ] `renderer_bake.cpp`：完整性校验（逐角度检查所有 lightmap + manifest + probe 文件齐全）
 - [ ] `renderer_bake.cpp`：每帧帧流程 `fill_common_gpu_data()`（方向光不写入）→ RG import Set 0 + TLAS → baker RT pass → ImGui render pass → present
 - [ ] `renderer.cpp`：render() switch 新增 Baking case
 - [ ] `debug_ui.cpp`：RenderMode combo 新增 Baking 选项
@@ -105,8 +107,9 @@
 
 ## Step 12：Probe 端到端流程
 
-- [ ] `renderer_bake.cpp`：BakingProbes 状态扩展（probe_placement → 逐 probe 烘焙循环）
-- [ ] 烘焙循环：accumulation + aux cubemap 创建 → dispatch → 目标采样数 → readback accumulation + aux → BakeDenoiser（6 face 逐面，含辅助通道）→ prefilter_cubemap() → compress_bc6h() → write_ktx2()
+- [ ] `renderer_bake.cpp`：BakingProbes 状态扩展（probe_placement → 写入 manifest.bin → 逐 probe 烘焙循环）
+- [ ] manifest.bin 写入：`uint32 probe_count` + `vec3[probe_count] positions`（probe position 是 bake 产物）
+- [ ] 烘焙循环：accumulation + aux cubemap 创建 → dispatch → 目标采样数 → readback accumulation + aux → BakeDenoiser（6 face 逐面，含辅助通道）→ prefilter_cubemap() → compress_bc6h() → write_ktx2()（文件名 `<set_hash>_rot<NNN>_probe<III>.ktx2`）
 - [ ] 所有 probe 完成 → BakeState::Complete
 
 ## Step 13：ImGui 烘焙控制面板
