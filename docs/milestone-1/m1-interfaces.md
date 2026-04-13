@@ -591,6 +591,11 @@ namespace himalaya::framework {
 
     /// 删除 cache_root() 下的所有缓存文件（所有 category）
     void clear_all_cache();
+
+    /// 原子写入二进制文件（write-to-temp + rename）
+    /// 文件要么完整写入，要么不存在（崩溃安全）
+    bool atomic_write_file(const std::filesystem::path& path,
+                           const void* data, size_t size);
 }
 ```
 
