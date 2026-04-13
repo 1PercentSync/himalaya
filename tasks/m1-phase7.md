@@ -91,7 +91,7 @@
 - [x] `renderer_bake.cpp`：per-instance `sample_count` 独立计数（从 0 到 target SPP），全局 `frame_seed` 单调递增不重置
 - [x] `renderer_bake.cpp`：baker push constant hardcode（`max_clamp = 0`、`lod_max_level = 0`）；`directional_lights = 0` 和 `ibl_intensity = 1.0` 由 Application 在 RenderInput 中设置
 - [x] `renderer_bake.cpp`：baker 独立 push constant（`max_bounces` / `env_sampling` / `emissive_light_count` 从 BakeConfig 读取）
-- [ ] `application.cpp`：baker allow tearing（BakeConfig::allow_tearing，Application 层设置 present mode，沿用 PT allow tearing 模式）
+- [x] `application.cpp`：baker allow tearing（BakeConfig::allow_tearing，Application 层设置 present mode，沿用 PT allow tearing 模式）
 - [ ] `scene_loader.cpp`：纹理加载时复用已有的 `source_hashes`（纹理缓存 pipeline 已算），按 glTF 纹理索引顺序拼接 hash 为 `scene_textures_hash`，存储在 SceneLoader 上
 - [ ] `renderer_bake.cpp`：lightmap cache key（`scene + geometry + transform + hdr + scene_textures`）+ 文件 `<lm_hash>_rot<NNN>.ktx2`
 - [ ] `renderer_bake.cpp`：probe set cache key（`scene + hdr + scene_textures`）+ 文件 `<set_hash>_rot<NNN>_probe<III>.ktx2` + manifest.bin（probe_count + positions）

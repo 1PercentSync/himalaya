@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段七 — PT 烘焙器
-- **进度**：Step 9 进行中（前 11 小项完成）
+- **进度**：Step 9 进行中（前 12 小项完成）
 
 ### 下一个任务
 
-Step 9 第十二小项：`application.cpp` baker allow tearing（BakeConfig::allow_tearing，沿用 PT allow tearing 模式）。
+Step 9 第十三小项：`scene_loader.cpp` 纹理加载时复用已有的 source_hashes，按 glTF 纹理索引顺序拼接 hash 为 scene_textures_hash，存储在 SceneLoader 上。
 
 ---
 
