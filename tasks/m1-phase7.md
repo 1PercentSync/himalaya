@@ -82,7 +82,7 @@
 
 - [x] 重构：PT 参数从 Renderer 迁移到 Application（新增 `scene_data.h` PTConfig 结构体，沿用 ShadowConfig 模式；RenderInput 新增 `const PTConfig&`；移除 Renderer 上的 mutable reference accessors）
 - [x] 新增 `scene_data.h`：BakeConfig 结构体（texels_per_meter / min_res / max_res / lightmap_spp / probe_face_res / probe_spacing / probe_spp / max_bounces / env_sampling / emissive_nee / allow_tearing）+ RenderInput 新增 `const BakeConfig&`
-- [ ] `scene_data.h`：RenderMode 新增 Baking
+- [x] `scene_data.h`：RenderMode 新增 Baking
 - [ ] `renderer.h`：BakeState 枚举 + 烘焙状态字段 + `render_baking()` 私有方法
 - [ ] 新增 `renderer_bake.cpp`：烘焙状态机（BakingLightmaps → BakingProbes → Complete）
 - [ ] `renderer_bake.cpp`：烘焙触发时计算 per-instance lightmap 分辨率（世界空间表面积 × texels_per_meter，对齐到 4）
