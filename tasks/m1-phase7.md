@@ -105,7 +105,7 @@
 - [ ] 新增 `passes/probe_baker_pass.h`：ProbeBakerPass 类声明
 - [ ] 新增 `passes/probe_baker_pass.cpp`：setup（编译 rgen + 创建 RT pipeline）+ record（6 次 dispatch per frame，每 face 一次）
 - [ ] Set 3 layout（per-dispatch）：binding 0 accumulation face view（cubemap 单层 2D view）+ binding 1 aux albedo（per-face 2D image）+ binding 2 aux normal（per-face 2D image）+ binding 3 Sobol
-- [ ] Aux image 管理：6 对 aux 2D image（或 2 个 image2DArray per-layer 2D view），per-probe 创建/销毁
+- [ ] Aux image 管理：2 个 RGBA16F image2DArray × 6 layer（albedo + normal），per-dispatch 创建 per-face 2D view，per-probe 创建/销毁
 - [ ] 6 个 face 共享同一个 per-probe `sample_count`：每帧 6 次 dispatch 后 `sample_count` +1（不是 +6）
 
 ## Step 12：Probe 端到端流程

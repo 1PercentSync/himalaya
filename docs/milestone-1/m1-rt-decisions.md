@@ -304,7 +304,7 @@ Per-instance lightmap 分辨率按世界空间表面积自动计算：
 resolution = clamp(round(sqrt(world_surface_area) * texels_per_meter), min_res, max_res)
 ```
 
-分辨率向上取到最近的 4 的倍数（BC6H block size 要求）。`world_surface_area` 在场景加载时 CPU 端遍历三角形面积求和，一次性计算。
+分辨率向上取到最近的 4 的倍数（BC6H block size 要求）。`world_surface_area` 在烘焙触发时 CPU 端遍历 `cpu_vertices_` + `cpu_indices_` + instance transform 求和三角形面积，不预存（计算量极小，几万三角形 < 1ms）。
 
 `texels_per_meter`（默认 10）、`min_res`（默认 32）、`max_res`（默认 2048）均通过 ImGui 烘焙面板可调。
 
