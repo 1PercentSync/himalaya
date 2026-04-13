@@ -41,10 +41,6 @@ namespace himalaya::passes {
 
     static_assert(sizeof(PTPushConstants) == 60);
 
-    // Default PT parameters (overridden at runtime via Renderer setters)
-    constexpr uint32_t kDefaultMaxBounces = 8;
-    constexpr float kDefaultMaxClamp = 0.0f;
-
     // ---- Init / Destroy ----
 
     void ReferenceViewPass::setup(rhi::Context &ctx,
