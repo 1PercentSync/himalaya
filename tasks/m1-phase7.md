@@ -107,7 +107,7 @@
 
 ## Step 9.5：审查修复（Steps 1-9 回顾）
 
-- [ ] `renderer.h`：删除未使用的 `bake_frame_seed_` 成员
+- [x] `renderer.h`：删除未使用的 `bake_frame_seed_` 成员
 - [ ] `pos_normal_map_pass.cpp`：`record()` 入口检查 `pipeline_.pipeline != VK_NULL_HANDLE`，无效时 early return
 - [ ] `lightmap_baker_pass.cpp`：`record()` 入口检查 `rt_pipeline_.pipeline != VK_NULL_HANDLE`，无效时 early return
 - [ ] `renderer_bake.cpp`：lightmap cache key 的 `geometry_hash` 扩展为 vertices + indices 分别 hash 再拼接
