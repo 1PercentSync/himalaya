@@ -260,6 +260,8 @@ Lightmap 烘焙 RT pipeline + raygen shader + accumulation。
   - `record()`：RG pass 注册 accumulation ReadWrite + aux albedo/normal Write + position/normal Read + push descriptors + trace_rays(lightmap_w, lightmap_h)
   - Set 3 layout：binding 0 accumulation (storage image) + binding 1 aux albedo (storage image, lightmap 分辨率) + binding 2 aux normal (storage image, lightmap 分辨率) + binding 3 Sobol SSBO + binding 4 position map (sampled) + binding 5 normal map (sampled)
 - `framework/CMakeLists.txt` / `passes/CMakeLists.txt`：添加源文件
+- `lightmap_baker_pass.h`：`lod_max_level_` 默认值从 4 改为 0，移除 `set_lod_max_level()` 接口（baker 始终全分辨率纹理采样，hardcode）
+- `lightmap_baker_pass.h`：`max_bounces_` 默认值从 8 改为 32（与 baker 面板默认值一致）
 
 **验证**：RenderDoc 捕获烘焙帧：accumulation buffer 在 UV 空间逐帧变亮，光照分布合理（窗户附近更亮，角落更暗）
 
