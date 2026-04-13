@@ -5,6 +5,7 @@
  */
 
 #include <himalaya/passes/lightmap_baker_pass.h>
+#include <himalaya/passes/pt_push_constants.h>
 
 #include <himalaya/framework/frame_context.h>
 #include <himalaya/framework/render_graph.h>
@@ -19,28 +20,6 @@
 #include <spdlog/spdlog.h>
 
 namespace himalaya::passes {
-    // ---- Push constants (must match pt_common.glsl RAYGEN_SHADER layout) ----
-
-    struct PTPushConstants {
-        uint32_t max_bounces;
-        uint32_t sample_count;
-        uint32_t frame_seed;
-        uint32_t blue_noise_index;
-        float max_clamp;
-        uint32_t env_sampling;
-        uint32_t directional_lights;
-        uint32_t emissive_light_count;
-        uint32_t lod_max_level;
-        uint32_t lightmap_width;
-        uint32_t lightmap_height;
-        float probe_pos_x;
-        float probe_pos_y;
-        float probe_pos_z;
-        uint32_t face_index;
-    };
-
-    static_assert(sizeof(PTPushConstants) == 60);
-
     // ---- Init / Destroy ----
 
     void LightmapBakerPass::setup(rhi::Context &ctx,

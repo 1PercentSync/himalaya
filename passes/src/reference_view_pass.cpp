@@ -5,6 +5,7 @@
  */
 
 #include <himalaya/passes/reference_view_pass.h>
+#include <himalaya/passes/pt_push_constants.h>
 
 #include <himalaya/framework/frame_context.h>
 #include <himalaya/framework/render_graph.h>
@@ -19,28 +20,6 @@
 #include <spdlog/spdlog.h>
 
 namespace himalaya::passes {
-    // ---- Push constants (must match reference_view.rgen / closesthit.rchit layout) ----
-
-    struct PTPushConstants {
-        uint32_t max_bounces;
-        uint32_t sample_count;
-        uint32_t frame_seed;
-        uint32_t blue_noise_index;
-        float max_clamp;
-        uint32_t env_sampling;           ///< 1 = env map importance sampling enabled, 0 = disabled
-        uint32_t directional_lights;     ///< 1 = directional lights enabled in PT, 0 = disabled
-        uint32_t emissive_light_count;   ///< number of emissive triangles (0 = skip NEE emissive)
-        uint32_t lod_max_level;          ///< ray cone LOD upper clamp (0 = full resolution, default 4)
-        uint32_t lightmap_width;         ///< lightmap texel width (0 for reference view)
-        uint32_t lightmap_height;        ///< lightmap texel height (0 for reference view)
-        float probe_pos_x;              ///< probe world position x (0 for non-probe)
-        float probe_pos_y;              ///< probe world position y (0 for non-probe)
-        float probe_pos_z;              ///< probe world position z (0 for non-probe)
-        uint32_t face_index;            ///< probe cubemap face 0-5 (0 for non-probe)
-    };
-
-    static_assert(sizeof(PTPushConstants) == 60);
-
     // ---- Init / Destroy ----
 
     void ReferenceViewPass::setup(rhi::Context &ctx,
