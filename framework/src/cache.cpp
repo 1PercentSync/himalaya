@@ -109,4 +109,33 @@ namespace himalaya::framework {
         return dir / (std::string(hash) + std::string(extension));
     }
 
+    bool atomic_write_file(const std::filesystem::path &path,
+                           const void *data, const size_t size) {
+        auto tmp_path = path;
+        tmp_path += ".tmp";
+
+        std::ofstream ofs(tmp_path, std::ios::binary | std::ios::trunc);
+        if (!ofs) {
+            spdlog::error("atomic_write_file: cannot open: {}", tmp_path.string());
+            return false;
+        }
+        ofs.write(static_cast<const char *>(data), static_cast<std::streamsize>(size));
+        ofs.close();
+        if (!ofs.good()) {
+            spdlog::error("atomic_write_file: write failed: {}", path.string());
+            std::error_code ec;
+            std::filesystem::remove(tmp_path, ec);
+            return false;
+        }
+
+        std::error_code ec;
+        std::filesystem::rename(tmp_path, path, ec);
+        if (ec) {
+            spdlog::error("atomic_write_file: rename failed: {}", ec.message());
+            std::filesystem::remove(tmp_path, ec);
+            return false;
+        }
+        return true;
+    }
+
 } // namespace himalaya::framework

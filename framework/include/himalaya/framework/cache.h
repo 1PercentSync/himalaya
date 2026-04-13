@@ -56,4 +56,20 @@ namespace himalaya::framework {
                                      std::string_view hash,
                                      std::string_view extension);
 
+    /**
+     * @brief Atomically writes a binary file (write-to-temp + rename).
+     *
+     * Writes data to `path.tmp`, then renames to `path`. On failure the
+     * temp file is removed and `path` is left unchanged (either the
+     * previous version or absent). Guarantees the file is either
+     * complete or absent — never partially written.
+     *
+     * @param path Destination file path.
+     * @param data Pointer to the data to write.
+     * @param size Number of bytes to write.
+     * @return true on success, false on write or rename failure.
+     */
+    bool atomic_write_file(const std::filesystem::path &path,
+                           const void *data, size_t size);
+
 } // namespace himalaya::framework
