@@ -389,7 +389,7 @@ namespace himalaya::passes {
                              .blue_noise_index = blue_noise_index_,
                              .max_clamp = 0.0f,
                              .env_sampling = env_sampling_ ? 1u : 0u,
-                             .directional_lights = directional_lights_ ? 1u : 0u,
+                             .directional_lights = 0u,
                              .emissive_light_count = emissive_light_count_,
                              .lod_max_level = lod_max_level_,
                              .lightmap_width = lm_w,
@@ -449,10 +449,6 @@ namespace himalaya::passes {
 
     void LightmapBakerPass::set_env_sampling(const bool v) {
         env_sampling_ = v;
-    }
-
-    void LightmapBakerPass::set_directional_lights(const bool v) {
-        directional_lights_ = v;
     }
 
     void LightmapBakerPass::set_emissive_light_count(const uint32_t v) {

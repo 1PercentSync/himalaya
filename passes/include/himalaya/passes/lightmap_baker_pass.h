@@ -121,9 +121,6 @@ namespace himalaya::passes {
         /** @brief Enables/disables environment map importance sampling. */
         void set_env_sampling(bool v);
 
-        /** @brief Enables/disables directional lights in PT. */
-        void set_directional_lights(bool v);
-
         /** @brief Sets the number of emissive triangles for NEE (0 = skip). */
         void set_emissive_light_count(uint32_t v);
 
@@ -168,7 +165,6 @@ namespace himalaya::passes {
 
         uint32_t max_bounces_ = 32;
         bool env_sampling_ = true;
-        bool directional_lights_ = false;
         uint32_t emissive_light_count_ = 0;
         uint32_t lod_max_level_ = 0;
 
