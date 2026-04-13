@@ -140,7 +140,7 @@
 - [x] Set 3 layout（per-dispatch）：binding 0 accumulation face view（cubemap 单层 2D view）+ binding 1 aux albedo（per-face 2D image）+ binding 2 aux normal（per-face 2D image）+ binding 3 Sobol
 - [x] Aux image 管理：2 个 RGBA16F image2DArray × 6 layer（albedo + normal）。Per-face 2D view per-probe 一次性创建（18 个 = 6 face × 3 images），所有 dispatch 复用，probe 完成时随 image 销毁
 - [x] 6 个 face 共享同一个 per-probe `sample_count`：每帧 6 次 dispatch 后 `sample_count` +1（不是 +6）
-- [ ] `renderer.h` + `renderer_init.cpp`：持有 `ProbeBakerPass` 实例，setup/destroy/rebuild 统一调用
+- [x] `renderer.h` + `renderer_init.cpp`：持有 `ProbeBakerPass` 实例，setup/destroy/rebuild 统一调用（同时修复 LightmapBakerPass 遗漏的 setup 调用）
 
 ## Step 12：Probe 端到端流程
 

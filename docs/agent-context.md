@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段七 — PT 烘焙器
-- **进度**：Step 11 进行中（probe_baker.rgen + probe_baker_pass.h/.cpp + Set 3 + Aux 管理 + sample_count 共享全部完成）
+- **进度**：Step 11 全部完成
 
 ### 下一个任务
 
-Step 11 最后一项：`renderer.h` + `renderer_init.cpp` 持有 ProbeBakerPass 实例，setup/destroy/rebuild 统一调用。
+Step 12 Probe 端到端流程，详见 `docs/current-phase.md` Step 12 章节。
 
 ---
 
