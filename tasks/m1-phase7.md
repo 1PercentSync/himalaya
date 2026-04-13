@@ -69,6 +69,8 @@
 - [x] 新增 `passes/lightmap_baker_pass.h`：LightmapBakerPass 类声明
 - [x] 新增 `passes/lightmap_baker_pass.cpp`：setup（编译 rgen + 创建 RT pipeline）+ record（RG pass + push descriptors + trace_rays）
 - [x] Set 3 layout：binding 0 accumulation + binding 1 aux albedo (lightmap 分辨率) + binding 2 aux normal (lightmap 分辨率) + binding 3 Sobol + binding 4 position map + binding 5 normal map
+- [ ] `lightmap_baker_pass.h`：`lod_max_level_` 默认值从 4 改为 0，移除 `set_lod_max_level()` 接口（baker 始终全分辨率纹理采样，hardcode）
+- [ ] `lightmap_baker_pass.h`：`max_bounces_` 默认值从 8 改为 32（与 baker 面板默认值一致）
 
 ## Step 9：烘焙模式渲染路径 + Lightmap 端到端
 
