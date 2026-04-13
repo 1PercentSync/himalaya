@@ -724,6 +724,9 @@ namespace himalaya::app {
         /** @brief Per-instance normal map (RGBA32F, lightmap resolution). */
         rhi::ImageHandle bake_normal_map_;
 
+        /** @brief Per-instance albedo map (RGBA16F, lightmap resolution, base color for OIDN aux). */
+        rhi::ImageHandle bake_albedo_map_;
+
         /** @brief Per-instance OIDN auxiliary albedo (RGBA16F, lightmap resolution). */
         rhi::ImageHandle bake_aux_albedo_;
 

@@ -239,6 +239,13 @@ namespace himalaya::app {
             .usage = rhi::ImageUsage::ColorAttachment | rhi::ImageUsage::Sampled,
         }, "bake_normal_map");
 
+        bake_albedo_map_ = resource_manager_->create_image({
+            .width = res, .height = res, .depth = 1,
+            .mip_levels = 1, .array_layers = 1, .sample_count = 1,
+            .format = rhi::Format::R16G16B16A16Sfloat,
+            .usage = rhi::ImageUsage::ColorAttachment | rhi::ImageUsage::TransferSrc,
+        }, "bake_albedo_map");
+
         bake_aux_albedo_ = resource_manager_->create_image({
             .width = res, .height = res, .depth = 1,
             .mip_levels = 1, .array_layers = 1, .sample_count = 1,
@@ -259,10 +266,10 @@ namespace himalaya::app {
         rhi::CommandBuffer imm_cmd(ctx_->immediate_command_buffer);
 
         // Batch 1: initial layout transitions for all per-instance images
-        //   pos/normal maps   → COLOR_ATTACHMENT (rasterization target)
-        //   accumulation      → GENERAL (RT storage + clear)
-        //   aux_albedo/normal → GENERAL (RT storage; Step 9.5c will rework to TRANSFER_DST + blit)
-        const std::array<VkImageMemoryBarrier2, 5> initial_barriers = {{
+        //   pos/normal/albedo maps → COLOR_ATTACHMENT (rasterization target)
+        //   accumulation           → GENERAL (RT storage + clear)
+        //   aux_albedo/normal      → GENERAL (RT storage; Step 9.5c will rework to TRANSFER_DST + blit)
+        const std::array<VkImageMemoryBarrier2, 6> initial_barriers = {{
             {
                 .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
                 .srcStageMask = VK_PIPELINE_STAGE_2_NONE,
@@ -283,6 +290,17 @@ namespace himalaya::app {
                 .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
                 .newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                 .image = resource_manager_->get_image(bake_normal_map_).image,
+                .subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1},
+            },
+            {
+                .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+                .srcStageMask = VK_PIPELINE_STAGE_2_NONE,
+                .srcAccessMask = VK_ACCESS_2_NONE,
+                .dstStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                .dstAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+                .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+                .newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                .image = resource_manager_->get_image(bake_albedo_map_).image,
                 .subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1},
             },
             {
@@ -340,9 +358,10 @@ namespace himalaya::app {
         // Compute normal matrix
         const glm::mat3 normal_matrix = glm::transpose(glm::inverse(glm::mat3(inst.transform)));
 
-        // Rasterize pos/normal map
+        // Rasterize pos/normal/albedo map (3 color attachments)
         pos_normal_map_pass_.record(imm_cmd, mesh, inst.transform, normal_matrix,
-                                    bake_position_map_, bake_normal_map_, res, res);
+                                    bake_position_map_, bake_normal_map_, bake_albedo_map_,
+                                    inst.material_id, 0, res, res);
 
         // Barrier: COLOR_ATTACHMENT → SHADER_READ_ONLY for baker sampling
         const std::array<VkImageMemoryBarrier2, 2> to_read = {{
@@ -437,6 +456,10 @@ namespace himalaya::app {
         if (bake_normal_map_.valid()) {
             resource_manager_->destroy_image(bake_normal_map_);
             bake_normal_map_ = {};
+        }
+        if (bake_albedo_map_.valid()) {
+            resource_manager_->destroy_image(bake_albedo_map_);
+            bake_albedo_map_ = {};
         }
         if (bake_aux_albedo_.valid()) {
             resource_manager_->destroy_image(bake_aux_albedo_);

@@ -447,7 +447,8 @@ namespace himalaya::app {
         if (ctx_->rt_supported) {
             reference_view_pass_.setup(*ctx_, *resource_manager_, *descriptor_manager_,
                                        shader_compiler_, sobol_buffer_, blue_noise_bindless_.index);
-            pos_normal_map_pass_.setup(*ctx_, *resource_manager_, shader_compiler_);
+            pos_normal_map_pass_.setup(*ctx_, *resource_manager_, *descriptor_manager_,
+                                       shader_compiler_);
         }
 
         // --- Set 2 initial descriptor writes ---
