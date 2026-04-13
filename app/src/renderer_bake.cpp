@@ -17,6 +17,8 @@
 
 #include <array>
 #include <cmath>
+#include <cstdio>
+#include <filesystem>
 
 #include <glm/glm.hpp>
 #include <spdlog/spdlog.h>
@@ -51,6 +53,54 @@ namespace himalaya::app {
      */
     static uint32_t align_to_4(const uint32_t v) {
         return (v + 3u) & ~3u;
+    }
+
+    /**
+     * @brief Formats rotation integer as zero-padded 3-digit string (e.g. "007", "090", "359").
+     */
+    static std::string format_rotation(const uint32_t rot) {
+        char buf[4];
+        std::snprintf(buf, sizeof(buf), "%03u", rot);
+        return buf;
+    }
+
+    // ---- Bake completeness check ----
+
+    bool Renderer::is_bake_angle_complete(
+        const std::span<const std::string> lightmap_keys,
+        const std::string &probe_set_key,
+        const uint32_t rotation_int,
+        const uint32_t probe_count) {
+
+        const auto rot = format_rotation(rotation_int);
+
+        // Check all lightmap KTX2 files
+        for (const auto &key : lightmap_keys) {
+            const auto path = framework::cache_path("bake", key + "_rot" + rot, ".ktx2");
+            if (!std::filesystem::exists(path)) {
+                return false;
+            }
+        }
+
+        // Check manifest
+        const auto manifest_path = framework::cache_path(
+            "bake", probe_set_key + "_rot" + rot + "_manifest", ".bin");
+        if (!std::filesystem::exists(manifest_path)) {
+            return false;
+        }
+
+        // Check all probe KTX2 files
+        for (uint32_t i = 0; i < probe_count; ++i) {
+            char probe_suffix[16];
+            std::snprintf(probe_suffix, sizeof(probe_suffix), "_probe%03u", i);
+            const auto path = framework::cache_path(
+                "bake", probe_set_key + "_rot" + rot + probe_suffix, ".ktx2");
+            if (!std::filesystem::exists(path)) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     // ---- Bake session management ----

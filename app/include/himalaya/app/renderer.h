@@ -275,6 +275,22 @@ namespace himalaya::app {
         [[nodiscard]] bool bake_finalize_pending() const;
 
         /**
+         * @brief Checks whether a baked angle is complete: all lightmap KTX2 files
+         *        + manifest + all probe KTX2 files exist on disk.
+         *
+         * @param lightmap_keys Per-bakeable-instance lightmap cache key hashes.
+         * @param probe_set_key Probe set cache key hash.
+         * @param rotation_int  IBL rotation in integer degrees (0-359).
+         * @param probe_count   Expected number of probes (from manifest, 0 = skip probe check).
+         * @return true if all expected files exist for this angle.
+         */
+        [[nodiscard]] static bool is_bake_angle_complete(
+            std::span<const std::string> lightmap_keys,
+            const std::string &probe_set_key,
+            uint32_t rotation_int,
+            uint32_t probe_count);
+
+        /**
          * @brief Initiates a bake session: filters bakeable instances, computes
          *        per-instance lightmap resolutions, and transitions to BakingLightmaps.
          *
