@@ -153,12 +153,14 @@ namespace himalaya::app {
         pending_semaphore_signal_ = {}; // Clear previous frame's signal
         fill_common_gpu_data(input);
 
-        // Fall back to rasterization when PT is requested but no valid TLAS exists
-        // (all scene primitives degenerate, or scene not loaded yet).
-        const bool can_path_trace = input.render_mode == framework::RenderMode::PathTracing
-                                    && scene_as_builder_.tlas_handle().as != VK_NULL_HANDLE;
-
-        if (can_path_trace) {
+        if (input.render_mode == framework::RenderMode::Baking) {
+            // Baking requires RT — UI prevents entering Baking without rt_supported + scene + HDR.
+            update_hdr_color_descriptor();
+            render_baking(cmd, input);
+        } else if (input.render_mode == framework::RenderMode::PathTracing
+                   && scene_as_builder_.tlas_handle().as != VK_NULL_HANDLE) {
+            // Fall back to rasterization when PT is requested but no valid TLAS exists
+            // (all scene primitives degenerate, or scene not loaded yet).
             render_path_tracing(cmd, input);
         } else {
             update_hdr_color_descriptor();
@@ -225,6 +227,12 @@ namespace himalaya::app {
         last_denoise_trigger_sample_count_ = 0;
         pt_start_time_ = std::chrono::steady_clock::now();
         pt_finish_time_ = pt_start_time_;
+    }
+
+    // ---- Bake accessor ----
+
+    bool Renderer::bake_finalize_pending() const {
+        return bake_finalize_pending_;
     }
 
     // ---- Denoiser parameter accessors (for DebugUIContext binding) ----

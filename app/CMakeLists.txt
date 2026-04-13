@@ -6,6 +6,7 @@ add_executable(himalaya_app
     src/renderer_init.cpp
     src/renderer_rasterization.cpp
     src/renderer_pt.cpp
+    src/renderer_bake.cpp
     src/camera_controller.cpp
     src/debug_ui.cpp
     src/scene_loader.cpp
