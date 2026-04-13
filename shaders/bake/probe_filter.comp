@@ -1,0 +1,160 @@
+#version 460
+
+/**
+ * @file probe_filter.comp
+ * @brief Probe placement filter — two-rule RT geometric culling.
+ *
+ * Each invocation tests one candidate probe position with N Monte Carlo rays
+ * (Fibonacci sphere sampling). Two culling rules are applied:
+ *
+ * - Rule 1 (one-vote veto): any ray hits a backface of single-sided geometry
+ *   → the probe is inside solid geometry. Immediate cull.
+ * - Rule 2 (enclosure detection): all rays hit, all hits are double-sided,
+ *   and the maximum hit distance < enclosure_threshold → the probe is inside
+ *   a small double-sided enclosure. Cull.
+ *
+ * Assumption: backfaces of non-double-sided geometry never appear in valid
+ * rendering regions. This holds for standard scenes (Sponza, etc.).
+ */
+
+#extension GL_EXT_ray_query                            : require
+#extension GL_EXT_buffer_reference                     : require
+#extension GL_EXT_buffer_reference2                    : require
+#extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
+#extension GL_EXT_scalar_block_layout                  : require
+
+#define HIMALAYA_RT
+#include "common/bindings.glsl"
+
+// ---- Buffer references (BDA) ----
+
+/** Candidate probe positions (vec4, only xyz used). */
+layout(buffer_reference, std430, buffer_reference_align = 16) readonly buffer CandidateBuffer {
+    vec4 positions[];
+};
+
+/** Per-candidate filter result: 0 = pass, 1 = Rule 1 cull, 2 = Rule 2 cull. */
+layout(buffer_reference, std430, buffer_reference_align = 4) writeonly buffer ResultBuffer {
+    uint results[];
+};
+
+// ---- Push constants ----
+
+layout(push_constant) uniform PushConstants {
+    uint64_t candidate_addr;       // BDA of CandidateBuffer
+    uint64_t result_addr;          // BDA of ResultBuffer
+    uint     candidate_count;      // total number of candidates
+    uint     ray_count;            // rays per candidate (Fibonacci sphere)
+    float    enclosure_threshold;  // max hit distance for Rule 2
+    float    ray_max_distance;     // tMax for ray queries
+} pc;
+
+// ---- Constants ----
+
+const float kPi         = 3.14159265358979323846;
+const float kGoldenRatio = 1.6180339887498948482; // (1 + sqrt(5)) / 2
+const float kRayTMin    = 0.001; // small offset to avoid self-intersection
+
+// ---- Workgroup ----
+
+layout(local_size_x = 64) in;
+
+// ---- Fibonacci sphere sampling ----
+
+/**
+ * Generates a quasi-random direction on the unit sphere using the Fibonacci
+ * lattice. Produces N points with near-optimal uniformity — better coverage
+ * than pure random sampling for a fixed sample count.
+ *
+ * @param index  Sample index in [0, count).
+ * @param count  Total number of samples.
+ * @return Unit direction vector.
+ */
+vec3 fibonacci_sphere(uint index, uint count) {
+    // Vertical position: linearly spaced from +1 to -1
+    float y = 1.0 - 2.0 * (float(index) + 0.5) / float(count);
+    // Radius at this height on the unit sphere
+    float r = sqrt(max(1.0 - y * y, 0.0));
+    // Azimuthal angle: golden-ratio increments for uniform spread
+    float theta = 2.0 * kPi * float(index) / kGoldenRatio;
+    return vec3(r * cos(theta), y, r * sin(theta));
+}
+
+// ---- Main ----
+
+void main() {
+    uint idx = gl_GlobalInvocationID.x;
+    if (idx >= pc.candidate_count) {
+        return;
+    }
+
+    CandidateBuffer candidates = CandidateBuffer(pc.candidate_addr);
+    ResultBuffer    results    = ResultBuffer(pc.result_addr);
+
+    vec3 origin = candidates.positions[idx].xyz;
+
+    // Accumulators for Rule 2
+    uint  double_sided_hit_count = 0;
+    bool  has_miss               = false;
+    bool  has_single_sided_hit   = false;
+    float max_hit_distance       = 0.0;
+
+    for (uint i = 0; i < pc.ray_count; ++i) {
+        vec3 dir = fibonacci_sphere(i, pc.ray_count);
+
+        rayQueryEXT rq;
+        rayQueryInitializeEXT(rq, tlas, gl_RayFlagsOpaqueEXT, 0xFF,
+                              origin, kRayTMin, dir, pc.ray_max_distance);
+
+        // OpaqueEXT auto-commits closest hit; loop until traversal completes
+        while (rayQueryProceedEXT(rq)) {
+            // intentionally empty — opaque geometry auto-committed
+        }
+
+        // Check committed intersection
+        if (rayQueryGetIntersectionTypeEXT(rq, true)
+            == gl_RayQueryCommittedIntersectionNoneEXT)
+        {
+            has_miss = true;
+            continue;
+        }
+
+        // ---- Hit: extract intersection properties ----
+        bool  front_face = rayQueryGetIntersectionFrontFaceEXT(rq, true);
+        int   inst_idx   = rayQueryGetIntersectionInstanceCustomIndexEXT(rq, true);
+        int   geom_idx   = rayQueryGetIntersectionGeometryIndexEXT(rq, true);
+        float t_hit      = rayQueryGetIntersectionTEXT(rq, true);
+
+        // Material lookup: instance+geometry → GeometryInfo → material
+        uint mat_idx       = geometry_infos[uint(inst_idx + geom_idx)].material_buffer_offset;
+        bool double_sided  = (materials[mat_idx].double_sided == 1u);
+
+        // ---- Rule 1: single-sided backface → immediate cull ----
+        if (!front_face && !double_sided) {
+            results.results[idx] = 1u;
+            return;
+        }
+
+        // ---- Accumulate for Rule 2 ----
+        if (double_sided) {
+            double_sided_hit_count++;
+            max_hit_distance = max(max_hit_distance, t_hit);
+        } else {
+            // Front-face hit of single-sided geometry — not enclosed
+            has_single_sided_hit = true;
+        }
+    }
+
+    // ---- Rule 2: enclosed in double-sided geometry ----
+    if (!has_miss
+        && !has_single_sided_hit
+        && double_sided_hit_count == pc.ray_count
+        && max_hit_distance < pc.enclosure_threshold)
+    {
+        results.results[idx] = 2u;
+        return;
+    }
+
+    // Passed both rules
+    results.results[idx] = 0u;
+}
