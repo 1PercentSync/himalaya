@@ -127,9 +127,6 @@ namespace himalaya::passes {
         /** @brief Sets the number of emissive triangles for NEE (0 = skip). */
         void set_emissive_light_count(uint32_t v);
 
-        /** @brief Sets the ray cone LOD upper clamp (0 = full resolution). */
-        void set_lod_max_level(uint32_t v);
-
     private:
         /** @brief Create (or recreate) the RT pipeline. */
         void create_pipeline();
@@ -173,7 +170,7 @@ namespace himalaya::passes {
         bool env_sampling_ = true;
         bool directional_lights_ = false;
         uint32_t emissive_light_count_ = 0;
-        uint32_t lod_max_level_ = 4;
+        uint32_t lod_max_level_ = 0;
 
         // ---- Accumulation state ----
 

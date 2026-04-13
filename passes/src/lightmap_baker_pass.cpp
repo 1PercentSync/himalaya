@@ -459,7 +459,4 @@ namespace himalaya::passes {
         emissive_light_count_ = v;
     }
 
-    void LightmapBakerPass::set_lod_max_level(const uint32_t v) {
-        lod_max_level_ = v;
-    }
 } // namespace himalaya::passes
