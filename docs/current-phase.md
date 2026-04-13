@@ -292,8 +292,13 @@ Position/normal map 通过 `sampler2D`（nearest, clamp）采样而非 storage i
   - Accumulation buffer 创建 / 销毁（per-instance，lightmap 分辨率）
   - `sample_count`：per-instance 独立计数（每个 instance 从 0 开始累积到 target SPP），通过 `pc.sample_count` 传入
   - `frame_seed`：全局单调递增计数器（不 per-instance 重置），保证不同 dispatch 种子唯一
-  - Baker push constant：`pc.max_clamp = 0`（禁用 firefly clamping，烘焙求无偏）
-  - `render_baking()` 每帧帧流程：`fill_common_gpu_data()`（closesthit 需要 GlobalUBO 中的 IBL/光源数据）→ RG import Set 0 资源 + TLAS → baker RT pass → ImGui render pass → swapchain present
+  - Baker push constant hardcode：`pc.max_clamp = 0`（禁用 firefly clamping）、`pc.directional_lights = 0`（不烘焙方向光）、`pc.lod_max_level = 0`（全分辨率纹理采样）
+  - Baker GlobalUBO override：`ibl_intensity = 1.0`（归一化烘焙，运行时乘法补偿）
+  - Baker 独立 push constant：`pc.max_bounces` / `pc.env_sampling` / `pc.emissive_light_count` 从 baker 面板参数读取（独立于参考视图）
+  - Baker allow tearing：烘焙期间可选强制 IMMEDIATE present mode 解除 VSync 帧率限制
+  - Cache key 扩展：lightmap key = `scene_hash + geometry_hash + transform_hash + hdr_hash + rotation_int`，probe key = `scene_hash + position_hash + hdr_hash + rotation_int`。`rotation_int` 为整数度数（0-359）
+  - 文件命名：`<content_hash>_rot<NNN>.ktx2`（content_hash = 除 rotation 以外的 key 部分，NNN = 零填充三位度数）。同一角度重新 bake 覆盖旧文件
+  - `render_baking()` 每帧帧流程：`fill_common_gpu_data()`（closesthit 需要 GlobalUBO 中的 IBL 数据，方向光不写入）→ RG import Set 0 资源 + TLAS → baker RT pass → ImGui render pass → swapchain present
 - `app/renderer.cpp`：`render()` switch 新增 `RenderMode::Baking` → `render_baking()`
 - `app/debug_ui.cpp`：Rendering section 的 RenderMode combo 新增 Baking（仅 rt_supported 时显示）
 
@@ -372,12 +377,14 @@ Cache key 只含 glTF 固有信息，不包含烘焙参数。Lightmap: `content_
 ### Step 13：ImGui 烘焙控制面板
 
 - `app/debug_ui.cpp`：新增 Baking collapsing header：
-  - **参数配置**：lightmap texels_per_meter slider + min/max resolution + lightmap 目标采样数 + probe face 分辨率 + probe grid spacing + probe 目标采样数
-  - **烘焙触发**：Start Bake 按钮（仅 rt_supported + RenderMode != Baking 时可用）→ 切换 RenderMode 到 Baking
-  - **进度显示**：当前阶段（Lightmaps / Probes / Complete）+ 当前项编号/总数 + 采样数/目标 + 总进度百分比
+  - **参数配置**：lightmap texels_per_meter slider + min/max resolution + lightmap 目标采样数 + probe face 分辨率 + probe grid spacing + probe 目标采样数 + baker max bounces + baker env sampling + baker emissive NEE + baker allow tearing
+  - **烘焙触发**：Start Bake 按钮（仅 rt_supported + RenderMode != Baking + IBL 模式时可用）→ 以当前 IBL 旋转角度（round 到整数度）触发烘焙，切换 RenderMode 到 Baking
+  - **进度显示**：当前阶段（Lightmaps / Probes / Complete）+ 当前项编号/总数 + 采样数/目标 + 吞吐量（SPP/s）+ 当前项耗时 + 总进度百分比 + 总耗时
   - **Accumulation 预览**：ImGui::Image() 显示当前 accumulation buffer（注册为 ImGui 纹理 descriptor）
   - **取消**：Cancel 按钮 → 中止烘焙，RenderMode 恢复 Rasterization
-- `app/renderer.h`：暴露烘焙状态（BakeState、current index、sample count 等）给 DebugUIContext
-- `app/config.cpp`：烘焙参数持久化（texels_per_meter、probe spacing 等）
+  - **已 bake 角度列表**：显示当前 scene+HDR 下所有已 bake 的旋转角度（目录扫描 `<hash>_rot*.ktx2`），点击可在 Lightmap/Probe 模式下切换角度。每个角度显示 lightmap 数量 + probe 数量
+  - **Cache 操作**：Cache 面板新增 Clear Bake Cache 按钮（清除全部 bake 缓存）
+- `app/renderer.h`：暴露烘焙状态（BakeState、current index、sample count、吞吐量、耗时等）给 DebugUIContext
+- `app/config.cpp`：烘焙参数持久化（texels_per_meter、probe spacing、baker max_bounces、baker env_sampling、baker emissive_nee、baker allow_tearing 等）
 
-**验证**：所有参数 slider 功能正常，Start/Cancel 按钮正确触发/中止，进度信息实时更新，accumulation 预览在烘焙进行中显示实时画面
+**验证**：所有参数 slider 功能正常，Start/Cancel 按钮正确触发/中止，进度信息和吞吐量实时更新，accumulation 预览在烘焙进行中显示实时画面，已 bake 角度列表正确显示

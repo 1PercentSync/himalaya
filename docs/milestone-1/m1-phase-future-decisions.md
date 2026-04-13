@@ -74,3 +74,22 @@ GTAO 的 heightfield 假设将每个可见表面视为无限厚。Thickness heur
 Visibility Bitmask（Therrien et al., 2023）将 GTAO 的两个 horizon 角替换为 32-bit 遮挡/可见扇区掩码，允许光线穿过恒定厚度的表面背后。Bevy 引擎在 v0.15 从 GTAO 迁移到此方案。
 
 这是核心算法替换（horizon search → bitmask 积累），shader 需大幅改写。仅在实测发现 thickness heuristic 不足以应对场景中的薄物体时实施，优先级在 M2 或更后。
+
+---
+
+## Phase 8 间接光照模式（阶段八构想，来自阶段七 Baker 参数分类审查）
+
+Phase 8 在光栅化渲染内引入两种间接光照模式：
+
+| 模式 | 间接光来源 | IBL 旋转行为 | IBL Intensity 语义 |
+|------|-----------|-------------|-------------------|
+| IBL 模式 | IBL Split-Sum 近似（无 lightmap/probe） | 自由旋转 | IBL 环境光强度 |
+| Lightmap/Probe 模式 | 烘焙 lightmap + reflection probe | 只能在已 bake 角度间跳切 | 间接光整体增益（含 emissive，乘法补偿） |
+
+**总开关**切换两种模式。无已 bake 角度时总开关不可用（灰显）。清除 bake 缓存后若当前处于 Lightmap/Probe 模式，自动回退到 IBL 模式。
+
+**角度切换 UX**：Lightmap/Probe 模式下左键拖拽 IBL 旋转在已 bake 角度间跳变（需拖过阈值才触发切换），UI 同时显示已 bake 角度列表可点击直接跳转。
+
+**IBL Intensity 改名**：Lightmap/Probe 模式下 slider label 和 tooltip 改为反映"间接光整体增益"语义（baker 以 `ibl_intensity = 1.0` 归一化烘焙，运行时乘法缩放。emissive 贡献被一同缩放，接受此不精确）。
+
+**Bake 工作流交互**：Bake 操作仅在 IBL 模式下触发（自由旋转到目标角度 → Start Bake）。Lightmap/Probe 模式下 Start Bake 不可用。

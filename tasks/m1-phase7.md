@@ -78,8 +78,11 @@
 - [ ] `renderer_bake.cpp`：烘焙触发时计算 per-instance lightmap 分辨率（世界空间表面积 × texels_per_meter，对齐到 4）
 - [ ] `renderer_bake.cpp`：per-instance lightmap 烘焙循环（position/normal map + aux image 创建 → accumulation → 目标采样数 → readback accumulation + aux → BakeDenoiser（含辅助通道）→ BC6H → KTX2）
 - [ ] `renderer_bake.cpp`：per-instance `sample_count` 独立计数（从 0 到 target SPP），全局 `frame_seed` 单调递增不重置
-- [ ] `renderer_bake.cpp`：baker push constant `max_clamp = 0`（禁用 firefly clamping）
-- [ ] `renderer_bake.cpp`：每帧帧流程 `fill_common_gpu_data()` → RG import Set 0 + TLAS → baker RT pass → ImGui render pass → present
+- [ ] `renderer_bake.cpp`：baker push constant hardcode（`max_clamp = 0`、`directional_lights = 0`、`lod_max_level = 0`）+ GlobalUBO override（`ibl_intensity = 1.0`）
+- [ ] `renderer_bake.cpp`：baker 独立 push constant（`max_bounces` / `env_sampling` / `emissive_light_count` 从 baker 面板参数读取）
+- [ ] `renderer_bake.cpp`：baker allow tearing（烘焙期间可选强制 IMMEDIATE present mode）
+- [ ] `renderer_bake.cpp`：cache key 扩展（加入 `hdr_content_hash` + `ibl_rotation_int`），文件命名 `<content_hash>_rot<NNN>.ktx2`
+- [ ] `renderer_bake.cpp`：每帧帧流程 `fill_common_gpu_data()`（方向光不写入）→ RG import Set 0 + TLAS → baker RT pass → ImGui render pass → present
 - [ ] `renderer.cpp`：render() switch 新增 Baking case
 - [ ] `debug_ui.cpp`：RenderMode combo 新增 Baking 选项
 
@@ -108,9 +111,11 @@
 
 ## Step 13：ImGui 烘焙控制面板
 
-- [ ] `debug_ui.cpp`：Baking collapsing header — 参数配置（texels_per_meter / min_res / max_res / lightmap SPP / probe face res / probe spacing / probe SPP）
-- [ ] `debug_ui.cpp`：Start Bake / Cancel 按钮
-- [ ] `debug_ui.cpp`：进度显示（阶段 + 当前项/总数 + 采样数/目标 + 百分比）
+- [ ] `debug_ui.cpp`：Baking collapsing header — 参数配置（texels_per_meter / min_res / max_res / lightmap SPP / probe face res / probe spacing / probe SPP / baker max_bounces / baker env_sampling / baker emissive_nee / baker allow_tearing）
+- [ ] `debug_ui.cpp`：Start Bake / Cancel 按钮（Start 仅 rt_supported + 非 Baking + IBL 模式时可用）
+- [ ] `debug_ui.cpp`：进度显示（阶段 + 当前项/总数 + 采样数/目标 + 吞吐量 SPP/s + 当前项耗时 + 总进度百分比 + 总耗时）
 - [ ] `debug_ui.cpp`：ImGui::Image() accumulation 预览
-- [ ] `renderer.h`：暴露烘焙状态给 DebugUIContext
-- [ ] `config.cpp`：烘焙参数持久化
+- [ ] `debug_ui.cpp`：已 bake 角度列表（目录扫描 `<hash>_rot*.ktx2`，显示角度 + lightmap/probe 数量，点击切换）
+- [ ] `debug_ui.cpp`：Cache 面板新增 Clear Bake Cache 按钮
+- [ ] `renderer.h`：暴露烘焙状态（BakeState、current index、sample count、吞吐量、耗时等）给 DebugUIContext
+- [ ] `config.cpp`：烘焙参数持久化（texels_per_meter、probe spacing、baker max_bounces、env_sampling、emissive_nee、allow_tearing）
