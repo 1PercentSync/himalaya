@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段七 — PT 烘焙器
-- **进度**：Step 9 进行中（前 21 小项完成）
+- **进度**：Step 9 进行中（前 22 小项完成）
 
 ### 下一个任务
 
-Step 9 第二十二小项：`renderer_bake.cpp` 进入 Baking 前记录当前 RenderMode，Cancel/Complete 后恢复。
+Step 9 第二十三小项：`renderer_bake.cpp` Cancel 后显示信息（"Bake cancelled. N/M instances completed."）。
 
 ---
 
