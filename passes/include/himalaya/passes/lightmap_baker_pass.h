@@ -17,6 +17,7 @@
  *   binding 5 — normal map   (combined image sampler, nearest + clamp)
  */
 
+#include <himalaya/framework/frame_context.h>
 #include <himalaya/framework/render_graph.h>
 #include <himalaya/rhi/rt_pipeline.h>
 #include <himalaya/rhi/types.h>

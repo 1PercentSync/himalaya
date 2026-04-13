@@ -138,6 +138,14 @@ namespace himalaya::app {
      */
     class Renderer {
     public:
+        /** @brief Bake pipeline state machine. */
+        enum class BakeState : uint8_t {
+            Idle,             ///< No bake in progress.
+            BakingLightmaps,  ///< Lightmap bake loop running.
+            BakingProbes,     ///< Probe bake loop running (Step 12).
+            Complete,         ///< All bake work finished.
+        };
+
         /**
          * @brief Initializes rendering resources: pipelines, buffers, default textures.
          *
@@ -701,14 +709,6 @@ namespace himalaya::app {
         glm::vec4 prev_pt_light_color_shadow_{0.0f};
 
         // --- Bake state ---
-
-        /** @brief Bake pipeline state machine. */
-        enum class BakeState : uint8_t {
-            Idle,             ///< No bake in progress.
-            BakingLightmaps,  ///< Lightmap bake loop running.
-            BakingProbes,     ///< Probe bake loop running (Step 12).
-            Complete,         ///< All bake work finished.
-        };
 
         /** @brief Current bake state machine position. */
         BakeState bake_state_ = BakeState::Idle;
