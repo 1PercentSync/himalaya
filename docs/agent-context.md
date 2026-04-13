@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段七 — PT 烘焙器
-- **进度**：Step 9 进行中（前 9 小项完成，sample_count/frame_seed 已由第七小项隐式覆盖）
+- **进度**：Step 9 进行中（前 10 小项完成）
 
 ### 下一个任务
 
-Step 9 第十小项：`renderer_bake.cpp` baker push constant hardcode（max_clamp=0、lod_max_level=0）；directional_lights=0 和 ibl_intensity=1.0 由 Application 在 RenderInput 中设置。
+Step 9 第十一小项：`renderer_bake.cpp` baker 独立 push constant（max_bounces / env_sampling / emissive_light_count 从 BakeConfig 读取）。
 
 ---
 
