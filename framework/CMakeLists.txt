@@ -23,6 +23,7 @@ target_sources(himalaya_framework PRIVATE
         src/texture.cpp
         src/lightmap_uv.cpp
         src/bake_denoiser.cpp
+        src/probe_placement.cpp
 )
 
 target_include_directories(himalaya_framework PUBLIC include)

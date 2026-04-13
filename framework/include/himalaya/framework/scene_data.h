@@ -317,6 +317,12 @@ namespace himalaya::framework {
         /** @brief Probe grid spacing in meters. */
         float probe_spacing = 1.0f;
 
+        /** @brief Number of Monte Carlo rays per probe candidate (Fibonacci sphere sampling). */
+        uint32_t filter_ray_count = 64;
+
+        /** @brief Enclosure detection threshold factor (× AABB longest edge = max hit distance). */
+        float enclosure_threshold_factor = 0.05f;
+
         /** @brief Probe target sample count (SPP). */
         uint32_t probe_spp = 2048;
 
