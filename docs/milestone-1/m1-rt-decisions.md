@@ -111,7 +111,7 @@ Idle → ReadbackPending → Processing → UploadPending → Idle
 - Aux Normal（R16G16B16A16Sfloat）→ `OIDN_FORMAT_HALF3`，pixelByteStride=8（跳过 alpha）
 - Output（RGBA32F）→ `OIDN_FORMAT_FLOAT3`，pixelByteStride=16
 
-三种输入无需任何 CPU 端格式转换。Aux albedo 原始设计为 R8G8B8A8Unorm（Step 7），Step 9 实现前升级为 R16G16B16A16Sfloat（half 精度高于 R8 的 256 级，零质量损失；VRAM 增加从 4→8 bytes/pixel，1080p 下约 +8MB 可忽略）。两张 aux 统一格式简化 readback 和 OIDN 配置。
+三种输入无需任何 CPU 端格式转换。Aux albedo 原始设计为 R8G8B8A8Unorm（Phase 6 Step 7），Phase 6 Step 9 实现前升级为 R16G16B16A16Sfloat（half 精度高于 R8 的 256 级，零质量损失；VRAM 增加从 4→8 bytes/pixel，1080p 下约 +8MB 可忽略）。两张 aux 统一格式简化 readback 和 OIDN 配置。
 
 ---
 
@@ -536,7 +536,7 @@ Tonemapping 输入选择：`show_denoised_ && denoise_enabled_ && denoised_gener
 
 | 参数 | 默认值 | 范围 | 说明 |
 |------|--------|------|------|
-| 最大 bounce | 8 | 1-32 | 有 Russian Roulette 时设高无性能代价 |
+| 最大 bounce | 16 | 1-32 | Step 12 从 8 调至 16 配合背面穿透消耗，有 Russian Roulette 时设高无性能代价 |
 | 每帧 SPP | 1 | 固定 | 保持 UI 响应，总吞吐量不变 |
 | Russian Roulette 起始 | bounce 2-3 | 硬编码 | 不终止 primary ray 和首次反弹 |
 

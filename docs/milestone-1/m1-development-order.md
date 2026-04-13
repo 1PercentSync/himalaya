@@ -135,8 +135,7 @@
 - Lightmap 分辨率自动计算（世界空间表面积 × texels_per_meter，clamp 到 min/max，对齐到 4）
 - BakeDenoiser（framework 层，同步阻塞 OIDN 降噪，独立于 reference view 的异步 Denoiser）
 - Position/Normal Map 光栅化 pass（UV 空间渲染：vertex shader 将 lightmap UV 映射到 NDC，fragment shader 输出世界空间 position + normal）
-- PT Push Constants 扩展（`baker_mode` + `lightmap_width` + `lightmap_height`，超集布局）
-- Closesthit `baker_mode` 条件分支（跳过 OIDN aux imageStore）
+- PT Push Constants 扩展（`lightmap_width` + `lightmap_height` + probe 字段，60B 超集布局，closesthit 无条件分支）
 - Lightmap Baker Pass（UV 空间 RT dispatch：读 position/normal map → 逐 texel 发射射线 → accumulation → BakeDenoiser → BC6H → KTX2 持久化）
 - Probe 自动放置（场景 AABB 内均匀网格 1m 间距 + RT 射线几何过滤剔除墙内探针）
 - Reflection Probe Baker Pass（cubemap 6 面 RT dispatch → accumulation → BakeDenoiser → prefilter mip chain → BC6H → KTX2 持久化）

@@ -57,7 +57,8 @@ framework/
 │   ├── texture_compress.h       # BC6H GPU 压缩通用工具（阶段七，从 IBL 提取）
 │   ├── cubemap_filter.h         # Cubemap prefilter 通用工具（阶段七，从 IBL 提取）
 │   ├── bake_denoiser.h          # 同步 OIDN 降噪（阶段七引入）
-│   └── lightmap_uv.h            # Lightmap UV 生成 + xatlas 集成 + 缓存（阶段七引入）
+│   ├── lightmap_uv.h            # Lightmap UV 生成 + xatlas 集成 + 缓存（阶段七引入）
+│   └── probe_placement.h       # Probe 自动放置（均匀网格 + RT 几何过滤）（阶段七引入）
 └── src/
     └── ...
 ```
@@ -455,7 +456,7 @@ struct CullResult {
 CPU 侧数据结构的 GPU 布局镜像，必须与 shader 端一一对应。
 
 ```cpp
-// GlobalUBO — std140 layout, 864 bytes (aligned to 16)
+// GlobalUBO — std140 layout, 928 bytes (aligned to 16)
 // 对应 shader: Set 0, Binding 0
 struct GlobalUniformData {
     glm::mat4 view;                             // offset   0
@@ -502,7 +503,9 @@ struct GlobalUniformData {
     uint32_t frame_index;                      // offset 848 — 当前帧索引 (PCSS 时域噪声变化等)
     uint32_t ao_so_mode;                       // offset 852 — 0=Lagarde, 1=GTSO (SO 评估方法)
     uint32_t _phase5_pad[2];                   // offset 856 — pad to 864 (vec4 alignment)
-};  // total: 864 bytes (54 × 16)
+    // --- 阶段六新增 ---
+    glm::mat4 inv_view;                        // offset 864 — 逆 view 矩阵（PT raygen primary ray 计算）
+};  // total: 928 bytes (58 × 16)
 
 // GPU 方向光 — std430 layout, 32 bytes per element
 // 对应 shader: Set 0, Binding 1 (LightBuffer SSBO)
@@ -550,6 +553,8 @@ struct EmissiveTriangle {
 // Step 11: 28B — + env_sampling(u32) + directional_lights(u32)
 // Step 12: 32B — + emissive_light_count(u32)
 // Step 13: 36B — + lod_max_level(u32)
+// 阶段七:  44B — + lightmap_width(u32) + lightmap_height(u32)
+// 阶段七:  60B — + probe_pos_x(f32) + probe_pos_y(f32) + probe_pos_z(f32) + face_index(u32)
 
 // PrimaryPayload — 逐步演进（raygen ↔ closesthit 通信）
 // Step 6:  56B — color(12) + next_origin(12) + next_direction(12) + throughput_update(12) + hit_distance(4) + bounce(4)
@@ -1173,7 +1178,7 @@ struct alignas(16) GPUMaterialData {
     uint  occlusion_tex;               // offset 64  — bindless index
     float alpha_cutoff;                // offset 68  — glTF alphaCutoff (Mask mode)
     uint  alpha_mode;                  // offset 72  — 0=Opaque, 1=Mask, 2=Blend
-    uint  _padding;                    // offset 76  — padding to 80 bytes
+    uint  double_sided;                // offset 76  — glTF doubleSided（Phase 6 Step 12 引入，RT 背面穿透判定用）
 };
 ```
 
