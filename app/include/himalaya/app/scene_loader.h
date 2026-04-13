@@ -105,6 +105,16 @@ namespace himalaya::app {
          */
         [[nodiscard]] const framework::AABB &scene_bounds() const;
 
+        /**
+         * @brief Composite hash of all scene texture source bytes.
+         *
+         * Computed at load time by concatenating per-texture source hashes
+         * (in unique_entries order) and hashing the result. Used as part
+         * of the bake cache key to invalidate when any texture changes.
+         * Empty string if no textures were loaded.
+         */
+        [[nodiscard]] const std::string &scene_textures_hash() const;
+
     private:
         // ---- Subsystem references (set during load) ----
 
@@ -142,6 +152,9 @@ namespace himalaya::app {
 
         /** @brief Union AABB of all mesh instance world_bounds, computed at load time. */
         framework::AABB scene_bounds_{};
+
+        /** @brief Composite hash of all scene texture source bytes (XXH3_128, hex). */
+        std::string scene_textures_hash_;
 
         // ---- Resource handles for cleanup ----
 

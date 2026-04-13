@@ -545,6 +545,15 @@ namespace himalaya::app {
             }
         }
 
+        // Compute scene_textures_hash: concatenate all source hashes and hash the result
+        if (!source_hashes.empty()) {
+            std::string concatenated;
+            for (const auto &h : source_hashes) {
+                concatenated += h;
+            }
+            scene_textures_hash_ = framework::content_hash(concatenated.data(), concatenated.size());
+        }
+
         // Phase 2b: Decode only cache-miss images (serial, skips cached textures)
         std::vector<framework::ImageData> decoded_images(tex_count);
         for (int i = 0; i < tex_count; ++i) {
@@ -765,6 +774,7 @@ namespace himalaya::app {
         cpu_indices_.clear();
         gpu_materials_.clear();
         scene_bounds_ = {glm::vec3(0.0f), glm::vec3(0.0f)};
+        scene_textures_hash_.clear();
 
         resource_manager_ = nullptr;
         descriptor_manager_ = nullptr;
@@ -804,5 +814,9 @@ namespace himalaya::app {
 
     const framework::AABB &SceneLoader::scene_bounds() const {
         return scene_bounds_;
+    }
+
+    const std::string &SceneLoader::scene_textures_hash() const {
+        return scene_textures_hash_;
     }
 } // namespace himalaya::app
