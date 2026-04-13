@@ -108,9 +108,9 @@
 ## Step 9.5：审查修复（Steps 1-9 回顾）
 
 - [x] `renderer.h`：删除未使用的 `bake_frame_seed_` 成员
-- [ ] `pos_normal_map_pass.cpp`：`record()` 入口检查 `pipeline_.pipeline != VK_NULL_HANDLE`，无效时 early return
-- [ ] `lightmap_baker_pass.cpp`：`record()` 入口检查 `rt_pipeline_.pipeline != VK_NULL_HANDLE`，无效时 early return
-- [ ] `renderer_bake.cpp`：lightmap cache key 的 `geometry_hash` 扩展为 vertices + indices 分别 hash 再拼接
+- [x] `pos_normal_map_pass.cpp`：`record()` 入口检查 `pipeline_.pipeline != VK_NULL_HANDLE`，无效时 early return
+- [x] `lightmap_baker_pass.cpp`：`record()` 入口检查 `rt_pipeline_.pipeline != VK_NULL_HANDLE`，无效时 early return
+- [x] `renderer_bake.cpp`：lightmap cache key 的 `geometry_hash` 扩展为 vertices + indices 分别 hash 再拼接
 - [ ] `renderer_bake.cpp`：`start_bake()` 末尾调用 `begin_bake_instance(0)`（guard `bake_total_instances_ > 0`，0 时直接 Complete）；文档标注需 immediate scope
 - [ ] `renderer_bake.cpp`：`begin_bake_instance()` 中 accumulation 创建后 barrier UNDEFINED→GENERAL + clear vec4(0)；aux 图像 barrier UNDEFINED→TRANSFER_DST（为 blit 预填充准备）
 - [ ] `closesthit.rchit`：aux imageStore 加 `if (pc.lightmap_width == 0u)` 守卫（lightmap baker 跳过，reference view / probe baker 保留）
