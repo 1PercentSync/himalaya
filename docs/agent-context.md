@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段七 — PT 烘焙器
-- **进度**：Step 8 清理修正中（lod_max_level 默认值 + setter 移除已完成）
+- **进度**：Step 8 清理修正中（lod_max_level / max_bounces 默认值已完成）
 
 ### 下一个任务
 
-Step 8 剩余：`max_bounces_` 默认值改 32。
+Step 8 剩余：移除 `set_directional_lights()` 接口，record() hardcode `directional_lights = 0`。
 
 ---
 
