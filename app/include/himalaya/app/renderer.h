@@ -738,9 +738,6 @@ namespace himalaya::app {
         /** @brief True when the current instance reached target SPP and awaits finalize. */
         bool bake_finalize_pending_ = false;
 
-        /** @brief Global monotonically increasing frame seed (never reset across instances). */
-        uint32_t bake_frame_seed_ = 0;
-
         /** @brief RenderMode recorded before entering Baking, restored on cancel/complete. */
         framework::RenderMode bake_pre_mode_ = framework::RenderMode::Rasterization;
 
