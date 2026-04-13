@@ -116,9 +116,9 @@
 - [x] `closesthit.rchit`：aux imageStore 加 `if (pc.lightmap_width == 0u)` 守卫（lightmap baker 跳过，reference view / probe baker 保留）
 - [x] `pos_normal_map.vert`：新增 `frag_uv0` 输出（pass through `in_uv0`）+ `material_index` push constant
 - [x] `pos_normal_map.frag`：引入 `bindings.glsl`，从 MaterialBuffer 采样 base color，新增第三输出 `out_albedo`
-- [ ] `pos_normal_map_pass.h/.cpp`：`setup()` 新增 `DescriptorManager&`；push constants 新增 `material_index`（116B）；pipeline 3 color attachment（RGBA32F, RGBA32F, RGBA16F）；`record()` 新增 `material_index` + `frame_index` 参数，绑定 Set 0/1
-- [ ] `renderer.h`：新增 `bake_albedo_map_` 成员
-- [ ] `renderer_bake.cpp`：`begin_bake_instance()` 创建 albedo_map（RGBA16F），扩展 barrier 序列（3 批次），光栅化 3 attachment，blit albedo_map→aux_albedo + normal_map→aux_normal 预填充正确 aux
+- [x] `pos_normal_map_pass.h/.cpp`：`setup()` 新增 `DescriptorManager&`；push constants 新增 `material_index`（116B）；pipeline 3 color attachment（RGBA32F, RGBA32F, RGBA16F）；`record()` 新增 `material_index` + `frame_index` 参数，绑定 Set 0/1
+- [x] `renderer.h`：新增 `bake_albedo_map_` 成员
+- [ ] `renderer_bake.cpp`：`begin_bake_instance()` blit albedo_map→aux_albedo + normal_map→aux_normal 预填充正确 aux
 - [ ] `lightmap_baker_pass.h/.cpp`：`record()` 接口改为接受外部 RG resource ID（5 个 baker 图像），移除内部 `import_image()` 调用
 - [ ] `renderer_bake.cpp`：`render_baking()` 统一 import baker 图像一次，传 RG resource ID 给 `lightmap_baker_pass_.record()` 和 blit pass
 - [ ] `renderer_bake.cpp`：`bake_finalize()` 实现完整管线（readback accumulation + aux_albedo + aux_normal → BakeDenoiser::denoise() → upload 降噪结果 → compress_bc6h() → readback BC6H → write_ktx2() → 释放 → 推进）
