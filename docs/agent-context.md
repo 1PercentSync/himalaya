@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段七 — PT 烘焙器
-- **进度**：Step 9 进行中（PTConfig + BakeConfig + RenderMode::Baking 完成）
+- **进度**：Step 9 进行中（PTConfig + BakeConfig + RenderMode::Baking + BakeState/字段/声明 完成）
 
 ### 下一个任务
 
-Step 9 第四小项：`renderer.h` BakeState 枚举 + 烘焙状态字段 + `render_baking()` 私有方法。
+Step 9 第五小项：新增 `renderer_bake.cpp` 烘焙状态机骨架（BakingLightmaps → BakingProbes → Complete）。
 
 ---
 
