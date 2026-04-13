@@ -13,6 +13,7 @@ target_sources(himalaya_passes PRIVATE
         src/reference_view_pass.cpp
         src/pos_normal_map_pass.cpp
         src/lightmap_baker_pass.cpp
+        src/probe_baker_pass.cpp
 )
 
 target_include_directories(himalaya_passes PUBLIC include)
