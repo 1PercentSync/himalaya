@@ -3,6 +3,7 @@
  * @brief Bake render path: lightmap/probe baker state machine and per-frame dispatch.
  */
 
+#include <algorithm>
 #include <himalaya/app/renderer.h>
 
 #include <himalaya/framework/frame_context.h>
@@ -249,6 +250,36 @@ namespace himalaya::app {
 
         spdlog::info("Bake instance {} started: scene_idx={}, mesh_id={}, resolution={}x{}",
                      instance_index, scene_idx, inst.mesh_id, res, res);
+    }
+
+    void Renderer::bake_finalize(
+        const std::span<const framework::Mesh> meshes,
+        const std::span<const framework::MeshInstance> mesh_instances) {
+
+        spdlog::info("Bake finalize: instance {} / {} (samples: {})",
+                     bake_current_instance_ + 1, bake_total_instances_,
+                     lightmap_baker_pass_.sample_count());
+
+        // TODO: readback accumulation + aux → BakeDenoiser::denoise()
+        // TODO: upload denoised result to accumulation buffer
+        // TODO: compress_bc6h() sampling from accumulation
+        // TODO: readback BC6H → write_ktx2()
+
+        // Clean up current instance images
+        destroy_bake_instance_images();
+        bake_finalize_pending_ = false;
+
+        // Advance to next instance or transition state
+        const uint32_t next = bake_current_instance_ + 1;
+        if (next < bake_total_instances_) {
+            // Prepare next instance (we're already in an immediate scope)
+            begin_bake_instance(next, mesh_instances, meshes);
+        } else {
+            // All lightmap instances done → transition to probes (or complete)
+            spdlog::info("All {} lightmap instances baked", bake_total_instances_);
+            // Step 12 will transition to BakingProbes here
+            bake_state_ = BakeState::Complete;
+        }
     }
 
     void Renderer::destroy_bake_instance_images() {

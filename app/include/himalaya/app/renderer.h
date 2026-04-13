@@ -297,6 +297,19 @@ namespace himalaya::app {
                         std::span<const std::vector<uint32_t>> cpu_indices);
 
         /**
+         * @brief Finalizes the current bake instance: readback, denoise, compress,
+         *        write KTX2, destroy images, and advance to the next instance.
+         *
+         * Must be called within an active immediate scope. Application calls
+         * this when bake_finalize_pending() returns true.
+         *
+         * @param meshes         All loaded meshes (for next instance begin).
+         * @param mesh_instances All scene mesh instances (for next instance begin).
+         */
+        void bake_finalize(std::span<const framework::Mesh> meshes,
+                           std::span<const framework::MeshInstance> mesh_instances);
+
+        /**
          * @brief Prepares a bake instance: creates per-instance images and renders
          *        position/normal maps. Must be called within an active immediate scope.
          *

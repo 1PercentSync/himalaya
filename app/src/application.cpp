@@ -265,6 +265,17 @@ namespace himalaya::app {
             }
 
             if (!begin_frame()) continue;
+
+            // Bake finalize: after fence wait (GPU done), before render().
+            // Application drives the immediate scope; Renderer does the work.
+            if (renderer_.bake_finalize_pending()) {
+                context_.begin_immediate();
+                renderer_.bake_finalize(
+                    scene_loader_.meshes(),
+                    scene_loader_.mesh_instances());
+                context_.end_immediate();
+            }
+
             update();
             render();
             end_frame();
