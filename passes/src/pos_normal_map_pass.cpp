@@ -91,16 +91,6 @@ namespace himalaya::passes {
     }
 
     void PosNormalMapPass::rebuild_pipelines() {
-        const auto vert_spirv = sc_->compile_from_file(
-            "bake/pos_normal_map.vert", rhi::ShaderStage::Vertex);
-        const auto frag_spirv = sc_->compile_from_file(
-            "bake/pos_normal_map.frag", rhi::ShaderStage::Fragment);
-
-        if (vert_spirv.empty() || frag_spirv.empty()) {
-            spdlog::warn("PosNormalMapPass: shader recompilation failed, keeping previous pipeline");
-            return;
-        }
-
         create_pipeline();
     }
 
