@@ -121,7 +121,7 @@
 - [x] `renderer_bake.cpp`：`begin_bake_instance()` blit albedo_map→aux_albedo + normal_map→aux_normal 预填充正确 aux
 - [x] `lightmap_baker_pass.h/.cpp`：`record()` 接口改为接受外部 RG resource ID（5 个 baker 图像），移除内部 `import_image()` 调用
 - [x] `renderer_bake.cpp`：`render_baking()` 统一 import baker 图像一次，传 RG resource ID 给 `lightmap_baker_pass_.record()` 和 blit pass
-- [ ] `renderer_bake.cpp`：`bake_finalize()` 实现完整管线（readback accumulation + aux_albedo + aux_normal → BakeDenoiser::denoise() → upload 降噪结果 → compress_bc6h() → readback BC6H → write_ktx2() → 释放 → 推进）
+- [x] `renderer_bake.cpp`：`bake_finalize()` 实现完整管线（readback accumulation + aux_albedo + aux_normal → BakeDenoiser::denoise() → upload 降噪结果 → compress_bc6h() → readback BC6H → write_ktx2() → 释放 → 推进）
 
 ## Step 10：Probe 自动放置
 
