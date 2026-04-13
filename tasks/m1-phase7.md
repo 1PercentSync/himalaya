@@ -72,7 +72,7 @@
 - [x] `lightmap_baker_pass.h`：`lod_max_level_` 默认值从 4 改为 0，移除 `set_lod_max_level()` 接口（baker 始终全分辨率纹理采样，hardcode）
 - [x] `lightmap_baker_pass.h`：`max_bounces_` 默认值从 8 改为 32（与 baker 面板默认值一致）
 - [x] `lightmap_baker_pass.h/.cpp`：移除 `set_directional_lights()` 接口和 `directional_lights_` 成员，record() 中 hardcode `directional_lights = 0`（与 `max_clamp = 0.0f` 一致的 hardcode 策略）
-- [ ] `pos_normal_map_pass.cpp`：`rebuild_pipelines()` 去掉双重编译，直接调 `create_pipeline()`（与 ReferenceViewPass/LightmapBakerPass 一致）
+- [x] `pos_normal_map_pass.cpp`：`rebuild_pipelines()` 去掉双重编译，直接调 `create_pipeline()`（与 ReferenceViewPass/LightmapBakerPass 一致）
 - [ ] `pos_normal_map_pass.h`：`destroy()` 去掉 const（与所有其他 Pass 一致）
 - [ ] `reference_view_pass.cpp`：删除未使用的 `kDefaultMaxBounces` / `kDefaultMaxClamp` 常量
 - [ ] 新增 `passes/include/himalaya/passes/pt_push_constants.h`：PTPushConstants 共享定义，reference_view_pass.cpp 和 lightmap_baker_pass.cpp 删除各自的重复定义
