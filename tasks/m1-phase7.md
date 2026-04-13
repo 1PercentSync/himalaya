@@ -71,6 +71,12 @@
 - [x] Set 3 layout：binding 0 accumulation + binding 1 aux albedo (lightmap 分辨率) + binding 2 aux normal (lightmap 分辨率) + binding 3 Sobol + binding 4 position map + binding 5 normal map
 - [ ] `lightmap_baker_pass.h`：`lod_max_level_` 默认值从 4 改为 0，移除 `set_lod_max_level()` 接口（baker 始终全分辨率纹理采样，hardcode）
 - [ ] `lightmap_baker_pass.h`：`max_bounces_` 默认值从 8 改为 32（与 baker 面板默认值一致）
+- [ ] `lightmap_baker_pass.h/.cpp`：移除 `set_directional_lights()` 接口和 `directional_lights_` 成员，record() 中 hardcode `directional_lights = 0`（与 `max_clamp = 0.0f` 一致的 hardcode 策略）
+- [ ] `pos_normal_map_pass.cpp`：`rebuild_pipelines()` 去掉双重编译，直接调 `create_pipeline()`（与 ReferenceViewPass/LightmapBakerPass 一致）
+- [ ] `pos_normal_map_pass.h`：`destroy()` 去掉 const（与所有其他 Pass 一致）
+- [ ] `reference_view_pass.cpp`：删除未使用的 `kDefaultMaxBounces` / `kDefaultMaxClamp` 常量
+- [ ] 新增 `passes/include/himalaya/passes/pt_push_constants.h`：PTPushConstants 共享定义，reference_view_pass.cpp 和 lightmap_baker_pass.cpp 删除各自的重复定义
+- [ ] `bake_denoiser.h/.cpp`：`denoise()` 的 albedo/normal 参数移除 nullable 语义，入口 assert 非空
 
 ## Step 9：烘焙模式渲染路径 + Lightmap 端到端
 
@@ -92,8 +98,9 @@
 - [ ] `renderer_bake.cpp`：KTX2 / manifest 原子写入（write-to-temp + rename）
 - [ ] `renderer_bake.cpp`：`rotation_int = round(angle_deg) % 360`（0-359）
 - [ ] `renderer_bake.cpp`：每帧帧流程 `fill_common_gpu_data()`（方向光不写入）→ RG import Set 0 + TLAS → baker RT pass → ImGui render pass → present
+- [ ] `renderer_bake.cpp`：进入 Baking 前记录当前 RenderMode，Cancel/Complete 后恢复
+- [ ] `renderer_bake.cpp`：Cancel 后显示信息（"Bake cancelled. N/M instances completed."）
 - [ ] `renderer.cpp`：render() switch 新增 Baking case
-- [ ] `debug_ui.cpp`：RenderMode combo 新增 Baking 选项
 
 ## Step 10：Probe 自动放置
 
@@ -121,9 +128,9 @@
 
 ## Step 13：ImGui 烘焙控制面板
 
-- [ ] `debug_ui.cpp`：Baking collapsing header — 参数配置（texels_per_meter / min_res / max_res / lightmap SPP / probe face res / probe spacing / probe SPP / baker max_bounces / baker env_sampling / baker emissive_nee / baker allow_tearing）
-- [ ] `debug_ui.cpp`：Start Bake / Cancel 按钮（Start 仅 rt_supported + 有场景 + 有 HDR + 非 Baking + IBL 模式时可用）
-- [ ] `debug_ui.cpp`：Bake 期间 UI 锁定（bake 参数 slider + Load Scene + Load HDR + Reload Shaders 全部灰显）
+- [ ] `debug_ui.cpp`：Baking collapsing header（始终显示，默认折叠）— 参数配置（texels_per_meter / min_res / max_res / lightmap SPP / probe face res / probe spacing / probe SPP / baker max_bounces / baker env_sampling / baker emissive_nee / baker allow_tearing）
+- [ ] `debug_ui.cpp`：Start Bake 按钮（唯一入口，旁显当前角度 + tooltip）+ Cancel 按钮（恢复原 RenderMode + 显示取消信息）
+- [ ] `debug_ui.cpp`：Bake 期间 UI 锁定（bake 参数 slider + Load Scene + Load HDR + Reload Shaders + PT checkbox 全部灰显，PT 面板不显示）
 - [ ] `debug_ui.cpp`：进度显示（阶段 + 当前项/总数 + 采样数/目标 + 吞吐量 SPP/s + 当前项耗时 + 总进度百分比 + 总耗时）
 - [ ] `debug_ui.cpp`：ImGui::Image() accumulation 预览
 - [ ] `debug_ui.cpp`：已 bake 角度列表（目录扫描 `<hash>_rot*.ktx2`，显示角度 + lightmap/probe 数量，点击切换）
