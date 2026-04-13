@@ -8,6 +8,8 @@
 
 #include <himalaya/framework/cache.h>
 #include <himalaya/framework/frame_context.h>
+#include <himalaya/framework/ktx2.h>
+#include <himalaya/framework/texture_compress.h>
 #include <himalaya/framework/imgui_backend.h>
 #include <himalaya/framework/mesh.h>
 #include <himalaya/rhi/commands.h>
@@ -503,26 +505,250 @@ namespace himalaya::app {
         const std::span<const framework::Mesh> meshes,
         const std::span<const framework::MeshInstance> mesh_instances) {
 
-        spdlog::info("Bake finalize: instance {} / {} (samples: {})",
+        const uint32_t w = bake_lightmap_width_;
+        const uint32_t h = bake_lightmap_height_;
+
+        spdlog::info("Bake finalize: instance {} / {} (samples: {}, {}x{})",
                      bake_current_instance_ + 1, bake_total_instances_,
-                     lightmap_baker_pass_.sample_count());
+                     lightmap_baker_pass_.sample_count(), w, h);
 
-        // TODO: readback accumulation + aux → BakeDenoiser::denoise()
-        // TODO: upload denoised result to accumulation buffer
-        // TODO: compress_bc6h() sampling from accumulation
-        // TODO: readback BC6H → write_ktx2()
+        constexpr uint32_t kBeautyBpp = 16; // RGBA32F
+        constexpr uint32_t kAuxBpp = 8;     // RGBA16F
+        const uint64_t beauty_size = static_cast<uint64_t>(w) * h * kBeautyBpp;
+        const uint64_t aux_size = static_cast<uint64_t>(w) * h * kAuxBpp;
+        const uint32_t blocks_w = (w + 3) / 4;
+        const uint32_t blocks_h = (h + 3) / 4;
+        const uint64_t bc6h_size = static_cast<uint64_t>(blocks_w) * blocks_h * 16;
 
-        // Clean up current instance images
+        // --- Create all staging buffers up front ---
+        auto rb_beauty = resource_manager_->create_buffer(
+            {beauty_size, rhi::BufferUsage::TransferDst, rhi::MemoryUsage::GpuToCpu},
+            "bake_rb_beauty");
+        auto rb_albedo = resource_manager_->create_buffer(
+            {aux_size, rhi::BufferUsage::TransferDst, rhi::MemoryUsage::GpuToCpu},
+            "bake_rb_albedo");
+        auto rb_normal = resource_manager_->create_buffer(
+            {aux_size, rhi::BufferUsage::TransferDst, rhi::MemoryUsage::GpuToCpu},
+            "bake_rb_normal");
+        auto upload_buf = resource_manager_->create_buffer(
+            {beauty_size, rhi::BufferUsage::TransferSrc, rhi::MemoryUsage::CpuToGpu},
+            "bake_upload_denoised");
+        auto rb_bc6h = resource_manager_->create_buffer(
+            {bc6h_size, rhi::BufferUsage::TransferDst, rhi::MemoryUsage::GpuToCpu},
+            "bake_rb_bc6h");
+
+        // === Scope 1: Readback accumulation + aux ===
+        ctx_->begin_immediate();
+        {
+            rhi::CommandBuffer cmd(ctx_->immediate_command_buffer);
+
+            // Transition accumulation + aux → TRANSFER_SRC
+            const std::array<VkImageMemoryBarrier2, 3> to_src = {{
+                {
+                    .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+                    .srcStageMask = VK_PIPELINE_STAGE_2_RAY_TRACING_SHADER_BIT_KHR,
+                    .srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT
+                                     | VK_ACCESS_2_SHADER_STORAGE_READ_BIT,
+                    .dstStageMask = VK_PIPELINE_STAGE_2_COPY_BIT,
+                    .dstAccessMask = VK_ACCESS_2_TRANSFER_READ_BIT,
+                    .oldLayout = VK_IMAGE_LAYOUT_GENERAL,
+                    .newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                    .image = resource_manager_->get_image(bake_accumulation_).image,
+                    .subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1},
+                },
+                {
+                    .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+                    .srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+                    .srcAccessMask = VK_ACCESS_2_MEMORY_READ_BIT | VK_ACCESS_2_MEMORY_WRITE_BIT,
+                    .dstStageMask = VK_PIPELINE_STAGE_2_COPY_BIT,
+                    .dstAccessMask = VK_ACCESS_2_TRANSFER_READ_BIT,
+                    .oldLayout = VK_IMAGE_LAYOUT_GENERAL,
+                    .newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                    .image = resource_manager_->get_image(bake_aux_albedo_).image,
+                    .subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1},
+                },
+                {
+                    .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+                    .srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+                    .srcAccessMask = VK_ACCESS_2_MEMORY_READ_BIT | VK_ACCESS_2_MEMORY_WRITE_BIT,
+                    .dstStageMask = VK_PIPELINE_STAGE_2_COPY_BIT,
+                    .dstAccessMask = VK_ACCESS_2_TRANSFER_READ_BIT,
+                    .oldLayout = VK_IMAGE_LAYOUT_GENERAL,
+                    .newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                    .image = resource_manager_->get_image(bake_aux_normal_).image,
+                    .subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1},
+                },
+            }};
+            VkDependencyInfo dep{};
+            dep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+            dep.imageMemoryBarrierCount = static_cast<uint32_t>(to_src.size());
+            dep.pImageMemoryBarriers = to_src.data();
+            cmd.pipeline_barrier(dep);
+
+            VkBufferImageCopy region{};
+            region.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+            region.imageExtent = {w, h, 1};
+
+            vkCmdCopyImageToBuffer(cmd.handle(),
+                resource_manager_->get_image(bake_accumulation_).image,
+                VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                resource_manager_->get_buffer(rb_beauty).buffer, 1, &region);
+            vkCmdCopyImageToBuffer(cmd.handle(),
+                resource_manager_->get_image(bake_aux_albedo_).image,
+                VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                resource_manager_->get_buffer(rb_albedo).buffer, 1, &region);
+            vkCmdCopyImageToBuffer(cmd.handle(),
+                resource_manager_->get_image(bake_aux_normal_).image,
+                VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                resource_manager_->get_buffer(rb_normal).buffer, 1, &region);
+        }
+        ctx_->end_immediate(); // GPU readback completes, data available via mapped pointers
+
+        // === CPU: OIDN denoise ===
+        const auto *beauty_ptr = resource_manager_->get_buffer(rb_beauty).allocation_info.pMappedData;
+        const auto *albedo_ptr = resource_manager_->get_buffer(rb_albedo).allocation_info.pMappedData;
+        const auto *normal_ptr = resource_manager_->get_buffer(rb_normal).allocation_info.pMappedData;
+        auto *upload_ptr = resource_manager_->get_buffer(upload_buf).allocation_info.pMappedData;
+
+        if (!bake_denoiser_.denoise(beauty_ptr, albedo_ptr, normal_ptr, upload_ptr, w, h)) {
+            spdlog::error("Bake finalize: OIDN denoise failed, using noisy result");
+            std::memcpy(upload_ptr, beauty_ptr, beauty_size);
+        }
+
+        // === Scope 2: Upload denoised → accumulation → BC6H compress → readback BC6H ===
+        std::vector<std::function<void()>> compress_deferred;
+        rhi::ImageHandle bc6h_image;
+
+        ctx_->begin_immediate();
+        {
+            rhi::CommandBuffer cmd(ctx_->immediate_command_buffer);
+
+            // Transition accumulation TRANSFER_SRC → TRANSFER_DST (receive upload)
+            VkImageMemoryBarrier2 to_dst{};
+            to_dst.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+            to_dst.srcStageMask = VK_PIPELINE_STAGE_2_NONE;
+            to_dst.srcAccessMask = VK_ACCESS_2_NONE;
+            to_dst.dstStageMask = VK_PIPELINE_STAGE_2_COPY_BIT;
+            to_dst.dstAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
+            to_dst.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+            to_dst.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+            to_dst.image = resource_manager_->get_image(bake_accumulation_).image;
+            to_dst.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+
+            VkDependencyInfo dep_dst{};
+            dep_dst.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+            dep_dst.imageMemoryBarrierCount = 1;
+            dep_dst.pImageMemoryBarriers = &to_dst;
+            cmd.pipeline_barrier(dep_dst);
+
+            // Copy denoised data → accumulation
+            VkBufferImageCopy upload_region{};
+            upload_region.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+            upload_region.imageExtent = {w, h, 1};
+
+            vkCmdCopyBufferToImage(cmd.handle(),
+                resource_manager_->get_buffer(upload_buf).buffer,
+                resource_manager_->get_image(bake_accumulation_).image,
+                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &upload_region);
+
+            // Transition accumulation TRANSFER_DST → SHADER_READ_ONLY (BC6H sampling)
+            VkImageMemoryBarrier2 to_read{};
+            to_read.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+            to_read.srcStageMask = VK_PIPELINE_STAGE_2_COPY_BIT;
+            to_read.srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
+            to_read.dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+            to_read.dstAccessMask = VK_ACCESS_2_SHADER_SAMPLED_READ_BIT;
+            to_read.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+            to_read.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            to_read.image = resource_manager_->get_image(bake_accumulation_).image;
+            to_read.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+
+            VkDependencyInfo dep_read{};
+            dep_read.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+            dep_read.imageMemoryBarrierCount = 1;
+            dep_read.pImageMemoryBarriers = &to_read;
+            cmd.pipeline_barrier(dep_read);
+
+            // BC6H compress: replaces accumulation handle with new BC6H image.
+            // Old accumulation is pushed to compress_deferred for destruction.
+            bc6h_image = bake_accumulation_;
+            framework::BC6HCompressInput compress_input{&bc6h_image, "bake_lightmap_bc6h"};
+            framework::compress_bc6h(*ctx_, *resource_manager_, shader_compiler_,
+                                     {&compress_input, 1}, compress_deferred);
+            // bc6h_image now points to the new BC6H image.
+            // bake_accumulation_ still holds the old handle — invalidate it
+            // (compress_deferred will destroy the old image).
+            bake_accumulation_ = {};
+
+            // Transition BC6H SHADER_READ_ONLY → TRANSFER_SRC for readback
+            VkImageMemoryBarrier2 bc6h_to_src{};
+            bc6h_to_src.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+            bc6h_to_src.srcStageMask = VK_PIPELINE_STAGE_2_COPY_BIT;
+            bc6h_to_src.srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
+            bc6h_to_src.dstStageMask = VK_PIPELINE_STAGE_2_COPY_BIT;
+            bc6h_to_src.dstAccessMask = VK_ACCESS_2_TRANSFER_READ_BIT;
+            bc6h_to_src.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            bc6h_to_src.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+            bc6h_to_src.image = resource_manager_->get_image(bc6h_image).image;
+            bc6h_to_src.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+
+            VkDependencyInfo dep_bc6h{};
+            dep_bc6h.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+            dep_bc6h.imageMemoryBarrierCount = 1;
+            dep_bc6h.pImageMemoryBarriers = &bc6h_to_src;
+            cmd.pipeline_barrier(dep_bc6h);
+
+            VkBufferImageCopy bc6h_region{};
+            bc6h_region.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+            bc6h_region.imageExtent = {w, h, 1};
+
+            vkCmdCopyImageToBuffer(cmd.handle(),
+                resource_manager_->get_image(bc6h_image).image,
+                VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                resource_manager_->get_buffer(rb_bc6h).buffer, 1, &bc6h_region);
+        }
+        ctx_->end_immediate(); // GPU compress + readback completes
+
+        // Flush compress_bc6h deferred (destroys old accumulation, pipeline, sampler, etc.)
+        for (auto &fn : compress_deferred) { fn(); }
+        compress_deferred.clear();
+
+        // Destroy BC6H image (no longer needed after readback)
+        resource_manager_->destroy_image(bc6h_image);
+
+        // === CPU: Write KTX2 (atomic: write-to-temp + rename) ===
+        {
+            const auto *bc6h_ptr = resource_manager_->get_buffer(rb_bc6h).allocation_info.pMappedData;
+            const auto rot = format_rotation(bake_rotation_int_);
+            const auto file_path = framework::cache_path(
+                "bake", bake_lightmap_keys_[bake_current_instance_] + "_rot" + rot, ".ktx2");
+
+            framework::Ktx2WriteLevel level{bc6h_ptr, bc6h_size};
+            if (framework::write_ktx2(file_path, rhi::Format::Bc6hUfloatBlock,
+                                      w, h, 1, {&level, 1})) {
+                spdlog::info("Bake finalize: wrote {}", file_path.string());
+            } else {
+                spdlog::error("Bake finalize: failed to write {}", file_path.string());
+            }
+        }
+
+        // === Cleanup staging buffers ===
+        resource_manager_->destroy_buffer(rb_beauty);
+        resource_manager_->destroy_buffer(rb_albedo);
+        resource_manager_->destroy_buffer(rb_normal);
+        resource_manager_->destroy_buffer(upload_buf);
+        resource_manager_->destroy_buffer(rb_bc6h);
+
+        // === Clean up current instance images + advance ===
         destroy_bake_instance_images();
         bake_finalize_pending_ = false;
 
-        // Advance to next instance or transition state
         const uint32_t next = bake_current_instance_ + 1;
         if (next < bake_total_instances_) {
-            // Prepare next instance (we're already in an immediate scope)
+            ctx_->begin_immediate();
             begin_bake_instance(next, mesh_instances, meshes);
+            ctx_->end_immediate();
         } else {
-            // All lightmap instances done → transition to probes (or complete)
             spdlog::info("All {} lightmap instances baked", bake_total_instances_);
             // Step 12 will transition to BakingProbes here
             bake_state_ = BakeState::Complete;

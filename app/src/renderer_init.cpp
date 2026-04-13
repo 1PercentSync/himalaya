@@ -207,6 +207,7 @@ namespace himalaya::app {
 
             denoiser_.init(*ctx_, *resource_manager_,
                            swapchain_->extent.width, swapchain_->extent.height);
+            bake_denoiser_.init();
         }
 
         // Fall back to the highest supported sample count if the default isn't available
@@ -532,6 +533,7 @@ namespace himalaya::app {
             render_graph_.destroy_managed_image(managed_denoised_);
         }
         denoiser_.destroy();
+        bake_denoiser_.destroy();
         render_graph_.destroy_managed_image(managed_ao_noisy_);
         render_graph_.destroy_managed_image(managed_ao_blurred_);
         render_graph_.destroy_managed_image(managed_ao_filtered_);

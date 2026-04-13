@@ -5,6 +5,7 @@
  * @brief Rendering subsystem: pass orchestration, GPU data filling, resource ownership.
  */
 
+#include <himalaya/framework/bake_denoiser.h>
 #include <himalaya/framework/cached_shader_compiler.h>
 #include <himalaya/framework/denoiser.h>
 #include <himalaya/framework/ibl.h>
@@ -534,8 +535,11 @@ namespace himalaya::app {
         /** @brief Denoised output buffer (RGBA32F, Relative 1.0x, TransferDst | Sampled); created when rt_supported. */
         framework::RGManagedHandle managed_denoised_;
 
-        /** @brief OIDN asynchronous denoiser instance. */
+        /** @brief OIDN asynchronous denoiser instance (reference view). */
         framework::Denoiser denoiser_{};
+
+        /** @brief OIDN synchronous denoiser instance (bake finalize). */
+        framework::BakeDenoiser bake_denoiser_{};
 
         /** @brief Timeline semaphore signal to inject into the current frame's submit. Set by launch_processing(), cleared at frame start. */
         framework::Denoiser::SemaphoreSignal pending_semaphore_signal_{};
