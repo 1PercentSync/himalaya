@@ -8,6 +8,8 @@
 #include <OpenImageDenoise/oidn.hpp>
 #include <spdlog/spdlog.h>
 
+#include <cassert>
+
 namespace himalaya::framework {
 
     constexpr size_t kBeautyBpp = 16; // RGBA32F
@@ -93,14 +95,15 @@ namespace himalaya::framework {
         const size_t beauty_size = static_cast<size_t>(w) * h * kBeautyBpp;
         const size_t aux_size = static_cast<size_t>(w) * h * kAuxBpp;
 
+        assert(beauty && "BakeDenoiser::denoise: beauty must not be null");
+        assert(albedo && "BakeDenoiser::denoise: albedo must not be null");
+        assert(normal && "BakeDenoiser::denoise: normal must not be null");
+        assert(output && "BakeDenoiser::denoise: output must not be null");
+
         // Copy input data → OIDN buffers
         oidn_->beauty_buf.write(0, beauty_size, beauty);
-        if (albedo) {
-            oidn_->albedo_buf.write(0, aux_size, albedo);
-        }
-        if (normal) {
-            oidn_->normal_buf.write(0, aux_size, normal);
-        }
+        oidn_->albedo_buf.write(0, aux_size, albedo);
+        oidn_->normal_buf.write(0, aux_size, normal);
 
         // Execute filter (blocking)
         oidn_->filter.execute();

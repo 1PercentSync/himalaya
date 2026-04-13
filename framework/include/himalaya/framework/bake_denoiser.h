@@ -47,8 +47,8 @@ namespace himalaya::framework {
          * caller-provided buffer. Blocking call.
          *
          * @param beauty Input RGBA32F pixel data (w × h × 16 bytes).
-         * @param albedo Auxiliary albedo R16G16B16A16F (w × h × 8 bytes, nullable).
-         * @param normal Auxiliary normal R16G16B16A16F (w × h × 8 bytes, nullable).
+         * @param albedo Auxiliary albedo R16G16B16A16F (w × h × 8 bytes).
+         * @param normal Auxiliary normal R16G16B16A16F (w × h × 8 bytes).
          * @param output Output RGBA32F pixel data (w × h × 16 bytes, caller-allocated).
          * @param w      Image width in pixels.
          * @param h      Image height in pixels.
