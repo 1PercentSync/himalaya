@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段七 — PT 烘焙器
-- **进度**：Step 9 进行中（前 19 小项完成，含 atomic_write_file 重构）
+- **进度**：Step 9 进行中（前 20 小项完成）
 
 ### 下一个任务
 
-Step 9 第二十小项：`renderer_bake.cpp` rotation_int = round(angle_deg) % 360（0-359）。
+Step 9 第二十一小项：`renderer_bake.cpp` 每帧帧流程 fill_common_gpu_data() → RG import Set 0 + TLAS → baker RT pass → clear managed_hdr_color_ + blit accumulation（居中保持宽高比）→ tonemapping → ImGui render pass → present。
 
 ---
 

@@ -99,7 +99,7 @@
 - [x] `renderer_bake.cpp`：完整性校验（逐角度检查所有 lightmap + manifest + probe 文件齐全）
 - [x] `renderer_bake.cpp`：退化 instance（vertex_count=0/index_count<3）和透明 instance（AlphaMode::Blend）跳过 lightmap bake
 - [x] `renderer_bake.cpp`：KTX2 / manifest 原子写入（write-to-temp + rename）
-- [ ] `renderer_bake.cpp`：`rotation_int = round(angle_deg) % 360`（0-359）
+- [x] `renderer_bake.cpp`：`rotation_int = round(angle_deg) % 360`（0-359）
 - [ ] `renderer_bake.cpp`：每帧帧流程 `fill_common_gpu_data()` → RG import Set 0 + TLAS → baker RT pass → clear `managed_hdr_color_` + blit accumulation（居中保持宽高比）→ tonemapping → ImGui render pass → present
 - [ ] `renderer_bake.cpp`：进入 Baking 前记录当前 RenderMode，Cancel/Complete 后恢复
 - [ ] `renderer_bake.cpp`：Cancel 后显示信息（"Bake cancelled. N/M instances completed."）
