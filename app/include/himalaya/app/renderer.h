@@ -25,6 +25,7 @@
 #include <himalaya/passes/skybox_pass.h>
 #include <himalaya/passes/shadow_pass.h>
 #include <himalaya/passes/lightmap_baker_pass.h>
+#include <himalaya/passes/probe_baker_pass.h>
 #include <himalaya/passes/pos_normal_map_pass.h>
 #include <himalaya/passes/reference_view_pass.h>
 #include <himalaya/passes/tonemapping_pass.h>
@@ -485,6 +486,9 @@ namespace himalaya::app {
 
         /** @brief Lightmap baker RT pass (UV-space dispatch with accumulation). */
         passes::LightmapBakerPass lightmap_baker_pass_{};
+
+        /** @brief Probe baker RT pass (cubemap 6-face dispatch with accumulation). */
+        passes::ProbeBakerPass probe_baker_pass_{};
 
         /** @brief Acceleration structure manager (RT, initialized when rt_supported). */
         rhi::AccelerationStructureManager as_manager_{};

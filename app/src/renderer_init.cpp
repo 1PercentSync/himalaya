@@ -450,6 +450,10 @@ namespace himalaya::app {
                                        shader_compiler_, sobol_buffer_, blue_noise_bindless_.index);
             pos_normal_map_pass_.setup(*ctx_, *resource_manager_, *descriptor_manager_,
                                        shader_compiler_);
+            lightmap_baker_pass_.setup(*ctx_, *resource_manager_, *descriptor_manager_,
+                                       shader_compiler_, sobol_buffer_, blue_noise_bindless_.index);
+            probe_baker_pass_.setup(*ctx_, *resource_manager_, *descriptor_manager_,
+                                    shader_compiler_, sobol_buffer_, blue_noise_bindless_.index);
         }
 
         // --- Set 2 initial descriptor writes ---
@@ -467,6 +471,8 @@ namespace himalaya::app {
         scene_as_builder_.destroy();
         as_manager_.destroy();
         if (ctx_->rt_supported) {
+            probe_baker_pass_.destroy();
+            lightmap_baker_pass_.destroy();
             reference_view_pass_.destroy();
             pos_normal_map_pass_.destroy();
         }
@@ -714,6 +720,8 @@ namespace himalaya::app {
         if (ctx_->rt_supported) {
             reference_view_pass_.rebuild_pipelines();
             pos_normal_map_pass_.rebuild_pipelines();
+            lightmap_baker_pass_.rebuild_pipelines();
+            probe_baker_pass_.rebuild_pipelines();
         }
 
         spdlog::info("All shaders reloaded");
