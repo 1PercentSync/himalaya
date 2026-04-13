@@ -298,7 +298,8 @@ Position/normal map 通过 `sampler2D`（nearest, clamp）采样而非 storage i
   - Baker GlobalUBO override：`ibl_intensity = 1.0`（归一化烘焙，运行时乘法补偿）
   - Baker 独立 push constant：`pc.max_bounces` / `pc.env_sampling` / `pc.emissive_light_count` 从 baker 面板参数读取（独立于参考视图）
   - Baker allow tearing：烘焙期间可选强制 IMMEDIATE present mode 解除 VSync 帧率限制
-  - Cache key 扩展：lightmap key = `scene_hash + geometry_hash + transform_hash + hdr_hash`（per-instance），probe set key = `scene_hash + hdr_hash`（不含 position——位置是 bake 产物）。`rotation_int`（0-359 整数度数）编码在文件名后缀
+  - Cache key 扩展：lightmap key = `scene_hash + geometry_hash + transform_hash + hdr_hash + scene_textures_hash`（per-instance），probe set key = `scene_hash + hdr_hash + scene_textures_hash`（不含 position——位置是 bake 产物）。`rotation_int`（0-359 整数度数）编码在文件名后缀
+  - `scene_textures_hash`：场景加载时复用纹理缓存已算的 per-texture content_hash，按 glTF 纹理数组索引顺序拼接后 hash，存储在 SceneLoader 上
   - Lightmap 文件：`<lm_hash>_rot<NNN>.ktx2`；Probe 文件：`<probe_set_hash>_rot<NNN>_probe<III>.ktx2` + `<probe_set_hash>_rot<NNN>_manifest.bin`（存 probe_count + positions vec3[]）。同一角度重新 bake 覆盖旧文件
   - 完整性校验：Phase 8 逐角度检查所有 instance lightmap 文件 + manifest + 所有 probe 文件齐全才视为有效角度
   - `render_baking()` 每帧帧流程：`fill_common_gpu_data()`（closesthit 需要 GlobalUBO 中的 IBL 数据，方向光不写入）→ RG import Set 0 资源 + TLAS → baker RT pass → ImGui render pass → swapchain present
@@ -307,7 +308,8 @@ Position/normal map 通过 `sampler2D`（nearest, clamp）采样而非 storage i
 - 退化 instance（vertex_count=0 / index_count<3）和透明 instance（AlphaMode::Blend）跳过 lightmap bake
 - KTX2 / manifest 写入使用 write-to-temp + rename 原子写入
 - `rotation_int = round(angle_deg) % 360`（0-359）
-- Bake 期间：Load Scene / Load HDR 灰显禁止，bake 参数 slider 灰显锁定，resize 不中断 bake
+- Bake 期间：Load Scene / Load HDR / Reload Shaders 灰显禁止，bake 参数 slider 灰显锁定，resize 不中断 bake
+- 进入 Baking 模式前调用 `abort_denoise()`（与 resize / scene load 一致），确保参考视图异步 Denoiser 归 Idle
 
 **验证**：切换到 Baking 模式 → lightmap 逐 instance 烘焙（跳过退化/透明 instance）→ 每个 instance 烘焙完成后 KTX2 文件出现在 cache 目录 → `read_ktx2()` 能正确加载 → 所有 instance 完成后状态转 Complete
 
@@ -355,7 +357,7 @@ Probe 烘焙 RT pipeline + raygen shader + cubemap accumulation。
   - `setup()`：编译 probe_baker.rgen，创建 RT pipeline
   - `record()`：每帧 **6 次 dispatch**（每 face 一次，face index 通过 push constant `face_index` 字段传入）。每次 dispatch 绑定 accumulation cubemap 的 per-layer 2D view + 对应 face 的 aux 2D image。保持 closesthit 用 `ivec2(gl_LaunchIDEXT.xy)` 写 aux 不变（已确认 closesthit 不使用 screen_size 等变换，直接用 `gl_LaunchIDEXT.xy`）
   - Set 3 layout（per-dispatch 切换绑定）：binding 0 accumulation face view（image2D storage，cubemap 单层 2D view）+ binding 1 aux albedo（image2D storage，per-face）+ binding 2 aux normal（image2D storage，per-face）+ binding 3 Sobol SSBO
-  - Aux image 管理：2 个 RGBA16F image2DArray × 6 layer（1 albedo array + 1 normal array），每次 dispatch 通过 `create_layer_view()` 创建 per-face 2D view 绑定。与 accumulation cubemap 的 per-face view 模式一致。随 accumulation cubemap 一起 per-probe 创建/销毁
+  - Aux image 管理：2 个 RGBA16F image2DArray × 6 layer（1 albedo array + 1 normal array）。Per-face 2D view 在 probe 开始烘焙时通过 `create_layer_view()` 一次性创建（accumulation 6 + aux albedo 6 + aux normal 6 = 18 个 view），所有 dispatch 复用，probe 完成时随 image 一起销毁。与 accumulation cubemap 的 per-face view 模式一致
 
 **验证**：RenderDoc：probe accumulation cubemap 6 个 face 逐帧变亮，环境内容正确（各 face 方向对应场景不同方向）
 

@@ -81,8 +81,10 @@
 - [ ] `renderer_bake.cpp`：baker push constant hardcode（`max_clamp = 0`、`directional_lights = 0`、`lod_max_level = 0`）+ GlobalUBO override（`ibl_intensity = 1.0`）
 - [ ] `renderer_bake.cpp`：baker 独立 push constant（`max_bounces` / `env_sampling` / `emissive_light_count` 从 baker 面板参数读取）
 - [ ] `renderer_bake.cpp`：baker allow tearing（烘焙期间可选强制 IMMEDIATE present mode）
-- [ ] `renderer_bake.cpp`：lightmap cache key（`scene + geometry + transform + hdr`）+ 文件 `<lm_hash>_rot<NNN>.ktx2`
-- [ ] `renderer_bake.cpp`：probe set cache key（`scene + hdr`）+ 文件 `<set_hash>_rot<NNN>_probe<III>.ktx2` + manifest.bin（probe_count + positions）
+- [ ] `scene_loader.cpp`：纹理加载时收集 per-texture content_hash，按 glTF 索引顺序拼接 hash 为 `scene_textures_hash`，存储在 SceneLoader 上
+- [ ] `renderer_bake.cpp`：lightmap cache key（`scene + geometry + transform + hdr + scene_textures`）+ 文件 `<lm_hash>_rot<NNN>.ktx2`
+- [ ] `renderer_bake.cpp`：probe set cache key（`scene + hdr + scene_textures`）+ 文件 `<set_hash>_rot<NNN>_probe<III>.ktx2` + manifest.bin（probe_count + positions）
+- [ ] `renderer_bake.cpp`：进入 Baking 前调用 `abort_denoise()`（参考视图异步 Denoiser 归 Idle）
 - [ ] `renderer_bake.cpp`：完整性校验（逐角度检查所有 lightmap + manifest + probe 文件齐全）
 - [ ] `renderer_bake.cpp`：退化 instance（vertex_count=0/index_count<3）和透明 instance（AlphaMode::Blend）跳过 lightmap bake
 - [ ] `renderer_bake.cpp`：KTX2 / manifest 原子写入（write-to-temp + rename）
@@ -105,7 +107,7 @@
 - [ ] 新增 `passes/probe_baker_pass.h`：ProbeBakerPass 类声明
 - [ ] 新增 `passes/probe_baker_pass.cpp`：setup（编译 rgen + 创建 RT pipeline）+ record（6 次 dispatch per frame，每 face 一次）
 - [ ] Set 3 layout（per-dispatch）：binding 0 accumulation face view（cubemap 单层 2D view）+ binding 1 aux albedo（per-face 2D image）+ binding 2 aux normal（per-face 2D image）+ binding 3 Sobol
-- [ ] Aux image 管理：2 个 RGBA16F image2DArray × 6 layer（albedo + normal），per-dispatch 创建 per-face 2D view，per-probe 创建/销毁
+- [ ] Aux image 管理：2 个 RGBA16F image2DArray × 6 layer（albedo + normal）。Per-face 2D view per-probe 一次性创建（18 个 = 6 face × 3 images），所有 dispatch 复用，probe 完成时随 image 销毁
 - [ ] 6 个 face 共享同一个 per-probe `sample_count`：每帧 6 次 dispatch 后 `sample_count` +1（不是 +6）
 
 ## Step 12：Probe 端到端流程
@@ -118,7 +120,8 @@
 ## Step 13：ImGui 烘焙控制面板
 
 - [ ] `debug_ui.cpp`：Baking collapsing header — 参数配置（texels_per_meter / min_res / max_res / lightmap SPP / probe face res / probe spacing / probe SPP / baker max_bounces / baker env_sampling / baker emissive_nee / baker allow_tearing）
-- [ ] `debug_ui.cpp`：Start Bake / Cancel 按钮（Start 仅 rt_supported + 非 Baking + IBL 模式时可用）
+- [ ] `debug_ui.cpp`：Start Bake / Cancel 按钮（Start 仅 rt_supported + 有场景 + 有 HDR + 非 Baking + IBL 模式时可用）
+- [ ] `debug_ui.cpp`：Bake 期间 UI 锁定（bake 参数 slider + Load Scene + Load HDR + Reload Shaders 全部灰显）
 - [ ] `debug_ui.cpp`：进度显示（阶段 + 当前项/总数 + 采样数/目标 + 吞吐量 SPP/s + 当前项耗时 + 总进度百分比 + 总耗时）
 - [ ] `debug_ui.cpp`：ImGui::Image() accumulation 预览
 - [ ] `debug_ui.cpp`：已 bake 角度列表（目录扫描 `<hash>_rot*.ktx2`，显示角度 + lightmap/probe 数量，点击切换）
