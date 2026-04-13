@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段七 — PT 烘焙器
-- **进度**：Step 9 进行中（前 7 小项完成：PTConfig / BakeConfig / RenderMode::Baking / BakeState+字段 / renderer_bake.cpp 骨架 / start_bake+分辨率 / per-instance 烘焙循环）
+- **进度**：Step 9 进行中（前 8 小项完成，含 bake finalize 时机骨架）
 
 ### 下一个任务
 
-Step 9 第八小项：`application.cpp` bake finalize 时机——begin_frame() fence wait 后、render() 前检查 flag，Application 驱动 begin_immediate() / end_immediate()（readback → BakeDenoiser → upload → BC6H → readback → KTX2 → 释放资源 → 推进到下一个 instance）。
+Step 9 第九小项：`renderer_bake.cpp` per-instance sample_count 独立计数 + 全局 frame_seed 单调递增不重置。
 
 ---
 
