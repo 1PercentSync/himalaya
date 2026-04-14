@@ -603,6 +603,11 @@ namespace himalaya::app {
             .bake_progress = renderer_.bake_progress(),
             .has_scene = !config_.scene_path.empty(),
             .has_hdr = !config_.env_path.empty(),
+            .scene_aabb_longest_edge = [&] {
+                const auto &b = scene_loader_.scene_bounds();
+                const auto ext = b.max - b.min;
+                return std::max({ext.x, ext.y, ext.z, 0.0f});
+            }(),
             .bake_cache_key = bake_cache_key,
             .bake_lightmap_keys = renderer_.bake_lightmap_keys(),
             .bake_angles_dirty = bake_angles_dirty_,
