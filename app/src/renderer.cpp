@@ -231,8 +231,8 @@ namespace himalaya::app {
 
     // ---- Bake accessor ----
 
-    bool Renderer::bake_finalize_pending() const {
-        return bake_finalize_pending_;
+    bool Renderer::lightmap_finalize_pending() const {
+        return lightmap_finalize_pending_;
     }
 
     // ---- Denoiser parameter accessors (for DebugUIContext binding) ----

@@ -186,7 +186,7 @@ namespace himalaya::app {
 
         bake_total_instances_ = static_cast<uint32_t>(bake_instance_indices_.size());
         bake_current_instance_ = 0;
-        bake_finalize_pending_ = false;
+        lightmap_finalize_pending_ = false;
         bake_start_time_ = std::chrono::steady_clock::now();
         bake_instance_start_time_ = bake_start_time_;
 
@@ -494,14 +494,14 @@ namespace himalaya::app {
         lightmap_baker_pass_.set_emissive_light_count(
             bake_locked_config_.emissive_nee ? emissive_light_builder_.emissive_count() : 0u);
 
-        bake_finalize_pending_ = false;
+        lightmap_finalize_pending_ = false;
         bake_instance_start_time_ = std::chrono::steady_clock::now();
 
         spdlog::info("Bake instance {} started: scene_idx={}, mesh_id={}, resolution={}x{}",
                      instance_index, scene_idx, inst.mesh_id, res, res);
     }
 
-    void Renderer::bake_finalize(
+    void Renderer::lightmap_bake_finalize(
         const std::span<const framework::Mesh> meshes,
         const std::span<const framework::MeshInstance> mesh_instances) {
 
@@ -741,7 +741,7 @@ namespace himalaya::app {
 
         // === Clean up current instance images + advance ===
         destroy_bake_instance_images();
-        bake_finalize_pending_ = false;
+        lightmap_finalize_pending_ = false;
 
         const uint32_t next = bake_current_instance_ + 1;
         if (next < bake_total_instances_) {
@@ -790,7 +790,7 @@ namespace himalaya::app {
 
         destroy_bake_instance_images();
         bake_state_ = BakeState::Idle;
-        bake_finalize_pending_ = false;
+        lightmap_finalize_pending_ = false;
         bake_instance_indices_.clear();
         bake_lightmap_sizes_.clear();
         bake_lightmap_keys_.clear();
@@ -815,9 +815,9 @@ namespace himalaya::app {
                 const uint32_t target_spp = bake_locked_config_.lightmap_spp;
                 if (lightmap_baker_pass_.sample_count() < target_spp) {
                     // Baker dispatch is recorded into the render graph below
-                } else if (!bake_finalize_pending_) {
+                } else if (!lightmap_finalize_pending_) {
                     // Target SPP reached — signal Application to finalize
-                    bake_finalize_pending_ = true;
+                    lightmap_finalize_pending_ = true;
                 }
                 break;
             }
@@ -859,7 +859,7 @@ namespace himalaya::app {
 
         // Baker RT dispatch (if actively accumulating)
         const bool actively_baking = bake_state_ == BakeState::BakingLightmaps
-                                     && !bake_finalize_pending_
+                                     && !lightmap_finalize_pending_
                                      && lightmap_baker_pass_.sample_count() < bake_locked_config_.lightmap_spp;
         if (actively_baking && has_baker_images) {
             auto rg_aux_albedo = render_graph_.import_image(

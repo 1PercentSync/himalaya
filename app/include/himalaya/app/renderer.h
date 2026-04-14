@@ -281,8 +281,8 @@ namespace himalaya::app {
         /** @brief Requests a manual denoise trigger (consumed in next render_path_tracing). */
         void request_manual_denoise();
 
-        /** @brief Returns true when the current bake instance needs finalize (Application drives immediate scope). */
-        [[nodiscard]] bool bake_finalize_pending() const;
+        /** @brief Returns true when the current lightmap instance needs finalize (Application drives immediate scope). */
+        [[nodiscard]] bool lightmap_finalize_pending() const;
 
         /**
          * @brief Checks whether a baked angle is complete: all lightmap KTX2 files
@@ -353,19 +353,19 @@ namespace himalaya::app {
         [[nodiscard]] BakeState bake_state() const;
 
         /**
-         * @brief Finalizes the current bake instance: readback, denoise, compress,
-         *        write KTX2, destroy images, and advance to the next instance.
+         * @brief Finalizes the current lightmap bake instance: readback, denoise,
+         *        compress, write KTX2, destroy images, and advance to the next instance.
          *
          * Manages its own immediate scopes internally (multiple GPU-CPU
          * round-trips: readback, upload, BC6H compress). Must NOT be called
          * while another immediate scope is active. Application calls this
-         * when bake_finalize_pending() returns true, after fence wait.
+         * when lightmap_finalize_pending() returns true, after fence wait.
          *
          * @param meshes         All loaded meshes (for next instance begin).
          * @param mesh_instances All scene mesh instances (for next instance begin).
          */
-        void bake_finalize(std::span<const framework::Mesh> meshes,
-                           std::span<const framework::MeshInstance> mesh_instances);
+        void lightmap_bake_finalize(std::span<const framework::Mesh> meshes,
+                                    std::span<const framework::MeshInstance> mesh_instances);
 
         /**
          * @brief Prepares a bake instance: creates per-instance images and renders
@@ -749,8 +749,8 @@ namespace himalaya::app {
         /** @brief Current instance lightmap height. */
         uint32_t bake_lightmap_height_ = 0;
 
-        /** @brief True when the current instance reached target SPP and awaits finalize. */
-        bool bake_finalize_pending_ = false;
+        /** @brief True when the current lightmap instance reached target SPP and awaits finalize. */
+        bool lightmap_finalize_pending_ = false;
 
         /** @brief RenderMode recorded before entering Baking, restored on cancel/complete. */
         framework::RenderMode bake_pre_mode_ = framework::RenderMode::Rasterization;

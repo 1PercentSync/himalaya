@@ -266,11 +266,11 @@ namespace himalaya::app {
 
             if (!begin_frame()) continue;
 
-            // Bake finalize: after fence wait (GPU done), before render().
-            // bake_finalize() manages its own immediate scopes internally
+            // Lightmap bake finalize: after fence wait (GPU done), before render().
+            // lightmap_bake_finalize() manages its own immediate scopes internally
             // (multiple GPU→CPU→GPU round-trips: readback → OIDN → upload → BC6H → KTX2).
-            if (renderer_.bake_finalize_pending()) {
-                renderer_.bake_finalize(
+            if (renderer_.lightmap_finalize_pending()) {
+                renderer_.lightmap_bake_finalize(
                     scene_loader_.meshes(),
                     scene_loader_.mesh_instances());
             }
