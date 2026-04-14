@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段七 — PT 烘焙器
-- **进度**：Step 12 开始
+- **进度**：Step 12 第一小项完成（前置重构 rename）
 
 ### 下一个任务
 
-Step 12 Probe 端到端流程，第一小项：前置重构 `bake_finalize()` → `lightmap_bake_finalize()`。
+Step 12 第二小项：`renderer.h` 新增 probe bake 状态字段。
 
 设计详见 `docs/current-phase.md` Step 12 章节，任务清单见 `tasks/m1-phase7.md` Step 12 部分。无设计决策空间，按文档直接实现。
 
