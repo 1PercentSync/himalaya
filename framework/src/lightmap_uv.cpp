@@ -129,6 +129,7 @@ namespace himalaya::framework {
 
         // Try cache first
         if (auto cached = read_cache(mesh_hash)) {
+            cached->cache_hit = true;
             spdlog::info("lightmap_uv: cache hit for mesh {:.8}", mesh_hash);
             return std::move(*cached);
         }

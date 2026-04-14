@@ -50,6 +50,9 @@ namespace himalaya::framework {
 
         /** @brief new_vertex -> original_vertex mapping. */
         std::vector<uint32_t> vertex_remap;
+
+        /** @brief True if loaded from disk cache, false if xatlas ran. */
+        bool cache_hit = false;
     };
 
     /**
