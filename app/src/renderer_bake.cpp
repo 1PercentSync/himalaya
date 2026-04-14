@@ -1423,12 +1423,7 @@ namespace himalaya::app {
         }
     }
 
-    void Renderer::cancel_bake() {
-        spdlog::info("Bake cancelled. {}/{} instances completed.",
-                     bake_current_instance_, bake_total_instances_);
-
-        destroy_bake_instance_images();
-        destroy_probe_bake_instance_images();
+    void Renderer::reset_bake_state() {
         bake_state_ = framework::BakeState::Idle;
         lightmap_finalize_pending_ = false;
         bake_probe_finalize_pending_ = false;
@@ -1445,24 +1440,20 @@ namespace himalaya::app {
         bake_probe_total_texel_samples_ = 0;
     }
 
+    void Renderer::cancel_bake() {
+        spdlog::info("Bake cancelled. {}/{} instances completed.",
+                     bake_current_instance_, bake_total_instances_);
+
+        destroy_bake_instance_images();
+        destroy_probe_bake_instance_images();
+        reset_bake_state();
+    }
+
     void Renderer::complete_bake() {
         spdlog::info("Bake complete. {} lightmap instances, {} probes ({} accepted).",
                      bake_total_instances_, bake_probe_total_, bake_probe_accepted_count_);
 
-        bake_state_ = framework::BakeState::Idle;
-        lightmap_finalize_pending_ = false;
-        bake_probe_finalize_pending_ = false;
-        bake_probe_placement_pending_ = false;
-        bake_instance_indices_.clear();
-        bake_lightmap_sizes_.clear();
-        // bake_lightmap_keys_ intentionally retained for baked angle scanning
-        bake_probe_positions_.clear();
-        bake_probe_total_ = 0;
-        bake_probe_accepted_count_ = 0;
-        bake_probe_accepted_positions_.clear();
-        bake_lm_total_texel_samples_ = 0;
-        bake_completed_lm_texel_samples_ = 0;
-        bake_probe_total_texel_samples_ = 0;
+        reset_bake_state();
     }
 
     framework::BakeState Renderer::bake_state() const {

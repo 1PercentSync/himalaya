@@ -932,6 +932,16 @@ namespace himalaya::app {
          */
         void render_baking(rhi::CommandBuffer &cmd, const RenderInput &input);
 
+        /**
+         * @brief Resets bake state machine fields to Idle defaults.
+         *
+         * Shared by cancel_bake() and complete_bake(). Clears working arrays,
+         * flags, and counters. Does NOT destroy per-instance images (cancel
+         * does that before calling, complete doesn't need to).
+         * Intentionally retains bake_lightmap_keys_ for baked angle scanning.
+         */
+        void reset_bake_state();
+
         /** @brief Updates Set 2 binding 0 with the current hdr_color backing image. */
         void update_hdr_color_descriptor() const;
 
