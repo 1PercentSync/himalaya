@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段七 — PT 烘焙器
-- **进度**：Step 12.6a 进行中（1/5 完成）
+- **进度**：Step 12.6a 进行中（2/5 完成）
 
 ### 下一个任务
 
-Step 12.6a 第 2 项：`lightmap_bake_finalize()` 全部 readback buffer 补 `vmaInvalidateAllocation()`，upload buffer 补 `vmaFlushAllocation()`。
+Step 12.6a 第 3 项：`probe_bake_finalize()` 全部 readback/upload buffer 补 VMA coherence 操作。
 
 ---
 
