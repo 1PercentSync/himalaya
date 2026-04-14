@@ -23,6 +23,8 @@
 #include <limits>
 #include <map>
 #include <stdexcept>
+#include <unordered_map>
+#include <unordered_set>
 
 namespace himalaya::app {
     namespace {
@@ -816,6 +818,84 @@ namespace himalaya::app {
 
     const std::string &SceneLoader::scene_textures_hash() const {
         return scene_textures_hash_;
+    }
+
+    void SceneLoader::apply_lightmap_uvs() {
+        // Build lookup set for O(1) pending check
+        std::unordered_set<uint32_t> pending_set(uv_pending_prims_.begin(), uv_pending_prims_.end());
+        // Map prim index → pending index for hash lookup
+        std::unordered_map<uint32_t, size_t> pending_hash_map;
+        for (size_t i = 0; i < uv_pending_prims_.size(); ++i) {
+            pending_hash_map[uv_pending_prims_[i]] = i;
+        }
+
+        const auto mesh_count = static_cast<uint32_t>(meshes_.size());
+        for (uint32_t i = 0; i < mesh_count; ++i) {
+            // Apply xatlas for pending prims
+            if (pending_set.contains(i)) {
+                const auto &hash = uv_pending_hashes_[pending_hash_map[i]];
+                auto uv_result = framework::generate_lightmap_uv(
+                    cpu_vertices_[i], cpu_indices_[i], hash);
+
+                if (!uv_result.cache_hit) {
+                    spdlog::warn("apply_lightmap_uvs: cache miss for prim {} (hash {:.8}) "
+                                 "— expected cache hit after generator wait", i, hash);
+                }
+
+                // Rebuild vertex array: copy attributes from original via remap, write xatlas uv1
+                const auto new_vert_count = uv_result.vertex_remap.size();
+                std::vector<framework::Vertex> new_vertices(new_vert_count);
+                for (size_t v = 0; v < new_vert_count; ++v) {
+                    new_vertices[v] = cpu_vertices_[i][uv_result.vertex_remap[v]];
+                    new_vertices[v].uv1 = uv_result.lightmap_uvs[v];
+                }
+                cpu_vertices_[i] = std::move(new_vertices);
+                cpu_indices_[i] = std::move(uv_result.new_indices);
+            }
+
+            // Destroy old VB/IB
+            resource_manager_->destroy_buffer(buffers_[i * 2]);
+            resource_manager_->destroy_buffer(buffers_[i * 2 + 1]);
+
+            // Create and upload new VB/IB
+            const auto vb_size = cpu_vertices_[i].size() * sizeof(framework::Vertex);
+            const auto ib_size = cpu_indices_[i].size() * sizeof(uint32_t);
+
+            const auto label = "Prim " + std::to_string(i);
+            auto vb_usage = rhi::BufferUsage::VertexBuffer | rhi::BufferUsage::TransferDst;
+            auto ib_usage = rhi::BufferUsage::IndexBuffer | rhi::BufferUsage::TransferDst;
+            if (rt_supported_) {
+                vb_usage = vb_usage | rhi::BufferUsage::ShaderDeviceAddress
+                                    | rhi::BufferUsage::AccelStructBuildInput;
+                ib_usage = ib_usage | rhi::BufferUsage::ShaderDeviceAddress
+                                    | rhi::BufferUsage::AccelStructBuildInput;
+            }
+
+            auto vb = resource_manager_->create_buffer({
+                .size = vb_size,
+                .usage = vb_usage,
+                .memory = rhi::MemoryUsage::GpuOnly,
+            }, (label + " VB").c_str());
+            auto ib = resource_manager_->create_buffer({
+                .size = ib_size,
+                .usage = ib_usage,
+                .memory = rhi::MemoryUsage::GpuOnly,
+            }, (label + " IB").c_str());
+
+            resource_manager_->upload_buffer(vb, cpu_vertices_[i].data(), vb_size);
+            resource_manager_->upload_buffer(ib, cpu_indices_[i].data(), ib_size);
+
+            // Update handles
+            buffers_[i * 2] = vb;
+            buffers_[i * 2 + 1] = ib;
+            meshes_[i].vertex_buffer = vb;
+            meshes_[i].index_buffer = ib;
+            meshes_[i].vertex_count = static_cast<uint32_t>(cpu_vertices_[i].size());
+            meshes_[i].index_count = static_cast<uint32_t>(cpu_indices_[i].size());
+        }
+
+        spdlog::info("apply_lightmap_uvs: rebuilt {}/{} VB/IB ({} pending xatlas)",
+                     mesh_count, mesh_count, uv_pending_prims_.size());
     }
 
     std::vector<framework::LightmapUVGenerator::Request> SceneLoader::prepare_uv_requests() const {
