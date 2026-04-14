@@ -198,8 +198,20 @@ namespace himalaya::app {
         bake_total_instances_ = static_cast<uint32_t>(bake_instance_indices_.size());
         bake_current_instance_ = 0;
         lightmap_finalize_pending_ = false;
+        bake_completed_lm_texel_samples_ = 0;
         bake_start_time_ = std::chrono::steady_clock::now();
         bake_instance_start_time_ = bake_start_time_;
+
+        // Pre-compute total texel-samples for progress weighting.
+        // Lightmap contribution: sum of (width * height * lightmap_spp) per instance.
+        // Probe contribution is estimated as 0 here — updated after placement.
+        {
+            uint64_t lm_total = 0;
+            for (const uint32_t res : bake_lightmap_sizes_) {
+                lm_total += static_cast<uint64_t>(res) * res * config.lightmap_spp;
+            }
+            bake_total_texel_samples_ = lm_total;
+        }
 
         spdlog::info("Bake started: {} bakeable instances, rotation={}°",
                      bake_total_instances_, bake_rotation_int_);
@@ -774,6 +786,8 @@ namespace himalaya::app {
         resource_manager_->destroy_buffer(rb_bc6h);
 
         // === Clean up current instance images + advance ===
+        bake_completed_lm_texel_samples_ += static_cast<uint64_t>(w) * h
+            * bake_locked_config_.lightmap_spp;
         destroy_bake_instance_images();
         lightmap_finalize_pending_ = false;
 
@@ -1280,6 +1294,8 @@ namespace himalaya::app {
         bake_lightmap_keys_.clear();
         bake_probe_positions_.clear();
         bake_probe_total_ = 0;
+        bake_total_texel_samples_ = 0;
+        bake_completed_lm_texel_samples_ = 0;
     }
 
     void Renderer::complete_bake() {
@@ -1295,6 +1311,8 @@ namespace himalaya::app {
         bake_lightmap_keys_.clear();
         bake_probe_positions_.clear();
         bake_probe_total_ = 0;
+        bake_total_texel_samples_ = 0;
+        bake_completed_lm_texel_samples_ = 0;
     }
 
     Renderer::BakeState Renderer::bake_state() const {
@@ -1303,6 +1321,56 @@ namespace himalaya::app {
 
     framework::RenderMode Renderer::bake_pre_mode() const {
         return bake_pre_mode_;
+    }
+
+    Renderer::BakeProgress Renderer::bake_progress() const {
+        BakeProgress p;
+        p.state = bake_state_;
+
+        if (bake_state_ == BakeState::Idle) {
+            return p;
+        }
+
+        // Lightmap phase fields
+        p.current_instance = bake_current_instance_;
+        p.total_instances = bake_total_instances_;
+        p.lm_sample_count = lightmap_baker_pass_.sample_count();
+        p.lm_target_spp = bake_locked_config_.lightmap_spp;
+        p.lm_width = bake_lightmap_width_;
+        p.lm_height = bake_lightmap_height_;
+
+        // Probe phase fields
+        p.current_probe = bake_current_probe_;
+        p.total_probes = bake_probe_total_;
+        p.probe_sample_count = probe_baker_pass_.sample_count();
+        p.probe_target_spp = bake_locked_config_.probe_spp;
+        p.probe_face_res = bake_locked_config_.probe_face_resolution;
+
+        // Timing
+        const auto now = std::chrono::steady_clock::now();
+        p.total_elapsed_s = std::chrono::duration<float>(now - bake_start_time_).count();
+        p.instance_elapsed_s = std::chrono::duration<float>(now - bake_instance_start_time_).count();
+
+        // Progress weighting (texel-samples)
+        p.total_texel_samples = bake_total_texel_samples_;
+
+        uint64_t completed = bake_completed_lm_texel_samples_;
+        if (bake_state_ == BakeState::BakingLightmaps && bake_lightmap_width_ > 0) {
+            // Add current lightmap instance partial progress
+            completed += static_cast<uint64_t>(bake_lightmap_width_) * bake_lightmap_height_
+                * p.lm_sample_count;
+        } else if (bake_state_ == BakeState::BakingProbes || bake_state_ == BakeState::Complete) {
+            // All lightmap work done; add completed + partial probe work
+            const uint64_t face_texels = static_cast<uint64_t>(p.probe_face_res)
+                * p.probe_face_res * 6;
+            completed += face_texels * bake_current_probe_ * bake_locked_config_.probe_spp;
+            if (bake_state_ == BakeState::BakingProbes && bake_probe_total_ > 0) {
+                completed += face_texels * p.probe_sample_count;
+            }
+        }
+        p.completed_texel_samples = completed;
+
+        return p;
     }
 
     // ---- Per-frame bake rendering ----
@@ -1367,6 +1435,15 @@ namespace himalaya::app {
                             spdlog::error("Failed to write probe manifest: {}",
                                           manifest_path.string());
                         }
+                    }
+
+                    // Update total_texel_samples with actual probe count
+                    {
+                        const uint64_t face_texels = static_cast<uint64_t>(
+                            bake_locked_config_.probe_face_resolution)
+                            * bake_locked_config_.probe_face_resolution * 6;
+                        bake_total_texel_samples_ += face_texels
+                            * bake_probe_total_ * bake_locked_config_.probe_spp;
                     }
 
                     if (bake_probe_total_ > 0) {
