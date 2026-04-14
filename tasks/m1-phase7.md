@@ -252,7 +252,7 @@
 
 ### 13.5d：代码清理
 
-- [ ] `debug_ui.cpp`：删除 ~13 个空 `if` 块（bake 参数 slider/checkbox），保留裸调用
+- [x] `debug_ui.cpp`：删除 ~13 个空 `if` 块（bake 参数 slider/checkbox），保留裸调用
 - [ ] `debug_ui.h`：删除 `BakeThroughput::reset()` 方法（死代码）
 - [ ] `debug_ui.cpp`：删除 "Bake Complete" UI 死代码分支（`complete` 变量及相关显示）
 
