@@ -879,16 +879,16 @@ namespace himalaya::app {
                 {
                     auto min_res = static_cast<int>(ctx.bake_config.min_resolution);
                     if (ImGui::SliderInt("Min Resolution", &min_res, 4, 512)) {
-                        ctx.bake_config.min_resolution = static_cast<uint32_t>(min_res);
-    
+                        ctx.bake_config.min_resolution = static_cast<uint32_t>(
+                            std::min(min_res, static_cast<int>(ctx.bake_config.max_resolution)));
                     }
                 }
 
                 {
                     auto max_res = static_cast<int>(ctx.bake_config.max_resolution);
                     if (ImGui::SliderInt("Max Resolution", &max_res, 128, 4096)) {
-                        ctx.bake_config.max_resolution = static_cast<uint32_t>(max_res);
-    
+                        ctx.bake_config.max_resolution = static_cast<uint32_t>(
+                            std::max(max_res, static_cast<int>(ctx.bake_config.min_resolution)));
                     }
                 }
 
