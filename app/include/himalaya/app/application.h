@@ -213,6 +213,9 @@ namespace himalaya::app {
         /** @brief Dirty flag for baked angle list rescanning in DebugUI. */
         bool bake_angles_dirty_ = true;
 
+        /** @brief Cached content hash of current HDR file (computed once on load). */
+        std::string env_content_hash_;
+
         // --- Left-click drag state (IBL rotation or fallback light direction) ---
 
         /** @brief Previous cursor X for left-click drag delta. */

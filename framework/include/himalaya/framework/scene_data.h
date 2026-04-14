@@ -308,7 +308,7 @@ namespace himalaya::framework {
      */
     struct BakeConfig {
         /** @brief Global lightmap density (texels per world-space meter). */
-        float texels_per_meter = 10.0f;
+        float texels_per_meter = 40.0f;
 
         /** @brief Minimum lightmap resolution per instance (aligned to 4). */
         uint32_t min_resolution = 32;
@@ -316,8 +316,8 @@ namespace himalaya::framework {
         /** @brief Maximum lightmap resolution per instance (aligned to 4). */
         uint32_t max_resolution = 2048;
 
-        /** @brief Lightmap target sample count (SPP). */
-        uint32_t lightmap_spp = 4096;
+        /** @brief Lightmap target sample count (SPP). OIDN denoising allows lower values. */
+        uint32_t lightmap_spp = 512;
 
         /** @brief Probe cubemap face resolution in texels. */
         uint32_t probe_face_resolution = 512;
@@ -331,8 +331,9 @@ namespace himalaya::framework {
         /** @brief Enclosure detection threshold factor (× AABB longest edge = max hit distance). */
         float enclosure_threshold_factor = 0.05f;
 
-        /** @brief Probe target sample count (SPP). */
-        uint32_t probe_spp = 2048;
+        /** @brief Probe target sample count (SPP). OIDN denoising allows lower values.
+         *  Half of lightmap SPP: prefilter mip chain provides additional spatial averaging. */
+        uint32_t probe_spp = 256;
 
         /** @brief Baker max ray bounce depth (independent from PT reference view). */
         uint32_t max_bounces = 32;

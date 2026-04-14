@@ -1688,7 +1688,7 @@ namespace himalaya::app {
                                        vkCmdBlitImage(pass_cmd.handle(),
                                                       accum_img.image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                                                       hdr_img.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                                                      1, &region, VK_FILTER_LINEAR);
+                                                      1, &region, VK_FILTER_NEAREST);
                                    });
         }
 

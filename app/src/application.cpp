@@ -91,6 +91,11 @@ namespace himalaya::app {
                        imgui_backend_,
                        config_.env_path);
 
+        // Cache env content hash (used for bake cache key computation every frame)
+        if (!config_.env_path.empty()) {
+            env_content_hash_ = framework::content_hash(config_.env_path);
+        }
+
         if (config_.auto_denoise_interval > 0) {
             renderer_.auto_denoise_interval() = config_.auto_denoise_interval;
         }
@@ -131,6 +136,11 @@ namespace himalaya::app {
                 uv_generator_.start(std::move(requests), config_.bg_uv_thread_count);
             }
         }
+
+        // Compute lightmap keys for bake progress UI.
+        // switch_scene() / switch_environment() call this on runtime changes,
+        // but init() loads scene/HDR directly — must be called here as well.
+        refresh_lightmap_keys();
 
         update_shadow_config_from_scene();
         auto_position_camera();
@@ -241,6 +251,7 @@ namespace himalaya::app {
         }
 
         config_.env_path = path;
+        env_content_hash_ = path.empty() ? std::string{} : framework::content_hash(path);
         bake_angles_dirty_ = true;
         refresh_lightmap_keys();
 
@@ -295,7 +306,7 @@ namespace himalaya::app {
                              scene_loader_.cpu_vertices(),
                              scene_loader_.cpu_indices(),
                              scene_loader_.scene_hash(),
-                             framework::content_hash(config_.env_path),
+                             env_content_hash_,
                              scene_loader_.scene_textures_hash(),
                              glm::degrees(ibl_yaw_),
                              render_mode_);
@@ -305,7 +316,7 @@ namespace himalaya::app {
     }
 
     void Application::refresh_lightmap_keys() {
-        if (config_.scene_path.empty() || config_.env_path.empty()) {
+        if (config_.scene_path.empty() || env_content_hash_.empty()) {
             return;
         }
         renderer_.compute_lightmap_keys(
@@ -315,7 +326,7 @@ namespace himalaya::app {
             scene_loader_.cpu_vertices(),
             scene_loader_.cpu_indices(),
             scene_loader_.scene_hash(),
-            framework::content_hash(config_.env_path),
+            env_content_hash_,
             scene_loader_.scene_textures_hash());
     }
 
@@ -537,9 +548,9 @@ namespace himalaya::app {
 
         // Compute bake cache key (probe_set_key: scene + hdr + scene_textures)
         std::string bake_cache_key;
-        if (!config_.scene_path.empty() && !config_.env_path.empty()) {
+        if (!config_.scene_path.empty() && !env_content_hash_.empty()) {
             const std::string key_input = scene_loader_.scene_hash()
-                + framework::content_hash(config_.env_path)
+                + env_content_hash_
                 + scene_loader_.scene_textures_hash();
             bake_cache_key = framework::content_hash(key_input.data(), key_input.size());
         }

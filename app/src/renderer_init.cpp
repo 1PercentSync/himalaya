@@ -40,7 +40,8 @@ namespace himalaya::app {
         render_graph_.set_reference_resolution(swapchain_->extent);
         register_swapchain_images();
 
-        // HDR color buffer as managed resource (ForwardPass writes, TonemappingPass samples)
+        // HDR color buffer as managed resource (ForwardPass writes, TonemappingPass samples,
+        // bake preview clears + blits as transfer destination)
         managed_hdr_color_ = render_graph_.create_managed_image("HDR Color", {
                                                                     .size_mode = framework::RGSizeMode::Relative,
                                                                     .width_scale = 1.0f,
@@ -49,7 +50,8 @@ namespace himalaya::app {
                                                                     .height = 0,
                                                                     .format = rhi::Format::R16G16B16A16Sfloat,
                                                                     .usage = rhi::ImageUsage::ColorAttachment |
-                                                                             rhi::ImageUsage::Sampled,
+                                                                             rhi::ImageUsage::Sampled |
+                                                                             rhi::ImageUsage::TransferDst,
                                                                     .sample_count = 1,
                                                                     .mip_levels = 1,
                                                                 }, false);
