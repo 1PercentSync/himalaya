@@ -40,6 +40,8 @@ Step 12: Probe 端到端流程（降噪 + prefilter + 压缩 + 持久化）
     ↓
 Step 12.5: 延迟 Lightmap UV 生成（后台并行 + bake 时应用 + 质量分级）
     ↓
+Step 12.6: 审查修复（Steps 12-12.5 正确性 + 全项目 barrier helper 重构）
+    ↓
 Step 13: ImGui 烘焙控制面板
 ```
 
@@ -61,6 +63,7 @@ Step 13: ImGui 烘焙控制面板
 | 11 | Probe Baker Pass | RenderDoc：probe accumulation cubemap 逐帧亮度增加 |
 | 12 | Probe 端到端 | 触发烘焙 → 累积 → 降噪 → prefilter → BC6H → KTX2 写入磁盘 |
 | 12.5 | 延迟 Lightmap UV 生成 | 场景加载不阻塞 xatlas；后台生成填充缓存；Bake 时读缓存重建 VB/IB + BLAS/TLAS，渲染无回归 |
+| 12.6 | 审查修复（Steps 12-12.5） | 无 validation 报错（AMD/NVIDIA），lightmap/probe bake 端到端正确（降噪数据无损坏），负角度 bake 缓存 key 正确，BakeState::Complete 自动恢复 RenderMode，全项目 barrier 代码使用 helper |
 | 13 | ImGui 烘焙面板 | 烘焙参数可调，触发/取消/进度显示正常，accumulation 预览实时更新 |
 
 ---
@@ -925,6 +928,57 @@ ctx_.end_immediate();
 4. 清除缓存后点 Bake：阻塞生成 + 全量 VB/IB 重建 + BLAS/TLAS 重建 + 烘焙正常进行
 5. 后台生成完毕后点 Bake：全部 cache hit，重建 + 烘焙秒启动
 6. 光栅化和 PT 参考视图渲染无回归（uv1=0 不影响渲染——uv1 仅用于 lightmap bake）
+
+---
+
+### Step 12.6：审查修复（Steps 12-12.5 正确性 + 全项目 barrier helper 重构）
+
+Phase 6 Step 12-12.5 完成后的全面审查发现的 bug 修复、同步正确性修复和全项目范围的 barrier 样板代码重构。
+
+#### 12.6a：Vulkan 正确性修复
+
+- `renderer_bake.cpp`：`bake_normal_map_` 创建时 usage 补 `TransferSrc`（blit source 需要，`bake_albedo_map_` 已正确包含）
+- `renderer_bake.cpp`：`lightmap_bake_finalize()` readback 后 CPU 读取前对 `rb_beauty` / `rb_albedo` / `rb_normal` 调用 `vmaInvalidateAllocation()`；CPU 写完 `upload_buf` 后调用 `vmaFlushAllocation()`；readback `rb_bc6h` 前调用 `vmaInvalidateAllocation()`（照搬 `denoiser.cpp:189-231` 模式）
+- `renderer_bake.cpp`：`probe_bake_finalize()` 同上，对全部 readback/upload buffer 补 VMA coherence 操作
+- `renderer_bake.cpp`：`lightmap_bake_finalize()` 中 aux image barrier `srcAccessMask` 从 `ALL_COMMANDS_BIT | MEMORY_READ | MEMORY_WRITE` 修正为 `RAY_TRACING_SHADER_BIT_KHR` + `NONE`（closesthit 守卫跳过写入，无 memory access 需要 make available）
+- `application.cpp`：`start_bake_session()` 开头补 `vkQueueWaitIdle(context_.graphics_queue)`（销毁旧 VB/IB 前确保 in-flight 帧完成，沿用 `switch_scene()` / `recreate_swapchain()` 模式）
+
+#### 12.6b：逻辑 bug 修复
+
+- `renderer_bake.cpp`：`bake_rotation_int_` 计算修正——先 `fmod(deg, 360) + 负值修正`，再 `static_cast<uint32_t>(std::round(...)) % 360`（修复负角度 undefined behavior）
+- `renderer_bake.cpp` + `application.cpp`：`BakeState::Complete` 时自动恢复 `bake_pre_mode_`（Application 检测 Complete → 恢复 render_mode_ → 重置 bake_state_ → Idle）
+
+#### 12.6c：lightmap UV 缓存健壮性
+
+- `lightmap_uv.h`：`LightmapUVResult` 新增 `bool is_fallback`（xatlas 失败或 0×0 atlas 的退化结果标记）
+- `lightmap_uv.h`：`CacheHeader` 新增 `uint32_t flags`（bit 0 = is_fallback），大小 8→12 字节（旧缓存自动 miss 重新生成）
+- `lightmap_uv.cpp`：`write_cache()` 写入 flags；`read_cache()` 读取 flags 设置 `is_fallback`
+- `lightmap_uv.cpp`：`AddMesh` 失败分流——mesh 固有错误（`IndexOutOfRange` / `InvalidIndexCount` / `InvalidFaceVertexCount`）缓存 fallback 并标记 `is_fallback=true`；API 错误（`Error`）不缓存仅返回 fallback
+- `lightmap_uv.cpp`：`Generate` 后 atlas 为 0×0 时标记 `is_fallback=true`
+- `scene_loader.cpp`：`apply_lightmap_uvs()` 检测 `is_fallback` 时 log warn（"prim N uses fallback UV"）
+- `scene_loader.cpp`：`prepare_uv_requests()` 按 `mesh_hash` 去重（消除并发写入同一 cache 临时文件的竞争）
+
+#### 12.6d：线程安全文档修正
+
+- `lightmap_uv_generator.h`：类文档修正线程安全声明——`running()` / `total()` 读取非原子 `workers_` / `requests_`，必须从主线程调用（不与 `start()` / `cancel()` / `wait()` 并发）；`completed()` 读 atomic，可从任意线程调用
+
+#### 12.6e：RHI barrier helper + 全项目重构
+
+- `rhi/commands.h`：新增 `image_barrier()` static 构建函数，返回 `VkImageMemoryBarrier2`（参数：`VkImage`、`old/new layout`、`src/dst stage`、`src/dst access`、`layer_count` 默认 1）
+- 全项目范围替换所有手写 `VkImageMemoryBarrier2` 初始化为 `image_barrier()` 调用（受影响文件：`renderer_bake.cpp`、`renderer_pt.cpp`、`renderer_rasterization.cpp`、`denoiser.cpp`、`resources.cpp`、各 pass 文件等）
+- 重构过程中逐个审查每个 barrier 的 `srcStageMask` / `srcAccessMask` / `dstStageMask` / `dstAccessMask` 精确性
+
+#### 12.6f：`end_immediate()` 跨 submit memory dependency
+
+- `context.cpp`：`end_immediate()` 在 `vkQueueSubmit` 之前、command buffer 录制末尾插入 full pipeline barrier（`ALL_COMMANDS → ALL_COMMANDS`，`MEMORY_WRITE → MEMORY_READ | MEMORY_WRITE`），确保 immediate scope 内的所有写入对后续 submit 可见（消除跨 submit 隐式 memory dependency 依赖）
+
+**验证**：
+1. Validation Layer 零报错（NVIDIA + AMD 测试）
+2. lightmap bake 端到端：负角度 bake → 缓存 key 正确（`rot359` 而非溢出值）
+3. probe bake 端到端：降噪数据无损坏（AMD 独显 `HOST_CACHED` 非 `HOST_COHERENT` 内存下正确）
+4. bake Complete 后自动恢复到光栅化/PT 模式
+5. 含重复 geometry 的场景后台 UV 生成：无 cache 竞争（去重后无重复 hash）
+6. 光栅化、PT 参考视图、bake 全路径渲染无回归
 
 ---
 

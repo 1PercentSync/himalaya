@@ -180,6 +180,44 @@
 - [x] `scene_loader.h/.cpp` 修复：新增 `uv_original_vertices_` / `uv_original_indices_`（原始数据备份），`load_meshes()` 记录 pending 时同时保存副本，`prepare_uv_requests()` 和 `apply_lightmap_uvs()` 从原始数据读取，`destroy()` 清理 pending 数据
 - [x] `application.cpp`：Start Bake 流程前置步骤（始终：if !running → start; wait → apply_lightmap_uvs → build_scene_rt → start_bake）
 
+## Step 12.6：审查修复（Steps 12-12.5 正确性 + 全项目 barrier helper 重构）
+
+### 12.6a：Vulkan 正确性修复
+
+- [ ] `renderer_bake.cpp`：`bake_normal_map_` 创建时 usage 补 `TransferSrc`
+- [ ] `renderer_bake.cpp`：`lightmap_bake_finalize()` 全部 readback buffer 补 `vmaInvalidateAllocation()`，upload buffer 补 `vmaFlushAllocation()`
+- [ ] `renderer_bake.cpp`：`probe_bake_finalize()` 全部 readback/upload buffer 补 VMA coherence 操作
+- [ ] `renderer_bake.cpp`：`lightmap_bake_finalize()` aux barrier 修正为 `srcStageMask = RT_SHADER` + `srcAccessMask = NONE`
+- [ ] `application.cpp`：`start_bake_session()` 开头补 `vkQueueWaitIdle(context_.graphics_queue)`
+
+### 12.6b：逻辑 bug 修复
+
+- [ ] `renderer_bake.cpp`：`bake_rotation_int_` 负角度修正（fmod + 负值修正 + round + %360）
+- [ ] `renderer_bake.cpp` + `application.cpp`：`BakeState::Complete` 自动恢复 `bake_pre_mode_`
+
+### 12.6c：lightmap UV 缓存健壮性
+
+- [ ] `lightmap_uv.h`：`LightmapUVResult` 新增 `bool is_fallback`
+- [ ] `lightmap_uv.h`：`CacheHeader` 新增 `uint32_t flags`（8→12 字节）
+- [ ] `lightmap_uv.cpp`：`write_cache()` / `read_cache()` 适配新 flags 字段
+- [ ] `lightmap_uv.cpp`：`AddMesh` 失败分流——mesh 固有错误缓存 fallback，`Error` 类型不缓存
+- [ ] `lightmap_uv.cpp`：`Generate` 后 0×0 atlas 标记 `is_fallback=true`
+- [ ] `scene_loader.cpp`：`apply_lightmap_uvs()` 检测 `is_fallback` 时 warn
+- [ ] `scene_loader.cpp`：`prepare_uv_requests()` 按 `mesh_hash` 去重
+
+### 12.6d：线程安全文档修正
+
+- [ ] `lightmap_uv_generator.h`：修正线程安全注释（`running()` / `total()` 主线程限定）
+
+### 12.6e：RHI barrier helper + 全项目重构
+
+- [ ] `rhi/commands.h`：新增 `image_barrier()` static 构建函数
+- [ ] 全项目替换手写 `VkImageMemoryBarrier2` 初始化（逐文件重构 + 审查 stage/access 精确性）
+
+### 12.6f：`end_immediate()` 跨 submit memory dependency
+
+- [ ] `context.cpp`：`end_immediate()` command buffer 末尾插入 full pipeline barrier
+
 ## Step 13：ImGui 烘焙控制面板
 
 - [ ] `debug_ui.cpp`：Baking collapsing header（始终显示，默认折叠）— Lightmap UV Generation 子面板（Step 12.5 已实现）+ 参数配置（texels_per_meter / min_res / max_res / lightmap SPP / probe face res / probe spacing / filter ray count / enclosure threshold factor + 绝对阈值显示 / probe SPP / baker max_bounces / baker env_sampling / baker emissive_nee / baker allow_tearing）
