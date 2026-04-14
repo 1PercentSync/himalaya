@@ -5,6 +5,7 @@
 
 #include <himalaya/app/application.h>
 
+#include <himalaya/framework/cache.h>
 #include <himalaya/framework/color_utils.h>
 #include <himalaya/framework/culling.h>
 #include <himalaya/framework/ibl.h>
@@ -249,6 +250,47 @@ namespace himalaya::app {
         }
 
         save_config(config_);
+    }
+
+    void Application::start_bake_session() {
+        // Ensure all xatlas UV caches are populated
+        if (!uv_generator_.running()) {
+            auto requests = scene_loader_.prepare_uv_requests();
+            uv_generator_.start(std::move(requests), config_.bg_uv_thread_count);
+        }
+        uv_generator_.wait();
+
+        // Rebuild all VB/IB with lightmap UVs (cache hits after generator wait)
+        context_.begin_immediate();
+        scene_loader_.apply_lightmap_uvs();
+        context_.end_immediate();
+
+        // Rebuild BLAS/TLAS with new VB/IB handles
+        context_.begin_immediate();
+        renderer_.build_scene_rt(scene_loader_.meshes(),
+                                 scene_loader_.mesh_instances(),
+                                 scene_loader_.material_instances(),
+                                 scene_loader_.gpu_materials(),
+                                 scene_loader_.cpu_vertices(),
+                                 scene_loader_.cpu_indices());
+        context_.end_immediate();
+
+        // Start the bake
+        context_.begin_immediate();
+        renderer_.start_bake(bake_config_,
+                             scene_loader_.mesh_instances(),
+                             scene_loader_.meshes(),
+                             scene_loader_.material_instances(),
+                             scene_loader_.cpu_vertices(),
+                             scene_loader_.cpu_indices(),
+                             scene_loader_.scene_hash(),
+                             framework::content_hash(config_.env_path),
+                             scene_loader_.scene_textures_hash(),
+                             glm::degrees(ibl_yaw_),
+                             render_mode_);
+        context_.end_immediate();
+
+        render_mode_ = framework::RenderMode::Baking;
     }
 
     void Application::resolve_thread_count() {

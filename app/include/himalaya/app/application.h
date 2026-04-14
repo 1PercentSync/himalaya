@@ -338,6 +338,16 @@ namespace himalaya::app {
         framework::LightmapUVGenerator uv_generator_{};
 
         /**
+         * @brief Starts a bake session with UV generation as a prerequisite.
+         *
+         * Ensures all xatlas UV caches are populated (starts generator if not
+         * running and waits for completion), then rebuilds all VB/IB with
+         * lightmap UVs, rebuilds BLAS/TLAS, and finally calls start_bake().
+         * Called by the Start Bake button handler (Step 13).
+         */
+        void start_bake_session();
+
+        /**
          * @brief Resolves bg_uv_thread_count if 0 (first launch) and persists.
          *
          * Called once at init after config load. Sets thread count to
