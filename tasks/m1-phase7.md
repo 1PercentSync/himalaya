@@ -371,3 +371,8 @@
 ### 17g：Probe per-face 亮度剔除
 
 - [x] `renderer_bake.cpp`：`probe_bake_finalize()` 亮度检查改为 per-face，任一面平均亮度低于 `probe_min_luminance` 则整个 probe 丢弃（捕获 placement filter 漏掉的部分嵌入几何体的 probe）
+
+### 17h：编译验证修复
+
+- [x] `descriptors.cpp`：Set 0 binding 4（TLAS）和 binding 5（GeometryInfo）stageFlags 追加 `COMPUTE_BIT`（`probe_filter.comp` compute pipeline 需要访问这两个绑定）
+- [x] `renderer_bake.cpp`：`bake_probe_aux_albedo_` / `bake_probe_aux_normal_` 创建时 usage 追加 `TransferDst`（Step 16a 的 `vkCmdClearColorImage` 需要此 flag）
