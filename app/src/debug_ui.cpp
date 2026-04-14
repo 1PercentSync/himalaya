@@ -1164,6 +1164,12 @@ namespace himalaya::app {
                 framework::clear_cache("shader_debug");
                 framework::clear_cache("shader_release");
             }
+            if (ImGui::Button("Clear Bake Cache")) {
+                actions.clear_bake_cache_requested = true;
+            }
+            if (ImGui::Button("Clear Lightmap UV Cache")) {
+                actions.clear_uv_cache_requested = true;
+            }
             ImGui::Spacing();
             if (ImGui::Button("Clear All Cache")) {
                 framework::clear_all_cache();
