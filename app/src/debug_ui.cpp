@@ -839,6 +839,118 @@ namespace himalaya::app {
             } else {
                 ImGui::TextDisabled("Idle");
             }
+
+            ImGui::Separator();
+
+            // --- Bake Parameters sub-panel ---
+            ImGui::Text("Bake Parameters");
+            ImGui::Spacing();
+
+            {
+                const bool baking = ctx.bake_progress.state != framework::BakeState::Idle;
+                if (baking) { ImGui::BeginDisabled(); }
+
+                // Lightmap parameters
+                if (slider_float_deferred("Texels/m", &ctx.bake_config.texels_per_meter,
+                                          1.0f, 50.0f, "%.1f")) {
+                    actions.bake_config_changed = true;
+                }
+
+                {
+                    auto min_res = static_cast<int>(ctx.bake_config.min_resolution);
+                    if (ImGui::SliderInt("Min Resolution", &min_res, 4, 512)) {
+                        ctx.bake_config.min_resolution = static_cast<uint32_t>(min_res);
+                        actions.bake_config_changed = true;
+                    }
+                }
+
+                {
+                    auto max_res = static_cast<int>(ctx.bake_config.max_resolution);
+                    if (ImGui::SliderInt("Max Resolution", &max_res, 128, 4096)) {
+                        ctx.bake_config.max_resolution = static_cast<uint32_t>(max_res);
+                        actions.bake_config_changed = true;
+                    }
+                }
+
+                {
+                    auto spp = static_cast<int>(ctx.bake_config.lightmap_spp);
+                    if (ImGui::SliderInt("Lightmap SPP", &spp, 64, 16384,
+                                         "%d", ImGuiSliderFlags_Logarithmic)) {
+                        ctx.bake_config.lightmap_spp = static_cast<uint32_t>(spp);
+                        actions.bake_config_changed = true;
+                    }
+                }
+
+                // Probe parameters
+                {
+                    auto face_res = static_cast<int>(ctx.bake_config.probe_face_resolution);
+                    if (ImGui::SliderInt("Probe Face Res", &face_res, 64, 1024)) {
+                        ctx.bake_config.probe_face_resolution = static_cast<uint32_t>(face_res);
+                        actions.bake_config_changed = true;
+                    }
+                }
+
+                if (slider_float_deferred("Probe Spacing", &ctx.bake_config.probe_spacing,
+                                          0.1f, 10.0f, "%.2f m")) {
+                    actions.bake_config_changed = true;
+                }
+
+                {
+                    auto rays = static_cast<int>(ctx.bake_config.filter_ray_count);
+                    if (ImGui::SliderInt("Filter Rays", &rays, 8, 256)) {
+                        ctx.bake_config.filter_ray_count = static_cast<uint32_t>(rays);
+                        actions.bake_config_changed = true;
+                    }
+                }
+
+                if (slider_float_deferred("Enclosure Factor",
+                                          &ctx.bake_config.enclosure_threshold_factor,
+                                          0.01f, 0.5f, "%.3f")) {
+                    actions.bake_config_changed = true;
+                }
+
+                {
+                    auto spp = static_cast<int>(ctx.bake_config.probe_spp);
+                    if (ImGui::SliderInt("Probe SPP", &spp, 64, 16384,
+                                         "%d", ImGuiSliderFlags_Logarithmic)) {
+                        ctx.bake_config.probe_spp = static_cast<uint32_t>(spp);
+                        actions.bake_config_changed = true;
+                    }
+                }
+
+                // Baker rendering parameters
+                {
+                    auto bounces = static_cast<int>(ctx.bake_config.max_bounces);
+                    if (ImGui::SliderInt("Baker Bounces", &bounces, 1, 64)) {
+                        ctx.bake_config.max_bounces = static_cast<uint32_t>(bounces);
+                        actions.bake_config_changed = true;
+                    }
+                }
+
+                if (ImGui::Checkbox("Baker Env Sampling", &ctx.bake_config.env_sampling)) {
+                    actions.bake_config_changed = true;
+                }
+
+                if (ImGui::Checkbox("Baker Emissive NEE", &ctx.bake_config.emissive_nee)) {
+                    actions.bake_config_changed = true;
+                }
+
+                {
+                    const bool can_tear = ctx.swapchain.immediate_supported;
+                    if (!can_tear) { ImGui::BeginDisabled(); }
+                    if (ImGui::Checkbox("Baker Allow Tearing", &ctx.bake_config.allow_tearing)) {
+                        actions.bake_config_changed = true;
+                    }
+                    if (ImGui::IsItemHovered()) {
+                        ImGui::SetTooltip(can_tear
+                            ? "Force IMMEDIATE present mode during baking."
+                            : "IMMEDIATE present mode not supported by this surface.");
+                    }
+                    if (!can_tear) { ImGui::EndDisabled(); }
+                }
+
+                if (baking) { ImGui::EndDisabled(); }
+            }
         }
 
         // Cache section
