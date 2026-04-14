@@ -842,7 +842,7 @@ namespace himalaya::app {
         return scene_textures_hash_;
     }
 
-    void SceneLoader::apply_lightmap_uvs(const uint32_t pack_resolution) {
+    void SceneLoader::apply_lightmap_uvs() {
         // Build lookup set for O(1) pending check
         std::unordered_set<uint32_t> pending_set(uv_pending_prims_.begin(), uv_pending_prims_.end());
         // Map prim index → pending index for hash lookup
@@ -861,7 +861,7 @@ namespace himalaya::app {
                 const auto &orig_indices = uv_original_indices_[pending_idx];
 
                 auto uv_result = framework::generate_lightmap_uv(
-                    orig_verts, orig_indices, hash, pack_resolution);
+                    orig_verts, orig_indices, hash);
 
                 if (!uv_result.cache_hit) {
                     spdlog::warn("apply_lightmap_uvs: cache miss for prim {} (hash {:.8}) "

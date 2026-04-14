@@ -310,9 +310,7 @@ namespace himalaya::framework {
         /** @brief Global lightmap density (texels per world-space meter). */
         float texels_per_meter = 40.0f;
 
-        /** @brief Minimum lightmap resolution per instance (aligned to 4).
-         *  Also determines xatlas pack resolution, guaranteeing UV island padding
-         *  >= 2 texels at any bake resolution >= min_resolution. */
+        /** @brief Minimum lightmap resolution per instance (aligned to 4). */
         uint32_t min_resolution = 64;
 
         /** @brief Maximum lightmap resolution per instance (aligned to 4). */

@@ -12,13 +12,11 @@ namespace himalaya::framework {
         cancel();
     }
 
-    void LightmapUVGenerator::start(std::vector<Request> requests, const uint32_t thread_count,
-                                     const uint32_t pack_resolution) {
+    void LightmapUVGenerator::start(std::vector<Request> requests, const uint32_t thread_count) {
         // Cancel any previous run
         cancel();
 
         requests_ = std::move(requests);
-        pack_resolution_ = pack_resolution;
         next_task_.store(0, std::memory_order_relaxed);
         completed_.store(0, std::memory_order_relaxed);
         cancel_.store(false, std::memory_order_relaxed);
@@ -45,8 +43,7 @@ namespace himalaya::framework {
 
                     generate_lightmap_uv(requests_[idx].vertices,
                                          requests_[idx].indices,
-                                         requests_[idx].mesh_hash,
-                                         pack_resolution_);
+                                         requests_[idx].mesh_hash);
                     completed_.fetch_add(1, std::memory_order_relaxed);
                 }
             });

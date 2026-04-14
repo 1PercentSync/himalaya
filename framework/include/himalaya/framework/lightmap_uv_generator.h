@@ -56,11 +56,10 @@ namespace himalaya::framework {
          * Each worker picks tasks via atomic fetch_add and calls
          * generate_lightmap_uv() (which writes to disk cache on miss).
          *
-         * @param requests        Mesh generation requests (moved, owned by generator).
-         * @param thread_count    Number of worker threads to spawn.
-         * @param pack_resolution xatlas atlas packing resolution (passed to generate_lightmap_uv).
+         * @param requests     Mesh generation requests (moved, owned by generator).
+         * @param thread_count Number of worker threads to spawn.
          */
-        void start(std::vector<Request> requests, uint32_t thread_count, uint32_t pack_resolution);
+        void start(std::vector<Request> requests, uint32_t thread_count);
 
         /**
          * @brief Requests cancellation and joins all worker threads.
@@ -104,7 +103,5 @@ namespace himalaya::framework {
         /** @brief Worker threads (joined on cancel or destruction). */
         std::vector<std::jthread> workers_;
 
-        /** @brief xatlas pack resolution for generate_lightmap_uv() calls. */
-        uint32_t pack_resolution_ = 0;
     };
 } // namespace himalaya::framework

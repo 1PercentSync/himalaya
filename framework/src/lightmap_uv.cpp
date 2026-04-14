@@ -126,10 +126,15 @@ namespace himalaya::framework {
 
     // --- Public API ---
 
+    /** @brief Fixed xatlas pack resolution matching the UI slider minimum (64).
+     *  Guarantees UV island padding >= 2 texels at any bake resolution >= 64.
+     *  Not tied to BakeConfig::min_resolution so that UV cache stays valid
+     *  regardless of runtime parameter changes. */
+    constexpr uint32_t kPackResolution = 64;
+
     LightmapUVResult generate_lightmap_uv(const std::span<const Vertex> vertices,
                                           const std::span<const uint32_t> indices,
-                                          const std::string &mesh_hash,
-                                          const uint32_t pack_resolution) {
+                                          const std::string &mesh_hash) {
         assert(!vertices.empty() && !indices.empty());
 
         // Try cache first
@@ -176,7 +181,7 @@ namespace himalaya::framework {
         xatlas::ChartOptions chart_options;
         xatlas::PackOptions pack_options;
         pack_options.padding = 2;
-        pack_options.resolution = (pack_resolution > 0) ? pack_resolution : 0;
+        pack_options.resolution = kPackResolution;
 
         if constexpr (kDefaultLightmapUVQuality == LightmapUVQuality::Production) {
             chart_options.maxIterations = 4;
