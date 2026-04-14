@@ -22,8 +22,10 @@ namespace himalaya::framework {
      * Results are written to disk cache only — the returned LightmapUVResult
      * is discarded. The caller later reads from cache via generate_lightmap_uv().
      *
-     * Thread-safe: running()/completed()/total() may be called from any thread.
-     * start() and cancel() must be called from the main thread.
+     * Thread model: all public methods must be called from the main thread.
+     * running() and total() read non-atomic members (workers_, requests_)
+     * and must not race with start()/cancel()/wait(). completed() reads
+     * an atomic counter and may be called from any thread.
      */
     class LightmapUVGenerator {
     public:
