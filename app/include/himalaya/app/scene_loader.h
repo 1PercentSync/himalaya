@@ -92,6 +92,24 @@ namespace himalaya::app {
         /** @brief Returns per-mesh CPU index data (parallel to meshes()). Available until destroy(). */
         [[nodiscard]] std::span<const std::vector<uint32_t>> cpu_indices() const;
 
+        /**
+         * @brief Returns pre-xatlas CPU vertex data (parallel to meshes()).
+         *
+         * Snapshot taken at load time, before apply_lightmap_uvs() modifies
+         * cpu_vertices_. Used by compute_lightmap_keys() to ensure cache keys
+         * are stable regardless of UV application state.
+         */
+        [[nodiscard]] std::span<const std::vector<framework::Vertex>> original_cpu_vertices() const;
+
+        /**
+         * @brief Returns pre-xatlas CPU index data (parallel to meshes()).
+         *
+         * Snapshot taken at load time, before apply_lightmap_uvs() modifies
+         * cpu_indices_. Used by compute_lightmap_keys() to ensure cache keys
+         * are stable regardless of UV application state.
+         */
+        [[nodiscard]] std::span<const std::vector<uint32_t>> original_cpu_indices() const;
+
         /** @brief Returns GPU material data array. Available until destroy(). */
         [[nodiscard]] std::span<const framework::GPUMaterialData> gpu_materials() const;
 
@@ -178,6 +196,12 @@ namespace himalaya::app {
 
         /** @brief CPU index data per mesh (parallel to meshes_). Retained for EmissiveLightBuilder. */
         std::vector<std::vector<uint32_t>> cpu_indices_;
+
+        /** @brief Snapshot of cpu_vertices_ at load time, before apply_lightmap_uvs(). */
+        std::vector<std::vector<framework::Vertex>> original_cpu_vertices_;
+
+        /** @brief Snapshot of cpu_indices_ at load time, before apply_lightmap_uvs(). */
+        std::vector<std::vector<uint32_t>> original_cpu_indices_;
 
         /** @brief GPU material data array. Retained for EmissiveLightBuilder emissive_factor lookup. */
         std::vector<framework::GPUMaterialData> gpu_materials_;

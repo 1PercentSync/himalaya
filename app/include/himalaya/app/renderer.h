@@ -55,6 +55,8 @@ namespace himalaya::framework {
 }
 
 namespace himalaya::app {
+    class SceneLoader;
+
     /**
      * @brief Per-frame semantic data passed from Application to Renderer.
      *
@@ -386,9 +388,7 @@ namespace himalaya::app {
             std::span<const framework::MeshInstance> mesh_instances,
             std::span<const framework::Mesh> meshes,
             std::span<const framework::MaterialInstance> materials,
-            std::span<const std::vector<framework::Vertex>> cpu_vertices,
-            std::span<const std::vector<uint32_t>> cpu_indices,
-            const std::string &scene_hash,
+            const SceneLoader &scene_loader,
             const std::string &hdr_hash,
             const std::string &scene_textures_hash);
 

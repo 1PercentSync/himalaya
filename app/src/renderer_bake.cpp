@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <himalaya/app/renderer.h>
 
+#include <himalaya/app/scene_loader.h>
 #include <himalaya/framework/cache.h>
 #include <himalaya/framework/cubemap_filter.h>
 #include <himalaya/framework/frame_context.h>
@@ -180,13 +181,15 @@ namespace himalaya::app {
         const std::span<const framework::MeshInstance> mesh_instances,
         const std::span<const framework::Mesh> meshes,
         const std::span<const framework::MaterialInstance> materials,
-        const std::span<const std::vector<framework::Vertex>> cpu_vertices,
-        const std::span<const std::vector<uint32_t>> cpu_indices,
-        const std::string &scene_hash,
+        const SceneLoader &scene_loader,
         const std::string &hdr_hash,
         const std::string &scene_textures_hash) {
 
         bake_lightmap_keys_.clear();
+        const auto scene_hash = scene_loader.scene_hash();
+        // Use original (pre-xatlas) data so keys are stable regardless of UV application.
+        const auto cpu_vertices = scene_loader.original_cpu_vertices();
+        const auto cpu_indices = scene_loader.original_cpu_indices();
 
         for_each_bakeable_instance(mesh_instances, meshes, materials,
             [&](uint32_t /*scene_idx*/, const framework::MeshInstance &inst, const framework::Mesh &/*mesh*/) {

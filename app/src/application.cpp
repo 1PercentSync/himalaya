@@ -325,9 +325,7 @@ namespace himalaya::app {
             scene_loader_.mesh_instances(),
             scene_loader_.meshes(),
             scene_loader_.material_instances(),
-            scene_loader_.cpu_vertices(),
-            scene_loader_.cpu_indices(),
-            scene_loader_.scene_hash(),
+            scene_loader_,
             env_content_hash_,
             scene_loader_.scene_textures_hash());
     }

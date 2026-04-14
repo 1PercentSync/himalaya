@@ -265,6 +265,12 @@ namespace himalaya::app {
                          gltf.nodes.size());
 
             const auto mesh_data = load_meshes(gltf);
+
+            // Snapshot original CPU data before any xatlas UV application.
+            // compute_lightmap_keys() uses this to produce stable cache keys.
+            original_cpu_vertices_ = cpu_vertices_;
+            original_cpu_indices_ = cpu_indices_;
+
             load_materials(gltf, base_dir.string(), material_system, default_textures, default_sampler);
             build_mesh_instances(gltf, mesh_data);
             return true;
@@ -769,6 +775,8 @@ namespace himalaya::app {
         directional_lights_.clear();
         cpu_vertices_.clear();
         cpu_indices_.clear();
+        original_cpu_vertices_.clear();
+        original_cpu_indices_.clear();
         gpu_materials_.clear();
         scene_bounds_ = {glm::vec3(0.0f), glm::vec3(0.0f)};
         scene_hash_.clear();
@@ -804,6 +812,14 @@ namespace himalaya::app {
 
     std::span<const std::vector<uint32_t>> SceneLoader::cpu_indices() const {
         return cpu_indices_;
+    }
+
+    std::span<const std::vector<framework::Vertex>> SceneLoader::original_cpu_vertices() const {
+        return original_cpu_vertices_;
+    }
+
+    std::span<const std::vector<uint32_t>> SceneLoader::original_cpu_indices() const {
+        return original_cpu_indices_;
     }
 
     std::span<const framework::GPUMaterialData> SceneLoader::gpu_materials() const {
