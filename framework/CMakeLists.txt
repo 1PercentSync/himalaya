@@ -22,6 +22,7 @@ target_sources(himalaya_framework PRIVATE
         src/stb_impl.cpp
         src/texture.cpp
         src/lightmap_uv.cpp
+        src/lightmap_uv_generator.cpp
         src/bake_denoiser.cpp
         src/probe_placement.cpp
 )
