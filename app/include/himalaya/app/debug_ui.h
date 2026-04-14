@@ -9,6 +9,7 @@
 #include <string>
 #include <vector>
 
+#include <himalaya/framework/render_progress.h>
 #include <himalaya/rhi/swapchain.h>
 
 namespace himalaya::rhi {
@@ -17,6 +18,7 @@ namespace himalaya::rhi {
 
 namespace himalaya::framework {
     struct AOConfig;
+    struct BakeConfig;
     struct Camera;
     struct ContactShadowConfig;
     enum class DenoiseState : uint8_t;
@@ -232,6 +234,36 @@ namespace himalaya::app {
         /** @brief Maximum thread count for slider upper bound (hardware_concurrency, read-only). */
         uint32_t max_thread_count;
 
+        // --- Bake parameters and progress ---
+
+        /** @brief Bake configuration (mutable — slider/checkbox controls). */
+        framework::BakeConfig& bake_config;
+
+        /** @brief Bake progress snapshot (read-only, from Renderer::bake_progress()). */
+        framework::BakeProgress bake_progress;
+
+        /** @brief True if a scene is loaded (Start Bake precondition). */
+        bool has_scene;
+
+        /** @brief True if an HDR environment is loaded (Start Bake precondition). */
+        bool has_hdr;
+
+        /**
+         * @brief Probe set cache key for baked angle directory scanning.
+         *
+         * Computed from scene_hash + hdr_hash + scene_textures_hash.
+         * Empty when no scene or HDR is loaded.
+         */
+        std::string bake_cache_key;
+
+        /**
+         * @brief Dirty flag for baked angle list rescanning.
+         *
+         * Set true on scene load, HDR load, or bake complete.
+         * Cleared after scan executes (when Baking header is expanded).
+         */
+        bool& bake_angles_dirty;
+
         // --- Scene statistics (display) ---
 
         /** @brief Per-frame scene statistics computed after frustum culling. */
@@ -314,6 +346,21 @@ namespace himalaya::app {
 
         /** @brief True if bg_uv_auto_start or bg_uv_thread_count changed (triggers config save). */
         bool bg_uv_config_changed = false;
+
+        /** @brief True if the user clicked the Start Bake button. */
+        bool bake_start_requested = false;
+
+        /** @brief True if the user clicked the Cancel Bake button. */
+        bool bake_cancel_requested = false;
+
+        /** @brief True if any bake config parameter changed (triggers config save). */
+        bool bake_config_changed = false;
+
+        /** @brief True if the user clicked the Clear Bake Cache button. */
+        bool clear_bake_cache_requested = false;
+
+        /** @brief True if the user clicked the Clear Lightmap UV Cache button. */
+        bool clear_uv_cache_requested = false;
     };
 
     /**
