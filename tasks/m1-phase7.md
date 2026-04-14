@@ -234,7 +234,7 @@
 
 ### 13.5a：Vulkan 正确性
 
-- [ ] `application.cpp`：`bake_cancel_requested` handler 在 `cancel_bake()` 调用前补 `vkQueueWaitIdle(context_.graphics_queue)`
+- [x] `application.cpp`：`bake_cancel_requested` handler 在 `cancel_bake()` 调用前补 `vkQueueWaitIdle(context_.graphics_queue)`
 
 ### 13.5b：UB 修复
 
