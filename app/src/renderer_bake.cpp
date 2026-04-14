@@ -1352,12 +1352,24 @@ namespace himalaya::app {
         dep.pImageMemoryBarriers = initial_barriers.data();
         imm_cmd.pipeline_barrier(dep);
 
-        // Clear accumulation to black (6 layers)
+        // Clear accumulation + aux to black (6 layers).
+        // Accumulation: uncovered texels must be zero, not VRAM garbage.
+        // Aux albedo/normal: miss rays (sky) don't write aux in closesthit,
+        // so uncleared texels would feed VRAM garbage into OIDN guide images.
+        // OIDN expects (0,0,0) for pixels without a surface hit.
         {
             VkClearColorValue clear_color{};
             VkImageSubresourceRange range{VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 6};
             vkCmdClearColorImage(imm_cmd.handle(),
                                 resource_manager_->get_image(bake_probe_accumulation_).image,
+                                VK_IMAGE_LAYOUT_GENERAL,
+                                &clear_color, 1, &range);
+            vkCmdClearColorImage(imm_cmd.handle(),
+                                resource_manager_->get_image(bake_probe_aux_albedo_).image,
+                                VK_IMAGE_LAYOUT_GENERAL,
+                                &clear_color, 1, &range);
+            vkCmdClearColorImage(imm_cmd.handle(),
+                                resource_manager_->get_image(bake_probe_aux_normal_).image,
                                 VK_IMAGE_LAYOUT_GENERAL,
                                 &clear_color, 1, &range);
         }
