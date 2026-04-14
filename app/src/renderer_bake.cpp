@@ -1588,12 +1588,16 @@ namespace himalaya::app {
                 "probe_aux_normal", bake_probe_aux_normal_,
                 VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
 
+            const uint32_t remaining = bake_locked_config_.probe_spp
+                                      - probe_baker_pass_.sample_count();
+            const uint32_t batch = std::min(remaining, input.bake_config.spp_per_frame);
+
             probe_baker_pass_.record(render_graph_, {
                 .swapchain = {},
                 .hdr_color = {},
                 .frame_index = input.frame_index,
                 .frame_number = frame_counter_,
-            }, rg_accum, rg_aux_albedo, rg_aux_normal);
+            }, rg_accum, rg_aux_albedo, rg_aux_normal, batch);
         }
 
         // --- Preview pipeline: clear hdr → blit accumulation → tonemapping → ImGui ---
