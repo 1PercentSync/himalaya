@@ -379,7 +379,8 @@
 
 ### 17i：Lightmap UV padding 与 bake 分辨率对齐
 
-- [ ] `scene_data.h`：`BakeConfig::min_resolution` 默认值 32 → 64
-- [ ] `lightmap_uv.cpp`：`PackOptions::resolution` 设为 `min_resolution`（通过新增函数参数传入），保证 padding 在任意 bake 分辨率下 >= 2 texels
-- [ ] `lightmap_uv.h`：`generate_lightmap_uv()` 签名新增 `uint32_t pack_resolution` 参数
-- [ ] 调用侧适配：`scene_loader.cpp` 和 `lightmap_uv_generator.cpp` 传入 `min_resolution`
+- [x] `scene_data.h`：`BakeConfig::min_resolution` 默认值 32 → 64
+- [x] `lightmap_uv.h/.cpp`：`generate_lightmap_uv()` 签名新增 `uint32_t pack_resolution` 参数，设置 `pack_options.resolution`
+- [x] `lightmap_uv_generator.h/.cpp`：`start()` 新增 `pack_resolution` 参数，存储并传递给 worker
+- [x] `scene_loader.h/.cpp`：`apply_lightmap_uvs()` 新增 `pack_resolution` 参数
+- [x] `application.cpp`：所有调用侧传入 `bake_config_.min_resolution`
