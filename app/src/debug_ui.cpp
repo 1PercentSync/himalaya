@@ -1131,15 +1131,25 @@ namespace himalaya::app {
                 framework::clear_cache("shader_debug");
                 framework::clear_cache("shader_release");
             }
-            if (ImGui::Button("Clear Bake Cache")) {
-                actions.clear_bake_cache_requested = true;
+            {
+                const bool baking = ctx.render_mode == framework::RenderMode::Baking;
+                if (baking) { ImGui::BeginDisabled(); }
+                if (ImGui::Button("Clear Bake Cache")) {
+                    actions.clear_bake_cache_requested = true;
+                }
+                if (baking) { ImGui::EndDisabled(); }
             }
             if (ImGui::Button("Clear Lightmap UV Cache")) {
                 actions.clear_uv_cache_requested = true;
             }
             ImGui::Spacing();
-            if (ImGui::Button("Clear All Cache")) {
-                framework::clear_all_cache();
+            {
+                const bool baking = ctx.render_mode == framework::RenderMode::Baking;
+                if (baking) { ImGui::BeginDisabled(); }
+                if (ImGui::Button("Clear All Cache")) {
+                    actions.clear_all_cache_requested = true;
+                }
+                if (baking) { ImGui::EndDisabled(); }
             }
         }
 
