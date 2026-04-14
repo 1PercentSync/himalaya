@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段七 — PT 烘焙器
-- **进度**：Step 13.5 进行中（14/20 项），13.5a-d + 13.5e-1/e-2 完成，下一项 13.5e-3
+- **进度**：Step 13.5 进行中（15/20 项），13.5a-d + 13.5e-1/e-2/e-3 完成，下一项 13.5e-4
 
 ### 下一个任务
 
-Step 13.5e-3：`debug_ui.cpp` Clear All Cache 改为设 action flag。
+Step 13.5e-4：`application.cpp` 处理 `clear_all_cache_requested`（调用 `clear_all_cache()` + 设 `bake_angles_dirty_`）。
 
 ---
 

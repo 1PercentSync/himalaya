@@ -260,7 +260,7 @@
 
 - [x] `debug_ui.cpp`：烘焙期间 `Clear Bake Cache` + `Clear All Cache` 灰显禁用
 - [x] `debug_ui.h`：`DebugUIActions` 新增 `clear_all_cache_requested`
-- [ ] `debug_ui.cpp`：`Clear All Cache` 改为设 action flag（不再直接调用 `clear_all_cache()`）
+- [x] `debug_ui.cpp`：`Clear All Cache` 改为设 action flag（不再直接调用 `clear_all_cache()`）（已在 13.5e-1 中完成）
 - [ ] `application.cpp`：处理 `clear_all_cache_requested`（调用 `clear_all_cache()` + 设 `bake_angles_dirty_`）
 
 ### 13.5f：分阶段独立进度
