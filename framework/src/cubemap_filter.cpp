@@ -152,7 +152,9 @@ namespace himalaya::framework {
 
         for (uint32_t mip = 0; mip < mip_count; ++mip) {
             constexpr uint32_t kGroupSize = 16;
-            const float mip_roughness = static_cast<float>(mip) / static_cast<float>(mip_count - 1);
+            const float mip_roughness = (mip_count <= 1)
+                ? 0.0f
+                : static_cast<float>(mip) / static_cast<float>(mip_count - 1);
             const uint32_t mip_size = face_size >> mip;
 
             // Push roughness constant
