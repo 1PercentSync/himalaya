@@ -14,14 +14,16 @@
 #include <fstream>
 
 namespace himalaya::framework {
-    /// Cache file header (8 bytes): array counts only.
+    /// Cache file header (12 bytes): array counts + flags.
     /// Validation relies on file size consistency (like IBL alias table cache).
+    /// Old 8-byte headers are rejected by size validation and re-generated.
     struct CacheHeader {
         uint32_t vertex_count;
         uint32_t index_count;
+        uint32_t flags;  ///< bit 0: is_fallback (xatlas failure or 0x0 atlas).
     };
 
-    static_assert(sizeof(CacheHeader) == 8);
+    static_assert(sizeof(CacheHeader) == 12);
 
     // --- Cache read/write helpers ---
 
