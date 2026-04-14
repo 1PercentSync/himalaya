@@ -912,6 +912,12 @@ namespace himalaya::app {
                 slider_float_deferred("Enclosure Factor",
                                       &ctx.bake_config.enclosure_threshold_factor,
                                       0.01f, 0.5f, "%.3f");
+                if (ctx.scene_aabb_longest_edge > 0.0f) {
+                    ImGui::SameLine();
+                    ImGui::Text("= %.2f m",
+                                static_cast<double>(ctx.bake_config.enclosure_threshold_factor
+                                    * ctx.scene_aabb_longest_edge));
+                }
 
                 {
                     auto spp = static_cast<int>(ctx.bake_config.probe_spp);
