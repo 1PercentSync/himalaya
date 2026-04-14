@@ -253,6 +253,12 @@ namespace himalaya::app {
     }
 
     void Application::start_bake_session() {
+        // Wait for in-flight GPU work before destroying old VB/IB.
+        // apply_lightmap_uvs() calls destroy_buffer() which frees Vulkan
+        // handles immediately — in-flight frames may still reference them
+        // via BLAS. Same pattern as switch_scene() / recreate_swapchain().
+        vkQueueWaitIdle(context_.graphics_queue);
+
         // Ensure all xatlas UV caches are populated
         if (!uv_generator_.running()) {
             auto requests = scene_loader_.prepare_uv_requests();
