@@ -242,10 +242,10 @@
 
 ### 13.5c：Baked angle lightmap 计数修复
 
-- [ ] `renderer.h` / `renderer_bake.cpp`：新增 `compute_lightmap_keys()` 公开方法，从 `start_bake()` 提取 bakeable instance 筛选 + key 生成逻辑
-- [ ] `renderer_bake.cpp`：`start_bake()` 改为内部调用 `compute_lightmap_keys()`，再单独循环计算分辨率
-- [ ] `renderer_bake.cpp`：`complete_bake()` / `cancel_bake()` 不再清空 `bake_lightmap_keys_`
-- [ ] `renderer.h`：新增 `bake_lightmap_keys()` const accessor
+- [x] `renderer.h` / `renderer_bake.cpp`：新增 `compute_lightmap_keys()` 公开方法，从 `start_bake()` 提取 bakeable instance 筛选 + key 生成逻辑
+- [x] `renderer_bake.cpp`：`start_bake()` 改为内部调用 `compute_lightmap_keys()`，再单独循环计算分辨率
+- [x] `renderer_bake.cpp`：`complete_bake()` / `cancel_bake()` 不再清空 `bake_lightmap_keys_`
+- [x] `renderer.h`：新增 `bake_lightmap_keys()` const accessor
 - [ ] `debug_ui.h`：`DebugUIContext` 新增 `std::span<const std::string> bake_lightmap_keys`
 - [ ] `application.cpp`：场景加载完成后 + HDR 加载完成后调用 `compute_lightmap_keys()` 预填充；构造 DebugUIContext 时传入
 - [ ] `debug_ui.cpp`：扫描逻辑改为遍历 lightmap keys，用 `cache_path()` 逐文件验证存在性计数
