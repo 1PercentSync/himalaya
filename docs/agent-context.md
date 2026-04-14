@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段七 — PT 烘焙器
-- **进度**：Step 15 进行中（4/8 完成）
+- **进度**：Step 15 进行中（5/8 完成）
 
 ### 下一个任务
 
-Step 15 第 5 小项：`probe_bake_finalize()` 亮度检测 + accepted 编号 + 跳过逻辑。
+Step 15 第 6 小项：所有 probe 完成后写入 manifest（accepted positions + count）。
 
 ---
 
