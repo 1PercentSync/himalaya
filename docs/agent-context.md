@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段七 — PT 烘焙器
-- **进度**：Step 13 第 5/13 项完成（BakeThroughput 内部类）
+- **进度**：Step 13 第 6/13 项完成（Baking 参数配置面板）
 
 ### 下一个任务
 
-Step 13 第 6 项：`debug_ui.cpp` — Baking collapsing header 参数配置面板。
+Step 13 第 7 项：`debug_ui.cpp` — Start Bake 按钮 + Cancel 按钮。
 
 ---
 
