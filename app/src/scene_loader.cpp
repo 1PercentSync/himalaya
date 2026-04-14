@@ -852,6 +852,11 @@ namespace himalaya::app {
                                  "— expected cache hit after generator wait", i, hash);
                 }
 
+                if (uv_result.is_fallback) {
+                    spdlog::warn("apply_lightmap_uvs: prim {} uses fallback UV "
+                                 "(degenerate geometry, hash {:.8})", i, hash);
+                }
+
                 // Rebuild vertex array from originals via remap, write xatlas uv1
                 const auto new_vert_count = uv_result.vertex_remap.size();
                 std::vector<framework::Vertex> new_vertices(new_vert_count);
