@@ -871,10 +871,8 @@ namespace himalaya::app {
                 if (baking) { ImGui::BeginDisabled(); }
 
                 // Lightmap parameters
-                if (slider_float_deferred("Texels/m", &ctx.bake_config.texels_per_meter,
-                                          1.0f, 50.0f, "%.1f")) {
-
-                }
+                slider_float_deferred("Texels/m", &ctx.bake_config.texels_per_meter,
+                                      1.0f, 50.0f, "%.1f");
 
                 {
                     auto min_res = static_cast<int>(ctx.bake_config.min_resolution);
@@ -897,7 +895,6 @@ namespace himalaya::app {
                     if (ImGui::SliderInt("Lightmap SPP", &spp, 64, 16384,
                                          "%d", ImGuiSliderFlags_Logarithmic)) {
                         ctx.bake_config.lightmap_spp = static_cast<uint32_t>(spp);
-    
                     }
                 }
 
@@ -906,35 +903,28 @@ namespace himalaya::app {
                     auto face_res = static_cast<int>(ctx.bake_config.probe_face_resolution);
                     if (ImGui::SliderInt("Probe Face Res", &face_res, 64, 1024)) {
                         ctx.bake_config.probe_face_resolution = static_cast<uint32_t>(face_res);
-    
                     }
                 }
 
-                if (slider_float_deferred("Probe Spacing", &ctx.bake_config.probe_spacing,
-                                          0.1f, 10.0f, "%.2f m")) {
-
-                }
+                slider_float_deferred("Probe Spacing", &ctx.bake_config.probe_spacing,
+                                      0.1f, 10.0f, "%.2f m");
 
                 {
                     auto rays = static_cast<int>(ctx.bake_config.filter_ray_count);
                     if (ImGui::SliderInt("Filter Rays", &rays, 8, 256)) {
                         ctx.bake_config.filter_ray_count = static_cast<uint32_t>(rays);
-    
                     }
                 }
 
-                if (slider_float_deferred("Enclosure Factor",
-                                          &ctx.bake_config.enclosure_threshold_factor,
-                                          0.01f, 0.5f, "%.3f")) {
-
-                }
+                slider_float_deferred("Enclosure Factor",
+                                      &ctx.bake_config.enclosure_threshold_factor,
+                                      0.01f, 0.5f, "%.3f");
 
                 {
                     auto spp = static_cast<int>(ctx.bake_config.probe_spp);
                     if (ImGui::SliderInt("Probe SPP", &spp, 64, 16384,
                                          "%d", ImGuiSliderFlags_Logarithmic)) {
                         ctx.bake_config.probe_spp = static_cast<uint32_t>(spp);
-    
                     }
                 }
 
@@ -943,24 +933,16 @@ namespace himalaya::app {
                     auto bounces = static_cast<int>(ctx.bake_config.max_bounces);
                     if (ImGui::SliderInt("Baker Bounces", &bounces, 1, 64)) {
                         ctx.bake_config.max_bounces = static_cast<uint32_t>(bounces);
-    
                     }
                 }
 
-                if (ImGui::Checkbox("Baker Env Sampling", &ctx.bake_config.env_sampling)) {
-
-                }
-
-                if (ImGui::Checkbox("Baker Emissive NEE", &ctx.bake_config.emissive_nee)) {
-
-                }
+                ImGui::Checkbox("Baker Env Sampling", &ctx.bake_config.env_sampling);
+                ImGui::Checkbox("Baker Emissive NEE", &ctx.bake_config.emissive_nee);
 
                 {
                     const bool can_tear = ctx.swapchain.immediate_supported;
                     if (!can_tear) { ImGui::BeginDisabled(); }
-                    if (ImGui::Checkbox("Baker Allow Tearing", &ctx.bake_config.allow_tearing)) {
-    
-                    }
+                    ImGui::Checkbox("Baker Allow Tearing", &ctx.bake_config.allow_tearing);
                     if (ImGui::IsItemHovered()) {
                         ImGui::SetTooltip(can_tear
                             ? "Force IMMEDIATE present mode during baking."
