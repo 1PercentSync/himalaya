@@ -297,6 +297,6 @@
 - [x] `renderer_bake.cpp`：`cancel_bake()` / `complete_bake()` 重置 accepted 成员
 - [x] `renderer_bake.cpp`：`render_baking()` BakingProbes 首帧移除 manifest 写入
 - [x] `renderer_bake.cpp`：`probe_bake_finalize()` readback 后计算 beauty 平均亮度，低于阈值跳过 denoise/compress/KTX2，使用 accepted counter 编号
-- [ ] `renderer_bake.cpp`：所有 probe 完成后写入 manifest（accepted positions + count）
+- [x] `renderer_bake.cpp`：所有 probe 完成后写入 manifest（accepted positions + count）
 - [ ] `render_progress.h`：`BakeProgress` 新增 `probes_rejected`
 - [ ] `debug_ui.cpp`：Baking 参数面板新增 "Probe Min Luminance" slider + 进度面板显示 rejected 数
