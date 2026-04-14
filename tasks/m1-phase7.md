@@ -150,7 +150,7 @@
 - [x] `renderer_bake.cpp`：`render_baking()` BakingProbes 首帧——检测 `placement_pending` → `generate_probe_grid()` → manifest.bin 原子写入 → `begin_immediate()` → `begin_probe_bake_instance(0)` → `end_immediate()` → 清除 pending
 - [x] `renderer_bake.cpp`：`begin_probe_bake_instance()`——创建 3 个 CUBE_COMPATIBLE cubemap（accumulation RGBA32F + aux RGBA16F × 2）→ barrier UNDEFINED→GENERAL → clear accumulation → `probe_baker_pass_.set_probe_images()` + `set_probe_position()` + `reset_accumulation()`
 - [x] `renderer_bake.cpp`：`render_baking()` BakingProbes 后续帧——dispatch `probe_baker_pass_.record()` → 达到 `probe_spp` 时设 `bake_probe_finalize_pending_`
-- [ ] `renderer_bake.cpp`：`render_baking()` BakingProbes RG 预览——十字展开（4×3 grid，6 次 `vkCmdBlitImage` via `srcSubresource.baseArrayLayer`）缩放居中到 hdr_color
+- [x] `renderer_bake.cpp`：`render_baking()` BakingProbes RG 预览——十字展开（4×3 grid，6 次 `vkCmdBlitImage` via `srcSubresource.baseArrayLayer`）缩放居中到 hdr_color
 - [ ] `application.cpp`：`begin_frame()` 后检测 `bake_probe_finalize_pending_` → 调用 `probe_bake_finalize()`
 - [ ] `renderer_bake.cpp`：`probe_bake_finalize()` Scope 1——readback accumulation + aux（layerCount=6，一次 copy）
 - [ ] `renderer_bake.cpp`：`probe_bake_finalize()` CPU——OIDN × 6 face 逐面降噪

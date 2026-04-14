@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段七 — PT 烘焙器
-- **进度**：Step 12 前六小项完成（含 probe RG dispatch）
+- **进度**：Step 12 前七小项完成（含十字展开预览）
 
 ### 下一个任务
 
-Step 12 第七小项：`render_baking()` BakingProbes RG 预览——十字展开 blit。
+Step 12 第八小项：`application.cpp` 检测 `bake_probe_finalize_pending_` → 调用 `probe_bake_finalize()`。
 
 设计详见 `docs/current-phase.md` Step 12 章节，任务清单见 `tasks/m1-phase7.md` Step 12 部分。无设计决策空间，按文档直接实现。
 
