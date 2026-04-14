@@ -1562,12 +1562,16 @@ namespace himalaya::app {
                 VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                 VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
+            const uint32_t remaining = bake_locked_config_.lightmap_spp
+                                      - lightmap_baker_pass_.sample_count();
+            const uint32_t batch = std::min(remaining, input.bake_config.spp_per_frame);
+
             lightmap_baker_pass_.record(render_graph_, {
                 .swapchain = {},
                 .hdr_color = {},
                 .frame_index = input.frame_index,
                 .frame_number = frame_counter_,
-            }, rg_accum, rg_aux_albedo, rg_aux_normal, rg_pos_map, rg_nrm_map);
+            }, rg_accum, rg_aux_albedo, rg_aux_normal, rg_pos_map, rg_nrm_map, batch);
         }
 
         // Probe baker RT dispatch (if actively accumulating probes)
