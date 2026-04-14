@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段七 — PT 烘焙器
-- **进度**：Step 12.6d 完成，12.6e 待开始
+- **进度**：Step 12.6d 完成，12.6e 待开始（原 12.6e barrier helper 已砍除，原 12.6f 重编号为 12.6e）
 
 ### 下一个任务
 
-Step 12.6e 第 1 项：`rhi/commands.h` 新增 `image_barrier()` static 构建函数。
+Step 12.6e：`context.cpp` `end_immediate()` command buffer 末尾插入 full pipeline barrier。
 
 ---
 

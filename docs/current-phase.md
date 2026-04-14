@@ -40,7 +40,7 @@ Step 12: Probe 端到端流程（降噪 + prefilter + 压缩 + 持久化）
     ↓
 Step 12.5: 延迟 Lightmap UV 生成（后台并行 + bake 时应用 + 质量分级）
     ↓
-Step 12.6: 审查修复（Steps 12-12.5 正确性 + 全项目 barrier helper 重构）
+Step 12.6: 审查修复（Steps 12-12.5 正确性 + 同步修复）
     ↓
 Step 13: ImGui 烘焙控制面板
 ```
@@ -63,7 +63,7 @@ Step 13: ImGui 烘焙控制面板
 | 11 | Probe Baker Pass | RenderDoc：probe accumulation cubemap 逐帧亮度增加 |
 | 12 | Probe 端到端 | 触发烘焙 → 累积 → 降噪 → prefilter → BC6H → KTX2 写入磁盘 |
 | 12.5 | 延迟 Lightmap UV 生成 | 场景加载不阻塞 xatlas；后台生成填充缓存；Bake 时读缓存重建 VB/IB + BLAS/TLAS，渲染无回归 |
-| 12.6 | 审查修复（Steps 12-12.5） | 无 validation 报错（AMD/NVIDIA），lightmap/probe bake 端到端正确（降噪数据无损坏），负角度 bake 缓存 key 正确，BakeState::Complete 自动恢复 RenderMode，全项目 barrier 代码使用 helper |
+| 12.6 | 审查修复（Steps 12-12.5） | 无 validation 报错（AMD/NVIDIA），lightmap/probe bake 端到端正确（降噪数据无损坏），负角度 bake 缓存 key 正确，BakeState::Complete 自动恢复 RenderMode |
 | 13 | ImGui 烘焙面板 | 烘焙参数可调，触发/取消/进度显示正常，accumulation 预览实时更新 |
 
 ---
@@ -962,13 +962,7 @@ Phase 6 Step 12-12.5 完成后的全面审查发现的 bug 修复、同步正确
 
 - `lightmap_uv_generator.h`：类文档修正线程安全声明——`running()` / `total()` 读取非原子 `workers_` / `requests_`，必须从主线程调用（不与 `start()` / `cancel()` / `wait()` 并发）；`completed()` 读 atomic，可从任意线程调用
 
-#### 12.6e：RHI barrier helper + 全项目重构
-
-- `rhi/commands.h`：新增 `image_barrier()` static 构建函数，返回 `VkImageMemoryBarrier2`（参数：`VkImage`、`old/new layout`、`src/dst stage`、`src/dst access`、`layer_count` 默认 1）
-- 全项目范围替换所有手写 `VkImageMemoryBarrier2` 初始化为 `image_barrier()` 调用（受影响文件：`renderer_bake.cpp`、`renderer_pt.cpp`、`renderer_rasterization.cpp`、`denoiser.cpp`、`resources.cpp`、各 pass 文件等）
-- 重构过程中逐个审查每个 barrier 的 `srcStageMask` / `srcAccessMask` / `dstStageMask` / `dstAccessMask` 精确性
-
-#### 12.6f：`end_immediate()` 跨 submit memory dependency
+#### 12.6e：`end_immediate()` 跨 submit memory dependency
 
 - `context.cpp`：`end_immediate()` 在 `vkQueueSubmit` 之前、command buffer 录制末尾插入 full pipeline barrier（`ALL_COMMANDS → ALL_COMMANDS`，`MEMORY_WRITE → MEMORY_READ | MEMORY_WRITE`），确保 immediate scope 内的所有写入对后续 submit 可见（消除跨 submit 隐式 memory dependency 依赖）
 

@@ -209,12 +209,7 @@
 
 - [x] `lightmap_uv_generator.h`：修正线程安全注释（`running()` / `total()` 主线程限定）
 
-### 12.6e：RHI barrier helper + 全项目重构
-
-- [ ] `rhi/commands.h`：新增 `image_barrier()` static 构建函数
-- [ ] 全项目替换手写 `VkImageMemoryBarrier2` 初始化（逐文件重构 + 审查 stage/access 精确性）
-
-### 12.6f：`end_immediate()` 跨 submit memory dependency
+### 12.6e：`end_immediate()` 跨 submit memory dependency
 
 - [ ] `context.cpp`：`end_immediate()` command buffer 末尾插入 full pipeline barrier
 
