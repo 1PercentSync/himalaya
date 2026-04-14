@@ -983,11 +983,39 @@ Phase 6 Step 12-12.5 完成后的全面审查发现的 bug 修复、同步正确
   - **参数配置**（默认值见 `m1-rt-decisions.md` 烘焙参数表）：lightmap texels_per_meter(10) + min_resolution(32) + max_resolution(2048) + lightmap SPP(4096) + probe face 分辨率(512) + probe grid spacing(1m) + probe filter ray count(64) + probe enclosure threshold factor(0.05)（slider 旁显示 "= X.XX m" 绝对阈值）+ probe SPP(2048) + baker max_bounces(32) + baker env_sampling(ON) + baker emissive_nee(ON) + baker allow_tearing(OFF)
   - **烘焙触发**：Start Bake 按钮（仅 rt_supported + 有场景 + 有 HDR + RenderMode != Baking + IBL 模式时可用）。按钮旁显示当前 IBL 旋转角度（round 后整数度），tooltip 说明"将以此角度 bake，结果按角度缓存"。点击后调用 `Application::start_bake_session()`（Step 12.5 已实现，封装 ensure generator → wait → apply UV → rebuild RT → start_bake → 切换 RenderMode）
   - **Bake 期间 UI 锁定**：所有 bake 参数 slider 灰显、Start Bake 灰显、Load Scene / Load HDR / Reload Shaders / PT checkbox 灰显、PT 面板不显示、Allow Tearing 不支持 IMMEDIATE 时灰显、Lightmap UV Generation 面板中 Start 灰显
-  - **进度显示**：当前阶段（Lightmaps / Probes / Complete）+ 当前项编号/总数 + 采样数/目标 + 吞吐量（SPP/s）+ 当前项耗时 + 总进度百分比 + 总耗时
+  - **进度显示**：
+    - 当前阶段（Lightmaps / Probes / Complete）+ 当前项编号/总数 + 采样数/目标
+    - 吞吐量：texel-samples/s，显示为 `XX.X M paths/s`。DebugUI 内新增 `BakeThroughput` 类（复刻 `FrameStats` 模式：1 秒窗口累积帧时间，窗口结束时计算 `dispatch_count × texels_per_dispatch / window_time`，窗口间显示值不变防抖）。全程不 reset（指标已按 texel 归一化，跨 instance/probe 可比较）。Lightmap 帧 texels = `width × height`，Probe 帧 texels = `face_res² × 6`
+    - 总进度：按 texel-samples 加权百分比（Renderer 在 `start_bake()` 时预算 `total_texel_samples = Σ(lm_w_i × lm_h_i × lightmap_spp) + probe_count × face_res² × 6 × probe_spp`，probe_count 在 placement 后更新）
+    - ETA：基于 smoothed throughput 估算剩余 texel-samples 所需时间
+    - 当前项耗时 + 总耗时
   - **取消**：Cancel 按钮 → 中止烘焙，RenderMode 恢复到进入 Baking 前的模式。显示信息 "Bake cancelled. N/M instances completed. Incomplete angle will not appear in available list."
-  - **已 bake 角度列表**：显示当前 scene+HDR 下所有已 bake 的旋转角度（目录扫描 `<hash>_rot*.ktx2`），点击可在 Lightmap/Probe 模式下切换角度。每个角度显示 lightmap 数量 + probe 数量
+  - **已 bake 角度列表**（仅显示，点击切换功能留待下一个 Phase 集成）：显示当前 scene+HDR 下所有已 bake 的旋转角度，每个角度显示 lightmap 数量 + probe 数量。通过 probe_set_key（`scene_hash + hdr_hash + scene_textures_hash`，场景/HDR 加载后即可计算）扫描 bake cache 目录中的 `<hash>_rot*_manifest.bin` 提取角度。dirty flag 控制扫描时机：场景加载、HDR 加载、bake 完成时置 dirty，仅 Baking header 展开且 dirty 时执行一次扫描并缓存结果
   - **Cache 操作**：Cache 面板新增 Clear Bake Cache 按钮（清除全部 bake 缓存）+ Clear Lightmap UV Cache 按钮（清除 lightmap_uv 缓存）
-- `app/renderer.h`：暴露烘焙状态（BakeState、current index、sample count、吞吐量、耗时等）给 DebugUIContext
-- `app/config.cpp`：烘焙参数持久化（texels_per_meter、probe spacing、baker max_bounces、baker env_sampling、baker emissive_nee、baker allow_tearing、**bg_uv_auto_start、bg_uv_thread_count**）
+- `app/renderer.h`：新增 `BakeProgress` 只读结构体 + `bake_progress()` accessor，暴露烘焙状态给 DebugUIContext：
+  ```cpp
+  struct BakeProgress {
+      BakeState state;
+      // Lightmap phase
+      uint32_t current_instance;   // 0-based index into bakeable list
+      uint32_t total_instances;
+      uint32_t lm_sample_count;    // current instance accumulated samples
+      uint32_t lm_target_spp;
+      uint32_t lm_width, lm_height; // current instance lightmap resolution
+      // Probe phase
+      uint32_t current_probe;
+      uint32_t total_probes;
+      uint32_t probe_sample_count;
+      uint32_t probe_target_spp;
+      uint32_t probe_face_res;
+      // Timing
+      float instance_elapsed_s;    // current item elapsed
+      float total_elapsed_s;       // total bake session elapsed
+      // Progress weighting
+      uint64_t completed_texel_samples; // texel-samples done so far
+      uint64_t total_texel_samples;     // pre-computed total work
+  };
+  ```
+- `app/config.cpp`：烘焙参数持久化（texels_per_meter、min_resolution、max_resolution、lightmap_spp、probe_face_resolution、probe_spacing、filter_ray_count、enclosure_threshold_factor、probe_spp、baker max_bounces、env_sampling、emissive_nee、allow_tearing、bg_uv_auto_start、bg_uv_thread_count）
 
 **验证**：所有参数 slider 功能正常，Start/Cancel 按钮正确触发/中止，进度信息和吞吐量实时更新，accumulation 全屏预览（经 blit + tonemapping）在烘焙进行中显示实时画面，已 bake 角度列表正确显示

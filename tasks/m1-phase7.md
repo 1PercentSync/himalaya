@@ -215,11 +215,15 @@
 
 ## Step 13：ImGui 烘焙控制面板
 
-- [ ] `debug_ui.cpp`：Baking collapsing header（始终显示，默认折叠）— Lightmap UV Generation 子面板（Step 12.5 已实现）+ 参数配置（texels_per_meter / min_res / max_res / lightmap SPP / probe face res / probe spacing / filter ray count / enclosure threshold factor + 绝对阈值显示 / probe SPP / baker max_bounces / baker env_sampling / baker emissive_nee / baker allow_tearing）
-- [ ] `debug_ui.cpp`：Start Bake 按钮（唯一入口，旁显当前角度 + tooltip，点击调用 `Application::start_bake_session()`（Step 12.5 已实现））+ Cancel 按钮（恢复原 RenderMode + 显示取消信息）
+- [ ] `renderer.h`：新增 `BakeProgress` 结构体 + `bake_progress()` accessor，暴露烘焙状态给 DebugUIContext
+- [ ] `renderer_bake.cpp`：`start_bake()` 预算 `total_texel_samples`（lightmap 阶段 + probe 预估），`bake_progress()` 实现（汇总各字段 + 计算 elapsed + completed_texel_samples）
+- [ ] `debug_ui.h`：`DebugUIContext` 新增 bake 相关字段（`BakeConfig&`、`BakeProgress`、`bake_cache_key`、dirty flag 等）+ `DebugUIActions` 新增 bake 动作（start / cancel / config_changed / clear_bake_cache / clear_uv_cache）
+- [ ] `debug_ui.cpp`：`BakeThroughput` 内部类（复刻 FrameStats，1 秒窗口平滑 texel-samples/s，全程不 reset）
+- [ ] `debug_ui.cpp`：Baking collapsing header — 参数配置（texels_per_meter / min_res / max_res / lightmap SPP / probe face res / probe spacing / filter ray count / enclosure threshold factor + 绝对阈值显示 / probe SPP / baker max_bounces / baker env_sampling / baker emissive_nee / baker allow_tearing）
+- [ ] `debug_ui.cpp`：Start Bake 按钮（唯一入口，旁显当前角度 + tooltip）+ Cancel 按钮（恢复原 RenderMode + 显示取消信息）
 - [ ] `debug_ui.cpp`：Bake 期间 UI 锁定（bake 参数 slider + Load Scene + Load HDR + Reload Shaders + PT checkbox 全部灰显，PT 面板不显示，UV Generation Start 灰显）
-- [ ] `debug_ui.cpp`：进度显示（阶段 + 当前项/总数 + 采样数/目标 + 吞吐量 SPP/s + 当前项耗时 + 总进度百分比 + 总耗时）
-- [ ] `debug_ui.cpp`：已 bake 角度列表（目录扫描 `<hash>_rot*.ktx2`，显示角度 + lightmap/probe 数量，点击切换）
+- [ ] `debug_ui.cpp`：进度显示（阶段 + 当前项/总数 + 采样数/目标 + M paths/s + 当前项耗时 + 总耗时 + texel-samples 加权百分比 + ETA）
+- [ ] `debug_ui.cpp`：已 bake 角度列表（dirty flag 控制扫描时机，仅显示，点击切换留待下一 Phase）
 - [ ] `debug_ui.cpp`：Cache 面板新增 Clear Bake Cache 按钮 + Clear Lightmap UV Cache 按钮
-- [ ] `renderer.h`：暴露烘焙状态（BakeState、current index、sample count、吞吐量、耗时等）给 DebugUIContext
-- [ ] `config.cpp`：烘焙参数持久化（texels_per_meter、probe spacing、filter_ray_count、enclosure_threshold_factor、baker max_bounces、env_sampling、emissive_nee、allow_tearing、bg_uv_auto_start、bg_uv_thread_count）
+- [ ] `application.cpp`：处理新增 DebugUIActions（start_bake / cancel_bake / config save / clear cache）+ 填充 DebugUIContext bake 字段
+- [ ] `config.h` + `config.cpp`：`AppConfig` 新增烘焙参数字段 + JSON 读写（texels_per_meter / min_resolution / max_resolution / lightmap_spp / probe_face_resolution / probe_spacing / filter_ray_count / enclosure_threshold_factor / probe_spp / max_bounces / env_sampling / emissive_nee / allow_tearing）
