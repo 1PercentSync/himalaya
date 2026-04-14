@@ -951,6 +951,37 @@ namespace himalaya::app {
 
                 if (baking) { ImGui::EndDisabled(); }
             }
+
+            ImGui::Separator();
+
+            // --- Start / Cancel buttons ---
+            {
+                const bool baking = ctx.bake_progress.state != framework::BakeState::Idle;
+
+                if (!baking) {
+                    // Start Bake button
+                    const bool can_start = ctx.rt_supported && ctx.has_scene && ctx.has_hdr
+                        && ctx.render_mode != framework::RenderMode::Baking;
+                    if (!can_start) { ImGui::BeginDisabled(); }
+                    if (ImGui::Button("Start Bake")) {
+                        actions.bake_start_requested = true;
+                    }
+                    if (!can_start) { ImGui::EndDisabled(); }
+
+                    // Show current IBL rotation angle next to button
+                    ImGui::SameLine();
+                    ImGui::Text("(%.0f%s)", static_cast<double>(ctx.ibl_rotation_deg), "\xC2\xB0");
+                    if (ImGui::IsItemHovered()) {
+                        ImGui::SetTooltip("Bake at this IBL rotation angle.\n"
+                                          "Results are cached per angle.");
+                    }
+                } else {
+                    // Cancel button (visible only during baking)
+                    if (ImGui::Button("Cancel Bake")) {
+                        actions.bake_cancel_requested = true;
+                    }
+                }
+            }
         }
 
         // Cache section
