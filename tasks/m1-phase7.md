@@ -215,7 +215,7 @@
 
 ## Step 13：ImGui 烘焙控制面板
 
-- [ ] `renderer.h`：新增 `BakeProgress` 结构体 + `bake_progress()` accessor，暴露烘焙状态给 DebugUIContext
+- [x] `renderer.h`：新增 `BakeProgress` 结构体 + `bake_progress()` accessor，暴露烘焙状态给 DebugUIContext
 - [ ] `renderer_bake.cpp`：`start_bake()` 预算 `total_texel_samples`（lightmap 阶段 + probe 预估），`bake_progress()` 实现（汇总各字段 + 计算 elapsed + completed_texel_samples）
 - [ ] `debug_ui.h`：`DebugUIContext` 新增 bake 相关字段（`BakeConfig&`、`BakeProgress`、`bake_cache_key`、dirty flag 等）+ `DebugUIActions` 新增 bake 动作（start / cancel / config_changed / clear_bake_cache / clear_uv_cache）
 - [ ] `debug_ui.cpp`：`BakeThroughput` 内部类（复刻 FrameStats，1 秒窗口平滑 texel-samples/s，全程不 reset）
