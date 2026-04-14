@@ -337,4 +337,4 @@
 
 ### 16e：`compress_bc6h` 出口 barrier 放宽
 
-- [ ] `texture_compress.cpp`：最终 barrier `dstStageMask` 从 `FRAGMENT_SHADER_BIT` 改为 `ALL_COMMANDS_BIT`（调用侧不限于 fragment shader 消费，bake 管线需要 transfer readback）
+- [x] `texture_compress.cpp`：最终 barrier `dstStageMask` 从 `FRAGMENT_SHADER_BIT` 改为 `ALL_COMMANDS_BIT`（调用侧不限于 fragment shader 消费，bake 管线需要 transfer readback）
