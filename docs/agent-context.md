@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段七 — PT 烘焙器
-- **进度**：Step 12.6c 进行中（5/7 完成）
+- **进度**：Step 12.6c 进行中（6/7 完成）
 
 ### 下一个任务
 
-Step 12.6c 第 6 项：`scene_loader.cpp` `apply_lightmap_uvs()` 检测 `is_fallback` 时 warn。
+Step 12.6c 第 7 项：`scene_loader.cpp` `prepare_uv_requests()` 按 `mesh_hash` 去重。
 
 ---
 
