@@ -63,6 +63,9 @@ namespace himalaya::app {
          */
         bool bake_allow_tearing = false;
 
+        /** @brief Number of SPP batched per frame during baking. */
+        uint32_t bake_spp_per_frame = 16;
+
         /**
          * @brief Auto-start background lightmap UV generation on scene load.
          *
