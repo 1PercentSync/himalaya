@@ -207,7 +207,7 @@
 
 ### 12.6d：线程安全文档修正
 
-- [ ] `lightmap_uv_generator.h`：修正线程安全注释（`running()` / `total()` 主线程限定）
+- [x] `lightmap_uv_generator.h`：修正线程安全注释（`running()` / `total()` 主线程限定）
 
 ### 12.6e：RHI barrier helper + 全项目重构
 
