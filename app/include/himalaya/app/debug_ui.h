@@ -6,6 +6,7 @@
  */
 
 #include <cstdint>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -255,6 +256,14 @@ namespace himalaya::app {
          * Empty when no scene or HDR is loaded.
          */
         std::string bake_cache_key;
+
+        /**
+         * @brief Per-instance lightmap cache keys for baked angle file verification.
+         *
+         * Populated by Renderer::compute_lightmap_keys() after scene/HDR load.
+         * Empty when no scene or HDR is loaded.
+         */
+        std::span<const std::string> bake_lightmap_keys;
 
         /**
          * @brief Dirty flag for baked angle list rescanning.
