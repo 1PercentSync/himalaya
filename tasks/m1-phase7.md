@@ -321,7 +321,7 @@
 ### 16a：Aux image 未初始化修复
 
 - [x] `renderer_bake.cpp`：`begin_probe_bake_instance()` accumulation clear 后追加 `vkCmdClearColorImage` 清零 `bake_probe_aux_albedo_` 和 `bake_probe_aux_normal_`（6 layer，GENERAL layout）
-- [ ] `renderer_pt.cpp`：reference view aux image（`managed_pt_aux_albedo_` / `managed_pt_aux_normal_`）在 accumulation reset 时追加 clear（miss texel 的 aux 为 VRAM 垃圾，OIDN guide 数据不正确）
+- [x] `renderer_pt.cpp`：reference view aux image（`managed_pt_aux_albedo_` / `managed_pt_aux_normal_`）在 accumulation reset 时追加 clear（miss texel 的 aux 为 VRAM 垃圾，OIDN guide 数据不正确）
 
 ### 16b：`spp_per_frame` 零值防护
 
