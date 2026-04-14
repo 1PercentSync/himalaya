@@ -229,3 +229,48 @@
 - [x] `application.cpp`：处理新增 DebugUIActions（start_bake / cancel_bake / config save / clear cache）+ 填充 DebugUIContext bake 字段
 - [x] `config.h` + `config.cpp`：`AppConfig` 新增 `bake_allow_tearing` + JSON 读写 + `application.cpp` 变化检测持久化（与 `pt_allow_tearing` 统一模式）
 - [x] 清理：移除 `bake_config_changed`（`debug_ui.h` 字段 + `debug_ui.cpp` 全部 13 处赋值 + `application.cpp` handler）
+
+## Step 13.5：审查修复（Step 13 正确性 + 代码质量）
+
+### 13.5a：Vulkan 正确性
+
+- [ ] `application.cpp`：`bake_cancel_requested` handler 在 `cancel_bake()` 调用前补 `vkQueueWaitIdle(context_.graphics_queue)`
+
+### 13.5b：UB 修复
+
+- [ ] `debug_ui.cpp`：Bake 参数 Min Resolution / Max Resolution slider 互相钳制（调 min 时 `min = std::min(min, max)`，调 max 时 `max = std::max(max, min)`）
+
+### 13.5c：Baked angle lightmap 计数修复
+
+- [ ] `renderer.h` / `renderer_bake.cpp`：新增 `compute_lightmap_keys()` 公开方法，从 `start_bake()` 提取 bakeable instance 筛选 + key 生成逻辑
+- [ ] `renderer_bake.cpp`：`start_bake()` 改为内部调用 `compute_lightmap_keys()`，再单独循环计算分辨率
+- [ ] `renderer_bake.cpp`：`complete_bake()` / `cancel_bake()` 不再清空 `bake_lightmap_keys_`
+- [ ] `renderer.h`：新增 `bake_lightmap_keys()` const accessor
+- [ ] `debug_ui.h`：`DebugUIContext` 新增 `std::span<const std::string> bake_lightmap_keys`
+- [ ] `application.cpp`：场景加载完成后 + HDR 加载完成后调用 `compute_lightmap_keys()` 预填充；构造 DebugUIContext 时传入
+- [ ] `debug_ui.cpp`：扫描逻辑改为遍历 lightmap keys，用 `cache_path()` 逐文件验证存在性计数
+
+### 13.5d：代码清理
+
+- [ ] `debug_ui.cpp`：删除 ~13 个空 `if` 块（bake 参数 slider/checkbox），保留裸调用
+- [ ] `debug_ui.h`：删除 `BakeThroughput::reset()` 方法（死代码）
+- [ ] `debug_ui.cpp`：删除 "Bake Complete" UI 死代码分支（`complete` 变量及相关显示）
+
+### 13.5e：Cache 按钮一致性
+
+- [ ] `debug_ui.cpp`：烘焙期间 `Clear Bake Cache` + `Clear All Cache` 灰显禁用
+- [ ] `debug_ui.h`：`DebugUIActions` 新增 `clear_all_cache_requested`
+- [ ] `debug_ui.cpp`：`Clear All Cache` 改为设 action flag（不再直接调用 `clear_all_cache()`）
+- [ ] `application.cpp`：处理 `clear_all_cache_requested`（调用 `clear_all_cache()` + 设 `bake_angles_dirty_`）
+
+### 13.5f：分阶段独立进度
+
+- [ ] `render_progress.h`：`BakeProgress` 拆分进度字段为 `lm_completed_texel_samples` / `lm_total_texel_samples` + `probe_completed_texel_samples` / `probe_total_texel_samples`
+- [ ] `renderer_bake.cpp`：`bake_progress()` 分别计算两阶段的 completed / total
+- [ ] `debug_ui.cpp`：进度显示改为当前阶段取对应字段计算百分比和 ETA
+
+### 13.5g：Enclosure Factor 绝对阈值
+
+- [ ] `debug_ui.h`：`DebugUIContext` 新增 `float scene_aabb_longest_edge`
+- [ ] `application.cpp`：从 scene AABB 计算 longest edge 填入 DebugUIContext
+- [ ] `debug_ui.cpp`：Enclosure Factor slider 旁 `SameLine` + `Text("= %.2f m")` 显示绝对阈值（无场景时不显示）
