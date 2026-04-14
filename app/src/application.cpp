@@ -51,6 +51,7 @@ namespace himalaya::app {
 
         pt_allow_tearing_ = config_.pt_allow_tearing;
         bake_config_.allow_tearing = config_.bake_allow_tearing;
+        bake_config_.spp_per_frame = config_.bake_spp_per_frame;
         resolve_thread_count();
 
         glfwInit();
@@ -773,6 +774,10 @@ namespace himalaya::app {
         }
         if (config_.bake_allow_tearing != bake_config_.allow_tearing) {
             config_.bake_allow_tearing = bake_config_.allow_tearing;
+            save_config(config_);
+        }
+        if (config_.bake_spp_per_frame != bake_config_.spp_per_frame) {
+            config_.bake_spp_per_frame = bake_config_.spp_per_frame;
             save_config(config_);
         }
     }
