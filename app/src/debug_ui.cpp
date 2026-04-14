@@ -227,8 +227,9 @@ namespace himalaya::app {
 
         // Path Tracing toggle
         {
+            const bool baking = ctx.render_mode == framework::RenderMode::Baking;
             bool pt_enabled = ctx.render_mode == framework::RenderMode::PathTracing;
-            if (ctx.rt_supported) {
+            if (ctx.rt_supported && !baking) {
                 if (ImGui::Checkbox("Path Tracing", &pt_enabled)) {
                     ctx.render_mode = pt_enabled
                                           ? framework::RenderMode::PathTracing
@@ -239,7 +240,8 @@ namespace himalaya::app {
                 ImGui::Checkbox("Path Tracing", &pt_enabled);
                 ImGui::EndDisabled();
                 if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
-                    ImGui::SetTooltip("Path Tracing requires RT hardware");
+                    ImGui::SetTooltip(baking ? "Disabled during baking"
+                                             : "Path Tracing requires RT hardware");
                 }
             }
         }
@@ -436,15 +438,20 @@ namespace himalaya::app {
             }
 
 #ifdef _WIN32
-            ImGui::SameLine();
-            if (ImGui::Button("Load Scene...")) {
-                auto path = open_file_dialog(
-                    L"glTF Files (*.gltf;*.glb)\0*.gltf;*.glb\0All Files (*.*)\0*.*\0",
-                    L"Load Scene");
-                if (!path.empty()) {
-                    actions.scene_load_requested = true;
-                    actions.new_scene_path = std::move(path);
+            {
+                const bool baking = ctx.render_mode == framework::RenderMode::Baking;
+                if (baking) { ImGui::BeginDisabled(); }
+                ImGui::SameLine();
+                if (ImGui::Button("Load Scene...")) {
+                    auto path = open_file_dialog(
+                        L"glTF Files (*.gltf;*.glb)\0*.gltf;*.glb\0All Files (*.*)\0*.*\0",
+                        L"Load Scene");
+                    if (!path.empty()) {
+                        actions.scene_load_requested = true;
+                        actions.new_scene_path = std::move(path);
+                    }
                 }
+                if (baking) { ImGui::EndDisabled(); }
             }
 #endif
 
@@ -483,15 +490,20 @@ namespace himalaya::app {
             }
 
 #ifdef _WIN32
-            ImGui::SameLine();
-            if (ImGui::Button("Load HDR...")) {
-                auto path = open_file_dialog(
-                    L"HDR Files (*.hdr)\0*.hdr\0All Files (*.*)\0*.*\0",
-                    L"Load HDR Environment");
-                if (!path.empty()) {
-                    actions.env_load_requested = true;
-                    actions.new_env_path = std::move(path);
+            {
+                const bool baking = ctx.render_mode == framework::RenderMode::Baking;
+                if (baking) { ImGui::BeginDisabled(); }
+                ImGui::SameLine();
+                if (ImGui::Button("Load HDR...")) {
+                    auto path = open_file_dialog(
+                        L"HDR Files (*.hdr)\0*.hdr\0All Files (*.*)\0*.*\0",
+                        L"Load HDR Environment");
+                    if (!path.empty()) {
+                        actions.env_load_requested = true;
+                        actions.new_env_path = std::move(path);
+                    }
                 }
+                if (baking) { ImGui::EndDisabled(); }
             }
 #endif
         }
@@ -772,8 +784,13 @@ namespace himalaya::app {
                 ImGui::EndCombo();
             }
 
-            if (ImGui::Button("Reload Shaders")) {
-                actions.reload_shaders = true;
+            {
+                const bool baking = ctx.render_mode == framework::RenderMode::Baking;
+                if (baking) { ImGui::BeginDisabled(); }
+                if (ImGui::Button("Reload Shaders")) {
+                    actions.reload_shaders = true;
+                }
+                if (baking) { ImGui::EndDisabled(); }
             }
 
             slider_float_deferred("IBL Intensity", &ctx.ibl_intensity, 0.0f, 5.0f, "%.2f");
@@ -810,7 +827,8 @@ namespace himalaya::app {
             }
 
             {
-                const bool can_start = !ctx.bg_uv_running;
+                const bool baking = ctx.render_mode == framework::RenderMode::Baking;
+                const bool can_start = !ctx.bg_uv_running && !baking;
                 if (!can_start) { ImGui::BeginDisabled(); }
                 if (ImGui::Button("Start")) {
                     actions.bg_uv_start_requested = true;
