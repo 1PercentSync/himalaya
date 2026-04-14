@@ -763,6 +763,56 @@ namespace himalaya::app {
             }
         }
 
+        // Baking section
+        ImGui::Separator();
+        if (ImGui::CollapsingHeader("Baking")) {
+            // --- Lightmap UV Generation sub-panel ---
+            ImGui::Text("Lightmap UV Generation");
+            ImGui::Spacing();
+
+            if (ImGui::Checkbox("Auto-start on scene load", &ctx.bg_uv_auto_start)) {
+                actions.bg_uv_config_changed = true;
+            }
+
+            auto thread_count = static_cast<int>(ctx.bg_uv_thread_count);
+            if (ImGui::SliderInt("Threads", &thread_count, 1,
+                                 static_cast<int>(ctx.max_thread_count))) {
+                ctx.bg_uv_thread_count = static_cast<uint32_t>(thread_count);
+                actions.bg_uv_config_changed = true;
+            }
+
+            {
+                const bool can_start = !ctx.bg_uv_running;
+                if (!can_start) { ImGui::BeginDisabled(); }
+                if (ImGui::Button("Start")) {
+                    actions.bg_uv_start_requested = true;
+                }
+                if (!can_start) { ImGui::EndDisabled(); }
+            }
+
+            ImGui::SameLine();
+
+            {
+                const bool can_stop = ctx.bg_uv_running;
+                if (!can_stop) { ImGui::BeginDisabled(); }
+                if (ImGui::Button("Stop")) {
+                    actions.bg_uv_stop_requested = true;
+                }
+                if (!can_stop) { ImGui::EndDisabled(); }
+            }
+
+            // Status text
+            if (ctx.bg_uv_running) {
+                ImGui::Text("Running %u/%u (%u threads)",
+                            ctx.bg_uv_completed, ctx.bg_uv_total,
+                            ctx.bg_uv_thread_count);
+            } else if (ctx.bg_uv_total > 0) {
+                ImGui::Text("Complete %u/%u", ctx.bg_uv_completed, ctx.bg_uv_total);
+            } else {
+                ImGui::TextDisabled("Idle");
+            }
+        }
+
         // Cache section
         ImGui::Separator();
         if (ImGui::CollapsingHeader("Cache")) {
