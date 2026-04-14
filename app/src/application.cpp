@@ -732,6 +732,10 @@ namespace himalaya::app {
             framework::clear_cache("lightmap_uv_debug");
             framework::clear_cache("lightmap_uv_release");
         }
+        if (actions.clear_all_cache_requested) {
+            framework::clear_all_cache();
+            bake_angles_dirty_ = true;
+        }
 
         // ---- Effective present mode (user preference + PT/Bake tearing override) ----
         // Deferred to end_frame() after present — mid-frame recreate would
