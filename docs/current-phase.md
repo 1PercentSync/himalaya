@@ -997,3 +997,102 @@ Phase 6 Step 12-12.5 完成后的全面审查发现的 bug 修复、同步正确
 - `app/config.cpp`：烘焙参数持久化仅 `bake_allow_tearing`（其余参数使用 BakeConfig 默认值，不持久化）。bg_uv_auto_start、bg_uv_thread_count 已在 Step 12.5 持久化
 
 **验证**：所有参数 slider 功能正常，Start/Cancel 按钮正确触发/中止，进度信息和吞吐量实时更新，accumulation 全屏预览（经 blit + tonemapping）在烘焙进行中显示实时画面，已 bake 角度列表正确显示
+
+---
+
+### Step 14：Bake Multi-SPP 优化
+
+#### 问题
+
+当前 bake 每帧只 dispatch 1 次 `trace_rays`（1 SPP），但每帧有固定开销（fence wait + swapchain acquire + render graph compile + preview passes + submit + present）约 0.8-0.9ms，远大于小 lightmap 的 trace_rays 耗时（32×32 约 0.01ms）。GPU 利用率极低，1683 个 instance × 512 SPP = 861K 帧，总耗时约 13 分钟。
+
+#### 方案
+
+在单个 render graph pass 的 lambda 内部循环 dispatch N 次 `trace_rays`（每次用不同 push constants），将帧固定开销从 per-SPP 摊薄为 per-frame。N 由用户通过 ImGui slider 控制（`BakeConfig::spp_per_frame`）。
+
+##### 内存可见性
+
+accumulation image 在 shader 中声明为 `layout(rgba32f) uniform image2D`（无 `coherent` qualifier）。同一 pass 内连续 dispatch 之间，前一次 `imageStore` 对后一次 `imageLoad` 不保证可见（Vulkan spec：incoherent image access 跨 dispatch 需 execution + memory dependency）。
+
+解决方案：在 pass lambda 内部每次 `trace_rays` 之后（最后一次除外）插入一个 image memory barrier：
+
+```cpp
+for (uint32_t s = 0; s < batch; ++s) {
+    pc.sample_count = start_sample + s;
+    pc.frame_seed = start_seed + s;
+    cmd.push_constants(..., &pc, sizeof(pc));
+    cmd.trace_rays(rt_pipeline_, lm_w, lm_h);
+
+    if (s + 1 < batch) {
+        // Ensure imageStore from this dispatch is visible to next dispatch's imageLoad
+        VkMemoryBarrier2 barrier{
+            .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
+            .srcStageMask = VK_PIPELINE_STAGE_2_RAY_TRACING_SHADER_BIT_KHR,
+            .srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+            .dstStageMask = VK_PIPELINE_STAGE_2_RAY_TRACING_SHADER_BIT_KHR,
+            .dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT
+                           | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+        };
+        VkDependencyInfo dep{.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+                             .memoryBarrierCount = 1, .pMemoryBarriers = &barrier};
+        cmd.pipeline_barrier(dep);
+    }
+}
+```
+
+Barrier 开销极小（仅 RT→RT 的 memory dependency，无 layout transition），对 GPU 占用率影响可忽略。
+
+##### Lightmap Baker
+
+`LightmapBakerPass::record()` 新增 `batch_spp` 参数（默认 1 保持向后兼容）。内部循环 `batch_spp` 次：每次更新 push constants 的 `sample_count` / `frame_seed` → `trace_rays` → barrier。pipeline bind + descriptor bind 只做一次。record 结束后 `sample_count_ += batch_spp; frame_seed_ += batch_spp;`。
+
+调用侧 `render_baking()` 计算实际 batch：
+
+```cpp
+const uint32_t remaining = target_spp - lightmap_baker_pass_.sample_count();
+const uint32_t batch = std::min(remaining, bake_locked_config_.spp_per_frame);
+lightmap_baker_pass_.record(rg, ctx, ..., batch);
+```
+
+##### Probe Baker
+
+`ProbeBakerPass::record()` 同样新增 `batch_spp` 参数。外层循环 batch_spp 次，内层循环 6 face。每个 SPP 的 6 face dispatch 之间无需 barrier（写不同 array layer，无 RAW hazard）；SPP 之间插入 barrier（同一 texel 跨 SPP 有 imageLoad/imageStore 依赖）。
+
+```
+for spp in 0..batch:
+    for face in 0..6:
+        push_constants(sample=start+spp, face=face)
+        trace_rays(res, res)
+    if spp + 1 < batch:
+        barrier(RT_SHADER write → RT_SHADER read+write)
+```
+
+##### BakeConfig 新增字段
+
+`scene_data.h` BakeConfig 新增：
+
+```cpp
+uint32_t spp_per_frame = 16;  ///< Number of SPP batched per frame during baking.
+```
+
+##### ImGui 控制
+
+`debug_ui.cpp` Baking 参数面板新增 "SPP per Frame" slider（范围 1-512，对数刻度或 ImGui::SliderInt 即可）。Tooltip："Number of path tracing samples dispatched per frame. Higher values improve GPU utilization but reduce UI responsiveness."
+
+该参数在烘焙期间**不锁定**（与其他参数不同），允许用户实时调节：`render_baking()` 每帧从 `bake_config_` 读取（而非 `bake_locked_config_`）。
+
+##### 持久化
+
+`config.h` AppConfig 新增 `bake_spp_per_frame`，`config.cpp` JSON 读写。
+
+##### 预览行为
+
+预览保持不变：每帧仍然 blit accumulation → tonemapping → ImGui → present。只是每帧之间 accumulation 前进了 N 个 SPP 而非 1 个，预览更新更快地收敛。
+
+**验证**：
+- spp_per_frame=1 时行为与优化前完全一致（回归测试）
+- spp_per_frame=16 时 32×32 lightmap 的 GPU 利用率显著提高（通过 Task Manager 或 RenderDoc 帧耗时观察）
+- spp_per_frame=512 时单帧完成整个 instance 的积累，等效于一帧出一个 lightmap
+- Probe baking 同样受益
+- 无 validation 报错（memory barrier 正确性）
+- 最终 bake 输出与 spp_per_frame=1 时一致（accumulation running average 数学不变）
