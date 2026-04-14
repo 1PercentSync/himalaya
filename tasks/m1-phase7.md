@@ -349,10 +349,9 @@
 
 - [ ] `cubemap_filter.cpp`：`mip_roughness` 计算增加 `mip_count <= 1` 防护（`0.0f`），避免 `0.0f / 0.0f = NaN` 传入 prefilter shader
 
-### 17c：Windows `rename` 原子替换修复
+### ~~17c：Windows `rename` 原子替换修复~~ — 取消
 
-- [ ] `cache.cpp`：`atomic_write_file()` rename 前先 `std::filesystem::remove(path, ec)`
-- [ ] `lightmap_uv.cpp`：`write_cache()` rename 前先 `std::filesystem::remove(path, ec)`
+经查证，MSVC STL 的 `std::filesystem::rename` 内部使用 `MoveFileExW` + `MOVEFILE_REPLACE_EXISTING`（非 C runtime `_wrename`），目标已存在时正确替换。项目现有行为无误，无需修复。
 
 ### 17d：零可烘焙 instance 时 probe placement 防护
 
