@@ -433,11 +433,21 @@ namespace himalaya::app {
             float elapsed_ = 0.0f;
         };
 
+        /** @brief Summary of a single baked angle in the cache. */
+        struct BakedAngleEntry {
+            uint32_t rotation_deg;     ///< IBL rotation in integer degrees.
+            uint32_t lightmap_count;   ///< Number of lightmap KTX2 files at this angle.
+            uint32_t probe_count;      ///< Number of probe KTX2 files at this angle.
+        };
+
         /** @brief Frame time statistics accumulator. */
         FrameStats frame_stats_;
 
         /** @brief Bake throughput accumulator. */
         BakeThroughput bake_throughput_;
+
+        /** @brief Cached baked angle list (populated on dirty flag scan). */
+        std::vector<BakedAngleEntry> baked_angles_;
     };
 
 } // namespace himalaya::app
