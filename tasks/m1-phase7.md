@@ -154,8 +154,8 @@
 - [x] `application.cpp`：`begin_frame()` 后检测 `bake_probe_finalize_pending_` → 调用 `probe_bake_finalize()`
 - [x] `renderer_bake.cpp`：`probe_bake_finalize()` Scope 1——readback accumulation + aux（layerCount=6，一次 copy）
 - [x] `renderer_bake.cpp`：`probe_bake_finalize()` CPU——OIDN × 6 face 逐面降噪
-- [ ] `renderer_bake.cpp`：`probe_bake_finalize()` Scope 2——upload 降噪结果 → `prefilter_cubemap()`（创建 RGBA16F dst cubemap with mip chain）→ `compress_bc6h()`（cubemap 6 face × N mip）→ readback BC6H
-- [ ] `renderer_bake.cpp`：`probe_bake_finalize()` 写入 `<set_hash>_rot<NNN>_probe<III>.ktx2`（`face_count=6`，`levels=N`）→ cleanup → advance 或 Complete
+- [x] `renderer_bake.cpp`：`probe_bake_finalize()` Scope 2——upload 降噪结果 → `prefilter_cubemap()`（创建 RGBA16F dst cubemap with mip chain）→ `compress_bc6h()`（cubemap 6 face × N mip）→ readback BC6H
+- [x] `renderer_bake.cpp`：`probe_bake_finalize()` 写入 `<set_hash>_rot<NNN>_probe<III>.ktx2`（`face_count=6`，`levels=N`）→ cleanup → advance 或 Complete
 - [x] `renderer_bake.cpp`：`destroy_probe_bake_instance_images()`——`probe_baker_pass_.destroy_face_views()` + 销毁 3 个 cubemap。`cancel_bake()` 和 `Renderer::destroy()` 中调用
 - [x] `renderer_bake.cpp`：manifest.bin 写入（`uint32 probe_count` + `vec3[N] positions`，原子写入）
 

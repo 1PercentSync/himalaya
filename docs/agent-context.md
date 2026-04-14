@@ -9,23 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段七 — PT 烘焙器
-- **进度**：Step 12 Scope 1 + OIDN 完成，Scope 2 待实现
+- **进度**：Step 12 全部完成
 
 ### 下一个任务
 
-Step 12 第十一小项：`probe_bake_finalize()` Scope 2——upload → prefilter → BC6H compress → readback。
-
-设计详见 `docs/current-phase.md` Step 12 章节，任务清单见 `tasks/m1-phase7.md` Step 12 部分。无设计决策空间，按文档直接实现。
-
-#### 已确认的实现要点
-
-- `resources.cpp` 中 `array_layers == 6` 自动加 `CUBE_COMPATIBLE_BIT`，默认 view 为 `VK_IMAGE_VIEW_TYPE_CUBE`。probe cubemap 创建只需设 `array_layers = 6`，无需额外 flags
-- `render()` 在调 `render_baking()` 前已调 `fill_common_gpu_data(input)`，baker 所需的 Set 0/1 数据已就绪
-- `prefilter_cubemap()` 采样 `src_img.view`（CUBE view），与 cubemap 默认 view 兼容
-- `compress_bc6h()` 从 `desc.array_layers` 读 face_count，逐 face × 逐 mip dispatch，原生支持 cubemap
-- `probe_bake_finalize()` 的 prefilter + compress 在同一个 `begin_immediate()/end_immediate()` scope 内录制
-- BC6H cubemap readback 需 per-mip 发 `vkCmdCopyImageToBuffer`（每次 `layerCount=6`），逐 mip 构造 `Ktx2WriteLevel`
-- `generate_probe_grid()` 自管 immediate scope，不可在外部 scope 内调用；设计文档用 `placement_pending` 标志延迟到 `render_baking()` 首帧在 scope 外处理
+Step 13 ImGui 烘焙控制面板，详见 `docs/current-phase.md` Step 13 章节。
 
 ---
 
