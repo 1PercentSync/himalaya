@@ -757,7 +757,136 @@ namespace himalaya::app {
     }
 
     void Renderer::probe_bake_finalize() {
-        // Step 12 items 9-12: readback, denoise, prefilter, compress, write KTX2, advance
+        const uint32_t res = bake_locked_config_.probe_face_resolution;
+        constexpr uint32_t kFaceCount = 6;
+
+        spdlog::info("Probe finalize: probe {} / {} (samples: {}, face_res={})",
+                     bake_current_probe_ + 1, bake_probe_total_,
+                     probe_baker_pass_.sample_count(), res);
+
+        constexpr uint32_t kBeautyBpp = 16; // RGBA32F
+        constexpr uint32_t kAuxBpp = 8;     // RGBA16F
+        const uint64_t beauty_size = static_cast<uint64_t>(res) * res * kFaceCount * kBeautyBpp;
+        const uint64_t aux_size = static_cast<uint64_t>(res) * res * kFaceCount * kAuxBpp;
+
+        // --- Create staging buffers ---
+        auto rb_beauty = resource_manager_->create_buffer(
+            {beauty_size, rhi::BufferUsage::TransferDst, rhi::MemoryUsage::GpuToCpu},
+            "probe_rb_beauty");
+        auto rb_albedo = resource_manager_->create_buffer(
+            {aux_size, rhi::BufferUsage::TransferDst, rhi::MemoryUsage::GpuToCpu},
+            "probe_rb_albedo");
+        auto rb_normal = resource_manager_->create_buffer(
+            {aux_size, rhi::BufferUsage::TransferDst, rhi::MemoryUsage::GpuToCpu},
+            "probe_rb_normal");
+
+        // === Scope 1: Readback accumulation + aux (layerCount=6, one copy each) ===
+        ctx_->begin_immediate();
+        {
+            rhi::CommandBuffer cmd(ctx_->immediate_command_buffer);
+
+            // Transition all 3 cubemaps → TRANSFER_SRC
+            const std::array<VkImageMemoryBarrier2, 3> to_src = {{
+                {
+                    .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+                    .srcStageMask = VK_PIPELINE_STAGE_2_RAY_TRACING_SHADER_BIT_KHR,
+                    .srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT
+                                     | VK_ACCESS_2_SHADER_STORAGE_READ_BIT,
+                    .dstStageMask = VK_PIPELINE_STAGE_2_COPY_BIT,
+                    .dstAccessMask = VK_ACCESS_2_TRANSFER_READ_BIT,
+                    .oldLayout = VK_IMAGE_LAYOUT_GENERAL,
+                    .newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                    .image = resource_manager_->get_image(bake_probe_accumulation_).image,
+                    .subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, kFaceCount},
+                },
+                {
+                    .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+                    .srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+                    .srcAccessMask = VK_ACCESS_2_MEMORY_READ_BIT | VK_ACCESS_2_MEMORY_WRITE_BIT,
+                    .dstStageMask = VK_PIPELINE_STAGE_2_COPY_BIT,
+                    .dstAccessMask = VK_ACCESS_2_TRANSFER_READ_BIT,
+                    .oldLayout = VK_IMAGE_LAYOUT_GENERAL,
+                    .newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                    .image = resource_manager_->get_image(bake_probe_aux_albedo_).image,
+                    .subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, kFaceCount},
+                },
+                {
+                    .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+                    .srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+                    .srcAccessMask = VK_ACCESS_2_MEMORY_READ_BIT | VK_ACCESS_2_MEMORY_WRITE_BIT,
+                    .dstStageMask = VK_PIPELINE_STAGE_2_COPY_BIT,
+                    .dstAccessMask = VK_ACCESS_2_TRANSFER_READ_BIT,
+                    .oldLayout = VK_IMAGE_LAYOUT_GENERAL,
+                    .newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                    .image = resource_manager_->get_image(bake_probe_aux_normal_).image,
+                    .subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, kFaceCount},
+                },
+            }};
+            VkDependencyInfo dep{};
+            dep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+            dep.imageMemoryBarrierCount = static_cast<uint32_t>(to_src.size());
+            dep.pImageMemoryBarriers = to_src.data();
+            cmd.pipeline_barrier(dep);
+
+            VkBufferImageCopy region{};
+            region.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, kFaceCount};
+            region.imageExtent = {res, res, 1};
+
+            vkCmdCopyImageToBuffer(cmd.handle(),
+                resource_manager_->get_image(bake_probe_accumulation_).image,
+                VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                resource_manager_->get_buffer(rb_beauty).buffer, 1, &region);
+            vkCmdCopyImageToBuffer(cmd.handle(),
+                resource_manager_->get_image(bake_probe_aux_albedo_).image,
+                VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                resource_manager_->get_buffer(rb_albedo).buffer, 1, &region);
+            vkCmdCopyImageToBuffer(cmd.handle(),
+                resource_manager_->get_image(bake_probe_aux_normal_).image,
+                VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                resource_manager_->get_buffer(rb_normal).buffer, 1, &region);
+        }
+        ctx_->end_immediate();
+
+        // === CPU: OIDN × 6 face (per-face denoise) ===
+        const auto *beauty_ptr = static_cast<const uint8_t *>(
+            resource_manager_->get_buffer(rb_beauty).allocation_info.pMappedData);
+        const auto *albedo_ptr = static_cast<const uint8_t *>(
+            resource_manager_->get_buffer(rb_albedo).allocation_info.pMappedData);
+        const auto *normal_ptr = static_cast<const uint8_t *>(
+            resource_manager_->get_buffer(rb_normal).allocation_info.pMappedData);
+
+        const uint64_t beauty_face_bytes = static_cast<uint64_t>(res) * res * kBeautyBpp;
+        const uint64_t aux_face_bytes = static_cast<uint64_t>(res) * res * kAuxBpp;
+
+        // Upload buffer: holds denoised RGBA32F for all 6 faces
+        auto upload_buf = resource_manager_->create_buffer(
+            {beauty_size, rhi::BufferUsage::TransferSrc, rhi::MemoryUsage::CpuToGpu},
+            "probe_upload_denoised");
+        auto *upload_ptr = static_cast<uint8_t *>(
+            resource_manager_->get_buffer(upload_buf).allocation_info.pMappedData);
+
+        for (uint32_t face = 0; face < kFaceCount; ++face) {
+            const auto *face_beauty = beauty_ptr + face * beauty_face_bytes;
+            const auto *face_albedo = albedo_ptr + face * aux_face_bytes;
+            const auto *face_normal = normal_ptr + face * aux_face_bytes;
+            auto *face_output = upload_ptr + face * beauty_face_bytes;
+
+            if (!bake_denoiser_.denoise(face_beauty, face_albedo, face_normal,
+                                        face_output, res, res)) {
+                spdlog::error("Probe finalize: OIDN denoise failed for face {}, using noisy", face);
+                std::memcpy(face_output, face_beauty, beauty_face_bytes);
+            }
+        }
+
+        // Scope 2 + KTX2 write + cleanup will follow in subsequent items
+        // For now, clean up Scope 1 buffers
+        resource_manager_->destroy_buffer(rb_beauty);
+        resource_manager_->destroy_buffer(rb_albedo);
+        resource_manager_->destroy_buffer(rb_normal);
+        resource_manager_->destroy_buffer(upload_buf);
+
+        // Reset pending flag (advance logic added in later items)
+        bake_probe_finalize_pending_ = false;
     }
 
     void Renderer::destroy_bake_instance_images() {
