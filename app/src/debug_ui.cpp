@@ -951,6 +951,19 @@ namespace himalaya::app {
                 }
 
                 if (baking) { ImGui::EndDisabled(); }
+
+                // SPP per Frame — adjustable during baking (not locked)
+                {
+                    auto spp = static_cast<int>(ctx.bake_config.spp_per_frame);
+                    if (ImGui::SliderInt("SPP per Frame", &spp, 1, 512)) {
+                        ctx.bake_config.spp_per_frame = static_cast<uint32_t>(spp);
+                    }
+                    if (ImGui::IsItemHovered()) {
+                        ImGui::SetTooltip(
+                            "Number of path tracing samples dispatched per frame.\n"
+                            "Higher values improve GPU utilization but reduce UI responsiveness.");
+                    }
+                }
             }
 
             ImGui::Separator();
