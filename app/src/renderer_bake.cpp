@@ -1453,31 +1453,11 @@ namespace himalaya::app {
                     bake_probe_positions_ = std::move(grid.positions);
                     bake_probe_total_ = static_cast<uint32_t>(bake_probe_positions_.size());
                     bake_current_probe_ = 0;
+                    bake_probe_accepted_count_ = 0;
+                    bake_probe_accepted_positions_.clear();
 
-                    // Write manifest.bin (probe_count + positions, atomic)
-                    {
-                        const auto rot = format_rotation(bake_rotation_int_);
-                        const auto manifest_path = framework::cache_path(
-                            "bake", bake_probe_set_key_ + "_rot" + rot + "_manifest", ".bin");
-                        const uint32_t count = bake_probe_total_;
-                        const size_t data_size = sizeof(uint32_t)
-                            + bake_probe_positions_.size() * sizeof(glm::vec3);
-                        std::vector<uint8_t> manifest_data(data_size);
-                        std::memcpy(manifest_data.data(), &count, sizeof(uint32_t));
-                        if (!bake_probe_positions_.empty()) {
-                            std::memcpy(manifest_data.data() + sizeof(uint32_t),
-                                        bake_probe_positions_.data(),
-                                        bake_probe_positions_.size() * sizeof(glm::vec3));
-                        }
-                        if (framework::atomic_write_file(manifest_path,
-                                                         manifest_data.data(), data_size)) {
-                            spdlog::info("Wrote probe manifest: {} probes → {}",
-                                         count, manifest_path.string());
-                        } else {
-                            spdlog::error("Failed to write probe manifest: {}",
-                                          manifest_path.string());
-                        }
-                    }
+                    // Manifest is written after all probes complete (deferred),
+                    // containing only accepted (non-black) probes.
 
                     // Compute probe total texel-samples from actual probe count
                     {
