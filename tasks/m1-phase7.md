@@ -279,6 +279,15 @@
 
 - [x] `renderer_bake.cpp`：`start_bake()` 移除 `compute_lightmap_keys()` 调用，使用 Application 预计算的原始数据 keys（而非 post-UV 数据重算）
 
+## Step 13.7：编译运行修复（Steps 1-13.6 首次运行）
+
+- [x] `debug_ui.cpp`：`std::min`/`std::max` 加括号防止 Windows.h 宏展开冲突
+- [x] `application.cpp`：`init()` 末尾调用 `refresh_lightmap_keys()`——从持久化 config 加载场景/HDR 时 keys 为空导致启动崩溃
+- [x] `renderer_init.cpp`：managed HDR Color image 追加 `TransferDst` usage——bake 预览 clear + blit 触发 validation error
+- [x] `application.cpp`：缓存 `env_content_hash_` 替代每帧调用 `content_hash(env_path)`——原逻辑每帧重读整个 HDR 文件导致 ~10 fps
+- [x] `scene_data.h`：BakeConfig 默认值调优（texels_per_meter 10→40、lightmap_spp 4096→512、probe_spp 2048→256）
+- [x] `renderer_bake.cpp`：bake 预览 blit 使用 `VK_FILTER_NEAREST`（清晰像素）
+
 ## Step 14：Bake Multi-SPP 优化（+ throughput / completeness / VMA 修复）
 
 - [x] `scene_data.h`：BakeConfig 新增 `uint32_t spp_per_frame = 16`
@@ -289,6 +298,12 @@
 - [x] `debug_ui.cpp`：Baking 参数面板新增 "SPP per Frame" SliderInt（范围 1-512），烘焙期间不锁定
 - [x] `config.h` + `config.cpp`：AppConfig 新增 `bake_spp_per_frame` + JSON 读写
 - [x] `application.cpp`：DebugUIContext 填充 spp_per_frame 引用 + 变化检测持久化
+
+## Step 14.5：编译运行修复（Step 14 首次运行）
+
+- [x] `debug_ui.h`/`debug_ui.cpp`：BakeThroughput 适配 multi-SPP（push 参数改为 texels_per_spp × spp_per_frame）
+- [x] `debug_ui.cpp`：baked angle 完整性检查修复（扫描逻辑适配 multi-SPP 后的文件计数）
+- [x] `probe_placement.cpp`：GPU filter readback buffer 补 `vmaInvalidateAllocation()` VMA coherence
 
 ## Step 15：Probe 亮度后置过滤 + Manifest 延迟写入
 
