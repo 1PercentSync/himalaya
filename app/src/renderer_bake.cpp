@@ -131,8 +131,17 @@ namespace himalaya::app {
         // Snapshot config (locked for the duration of this bake session)
         bake_locked_config_ = config;
 
-        // Rotation encoded as integer degrees 0-359
-        bake_rotation_int_ = static_cast<uint32_t>(std::round(ibl_rotation_deg)) % 360;
+        // Rotation encoded as integer degrees 0-359.
+        // ibl_rotation_deg can be negative or > 360 (unbounded accumulation),
+        // so normalize to [0, 360) before casting to uint32_t.
+        // Direct static_cast<uint32_t>(negative float) is undefined behavior.
+        {
+            float normalized = std::fmod(ibl_rotation_deg, 360.0f);
+            if (normalized < 0.0f) {
+                normalized += 360.0f;
+            }
+            bake_rotation_int_ = static_cast<uint32_t>(std::round(normalized)) % 360;
+        }
 
         // Probe set cache key: scene + hdr + scene_textures (no position — positions are bake output)
         {
