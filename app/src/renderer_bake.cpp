@@ -867,6 +867,16 @@ namespace himalaya::app {
         }
         ctx_->end_immediate();
 
+        // Invalidate readback buffers for CPU cache coherency.
+        // GpuToCpu memory may be HOST_CACHED but not HOST_COHERENT
+        // (e.g. AMD discrete GPUs). No-op on coherent memory.
+        vmaInvalidateAllocation(ctx_->allocator,
+            resource_manager_->get_buffer(rb_beauty).allocation, 0, VK_WHOLE_SIZE);
+        vmaInvalidateAllocation(ctx_->allocator,
+            resource_manager_->get_buffer(rb_albedo).allocation, 0, VK_WHOLE_SIZE);
+        vmaInvalidateAllocation(ctx_->allocator,
+            resource_manager_->get_buffer(rb_normal).allocation, 0, VK_WHOLE_SIZE);
+
         // === CPU: OIDN × 6 face (per-face denoise) ===
         const auto *beauty_ptr = static_cast<const uint8_t *>(
             resource_manager_->get_buffer(rb_beauty).allocation_info.pMappedData);
@@ -897,6 +907,10 @@ namespace himalaya::app {
                 std::memcpy(face_output, face_beauty, beauty_face_bytes);
             }
         }
+
+        // Flush upload buffer so GPU sees CPU writes on non-coherent memory.
+        vmaFlushAllocation(ctx_->allocator,
+            resource_manager_->get_buffer(upload_buf).allocation, 0, VK_WHOLE_SIZE);
 
         // === Scope 2: Upload denoised → prefilter → BC6H compress → readback BC6H ===
         const uint32_t mip_count = static_cast<uint32_t>(std::floor(std::log2(res))) + 1;
@@ -1032,6 +1046,10 @@ namespace himalaya::app {
             }
         }
         ctx_->end_immediate();
+
+        // Invalidate BC6H readback buffer for CPU cache coherency.
+        vmaInvalidateAllocation(ctx_->allocator,
+            resource_manager_->get_buffer(rb_bc6h).allocation, 0, VK_WHOLE_SIZE);
 
         // Flush deferred cleanup (destroys old prefilter target, pipelines, samplers)
         for (auto &fn : compress_deferred) { fn(); }
