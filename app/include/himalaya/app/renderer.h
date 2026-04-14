@@ -148,6 +148,41 @@ namespace himalaya::app {
         };
 
         /**
+         * @brief Read-only snapshot of bake progress for UI display.
+         *
+         * Populated by bake_progress() each frame. Timing fields are
+         * wall-clock seconds since bake start. Progress weighting uses
+         * texel-samples (width * height * spp) so that large and small
+         * instances contribute proportionally.
+         */
+        struct BakeProgress {
+            BakeState state = BakeState::Idle;
+
+            // --- Lightmap phase ---
+            uint32_t current_instance = 0;    ///< 0-based index into bakeable list.
+            uint32_t total_instances = 0;
+            uint32_t lm_sample_count = 0;     ///< Current instance accumulated samples.
+            uint32_t lm_target_spp = 0;
+            uint32_t lm_width = 0;            ///< Current instance lightmap width.
+            uint32_t lm_height = 0;           ///< Current instance lightmap height.
+
+            // --- Probe phase ---
+            uint32_t current_probe = 0;
+            uint32_t total_probes = 0;
+            uint32_t probe_sample_count = 0;
+            uint32_t probe_target_spp = 0;
+            uint32_t probe_face_res = 0;
+
+            // --- Timing ---
+            float instance_elapsed_s = 0.0f;  ///< Current item wall-clock elapsed.
+            float total_elapsed_s = 0.0f;     ///< Total bake session wall-clock elapsed.
+
+            // --- Progress weighting (texel-samples) ---
+            uint64_t completed_texel_samples = 0; ///< Texel-samples finished so far.
+            uint64_t total_texel_samples = 0;     ///< Pre-computed total work.
+        };
+
+        /**
          * @brief Initializes rendering resources: pipelines, buffers, default textures.
          *
          * Must be called after RHI context, swapchain, resource manager, and
@@ -374,6 +409,14 @@ namespace himalaya::app {
          * @brief Returns the current bake state.
          */
         [[nodiscard]] BakeState bake_state() const;
+
+        /**
+         * @brief Returns a snapshot of current bake progress for UI display.
+         *
+         * Computes elapsed times and completed texel-samples on each call.
+         * Cheap to call every frame (no allocations, no I/O).
+         */
+        [[nodiscard]] BakeProgress bake_progress() const;
 
         /**
          * @brief Finalizes the current lightmap bake instance: readback, denoise,
@@ -819,6 +862,12 @@ namespace himalaya::app {
 
         /** @brief Time point when the current instance started baking. */
         std::chrono::steady_clock::time_point bake_instance_start_time_{};
+
+        /** @brief Pre-computed total texel-samples for the entire bake session (lightmap + probe estimate). */
+        uint64_t bake_total_texel_samples_ = 0;
+
+        /** @brief Accumulated texel-samples from fully completed lightmap instances. */
+        uint64_t bake_completed_lm_texel_samples_ = 0;
 
         // --- Probe bake state ---
 
