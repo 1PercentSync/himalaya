@@ -51,7 +51,7 @@ namespace himalaya::app {
 
         pt_allow_tearing_ = config_.pt_allow_tearing;
         bake_config_.allow_tearing = config_.bake_allow_tearing;
-        bake_config_.spp_per_frame = config_.bake_spp_per_frame;
+        bake_config_.spp_per_frame = std::max(1u, config_.bake_spp_per_frame);
         bake_config_.probe_min_luminance = config_.bake_probe_min_luminance;
         resolve_thread_count();
 
