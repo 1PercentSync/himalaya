@@ -211,7 +211,7 @@
 
 ### 12.6e：`end_immediate()` 跨 submit memory dependency
 
-- [ ] `context.cpp`：`end_immediate()` command buffer 末尾插入 full pipeline barrier
+- [x] `context.cpp`：`end_immediate()` command buffer 末尾插入 full pipeline barrier
 
 ## Step 13：ImGui 烘焙控制面板
 
