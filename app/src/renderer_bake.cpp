@@ -988,23 +988,37 @@ namespace himalaya::app {
         vmaInvalidateAllocation(ctx_->allocator,
             resource_manager_->get_buffer(rb_normal).allocation, 0, VK_WHOLE_SIZE);
 
-        // === CPU: Luminance check (reject dark probes) ===
+        // === CPU: Per-face luminance check (reject probes with any dark face) ===
+        // A legitimately placed probe receives non-zero illumination from all
+        // directions (environment map + indirect bounces). A near-zero face
+        // indicates the probe is partially embedded in geometry that the
+        // placement filter missed.
         {
             const auto *beauty_f32 = static_cast<const float *>(
                 resource_manager_->get_buffer(rb_beauty).allocation_info.pMappedData);
-            const uint64_t total_texels = static_cast<uint64_t>(res) * res * kFaceCount;
-            double luminance_sum = 0.0;
-            for (uint64_t i = 0; i < total_texels; ++i) {
-                luminance_sum += beauty_f32[i * 4 + 0];
-                luminance_sum += beauty_f32[i * 4 + 1];
-                luminance_sum += beauty_f32[i * 4 + 2];
-            }
-            const double avg_luminance = luminance_sum / static_cast<double>(total_texels * 3);
+            const uint64_t face_texels = static_cast<uint64_t>(res) * res;
+            const double threshold = static_cast<double>(bake_locked_config_.probe_min_luminance);
+            bool rejected = false;
 
-            if (avg_luminance < static_cast<double>(bake_locked_config_.probe_min_luminance)) {
-                spdlog::info("Probe finalize: probe {} rejected (avg luminance {:.6f} < {:.6f})",
-                             bake_current_probe_, avg_luminance,
-                             bake_locked_config_.probe_min_luminance);
+            for (uint32_t face = 0; face < kFaceCount; ++face) {
+                double face_sum = 0.0;
+                const uint64_t face_offset = face * face_texels;
+                for (uint64_t i = 0; i < face_texels; ++i) {
+                    const uint64_t px = (face_offset + i) * 4;
+                    face_sum += beauty_f32[px + 0];
+                    face_sum += beauty_f32[px + 1];
+                    face_sum += beauty_f32[px + 2];
+                }
+                const double face_avg = face_sum / static_cast<double>(face_texels * 3);
+                if (face_avg < threshold) {
+                    spdlog::info("Probe finalize: probe {} rejected (face {} avg luminance {:.6f} < {:.6f})",
+                                 bake_current_probe_, face, face_avg, threshold);
+                    rejected = true;
+                    break;
+                }
+            }
+
+            if (rejected) {
 
                 resource_manager_->destroy_buffer(rb_beauty);
                 resource_manager_->destroy_buffer(rb_albedo);
