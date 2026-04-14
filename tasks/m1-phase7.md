@@ -288,4 +288,4 @@
 - [x] `renderer_bake.cpp`：`render_baking()` BakingProbes 分支同理计算 batch 传给 `probe_baker_pass_.record()`
 - [x] `debug_ui.cpp`：Baking 参数面板新增 "SPP per Frame" SliderInt（范围 1-512），烘焙期间不锁定
 - [x] `config.h` + `config.cpp`：AppConfig 新增 `bake_spp_per_frame` + JSON 读写
-- [ ] `application.cpp`：DebugUIContext 填充 spp_per_frame 引用 + 变化检测持久化
+- [x] `application.cpp`：DebugUIContext 填充 spp_per_frame 引用 + 变化检测持久化
