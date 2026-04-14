@@ -226,5 +226,5 @@
 - [x] `debug_ui.cpp`：进度显示（阶段 + 当前项/总数 + 采样数/目标 + M paths/s + 当前项耗时 + 总耗时 + texel-samples 加权百分比 + ETA）
 - [x] `debug_ui.cpp`：已 bake 角度列表（dirty flag 控制扫描时机，仅显示，点击切换留待下一 Phase）
 - [x] `debug_ui.cpp`：Cache 面板新增 Clear Bake Cache 按钮 + Clear Lightmap UV Cache 按钮
-- [ ] `application.cpp`：处理新增 DebugUIActions（start_bake / cancel_bake / config save / clear cache）+ 填充 DebugUIContext bake 字段
+- [x] `application.cpp`：处理新增 DebugUIActions（start_bake / cancel_bake / config save / clear cache）+ 填充 DebugUIContext bake 字段
 - [ ] `config.h` + `config.cpp`：`AppConfig` 新增烘焙参数字段 + JSON 读写（texels_per_meter / min_resolution / max_resolution / lightmap_spp / probe_face_resolution / probe_spacing / filter_ray_count / enclosure_threshold_factor / probe_spp / max_bounces / env_sampling / emissive_nee / allow_tearing）
