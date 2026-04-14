@@ -166,7 +166,7 @@
 - [x] `lightmap_uv_generator.h`：新建 `LightmapUVGenerator` 类声明（Request struct + start/cancel/running/completed/total）
 - [x] `lightmap_uv_generator.cpp`：新建线程池实现（jthread + atomic next_task/completed/cancel）
 - [x] `framework/CMakeLists.txt`：添加 `lightmap_uv_generator.cpp`
-- [ ] `lightmap_uv_generator.h/.cpp` 重构：新增 `wait()` 方法（join 不 cancel），`cancel()` 复用 `wait()`
+- [ ] `lightmap_uv_generator.h/.cpp` 重构：新增 `wait()` 方法（join 不 cancel），`cancel()` 复用 `wait()`，新增 `~LightmapUVGenerator()` 调用 `cancel()`（防止析构时 worker 未响应 jthread stop_token 导致卡住）
 - [ ] `scene_loader.h`：修正已提交的声明（删除 `has_pending_uvs()`，`apply_lightmap_uvs()` 文档更新为不清空 pending）+ 新增 `uv_pending_prims_` / `uv_pending_hashes_` 数据成员 + `prepare_uv_requests()` / `apply_lightmap_uvs()` 方法声明
 - [ ] `scene_loader.cpp`：`load_meshes()` 去除 xatlas 阻塞（无 TEXCOORD_1 的 mesh 上传 uv1=0，记录 pending）
 - [ ] `scene_loader.cpp`：`prepare_uv_requests()` 实现（从 pending + cpu data 构造 Request 列表）

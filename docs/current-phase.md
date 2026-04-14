@@ -760,7 +760,7 @@ while (true) {
 }
 ```
 
-`wait()` join 所有线程（不设 cancel 标记，等待全部任务完成）。`cancel()` 设标记后复用 `wait()`（当前正在执行的 mesh 完成后退出，剩余跳过）。`start()` 前若已有线程在跑，先 `cancel()`。
+`wait()` join 所有线程（不设 cancel 标记，等待全部任务完成）。`cancel()` 设标记后复用 `wait()`（当前正在执行的 mesh 完成后退出，剩余跳过）。`start()` 前若已有线程在跑，先 `cancel()`。`~LightmapUVGenerator()` 调用 `cancel()`——worker lambda 检查 `cancel_` 而非 jthread stop_token，若不显式设 `cancel_=true`，析构时 jthread::~jthread 的 join 会等待当前 mesh 完成但不会触发提前退出。
 
 Bake 时调用 `wait()` 而非 `cancel()`——等待后台全部完成再 apply（确保缓存已填充）。
 
