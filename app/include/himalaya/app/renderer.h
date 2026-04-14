@@ -779,6 +779,32 @@ namespace himalaya::app {
         /** @brief Time point when the current instance started baking. */
         std::chrono::steady_clock::time_point bake_instance_start_time_{};
 
+        // --- Probe bake state ---
+
+        /** @brief World-space positions from generate_probe_grid(). */
+        std::vector<glm::vec3> bake_probe_positions_;
+
+        /** @brief Total number of probes to bake. */
+        uint32_t bake_probe_total_ = 0;
+
+        /** @brief Index of the probe currently being baked. */
+        uint32_t bake_current_probe_ = 0;
+
+        /** @brief Per-probe accumulation cubemap (RGBA32F, 6 layers). */
+        rhi::ImageHandle bake_probe_accumulation_;
+
+        /** @brief Per-probe OIDN auxiliary albedo cubemap (RGBA16F, 6 layers). */
+        rhi::ImageHandle bake_probe_aux_albedo_;
+
+        /** @brief Per-probe OIDN auxiliary normal cubemap (RGBA16F, 6 layers). */
+        rhi::ImageHandle bake_probe_aux_normal_;
+
+        /** @brief True when the current probe reached target SPP and awaits finalize. */
+        bool bake_probe_finalize_pending_ = false;
+
+        /** @brief Deferred probe placement flag (avoid nested immediate scopes in start_bake). */
+        bool bake_probe_placement_pending_ = false;
+
         // --- Private helpers ---
 
         /**
