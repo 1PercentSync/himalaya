@@ -363,5 +363,7 @@
 
 ### 17f：Cache key 稳定性加固
 
-- [ ] `scene_loader.h`：新增 `uv_original_vertices()` / `uv_original_indices()` const accessor
-- [ ] `application.cpp`：`refresh_lightmap_keys()` 改为使用原始数据 accessor（无论 `apply_lightmap_uvs()` 是否已执行，key 始终一致）
+- [x] `scene_loader.h`：新增 `original_cpu_vertices_` / `original_cpu_indices_` 全量备份 + `original_cpu_vertices()` / `original_cpu_indices()` const accessor
+- [x] `scene_loader.cpp`：`load_meshes()` 后拷贝全量 cpu 数据到备份；`destroy()` 清理备份
+- [x] `renderer.h`：`compute_lightmap_keys()` 签名改为接受 `const SceneLoader&`（替代 cpu data span + scene_hash）
+- [x] `renderer_bake.cpp` + `application.cpp`：适配新签名，使用 `original_cpu_vertices()` / `original_cpu_indices()`
