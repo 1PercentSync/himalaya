@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段七 — PT 烘焙器
-- **进度**：Step 13 第 3/13 项完成（类型提取：BakeState→scene_data, BakeProgress→render_progress.h）
+- **进度**：Step 13 第 4/13 项完成（debug_ui.h bake context/actions）
 
 ### 下一个任务
 
-Step 13 第 4 项：`debug_ui.h` — `DebugUIContext` 新增 bake 相关字段 + `DebugUIActions` 新增 bake 动作。
+Step 13 第 5 项：`debug_ui.cpp` — `BakeThroughput` 内部类（复刻 FrameStats，1 秒窗口平滑 texel-samples/s，全程不 reset）。
 
 ---
 
