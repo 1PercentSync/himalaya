@@ -359,7 +359,7 @@
 
 ### 17e：`closesthit.rchit` basis 函数去重
 
-- [ ] `closesthit.rchit`：内联 `build_orthonormal_basis` 替换为调用 `pt_common.glsl` 中的共享版本
+- [x] `closesthit.rchit`：内联 `build_orthonormal_basis` 替换为调用 `pt_common.glsl` 中的共享版本
 
 ### 17f：Cache key 稳定性加固
 
