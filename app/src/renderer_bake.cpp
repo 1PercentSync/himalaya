@@ -1533,6 +1533,17 @@ namespace himalaya::app {
 
             case framework::BakeState::BakingProbes: {
                 if (bake_probe_placement_pending_) {
+                    // Guard: probe placement dispatches ray queries against the TLAS.
+                    // If no valid geometry was built (all instances degenerate/transparent),
+                    // skip placement entirely and write an empty manifest.
+                    if (scene_as_builder_.tlas_handle().as == VK_NULL_HANDLE) {
+                        write_probe_manifest(bake_probe_set_key_, bake_rotation_int_, {});
+                        spdlog::info("No valid TLAS, skipping probe baking");
+                        bake_state_ = framework::BakeState::Complete;
+                        bake_probe_placement_pending_ = false;
+                        break;
+                    }
+
                     // First frame of BakingProbes: run placement, write manifest, start first probe
                     const auto &bounds = input.scene_bounds;
                     const float longest_edge = std::max({
