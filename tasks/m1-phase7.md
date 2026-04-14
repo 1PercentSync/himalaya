@@ -217,6 +217,7 @@
 
 - [x] `renderer.h`：新增 `BakeProgress` 结构体 + `bake_progress()` accessor，暴露烘焙状态给 DebugUIContext
 - [x] `renderer_bake.cpp`：`start_bake()` 预算 `total_texel_samples`（lightmap 阶段 + probe 预估），`bake_progress()` 实现（汇总各字段 + 计算 elapsed + completed_texel_samples）
+- [ ] 类型提取：`BakeState` 迁移到 `scene_data.h`（与 `RenderMode` 一致）+ 新增 `framework/render_progress.h`（`BakeProgress`）+ `renderer.h` 去除嵌套类型改为 include
 - [ ] `debug_ui.h`：`DebugUIContext` 新增 bake 相关字段（`BakeConfig&`、`BakeProgress`、`bake_cache_key`、dirty flag 等）+ `DebugUIActions` 新增 bake 动作（start / cancel / config_changed / clear_bake_cache / clear_uv_cache）
 - [ ] `debug_ui.cpp`：`BakeThroughput` 内部类（复刻 FrameStats，1 秒窗口平滑 texel-samples/s，全程不 reset）
 - [ ] `debug_ui.cpp`：Baking collapsing header — 参数配置（texels_per_meter / min_res / max_res / lightmap SPP / probe face res / probe spacing / filter ray count / enclosure threshold factor + 绝对阈值显示 / probe SPP / baker max_bounces / baker env_sampling / baker emissive_nee / baker allow_tearing）

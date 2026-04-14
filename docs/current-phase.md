@@ -992,30 +992,8 @@ Phase 6 Step 12-12.5 完成后的全面审查发现的 bug 修复、同步正确
   - **取消**：Cancel 按钮 → 中止烘焙，RenderMode 恢复到进入 Baking 前的模式。显示信息 "Bake cancelled. N/M instances completed. Incomplete angle will not appear in available list."
   - **已 bake 角度列表**（仅显示，点击切换功能留待下一个 Phase 集成）：显示当前 scene+HDR 下所有已 bake 的旋转角度，每个角度显示 lightmap 数量 + probe 数量。通过 probe_set_key（`scene_hash + hdr_hash + scene_textures_hash`，场景/HDR 加载后即可计算）扫描 bake cache 目录中的 `<hash>_rot*_manifest.bin` 提取角度。dirty flag 控制扫描时机：场景加载、HDR 加载、bake 完成时置 dirty，仅 Baking header 展开且 dirty 时执行一次扫描并缓存结果
   - **Cache 操作**：Cache 面板新增 Clear Bake Cache 按钮（清除全部 bake 缓存）+ Clear Lightmap UV Cache 按钮（清除 lightmap_uv 缓存）
-- `app/renderer.h`：新增 `BakeProgress` 只读结构体 + `bake_progress()` accessor，暴露烘焙状态给 DebugUIContext：
-  ```cpp
-  struct BakeProgress {
-      BakeState state;
-      // Lightmap phase
-      uint32_t current_instance;   // 0-based index into bakeable list
-      uint32_t total_instances;
-      uint32_t lm_sample_count;    // current instance accumulated samples
-      uint32_t lm_target_spp;
-      uint32_t lm_width, lm_height; // current instance lightmap resolution
-      // Probe phase
-      uint32_t current_probe;
-      uint32_t total_probes;
-      uint32_t probe_sample_count;
-      uint32_t probe_target_spp;
-      uint32_t probe_face_res;
-      // Timing
-      float instance_elapsed_s;    // current item elapsed
-      float total_elapsed_s;       // total bake session elapsed
-      // Progress weighting
-      uint64_t completed_texel_samples; // texel-samples done so far
-      uint64_t total_texel_samples;     // pre-computed total work
-  };
-  ```
+- 类型提取：`BakeState` 从 `Renderer` 嵌套枚举迁移到 `framework/scene_data.h`（与 `RenderMode` 一致）；新增 `framework/render_progress.h` 定义 `BakeProgress` 只读快照结构体（运行时状态快照类型的统一存放位置）。`renderer.h` 改为 include 这两个头文件，`BakeProgress` / `BakeState` 不再是 `Renderer` 的嵌套类型
+- `app/renderer.h`：`bake_progress()` accessor 返回 `framework::BakeProgress`
 - `app/config.cpp`：烘焙参数持久化（texels_per_meter、min_resolution、max_resolution、lightmap_spp、probe_face_resolution、probe_spacing、filter_ray_count、enclosure_threshold_factor、probe_spp、baker max_bounces、env_sampling、emissive_nee、allow_tearing、bg_uv_auto_start、bg_uv_thread_count）
 
 **验证**：所有参数 slider 功能正常，Start/Cancel 按钮正确触发/中止，进度信息和吞吐量实时更新，accumulation 全屏预览（经 blit + tonemapping）在烘焙进行中显示实时画面，已 bake 角度列表正确显示
