@@ -914,9 +914,16 @@ namespace himalaya::app {
     }
 
     std::vector<framework::LightmapUVGenerator::Request> SceneLoader::prepare_uv_requests() const {
+        // Deduplicate by mesh_hash: same geometry shared by multiple instances
+        // would produce identical xatlas output. Without dedup, multiple workers
+        // would race on the same cache .tmp file, risking data corruption.
+        std::unordered_set<std::string> seen_hashes;
         std::vector<framework::LightmapUVGenerator::Request> requests;
         requests.reserve(uv_pending_prims_.size());
         for (size_t i = 0; i < uv_pending_prims_.size(); ++i) {
+            if (!seen_hashes.insert(uv_pending_hashes_[i]).second) {
+                continue; // duplicate hash, skip
+            }
             requests.push_back({
                 .vertices = uv_original_vertices_[i],
                 .indices = uv_original_indices_[i],
