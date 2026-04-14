@@ -367,3 +367,7 @@
 - [x] `scene_loader.cpp`：`load_meshes()` 后拷贝全量 cpu 数据到备份；`destroy()` 清理备份
 - [x] `renderer.h`：`compute_lightmap_keys()` 签名改为接受 `const SceneLoader&`（替代 cpu data span + scene_hash）
 - [x] `renderer_bake.cpp` + `application.cpp`：适配新签名，使用 `original_cpu_vertices()` / `original_cpu_indices()`
+
+### 17g：Probe per-face 亮度剔除
+
+- [ ] `renderer_bake.cpp`：`probe_bake_finalize()` 亮度检查改为 per-face，任一面平均亮度低于 `probe_min_luminance` 则整个 probe 丢弃（捕获 placement filter 漏掉的部分嵌入几何体的 probe）
