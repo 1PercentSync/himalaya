@@ -177,12 +177,13 @@
 - [x] `debug_ui.h`：`DebugUIContext` 新增 bg_uv 字段（thread_count&、auto_start&、running、completed、total、max_thread_count）+ `DebugUIActions` 新增 bg_uv_start_requested / bg_uv_stop_requested / bg_uv_config_changed
 - [x] `debug_ui.cpp`：Baking header 内新增 Lightmap UV Generation 子面板（Auto-start checkbox + Threads slider + Start/Stop 按钮 + Status 文本）
 - [x] `application.cpp`：持有 `LightmapUVGenerator`，场景加载后 auto-start 逻辑，DebugUIActions 处理（start/stop/config save），线程数首次解析并持久化
+- [ ] `scene_loader.h/.cpp` 修复：新增 `uv_original_vertices_` / `uv_original_indices_`（原始数据备份），`load_meshes()` 记录 pending 时同时保存副本，`prepare_uv_requests()` 和 `apply_lightmap_uvs()` 从原始数据读取，`destroy()` 清理 pending 数据
 - [ ] `application.cpp`：Start Bake 流程前置步骤（始终：if !running → start; wait → apply_lightmap_uvs → build_scene_rt → start_bake）
 
 ## Step 13：ImGui 烘焙控制面板
 
 - [ ] `debug_ui.cpp`：Baking collapsing header（始终显示，默认折叠）— Lightmap UV Generation 子面板（Step 12.5 已实现）+ 参数配置（texels_per_meter / min_res / max_res / lightmap SPP / probe face res / probe spacing / filter ray count / enclosure threshold factor + 绝对阈值显示 / probe SPP / baker max_bounces / baker env_sampling / baker emissive_nee / baker allow_tearing）
-- [ ] `debug_ui.cpp`：Start Bake 按钮（唯一入口，旁显当前角度 + tooltip，点击始终触发 ensure generator → wait → apply UV → rebuild RT → start_bake）+ Cancel 按钮（恢复原 RenderMode + 显示取消信息）
+- [ ] `debug_ui.cpp`：Start Bake 按钮（唯一入口，旁显当前角度 + tooltip，点击调用 `Application::start_bake_session()`（Step 12.5 已实现））+ Cancel 按钮（恢复原 RenderMode + 显示取消信息）
 - [ ] `debug_ui.cpp`：Bake 期间 UI 锁定（bake 参数 slider + Load Scene + Load HDR + Reload Shaders + PT checkbox 全部灰显，PT 面板不显示，UV Generation Start 灰显）
 - [ ] `debug_ui.cpp`：进度显示（阶段 + 当前项/总数 + 采样数/目标 + 吞吐量 SPP/s + 当前项耗时 + 总进度百分比 + 总耗时）
 - [ ] `debug_ui.cpp`：已 bake 角度列表（目录扫描 `<hash>_rot*.ktx2`，显示角度 + lightmap/probe 数量，点击切换）
