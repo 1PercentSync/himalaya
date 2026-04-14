@@ -702,6 +702,7 @@ namespace himalaya::app {
             bake_angles_dirty_ = true;
         }
         if (actions.bake_cancel_requested) {
+            vkQueueWaitIdle(context_.graphics_queue);
             renderer_.cancel_bake();
             render_mode_ = renderer_.bake_pre_mode();
         }
