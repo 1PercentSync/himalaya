@@ -1472,6 +1472,7 @@ namespace himalaya::app {
         p.probe_sample_count = probe_baker_pass_.sample_count();
         p.probe_target_spp = bake_locked_config_.probe_spp;
         p.probe_face_res = bake_locked_config_.probe_face_resolution;
+        p.probes_rejected = bake_current_probe_ - bake_probe_accepted_count_;
 
         // Timing
         const auto now = std::chrono::steady_clock::now();

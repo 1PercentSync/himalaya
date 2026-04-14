@@ -39,6 +39,7 @@ namespace himalaya::framework {
         uint32_t probe_sample_count = 0;
         uint32_t probe_target_spp = 0;
         uint32_t probe_face_res = 0;
+        uint32_t probes_rejected = 0;     ///< Probes rejected by luminance filter.
 
         // --- Timing ---
         float instance_elapsed_s = 0.0f;  ///< Current item wall-clock elapsed.
