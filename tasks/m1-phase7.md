@@ -197,7 +197,7 @@
 
 ### 12.6c：lightmap UV 缓存健壮性
 
-- [ ] `lightmap_uv.h`：`LightmapUVResult` 新增 `bool is_fallback`
+- [x] `lightmap_uv.h`：`LightmapUVResult` 新增 `bool is_fallback`
 - [ ] `lightmap_uv.h`：`CacheHeader` 新增 `uint32_t flags`（8→12 字节）
 - [ ] `lightmap_uv.cpp`：`write_cache()` / `read_cache()` 适配新 flags 字段
 - [ ] `lightmap_uv.cpp`：`AddMesh` 失败分流——mesh 固有错误缓存 fallback，`Error` 类型不缓存
