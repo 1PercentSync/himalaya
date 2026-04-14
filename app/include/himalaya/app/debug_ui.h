@@ -429,9 +429,6 @@ namespace himalaya::app {
              */
             void push(float delta_time, uint64_t texels_per_dispatch);
 
-            /** @brief Reset state (called when bake session starts). */
-            void reset();
-
         private:
             static constexpr float kUpdateInterval = 1.0f;
             uint32_t dispatch_count_ = 0;

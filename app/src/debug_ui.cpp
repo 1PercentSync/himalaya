@@ -159,13 +159,6 @@ namespace himalaya::app {
         }
     }
 
-    void DebugUI::BakeThroughput::reset() {
-        throughput = 0.0;
-        dispatch_count_ = 0;
-        texels_per_dispatch_ = 0;
-        elapsed_ = 0.0f;
-    }
-
     // ---- DebugUI ----
 
     // ReSharper disable once CppParameterMayBeConstPtrOrRef
