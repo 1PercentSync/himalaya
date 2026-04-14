@@ -271,6 +271,6 @@
 
 ### 13.5g：Enclosure Factor 绝对阈值
 
-- [ ] `debug_ui.h`：`DebugUIContext` 新增 `float scene_aabb_longest_edge`
+- [x] `debug_ui.h`：`DebugUIContext` 新增 `float scene_aabb_longest_edge`
 - [ ] `application.cpp`：从 scene AABB 计算 longest edge 填入 DebugUIContext
 - [ ] `debug_ui.cpp`：Enclosure Factor slider 旁 `SameLine` + `Text("= %.2f m")` 显示绝对阈值（无场景时不显示）
