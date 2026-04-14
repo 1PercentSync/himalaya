@@ -279,7 +279,7 @@
 
 - [x] `renderer_bake.cpp`：`start_bake()` 移除 `compute_lightmap_keys()` 调用，使用 Application 预计算的原始数据 keys（而非 post-UV 数据重算）
 
-## Step 14：Bake Multi-SPP 优化
+## Step 14：Bake Multi-SPP 优化（+ throughput / completeness / VMA 修复）
 
 - [x] `scene_data.h`：BakeConfig 新增 `uint32_t spp_per_frame = 16`
 - [x] `lightmap_baker_pass.h/.cpp`：`record()` 新增 `uint32_t batch_spp` 参数，内部循环 batch_spp 次 push_constants + trace_rays + inter-dispatch memory barrier，record 结束后 `sample_count_ += batch_spp; frame_seed_ += batch_spp`
@@ -289,3 +289,14 @@
 - [x] `debug_ui.cpp`：Baking 参数面板新增 "SPP per Frame" SliderInt（范围 1-512），烘焙期间不锁定
 - [x] `config.h` + `config.cpp`：AppConfig 新增 `bake_spp_per_frame` + JSON 读写
 - [x] `application.cpp`：DebugUIContext 填充 spp_per_frame 引用 + 变化检测持久化
+
+## Step 15：Probe 亮度后置过滤 + Manifest 延迟写入
+
+- [ ] `scene_data.h`：BakeConfig 新增 `float probe_min_luminance = 1e-4f`
+- [ ] `renderer.h`：新增 `bake_probe_accepted_count_` + `bake_probe_accepted_positions_` 成员
+- [ ] `renderer_bake.cpp`：`start_bake()` / `cancel_bake()` 重置 accepted 成员
+- [ ] `renderer_bake.cpp`：`render_baking()` BakingProbes 首帧移除 manifest 写入
+- [ ] `renderer_bake.cpp`：`probe_bake_finalize()` readback 后计算 beauty 平均亮度，低于阈值跳过 denoise/compress/KTX2，使用 accepted counter 编号
+- [ ] `renderer_bake.cpp`：所有 probe 完成后写入 manifest（accepted positions + count）
+- [ ] `render_progress.h`：`BakeProgress` 新增 `probes_rejected`
+- [ ] `debug_ui.cpp`：Baking 参数面板新增 "Probe Min Luminance" slider + 进度面板显示 rejected 数

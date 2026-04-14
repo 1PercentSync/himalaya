@@ -1096,3 +1096,83 @@ uint32_t spp_per_frame = 16;  ///< Number of SPP batched per frame during baking
 - Probe baking 同样受益
 - 无 validation 报错（memory barrier 正确性）
 - 最终 bake 输出与 spp_per_frame=1 时一致（accumulation running average 数学不变）
+
+---
+
+### Step 15：Probe 亮度后置过滤 + Manifest 延迟写入
+
+#### 问题
+
+当前 probe 过滤仅依赖几何预过滤（RT ray query），对 double-sided 场景效果不佳（Rule 1 不触发、Rule 2 条件苛刻），导致大量无效 probe（全黑或极暗）通过过滤被 bake 并写入 KTX2。同时 manifest 在 probe placement 时就写入，半途取消的 bake 会残留不完整的 manifest。
+
+#### 方案
+
+##### Manifest 延迟写入
+
+将 manifest 写入从 probe placement 首帧移到所有 probe bake 完成后（进入 `BakeState::Complete` 前）。好处：
+
+1. bake 未完成时不存在 manifest → completeness check 立即判定该角度不完整
+2. manifest 只包含最终通过亮度检测的 probe，数量和 KTX2 文件一一对应
+
+##### 亮度后置过滤
+
+`probe_bake_finalize()` readback beauty buffer 后、OIDN denoise 前，计算 6 face 的平均亮度。低于阈值则跳过 denoise / compress / KTX2 写入，该 probe 被标记为 rejected。
+
+亮度计算：遍历 beauty buffer 所有 texel（RGBA32F，6 face），累加 `R + G + B`，除以总 texel 数得到平均辐射度。
+
+阈值：`BakeConfig::probe_min_luminance`（默认 `1e-4f`），ImGui slider 可调。
+
+##### 连续编号重映射
+
+使用一个 accepted counter（`bake_probe_accepted_count_`）做 KTX2 文件编号，而非原始 probe 索引。这样 KTX2 文件名 `_probe000` ~ `_probe{N-1}` 连续，manifest 中 `probe_count = N`，下游完整性校验和加载逻辑不改。
+
+同时记录 accepted 的 probe 位置（`bake_probe_accepted_positions_`），manifest 写入时使用该列表。
+
+##### 数据流
+
+```
+probe_bake_finalize():
+  readback beauty → 计算平均亮度
+  if luminance < threshold:
+    log "Probe {i} rejected (luminance={:.6f})"
+    skip denoise/compress/KTX2
+    cleanup + advance to next
+  else:
+    KTX2 文件名使用 bake_probe_accepted_count_ 编号
+    bake_probe_accepted_positions_.push_back(position)
+    ++bake_probe_accepted_count_
+    继续 denoise → compress → write KTX2
+
+所有 probe 完成后（进入 Complete 前）:
+  写入 manifest（count = bake_probe_accepted_count_，
+                 positions = bake_probe_accepted_positions_）
+  log "All {total} probes baked, {accepted} accepted, {rejected} rejected"
+```
+
+##### Renderer 新增成员
+
+- `bake_probe_accepted_count_`：已 accept 的 probe 数（KTX2 编号用）
+- `bake_probe_accepted_positions_`：accepted probe 的世界坐标列表（manifest 写入用）
+
+`start_bake()` / `cancel_bake()` 重置这两个成员。
+
+##### BakeConfig 新增字段
+
+```cpp
+float probe_min_luminance = 1e-4f;  ///< Probes below this average luminance are rejected.
+```
+
+##### ImGui
+
+Baking 参数面板新增 "Probe Min Luminance" slider（范围 0.0 ~ 0.01，格式 `%.6f`）。
+
+##### BakeProgress 更新
+
+`BakeProgress` 新增 `uint32_t probes_rejected`，UI 进度面板显示 rejected 数。
+
+**验证**：
+- 全黑 probe 不再生成 KTX2 文件
+- manifest 只在 bake 完成后写入，Cancel 后不残留 manifest
+- KTX2 编号连续，completeness check 通过
+- 非全黑 probe 正常 bake，输出不变
+- 无 validation 报错
