@@ -218,11 +218,11 @@ namespace himalaya::app {
 
         // Start first instance (caller must be in immediate scope)
         if (bake_total_instances_ > 0) {
-            bake_state_ = BakeState::BakingLightmaps;
+            bake_state_ = framework::BakeState::BakingLightmaps;
             begin_bake_instance(0, mesh_instances, meshes);
         } else {
             spdlog::info("No bakeable instances, skipping lightmap baking");
-            bake_state_ = BakeState::BakingProbes;
+            bake_state_ = framework::BakeState::BakingProbes;
             bake_probe_placement_pending_ = true;
         }
     }
@@ -798,7 +798,7 @@ namespace himalaya::app {
             ctx_->end_immediate();
         } else {
             spdlog::info("All {} lightmap instances baked", bake_total_instances_);
-            bake_state_ = BakeState::BakingProbes;
+            bake_state_ = framework::BakeState::BakingProbes;
             bake_probe_placement_pending_ = true;
         }
     }
@@ -1126,7 +1126,7 @@ namespace himalaya::app {
             ctx_->end_immediate();
         } else {
             spdlog::info("All {} probes baked", bake_probe_total_);
-            bake_state_ = BakeState::Complete;
+            bake_state_ = framework::BakeState::Complete;
         }
     }
 
@@ -1285,7 +1285,7 @@ namespace himalaya::app {
 
         destroy_bake_instance_images();
         destroy_probe_bake_instance_images();
-        bake_state_ = BakeState::Idle;
+        bake_state_ = framework::BakeState::Idle;
         lightmap_finalize_pending_ = false;
         bake_probe_finalize_pending_ = false;
         bake_probe_placement_pending_ = false;
@@ -1302,7 +1302,7 @@ namespace himalaya::app {
         spdlog::info("Bake complete. {} lightmap instances, {} probes.",
                      bake_total_instances_, bake_probe_total_);
 
-        bake_state_ = BakeState::Idle;
+        bake_state_ = framework::BakeState::Idle;
         lightmap_finalize_pending_ = false;
         bake_probe_finalize_pending_ = false;
         bake_probe_placement_pending_ = false;
@@ -1315,7 +1315,7 @@ namespace himalaya::app {
         bake_completed_lm_texel_samples_ = 0;
     }
 
-    Renderer::BakeState Renderer::bake_state() const {
+    framework::BakeState Renderer::bake_state() const {
         return bake_state_;
     }
 
@@ -1323,11 +1323,11 @@ namespace himalaya::app {
         return bake_pre_mode_;
     }
 
-    Renderer::BakeProgress Renderer::bake_progress() const {
-        BakeProgress p;
+    framework::BakeProgress Renderer::bake_progress() const {
+        framework::BakeProgress p;
         p.state = bake_state_;
 
-        if (bake_state_ == BakeState::Idle) {
+        if (bake_state_ == framework::BakeState::Idle) {
             return p;
         }
 
@@ -1355,16 +1355,16 @@ namespace himalaya::app {
         p.total_texel_samples = bake_total_texel_samples_;
 
         uint64_t completed = bake_completed_lm_texel_samples_;
-        if (bake_state_ == BakeState::BakingLightmaps && bake_lightmap_width_ > 0) {
+        if (bake_state_ == framework::BakeState::BakingLightmaps && bake_lightmap_width_ > 0) {
             // Add current lightmap instance partial progress
             completed += static_cast<uint64_t>(bake_lightmap_width_) * bake_lightmap_height_
                 * p.lm_sample_count;
-        } else if (bake_state_ == BakeState::BakingProbes || bake_state_ == BakeState::Complete) {
+        } else if (bake_state_ == framework::BakeState::BakingProbes || bake_state_ == framework::BakeState::Complete) {
             // All lightmap work done; add completed + partial probe work
             const uint64_t face_texels = static_cast<uint64_t>(p.probe_face_res)
                 * p.probe_face_res * 6;
             completed += face_texels * bake_current_probe_ * bake_locked_config_.probe_spp;
-            if (bake_state_ == BakeState::BakingProbes && bake_probe_total_ > 0) {
+            if (bake_state_ == framework::BakeState::BakingProbes && bake_probe_total_ > 0) {
                 completed += face_texels * p.probe_sample_count;
             }
         }
@@ -1379,7 +1379,7 @@ namespace himalaya::app {
         draw_call_count_ = 0;
 
         switch (bake_state_) {
-            case BakeState::BakingLightmaps: {
+            case framework::BakeState::BakingLightmaps: {
                 // Each frame: dispatch one sample of the baker RT pass
                 const uint32_t target_spp = bake_locked_config_.lightmap_spp;
                 if (lightmap_baker_pass_.sample_count() < target_spp) {
@@ -1391,7 +1391,7 @@ namespace himalaya::app {
                 break;
             }
 
-            case BakeState::BakingProbes: {
+            case framework::BakeState::BakingProbes: {
                 if (bake_probe_placement_pending_) {
                     // First frame of BakingProbes: run placement, write manifest, start first probe
                     const auto &bounds = input.scene_bounds;
@@ -1452,7 +1452,7 @@ namespace himalaya::app {
                         ctx_->end_immediate();
                     } else {
                         spdlog::info("No valid probes after filtering, skipping probe baking");
-                        bake_state_ = BakeState::Complete;
+                        bake_state_ = framework::BakeState::Complete;
                     }
 
                     bake_probe_placement_pending_ = false;
@@ -1468,12 +1468,12 @@ namespace himalaya::app {
                 break;
             }
 
-            case BakeState::Complete:
+            case framework::BakeState::Complete:
                 // All bake work finished — stay in this state until
                 // Application restores the pre-bake RenderMode.
                 break;
 
-            case BakeState::Idle:
+            case framework::BakeState::Idle:
                 // Should not reach here — Application only sets Baking mode
                 // after transitioning to BakingLightmaps.
                 spdlog::warn("render_baking() called in Idle state");
@@ -1505,7 +1505,7 @@ namespace himalaya::app {
         }
 
         // Lightmap baker RT dispatch (if actively accumulating lightmaps)
-        const bool actively_baking_lightmaps = bake_state_ == BakeState::BakingLightmaps
+        const bool actively_baking_lightmaps = bake_state_ == framework::BakeState::BakingLightmaps
                                                && !lightmap_finalize_pending_
                                                && lightmap_baker_pass_.sample_count() < bake_locked_config_.lightmap_spp;
         if (actively_baking_lightmaps && has_lightmap_images) {
@@ -1533,7 +1533,7 @@ namespace himalaya::app {
         }
 
         // Probe baker RT dispatch (if actively accumulating probes)
-        const bool actively_baking_probes = bake_state_ == BakeState::BakingProbes
+        const bool actively_baking_probes = bake_state_ == framework::BakeState::BakingProbes
                                             && !bake_probe_placement_pending_
                                             && !bake_probe_finalize_pending_
                                             && bake_probe_total_ > 0

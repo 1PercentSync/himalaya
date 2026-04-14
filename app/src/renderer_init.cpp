@@ -474,7 +474,7 @@ namespace himalaya::app {
         bake_lightmap_sizes_.clear();
         bake_lightmap_keys_.clear();
         bake_probe_positions_.clear();
-        bake_state_ = BakeState::Idle;
+        bake_state_ = framework::BakeState::Idle;
 
         emissive_light_builder_.destroy();
         scene_as_builder_.destroy();

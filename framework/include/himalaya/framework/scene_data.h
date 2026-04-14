@@ -130,6 +130,14 @@ namespace himalaya::framework {
         Baking,        ///< Lightmap/probe bake mode (GPU full-time baking).
     };
 
+    /** @brief Bake pipeline state machine. */
+    enum class BakeState : uint8_t {
+        Idle,             ///< No bake in progress.
+        BakingLightmaps,  ///< Lightmap bake loop running.
+        BakingProbes,     ///< Probe bake loop running.
+        Complete,         ///< All bake work finished.
+    };
+
     /**
      * @brief Runtime toggles for optional rendering effects.
      *

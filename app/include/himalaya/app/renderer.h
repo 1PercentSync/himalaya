@@ -13,6 +13,7 @@
 #include <himalaya/framework/render_graph.h>
 #include <himalaya/framework/emissive_light_builder.h>
 #include <himalaya/framework/scene_as_builder.h>
+#include <himalaya/framework/render_progress.h>
 #include <himalaya/framework/scene_data.h>
 #include <himalaya/framework/texture.h>
 #include <himalaya/rhi/acceleration_structure.h>
@@ -139,49 +140,6 @@ namespace himalaya::app {
      */
     class Renderer {
     public:
-        /** @brief Bake pipeline state machine. */
-        enum class BakeState : uint8_t {
-            Idle,             ///< No bake in progress.
-            BakingLightmaps,  ///< Lightmap bake loop running.
-            BakingProbes,     ///< Probe bake loop running (Step 12).
-            Complete,         ///< All bake work finished.
-        };
-
-        /**
-         * @brief Read-only snapshot of bake progress for UI display.
-         *
-         * Populated by bake_progress() each frame. Timing fields are
-         * wall-clock seconds since bake start. Progress weighting uses
-         * texel-samples (width * height * spp) so that large and small
-         * instances contribute proportionally.
-         */
-        struct BakeProgress {
-            BakeState state = BakeState::Idle;
-
-            // --- Lightmap phase ---
-            uint32_t current_instance = 0;    ///< 0-based index into bakeable list.
-            uint32_t total_instances = 0;
-            uint32_t lm_sample_count = 0;     ///< Current instance accumulated samples.
-            uint32_t lm_target_spp = 0;
-            uint32_t lm_width = 0;            ///< Current instance lightmap width.
-            uint32_t lm_height = 0;           ///< Current instance lightmap height.
-
-            // --- Probe phase ---
-            uint32_t current_probe = 0;
-            uint32_t total_probes = 0;
-            uint32_t probe_sample_count = 0;
-            uint32_t probe_target_spp = 0;
-            uint32_t probe_face_res = 0;
-
-            // --- Timing ---
-            float instance_elapsed_s = 0.0f;  ///< Current item wall-clock elapsed.
-            float total_elapsed_s = 0.0f;     ///< Total bake session wall-clock elapsed.
-
-            // --- Progress weighting (texel-samples) ---
-            uint64_t completed_texel_samples = 0; ///< Texel-samples finished so far.
-            uint64_t total_texel_samples = 0;     ///< Pre-computed total work.
-        };
-
         /**
          * @brief Initializes rendering resources: pipelines, buffers, default textures.
          *
@@ -391,7 +349,7 @@ namespace himalaya::app {
         /**
          * @brief Resets bake state to Idle after a completed bake session.
          *
-         * Called by Application when BakeState::Complete is detected.
+         * Called by Application when framework::BakeState::Complete is detected.
          * Unlike cancel_bake(), does not destroy per-instance images
          * (already cleaned up by finalize) and logs completion instead
          * of cancellation.
@@ -408,7 +366,7 @@ namespace himalaya::app {
         /**
          * @brief Returns the current bake state.
          */
-        [[nodiscard]] BakeState bake_state() const;
+        [[nodiscard]] framework::BakeState bake_state() const;
 
         /**
          * @brief Returns a snapshot of current bake progress for UI display.
@@ -416,7 +374,7 @@ namespace himalaya::app {
          * Computes elapsed times and completed texel-samples on each call.
          * Cheap to call every frame (no allocations, no I/O).
          */
-        [[nodiscard]] BakeProgress bake_progress() const;
+        [[nodiscard]] framework::BakeProgress bake_progress() const;
 
         /**
          * @brief Finalizes the current lightmap bake instance: readback, denoise,
@@ -801,7 +759,7 @@ namespace himalaya::app {
         // --- Bake state ---
 
         /** @brief Current bake state machine position. */
-        BakeState bake_state_ = BakeState::Idle;
+        framework::BakeState bake_state_ = framework::BakeState::Idle;
 
         /** @brief Index of the current instance being baked (into bakeable instance list). */
         uint32_t bake_current_instance_ = 0;
