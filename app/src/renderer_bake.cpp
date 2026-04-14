@@ -9,6 +9,7 @@
 #include <himalaya/framework/cache.h>
 #include <himalaya/framework/frame_context.h>
 #include <himalaya/framework/ktx2.h>
+#include <himalaya/framework/probe_placement.h>
 #include <himalaya/framework/texture_compress.h>
 #include <himalaya/framework/imgui_backend.h>
 #include <himalaya/framework/mesh.h>
@@ -784,16 +785,42 @@ namespace himalaya::app {
         bake_lightmap_height_ = 0;
     }
 
+    void Renderer::begin_probe_bake_instance(const uint32_t probe_index) {
+        // Step 12 item 5: create cubemap images, barrier, clear, configure pass
+        (void)probe_index;
+    }
+
+    void Renderer::destroy_probe_bake_instance_images() {
+        probe_baker_pass_.destroy_face_views();
+        if (bake_probe_accumulation_.valid()) {
+            resource_manager_->destroy_image(bake_probe_accumulation_);
+            bake_probe_accumulation_ = {};
+        }
+        if (bake_probe_aux_albedo_.valid()) {
+            resource_manager_->destroy_image(bake_probe_aux_albedo_);
+            bake_probe_aux_albedo_ = {};
+        }
+        if (bake_probe_aux_normal_.valid()) {
+            resource_manager_->destroy_image(bake_probe_aux_normal_);
+            bake_probe_aux_normal_ = {};
+        }
+    }
+
     void Renderer::cancel_bake() {
         spdlog::info("Bake cancelled. {}/{} instances completed.",
                      bake_current_instance_, bake_total_instances_);
 
         destroy_bake_instance_images();
+        destroy_probe_bake_instance_images();
         bake_state_ = BakeState::Idle;
         lightmap_finalize_pending_ = false;
+        bake_probe_finalize_pending_ = false;
+        bake_probe_placement_pending_ = false;
         bake_instance_indices_.clear();
         bake_lightmap_sizes_.clear();
         bake_lightmap_keys_.clear();
+        bake_probe_positions_.clear();
+        bake_probe_total_ = 0;
     }
 
     Renderer::BakeState Renderer::bake_state() const {
@@ -822,9 +849,73 @@ namespace himalaya::app {
                 break;
             }
 
-            case BakeState::BakingProbes:
-                // TODO: per-probe bake loop (Step 12)
+            case BakeState::BakingProbes: {
+                if (bake_probe_placement_pending_) {
+                    // First frame of BakingProbes: run placement, write manifest, start first probe
+                    const auto &bounds = input.scene_bounds;
+                    const float longest_edge = std::max({
+                        bounds.max.x - bounds.min.x,
+                        bounds.max.y - bounds.min.y,
+                        bounds.max.z - bounds.min.z,
+                    });
+                    const float enclosure_threshold =
+                        bake_locked_config_.enclosure_threshold_factor * longest_edge;
+
+                    auto grid = framework::generate_probe_grid(
+                        *ctx_, *resource_manager_, shader_compiler_, *descriptor_manager_,
+                        bounds, bake_locked_config_.probe_spacing,
+                        bake_locked_config_.filter_ray_count, enclosure_threshold);
+
+                    bake_probe_positions_ = std::move(grid.positions);
+                    bake_probe_total_ = static_cast<uint32_t>(bake_probe_positions_.size());
+                    bake_current_probe_ = 0;
+
+                    // Write manifest.bin (probe_count + positions, atomic)
+                    {
+                        const auto rot = format_rotation(bake_rotation_int_);
+                        const auto manifest_path = framework::cache_path(
+                            "bake", bake_probe_set_key_ + "_rot" + rot + "_manifest", ".bin");
+                        const uint32_t count = bake_probe_total_;
+                        const size_t data_size = sizeof(uint32_t)
+                            + bake_probe_positions_.size() * sizeof(glm::vec3);
+                        std::vector<uint8_t> manifest_data(data_size);
+                        std::memcpy(manifest_data.data(), &count, sizeof(uint32_t));
+                        if (!bake_probe_positions_.empty()) {
+                            std::memcpy(manifest_data.data() + sizeof(uint32_t),
+                                        bake_probe_positions_.data(),
+                                        bake_probe_positions_.size() * sizeof(glm::vec3));
+                        }
+                        if (framework::atomic_write_file(manifest_path,
+                                                         manifest_data.data(), data_size)) {
+                            spdlog::info("Wrote probe manifest: {} probes → {}",
+                                         count, manifest_path.string());
+                        } else {
+                            spdlog::error("Failed to write probe manifest: {}",
+                                          manifest_path.string());
+                        }
+                    }
+
+                    if (bake_probe_total_ > 0) {
+                        ctx_->begin_immediate();
+                        begin_probe_bake_instance(0);
+                        ctx_->end_immediate();
+                    } else {
+                        spdlog::info("No valid probes after filtering, skipping probe baking");
+                        bake_state_ = BakeState::Complete;
+                    }
+
+                    bake_probe_placement_pending_ = false;
+                } else if (bake_probe_total_ > 0) {
+                    // Subsequent frames: dispatch probe baker, check SPP target
+                    const uint32_t target_spp = bake_locked_config_.probe_spp;
+                    if (probe_baker_pass_.sample_count() < target_spp) {
+                        // Probe baker dispatch is recorded into the render graph below
+                    } else if (!bake_probe_finalize_pending_) {
+                        bake_probe_finalize_pending_ = true;
+                    }
+                }
                 break;
+            }
 
             case BakeState::Complete:
                 // All bake work finished — stay in this state until

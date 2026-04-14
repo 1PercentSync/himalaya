@@ -390,6 +390,24 @@ namespace himalaya::app {
          */
         void destroy_bake_instance_images();
 
+        /**
+         * @brief Prepares a probe bake instance: creates per-probe cubemap images,
+         *        transitions layouts, and configures the probe baker pass.
+         *
+         * Must be called within an active immediate command scope.
+         *
+         * @param probe_index Index into bake_probe_positions_ (0-based).
+         */
+        void begin_probe_bake_instance(uint32_t probe_index);
+
+        /**
+         * @brief Destroys the current probe's per-instance cubemap images and face views.
+         *
+         * Called during probe finalize before advancing to the next probe,
+         * or on cancel to clean up. Safe to call when no probe instance is active.
+         */
+        void destroy_probe_bake_instance_images();
+
         // --- Denoiser parameter accessors (for DebugUIContext binding) ---
 
         /** @brief Mutable reference to denoise enabled flag. */
