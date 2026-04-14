@@ -605,7 +605,17 @@ namespace himalaya::app {
                 VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                 resource_manager_->get_buffer(rb_normal).buffer, 1, &region);
         }
-        ctx_->end_immediate(); // GPU readback completes, data available via mapped pointers
+        ctx_->end_immediate(); // GPU readback completes
+
+        // Invalidate readback buffers for CPU cache coherency.
+        // GpuToCpu memory may be HOST_CACHED but not HOST_COHERENT
+        // (e.g. AMD discrete GPUs). No-op on coherent memory.
+        vmaInvalidateAllocation(ctx_->allocator,
+            resource_manager_->get_buffer(rb_beauty).allocation, 0, VK_WHOLE_SIZE);
+        vmaInvalidateAllocation(ctx_->allocator,
+            resource_manager_->get_buffer(rb_albedo).allocation, 0, VK_WHOLE_SIZE);
+        vmaInvalidateAllocation(ctx_->allocator,
+            resource_manager_->get_buffer(rb_normal).allocation, 0, VK_WHOLE_SIZE);
 
         // === CPU: OIDN denoise ===
         const auto *beauty_ptr = resource_manager_->get_buffer(rb_beauty).allocation_info.pMappedData;
@@ -617,6 +627,10 @@ namespace himalaya::app {
             spdlog::error("Bake finalize: OIDN denoise failed, using noisy result");
             std::memcpy(upload_ptr, beauty_ptr, beauty_size);
         }
+
+        // Flush upload buffer so GPU sees CPU writes on non-coherent memory.
+        vmaFlushAllocation(ctx_->allocator,
+            resource_manager_->get_buffer(upload_buf).allocation, 0, VK_WHOLE_SIZE);
 
         // === Scope 2: Upload denoised → accumulation → BC6H compress → readback BC6H ===
         std::vector<std::function<void()>> compress_deferred;
@@ -711,6 +725,10 @@ namespace himalaya::app {
                 resource_manager_->get_buffer(rb_bc6h).buffer, 1, &bc6h_region);
         }
         ctx_->end_immediate(); // GPU compress + readback completes
+
+        // Invalidate BC6H readback buffer for CPU cache coherency.
+        vmaInvalidateAllocation(ctx_->allocator,
+            resource_manager_->get_buffer(rb_bc6h).allocation, 0, VK_WHOLE_SIZE);
 
         // Flush compress_bc6h deferred (destroys old accumulation, pipeline, sampler, etc.)
         for (auto &fn : compress_deferred) { fn(); }
