@@ -810,6 +810,7 @@ uint32_t bg_uv_thread_count = 0;     // 后台线程数（0 = 未配置）
 **线程数解析规则**：
 - 配置值为 0（首次启动）：解析为 `max(1, hardware_concurrency() - 4)`，立即持久化并在 ImGui 显示实际值
 - 配置值 > 0：直接使用
+- **解析时机**：Application 初始化时加载 config 后立即检查，确保 ImGui slider 始终显示有效值（不等到首次 start/bake）
 
 `config.cpp` JSON 读写追加两个字段。
 
@@ -861,11 +862,16 @@ bool bg_uv_config_changed = false;   // auto_start 或 thread_count 变更时触
 framework::LightmapUVGenerator uv_generator_;
 ```
 
+**Application 初始化时**（config 加载后）：
+
+```cpp
+resolve_thread_count();  // 若 bg_uv_thread_count == 0 则解析为 max(1, hw_concurrency - 4) 并持久化
+```
+
 **场景加载后**（`load()` 成功后，`build_scene_rt()` 之前）：
 
 ```cpp
 if (config_.bg_uv_auto_start) {
-    resolve_thread_count();  // 若 bg_uv_thread_count == 0 则解析并持久化
     auto requests = scene_loader_.prepare_uv_requests();
     uv_generator_.start(std::move(requests), config_.bg_uv_thread_count);
 }
@@ -875,7 +881,6 @@ if (config_.bg_uv_auto_start) {
 
 ```cpp
 if (actions.bg_uv_start_requested) {
-    resolve_thread_count();
     auto requests = scene_loader_.prepare_uv_requests();
     uv_generator_.start(std::move(requests), config_.bg_uv_thread_count);
 }
@@ -892,7 +897,6 @@ if (actions.bg_uv_config_changed) {
 ```cpp
 // 确保所有 xatlas UV 已生成到缓存
 if (!uv_generator_.running()) {
-    resolve_thread_count();
     auto requests = scene_loader_.prepare_uv_requests();
     uv_generator_.start(std::move(requests), config_.bg_uv_thread_count);
 }
