@@ -333,7 +333,7 @@
 
 ### 16d：`cancel_bake` / `complete_bake` 去重
 
-- [ ] `renderer.h` + `renderer_bake.cpp`：提取 `reset_bake_state()` 私有方法，`cancel_bake()` 和 `complete_bake()` 调用它
+- [x] `renderer.h` + `renderer_bake.cpp`：提取 `reset_bake_state()` 私有方法，`cancel_bake()` 和 `complete_bake()` 调用它
 
 ### 16e：`compress_bc6h` 出口 barrier 放宽
 

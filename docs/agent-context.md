@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段七 — PT 烘焙器
-- **进度**：Step 16 进行中（16a-c 完成，16d 待开始）
+- **进度**：Step 16 进行中（16a-d 完成，16e 待开始）
 
 ### 下一个任务
 
-Step 16d：`cancel_bake` / `complete_bake` 提取 `reset_bake_state()`。
+Step 16e：`compress_bc6h` 出口 barrier `dstStageMask` 改 `ALL_COMMANDS_BIT`。
 
 ---
 
