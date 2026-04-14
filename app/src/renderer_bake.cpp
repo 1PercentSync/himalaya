@@ -756,6 +756,10 @@ namespace himalaya::app {
         }
     }
 
+    void Renderer::probe_bake_finalize() {
+        // Step 12 items 9-12: readback, denoise, prefilter, compress, write KTX2, advance
+    }
+
     void Renderer::destroy_bake_instance_images() {
         if (bake_accumulation_.valid()) {
             resource_manager_->destroy_image(bake_accumulation_);

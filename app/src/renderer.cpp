@@ -235,6 +235,10 @@ namespace himalaya::app {
         return lightmap_finalize_pending_;
     }
 
+    bool Renderer::probe_finalize_pending() const {
+        return bake_probe_finalize_pending_;
+    }
+
     // ---- Denoiser parameter accessors (for DebugUIContext binding) ----
 
     bool& Renderer::denoise_enabled() { return denoise_enabled_; }

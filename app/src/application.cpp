@@ -275,6 +275,13 @@ namespace himalaya::app {
                     scene_loader_.mesh_instances());
             }
 
+            // Probe bake finalize: same pattern as lightmap finalize.
+            // probe_bake_finalize() manages its own immediate scopes internally
+            // (readback → per-face OIDN → upload → prefilter → BC6H → KTX2).
+            if (renderer_.probe_finalize_pending()) {
+                renderer_.probe_bake_finalize();
+            }
+
             update();
             render();
             end_frame();

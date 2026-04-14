@@ -284,6 +284,19 @@ namespace himalaya::app {
         /** @brief Returns true when the current lightmap instance needs finalize (Application drives immediate scope). */
         [[nodiscard]] bool lightmap_finalize_pending() const;
 
+        /** @brief Returns true when the current probe needs finalize (Application drives immediate scope). */
+        [[nodiscard]] bool probe_finalize_pending() const;
+
+        /**
+         * @brief Finalizes the current probe: readback, per-face denoise, prefilter,
+         *        BC6H compress, write KTX2, destroy images, and advance to the next probe.
+         *
+         * Manages its own immediate scopes internally (multiple GPU-CPU
+         * round-trips). Must NOT be called while another immediate scope is active.
+         * Application calls this when probe_finalize_pending() returns true, after fence wait.
+         */
+        void probe_bake_finalize();
+
         /**
          * @brief Checks whether a baked angle is complete: all lightmap KTX2 files
          *        + manifest + all probe KTX2 files exist on disk.
