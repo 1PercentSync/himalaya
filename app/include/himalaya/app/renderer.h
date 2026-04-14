@@ -858,11 +858,14 @@ namespace himalaya::app {
         /** @brief Time point when the current instance started baking. */
         std::chrono::steady_clock::time_point bake_instance_start_time_{};
 
-        /** @brief Pre-computed total texel-samples for the entire bake session (lightmap + probe estimate). */
-        uint64_t bake_total_texel_samples_ = 0;
+        /** @brief Total lightmap texel-samples for the bake session (known at bake start). */
+        uint64_t bake_lm_total_texel_samples_ = 0;
 
         /** @brief Accumulated texel-samples from fully completed lightmap instances. */
         uint64_t bake_completed_lm_texel_samples_ = 0;
+
+        /** @brief Total probe texel-samples for the bake session (known after placement). */
+        uint64_t bake_probe_total_texel_samples_ = 0;
 
         // --- Probe bake state ---
 

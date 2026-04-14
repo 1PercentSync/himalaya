@@ -249,7 +249,7 @@ namespace himalaya::app {
             for (const uint32_t res : bake_lightmap_sizes_) {
                 lm_total += static_cast<uint64_t>(res) * res * config.lightmap_spp;
             }
-            bake_total_texel_samples_ = lm_total;
+            bake_lm_total_texel_samples_ = lm_total;
         }
 
         spdlog::info("Bake started: {} bakeable instances, rotation={}°",
@@ -1333,8 +1333,9 @@ namespace himalaya::app {
         // bake_lightmap_keys_ intentionally retained for baked angle scanning
         bake_probe_positions_.clear();
         bake_probe_total_ = 0;
-        bake_total_texel_samples_ = 0;
+        bake_lm_total_texel_samples_ = 0;
         bake_completed_lm_texel_samples_ = 0;
+        bake_probe_total_texel_samples_ = 0;
     }
 
     void Renderer::complete_bake() {
@@ -1350,8 +1351,9 @@ namespace himalaya::app {
         // bake_lightmap_keys_ intentionally retained for baked angle scanning
         bake_probe_positions_.clear();
         bake_probe_total_ = 0;
-        bake_total_texel_samples_ = 0;
+        bake_lm_total_texel_samples_ = 0;
         bake_completed_lm_texel_samples_ = 0;
+        bake_probe_total_texel_samples_ = 0;
     }
 
     framework::BakeState Renderer::bake_state() const {
@@ -1390,24 +1392,22 @@ namespace himalaya::app {
         p.total_elapsed_s = std::chrono::duration<float>(now - bake_start_time_).count();
         p.instance_elapsed_s = std::chrono::duration<float>(now - bake_instance_start_time_).count();
 
-        // Progress weighting (texel-samples)
-        p.total_texel_samples = bake_total_texel_samples_;
-
-        uint64_t completed = bake_completed_lm_texel_samples_;
+        // Per-phase progress (texel-samples)
+        p.lm_total_texel_samples = bake_lm_total_texel_samples_;
+        p.lm_completed_texel_samples = bake_completed_lm_texel_samples_;
         if (bake_state_ == framework::BakeState::BakingLightmaps && bake_lightmap_width_ > 0) {
-            // Add current lightmap instance partial progress
-            completed += static_cast<uint64_t>(bake_lightmap_width_) * bake_lightmap_height_
-                * p.lm_sample_count;
-        } else if (bake_state_ == framework::BakeState::BakingProbes || bake_state_ == framework::BakeState::Complete) {
-            // All lightmap work done; add completed + partial probe work
+            p.lm_completed_texel_samples += static_cast<uint64_t>(bake_lightmap_width_)
+                * bake_lightmap_height_ * p.lm_sample_count;
+        }
+
+        p.probe_total_texel_samples = bake_probe_total_texel_samples_;
+        if (bake_state_ == framework::BakeState::BakingProbes && bake_probe_total_ > 0) {
             const uint64_t face_texels = static_cast<uint64_t>(p.probe_face_res)
                 * p.probe_face_res * 6;
-            completed += face_texels * bake_current_probe_ * bake_locked_config_.probe_spp;
-            if (bake_state_ == framework::BakeState::BakingProbes && bake_probe_total_ > 0) {
-                completed += face_texels * p.probe_sample_count;
-            }
+            p.probe_completed_texel_samples = face_texels
+                * bake_current_probe_ * bake_locked_config_.probe_spp
+                + face_texels * p.probe_sample_count;
         }
-        p.completed_texel_samples = completed;
 
         return p;
     }
@@ -1476,12 +1476,12 @@ namespace himalaya::app {
                         }
                     }
 
-                    // Update total_texel_samples with actual probe count
+                    // Compute probe total texel-samples from actual probe count
                     {
                         const uint64_t face_texels = static_cast<uint64_t>(
                             bake_locked_config_.probe_face_resolution)
                             * bake_locked_config_.probe_face_resolution * 6;
-                        bake_total_texel_samples_ += face_texels
+                        bake_probe_total_texel_samples_ = face_texels
                             * bake_probe_total_ * bake_locked_config_.probe_spp;
                     }
 
