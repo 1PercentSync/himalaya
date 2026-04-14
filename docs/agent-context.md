@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段七 — PT 烘焙器
-- **进度**：Step 14 进行中（3/8 完成：BakeConfig + LightmapBakerPass + ProbeBakerPass）
+- **进度**：Step 14 进行中（4/8 完成）
 
 ### 下一个任务
 
-Step 14 第 4 小项：`renderer_bake.cpp` BakingLightmaps 分支计算 batch 并传给 record()。
+Step 14 第 5 小项：`renderer_bake.cpp` BakingProbes 分支同理计算 batch 传给 `probe_baker_pass_.record()`。
 
 ---
 
