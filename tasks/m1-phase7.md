@@ -347,7 +347,7 @@
 
 ### 17b：`cubemap_filter` 除零防护
 
-- [ ] `cubemap_filter.cpp`：`mip_roughness` 计算增加 `mip_count <= 1` 防护（`0.0f`），避免 `0.0f / 0.0f = NaN` 传入 prefilter shader
+- [x] `cubemap_filter.cpp`：`mip_roughness` 计算增加 `mip_count <= 1` 防护（`0.0f`），避免 `0.0f / 0.0f = NaN` 传入 prefilter shader
 
 ### ~~17c：Windows `rename` 原子替换修复~~ — 取消
 
