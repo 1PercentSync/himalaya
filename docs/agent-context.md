@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段七 — PT 烘焙器
-- **进度**：Step 13.5 进行中（1/20 项），13.5a 完成，下一项 13.5b
+- **进度**：Step 13.5 进行中（2/20 项），13.5a-b 完成，下一项 13.5c
 
 ### 下一个任务
 
-Step 13.5b：Min/Max Resolution slider 互相钳制（UB 修复）。
+Step 13.5c：Baked angle lightmap 计数修复（compute_lightmap_keys 提取 + DebugUIContext 传递）。
 
 ---
 

@@ -238,7 +238,7 @@
 
 ### 13.5b：UB 修复
 
-- [ ] `debug_ui.cpp`：Bake 参数 Min Resolution / Max Resolution slider 互相钳制（调 min 时 `min = std::min(min, max)`，调 max 时 `max = std::max(max, min)`）
+- [x] `debug_ui.cpp`：Bake 参数 Min Resolution / Max Resolution slider 互相钳制（调 min 时 `min = std::min(min, max)`，调 max 时 `max = std::max(max, min)`）
 
 ### 13.5c：Baked angle lightmap 计数修复
 
