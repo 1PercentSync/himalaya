@@ -346,6 +346,10 @@ namespace himalaya::framework {
 
         /** @brief Override present mode to IMMEDIATE during baking (bypass VSync). */
         bool allow_tearing = false;
+
+        /** @brief Number of SPP batched per frame during baking.
+         *  Higher values improve GPU utilization but reduce UI responsiveness. */
+        uint32_t spp_per_frame = 16;
     };
 
     // ---- GPU Data Structures ----
