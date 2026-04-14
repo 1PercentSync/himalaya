@@ -639,6 +639,29 @@ namespace himalaya::rhi {
     void Context::end_immediate() {
         assert(immediate_active_ && "No active immediate scope");
 
+        // Full pipeline barrier: ensure all writes from this immediate scope
+        // are visible to subsequent queue submissions. vkQueueWaitIdle provides
+        // execution completion but not memory visibility per Vulkan spec.
+        // This barrier makes all writes available before the GPU goes idle,
+        // so the next command buffer on this queue sees consistent data.
+        // Zero performance cost — GPU is about to idle anyway.
+        {
+            VkMemoryBarrier2 mem_barrier{};
+            mem_barrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2;
+            mem_barrier.srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
+            mem_barrier.srcAccessMask = VK_ACCESS_2_MEMORY_WRITE_BIT;
+            mem_barrier.dstStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
+            mem_barrier.dstAccessMask = VK_ACCESS_2_MEMORY_READ_BIT
+                                        | VK_ACCESS_2_MEMORY_WRITE_BIT;
+
+            VkDependencyInfo dep{};
+            dep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+            dep.memoryBarrierCount = 1;
+            dep.pMemoryBarriers = &mem_barrier;
+
+            vkCmdPipelineBarrier2(immediate_command_buffer, &dep);
+        }
+
         VK_CHECK(vkEndCommandBuffer(immediate_command_buffer));
 
         VkSubmitInfo submit_info{};
