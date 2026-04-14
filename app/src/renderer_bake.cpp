@@ -942,6 +942,45 @@ namespace himalaya::app {
         vmaInvalidateAllocation(ctx_->allocator,
             resource_manager_->get_buffer(rb_normal).allocation, 0, VK_WHOLE_SIZE);
 
+        // === CPU: Luminance check (reject dark probes) ===
+        {
+            const auto *beauty_f32 = static_cast<const float *>(
+                resource_manager_->get_buffer(rb_beauty).allocation_info.pMappedData);
+            const uint64_t total_texels = static_cast<uint64_t>(res) * res * kFaceCount;
+            double luminance_sum = 0.0;
+            for (uint64_t i = 0; i < total_texels; ++i) {
+                luminance_sum += beauty_f32[i * 4 + 0];
+                luminance_sum += beauty_f32[i * 4 + 1];
+                luminance_sum += beauty_f32[i * 4 + 2];
+            }
+            const double avg_luminance = luminance_sum / static_cast<double>(total_texels * 3);
+
+            if (avg_luminance < static_cast<double>(bake_locked_config_.probe_min_luminance)) {
+                spdlog::info("Probe finalize: probe {} rejected (avg luminance {:.6f} < {:.6f})",
+                             bake_current_probe_, avg_luminance,
+                             bake_locked_config_.probe_min_luminance);
+
+                resource_manager_->destroy_buffer(rb_beauty);
+                resource_manager_->destroy_buffer(rb_albedo);
+                resource_manager_->destroy_buffer(rb_normal);
+
+                destroy_probe_bake_instance_images();
+                bake_probe_finalize_pending_ = false;
+
+                const uint32_t next = bake_current_probe_ + 1;
+                if (next < bake_probe_total_) {
+                    ctx_->begin_immediate();
+                    begin_probe_bake_instance(next);
+                    ctx_->end_immediate();
+                } else {
+                    spdlog::info("All {} probes baked ({} accepted)",
+                                 bake_probe_total_, bake_probe_accepted_count_);
+                    bake_state_ = framework::BakeState::Complete;
+                }
+                return;
+            }
+        }
+
         // === CPU: OIDN × 6 face (per-face denoise) ===
         const auto *beauty_ptr = static_cast<const uint8_t *>(
             resource_manager_->get_buffer(rb_beauty).allocation_info.pMappedData);
@@ -1123,13 +1162,14 @@ namespace himalaya::app {
         // Destroy BC6H image (data now in staging buffer)
         resource_manager_->destroy_image(bc6h_image);
 
-        // === CPU: Write KTX2 (face_count=6, N mip levels) ===
+        // === CPU: Write KTX2 (face_count=6, N mip levels) — accepted index ===
         {
             const auto *bc6h_ptr = static_cast<const uint8_t *>(
                 resource_manager_->get_buffer(rb_bc6h).allocation_info.pMappedData);
             const auto rot = format_rotation(bake_rotation_int_);
             char probe_suffix[16];
-            std::snprintf(probe_suffix, sizeof(probe_suffix), "_probe%03u", bake_current_probe_);
+            std::snprintf(probe_suffix, sizeof(probe_suffix), "_probe%03u",
+                          bake_probe_accepted_count_);
             const auto file_path = framework::cache_path(
                 "bake", bake_probe_set_key_ + "_rot" + rot + probe_suffix, ".ktx2");
 
@@ -1140,11 +1180,17 @@ namespace himalaya::app {
 
             if (framework::write_ktx2(file_path, rhi::Format::Bc6hUfloatBlock,
                                       res, res, kFaceCount, levels)) {
-                spdlog::info("Probe finalize: wrote {}", file_path.string());
+                spdlog::info("Probe finalize: wrote {} (accepted {})",
+                             file_path.string(), bake_probe_accepted_count_);
             } else {
                 spdlog::error("Probe finalize: failed to write {}", file_path.string());
             }
         }
+
+        // Record accepted probe
+        bake_probe_accepted_positions_.push_back(
+            bake_probe_positions_[bake_current_probe_]);
+        ++bake_probe_accepted_count_;
 
         // === Cleanup staging buffers ===
         resource_manager_->destroy_buffer(rb_beauty);
@@ -1163,7 +1209,8 @@ namespace himalaya::app {
             begin_probe_bake_instance(next);
             ctx_->end_immediate();
         } else {
-            spdlog::info("All {} probes baked", bake_probe_total_);
+            spdlog::info("All {} probes baked ({} accepted)",
+                         bake_probe_total_, bake_probe_accepted_count_);
             bake_state_ = framework::BakeState::Complete;
         }
     }
