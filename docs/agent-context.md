@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段七 — PT 烘焙器
-- **进度**：Step 12.5 config.cpp 完成
+- **进度**：Step 12.5 debug_ui.h 完成
 
 ### 下一个任务
 
-Step 12.5：`debug_ui.h` DebugUIContext/Actions 新增 bg_uv 字段，详见 `docs/current-phase.md` Step 12.5 章节。
+Step 12.5：`debug_ui.cpp` Lightmap UV Generation 子面板，详见 `docs/current-phase.md` Step 12.5 章节。
 
 ---
 
