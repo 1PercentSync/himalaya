@@ -862,11 +862,11 @@ namespace himalaya::app {
 
                 // Lightmap parameters
                 slider_float_deferred("Texels/m", &ctx.bake_config.texels_per_meter,
-                                      1.0f, 50.0f, "%.1f");
+                                      1.0f, 200.0f, "%.1f");
 
                 {
                     auto min_res = static_cast<int>(ctx.bake_config.min_resolution);
-                    if (ImGui::SliderInt("Min Resolution", &min_res, 4, 512)) {
+                    if (ImGui::SliderInt("Min Resolution", &min_res, 64, 512)) {
                         ctx.bake_config.min_resolution = static_cast<uint32_t>(
                             (std::min)(min_res, static_cast<int>(ctx.bake_config.max_resolution)));
                     }
