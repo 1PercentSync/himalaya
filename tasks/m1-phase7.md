@@ -227,5 +227,5 @@
 - [x] `debug_ui.cpp`：已 bake 角度列表（dirty flag 控制扫描时机，仅显示，点击切换留待下一 Phase）
 - [x] `debug_ui.cpp`：Cache 面板新增 Clear Bake Cache 按钮 + Clear Lightmap UV Cache 按钮
 - [x] `application.cpp`：处理新增 DebugUIActions（start_bake / cancel_bake / config save / clear cache）+ 填充 DebugUIContext bake 字段
-- [ ] `config.h` + `config.cpp`：`AppConfig` 新增 `bake_allow_tearing` + JSON 读写 + `application.cpp` 变化检测持久化（与 `pt_allow_tearing` 统一模式）
+- [x] `config.h` + `config.cpp`：`AppConfig` 新增 `bake_allow_tearing` + JSON 读写 + `application.cpp` 变化检测持久化（与 `pt_allow_tearing` 统一模式）
 - [ ] 清理：移除 `bake_config_changed`（`debug_ui.h` 字段 + `debug_ui.cpp` 全部 13 处赋值 + `application.cpp` handler）
