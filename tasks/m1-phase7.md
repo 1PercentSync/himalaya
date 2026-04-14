@@ -292,7 +292,7 @@
 
 ## Step 15：Probe 亮度后置过滤 + Manifest 延迟写入
 
-- [ ] `scene_data.h`：BakeConfig 新增 `float probe_min_luminance = 1e-4f`
+- [x] `scene_data.h`：BakeConfig 新增 `float probe_min_luminance = 1e-4f`
 - [ ] `renderer.h`：新增 `bake_probe_accepted_count_` + `bake_probe_accepted_positions_` 成员
 - [ ] `renderer_bake.cpp`：`start_bake()` / `cancel_bake()` 重置 accepted 成员
 - [ ] `renderer_bake.cpp`：`render_baking()` BakingProbes 首帧移除 manifest 写入
