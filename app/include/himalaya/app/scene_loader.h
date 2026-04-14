@@ -5,12 +5,14 @@
  * @brief glTF scene loading: meshes, materials, textures, and scene graph.
  */
 
+#include <himalaya/framework/lightmap_uv_generator.h>
 #include <himalaya/framework/material_system.h>
 #include <himalaya/framework/mesh.h>
 #include <himalaya/framework/scene_data.h>
 #include <himalaya/framework/texture.h>
 #include <himalaya/rhi/types.h>
 
+#include <cstdint>
 #include <span>
 #include <string>
 #include <vector>
@@ -106,6 +108,28 @@ namespace himalaya::app {
         [[nodiscard]] const framework::AABB &scene_bounds() const;
 
         /**
+         * @brief Builds generation requests from pending meshes (copies vertex/index data).
+         *
+         * The returned requests own their data and are safe to pass to
+         * LightmapUVGenerator::start(). May be called multiple times
+         * (e.g. after cancel + restart); the pending list is never cleared.
+         */
+        [[nodiscard]] std::vector<framework::LightmapUVGenerator::Request> prepare_uv_requests() const;
+
+        /**
+         * @brief Applies xatlas lightmap UVs and rebuilds all GPU vertex/index buffers.
+         *
+         * For pending meshes: reads xatlas result from cache (should be cache hit
+         * after background generation), applies vertex remap + uv1.
+         * For non-pending meshes: re-uploads existing data unchanged.
+         * Destroys old VB/IB, creates new ones, updates meshes_/cpu_vertices_/cpu_indices_.
+         *
+         * Must be called within a begin_immediate() / end_immediate() scope.
+         * Does not clear pending state — safe to call on every Bake (cache hits are fast).
+         */
+        void apply_lightmap_uvs();
+
+        /**
          * @brief Content hash of the scene file (XXH3_128, hex).
          *
          * Computed at load time from the glTF/GLB file bytes. Empty if
@@ -180,6 +204,12 @@ namespace himalaya::app {
 
         /** @brief Sampler handles created from glTF sampler definitions. */
         std::vector<rhi::SamplerHandle> samplers_;
+
+        /** @brief Prim indices that need xatlas UV generation (parallel to uv_pending_hashes_). */
+        std::vector<uint32_t> uv_pending_prims_;
+
+        /** @brief Pre-computed mesh hashes for pending prims (parallel to uv_pending_prims_). */
+        std::vector<std::string> uv_pending_hashes_;
 
         // ---- Private loading stages ----
 
