@@ -1000,6 +1000,84 @@ namespace himalaya::app {
                     }
                 }
             }
+
+            // --- Bake Progress Display ---
+            {
+                const auto &bp = ctx.bake_progress;
+                const bool active = bp.state == framework::BakeState::BakingLightmaps
+                                 || bp.state == framework::BakeState::BakingProbes;
+                const bool complete = bp.state == framework::BakeState::Complete;
+
+                if (active || complete) {
+                    ImGui::Separator();
+
+                    // Stage label
+                    if (bp.state == framework::BakeState::BakingLightmaps) {
+                        ImGui::Text("Baking Lightmaps");
+                    } else if (bp.state == framework::BakeState::BakingProbes) {
+                        ImGui::Text("Baking Probes");
+                    } else {
+                        ImGui::Text("Bake Complete");
+                    }
+
+                    // Current item / total + samples
+                    if (bp.state == framework::BakeState::BakingLightmaps) {
+                        ImGui::Text("Instance: %u / %u    %u / %u SPP",
+                                    bp.current_instance + 1, bp.total_instances,
+                                    bp.lm_sample_count, bp.lm_target_spp);
+                    } else if (bp.state == framework::BakeState::BakingProbes) {
+                        ImGui::Text("Probe: %u / %u    %u / %u SPP",
+                                    bp.current_probe + 1, bp.total_probes,
+                                    bp.probe_sample_count, bp.probe_target_spp);
+                    }
+
+                    // Throughput — feed BakeThroughput accumulator
+                    if (active) {
+                        uint64_t texels = 0;
+                        if (bp.state == framework::BakeState::BakingLightmaps) {
+                            texels = static_cast<uint64_t>(bp.lm_width) * bp.lm_height;
+                        } else {
+                            texels = static_cast<uint64_t>(bp.probe_face_res)
+                                * bp.probe_face_res * 6;
+                        }
+                        bake_throughput_.push(ctx.delta_time, texels);
+                    }
+
+                    if (bake_throughput_.throughput > 0.0) {
+                        ImGui::Text("%.1f M paths/s", bake_throughput_.throughput / 1e6);
+                    }
+
+                    // Timing
+                    if (active) {
+                        ImGui::Text("Item: %.1fs  Total: %.1fs",
+                                    static_cast<double>(bp.instance_elapsed_s),
+                                    static_cast<double>(bp.total_elapsed_s));
+                    } else {
+                        ImGui::Text("Total: %.1fs", static_cast<double>(bp.total_elapsed_s));
+                    }
+
+                    // Progress percentage + ETA
+                    if (bp.total_texel_samples > 0) {
+                        const double pct = static_cast<double>(bp.completed_texel_samples)
+                            / static_cast<double>(bp.total_texel_samples) * 100.0;
+                        ImGui::Text("Progress: %.1f%%", pct);
+
+                        if (active && bake_throughput_.throughput > 0.0) {
+                            const uint64_t remaining = bp.total_texel_samples
+                                - bp.completed_texel_samples;
+                            const double eta_s = static_cast<double>(remaining)
+                                / bake_throughput_.throughput;
+                            if (eta_s < 3600.0) {
+                                ImGui::SameLine();
+                                ImGui::Text("  ETA: %.0fs", eta_s);
+                            } else {
+                                ImGui::SameLine();
+                                ImGui::Text("  ETA: %.1fh", eta_s / 3600.0);
+                            }
+                        }
+                    }
+                }
+            }
         }
 
         // Cache section
