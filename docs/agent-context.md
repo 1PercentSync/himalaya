@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 13 ImGui 烘焙控制面板，详见 `docs/current-phase.md` Step 13 章节。
+Step 12.5 延迟 Lightmap UV 生成，详见 `docs/current-phase.md` Step 12.5 章节。
 
 ---
 
