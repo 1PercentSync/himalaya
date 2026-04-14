@@ -9,11 +9,29 @@
 
 #include <glm/vec2.hpp>
 
+#include <cstdint>
 #include <span>
 #include <string>
 #include <vector>
 
 namespace himalaya::framework {
+    /**
+     * @brief xatlas quality preset controlling chart iteration count and pack strategy.
+     *
+     * Fast uses minimal iterations and greedy packing (seconds per mesh).
+     * Production uses higher iterations and brute-force packing (best quality, cached).
+     */
+    enum class LightmapUVQuality : uint8_t {
+        Fast,       ///< maxIterations=1, bruteForce=false (debug builds).
+        Production, ///< maxIterations=4, bruteForce=true  (release builds).
+    };
+
+    /** @brief Compile-time default quality: Production in release, Fast in debug. */
+#ifdef NDEBUG
+    inline constexpr auto kDefaultLightmapUVQuality = LightmapUVQuality::Production;
+#else
+    inline constexpr auto kDefaultLightmapUVQuality = LightmapUVQuality::Fast;
+#endif
     /**
      * @brief Per-mesh xatlas output (or loaded from cache).
      *
