@@ -267,7 +267,7 @@
 
 - [x] `render_progress.h`：`BakeProgress` 拆分进度字段为 `lm_completed_texel_samples` / `lm_total_texel_samples` + `probe_completed_texel_samples` / `probe_total_texel_samples`
 - [x] `renderer_bake.cpp`：`bake_progress()` 分别计算两阶段的 completed / total
-- [ ] `debug_ui.cpp`：进度显示改为当前阶段取对应字段计算百分比和 ETA
+- [x] `debug_ui.cpp`：进度显示改为当前阶段取对应字段计算百分比和 ETA
 
 ### 13.5g：Enclosure Factor 绝对阈值
 

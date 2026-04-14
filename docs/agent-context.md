@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段七 — PT 烘焙器
-- **进度**：Step 13.5 进行中（18/20 项），13.5a-e + 13.5f-1/f-2 完成，下一项 13.5f-3
+- **进度**：Step 13.5 进行中（19/20 项），13.5a-f 完成，下一项 13.5g-1
 
 ### 下一个任务
 
-Step 13.5f-3：`debug_ui.cpp` 进度显示改为当前阶段取对应字段计算百分比和 ETA。
+Step 13.5g-1：`debug_ui.h` DebugUIContext 新增 `float scene_aabb_longest_edge`。
 
 ---
 
