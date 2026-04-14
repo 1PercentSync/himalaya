@@ -107,6 +107,52 @@ namespace himalaya::app {
         return true;
     }
 
+    // ---- Lightmap key computation ----
+
+    void Renderer::compute_lightmap_keys(
+        const std::span<const framework::MeshInstance> mesh_instances,
+        const std::span<const framework::Mesh> meshes,
+        const std::span<const framework::MaterialInstance> materials,
+        const std::span<const std::vector<framework::Vertex>> cpu_vertices,
+        const std::span<const std::vector<uint32_t>> cpu_indices,
+        const std::string &scene_hash,
+        const std::string &hdr_hash,
+        const std::string &scene_textures_hash) {
+
+        bake_lightmap_keys_.clear();
+
+        for (uint32_t i = 0; i < static_cast<uint32_t>(mesh_instances.size()); ++i) {
+            const auto &inst = mesh_instances[i];
+            const auto &mesh = meshes[inst.mesh_id];
+
+            // Skip degenerate meshes
+            if (mesh.vertex_count == 0 || mesh.index_count < 3) {
+                continue;
+            }
+
+            // Skip transparent instances (AlphaMode::Blend)
+            if (materials[inst.material_id].alpha_mode == framework::AlphaMode::Blend) {
+                continue;
+            }
+
+            // Compute per-instance lightmap cache key:
+            // scene_hash + vertices_hash + indices_hash + transform_hash + hdr_hash + scene_textures_hash
+            const auto &verts = cpu_vertices[inst.mesh_id];
+            const auto &idxs = cpu_indices[inst.mesh_id];
+            const auto vertices_hash = framework::content_hash(verts.data(), verts.size() * sizeof(framework::Vertex));
+            const auto indices_hash = framework::content_hash(idxs.data(), idxs.size() * sizeof(uint32_t));
+            const auto transform_hash = framework::content_hash(&inst.transform, sizeof(glm::mat4));
+            const std::string key_input = scene_hash + vertices_hash + indices_hash
+                                          + transform_hash + hdr_hash + scene_textures_hash;
+            bake_lightmap_keys_.push_back(
+                framework::content_hash(key_input.data(), key_input.size()));
+        }
+    }
+
+    const std::vector<std::string> &Renderer::bake_lightmap_keys() const {
+        return bake_lightmap_keys_;
+    }
+
     // ---- Bake session management ----
 
     void Renderer::start_bake(
@@ -149,21 +195,24 @@ namespace himalaya::app {
             bake_probe_set_key_ = framework::content_hash(probe_key_input.data(), probe_key_input.size());
         }
 
-        // Filter bakeable instances: skip degenerate and transparent
+        // Compute lightmap keys (reuses compute_lightmap_keys, may already be populated
+        // by Application after scene/HDR load, but start_bake always refreshes)
+        compute_lightmap_keys(mesh_instances, meshes, materials,
+                              cpu_vertices, cpu_indices,
+                              scene_hash, hdr_hash, scene_textures_hash);
+
+        // Build parallel arrays: instance indices + lightmap resolutions
         bake_instance_indices_.clear();
         bake_lightmap_sizes_.clear();
-        bake_lightmap_keys_.clear();
+        uint32_t key_idx = 0;
 
         for (uint32_t i = 0; i < static_cast<uint32_t>(mesh_instances.size()); ++i) {
             const auto &inst = mesh_instances[i];
             const auto &mesh = meshes[inst.mesh_id];
 
-            // Skip degenerate meshes
             if (mesh.vertex_count == 0 || mesh.index_count < 3) {
                 continue;
             }
-
-            // Skip transparent instances (AlphaMode::Blend)
             if (materials[inst.material_id].alpha_mode == framework::AlphaMode::Blend) {
                 continue;
             }
@@ -176,23 +225,13 @@ namespace himalaya::app {
             const uint32_t clamped = std::clamp(raw, config.min_resolution, config.max_resolution);
             const uint32_t resolution = align_to_4(clamped);
 
-            // Compute per-instance lightmap cache key:
-            // scene_hash + vertices_hash + indices_hash + transform_hash + hdr_hash + scene_textures_hash
-            const auto &verts = cpu_vertices[inst.mesh_id];
-            const auto &idxs = cpu_indices[inst.mesh_id];
-            const auto vertices_hash = framework::content_hash(verts.data(), verts.size() * sizeof(framework::Vertex));
-            const auto indices_hash = framework::content_hash(idxs.data(), idxs.size() * sizeof(uint32_t));
-            const auto transform_hash = framework::content_hash(&inst.transform, sizeof(glm::mat4));
-            const std::string key_input = scene_hash + vertices_hash + indices_hash
-                                          + transform_hash + hdr_hash + scene_textures_hash;
-            const auto lm_key = framework::content_hash(key_input.data(), key_input.size());
-
             bake_instance_indices_.push_back(i);
             bake_lightmap_sizes_.push_back(resolution);
-            bake_lightmap_keys_.push_back(lm_key);
 
             spdlog::info("Bake instance {}: mesh_id={}, area={:.2f}m², resolution={}, key={}",
-                         i, inst.mesh_id, static_cast<double>(area), resolution, lm_key);
+                         i, inst.mesh_id, static_cast<double>(area), resolution,
+                         bake_lightmap_keys_[key_idx]);
+            ++key_idx;
         }
 
         bake_total_instances_ = static_cast<uint32_t>(bake_instance_indices_.size());
@@ -1291,7 +1330,7 @@ namespace himalaya::app {
         bake_probe_placement_pending_ = false;
         bake_instance_indices_.clear();
         bake_lightmap_sizes_.clear();
-        bake_lightmap_keys_.clear();
+        // bake_lightmap_keys_ intentionally retained for baked angle scanning
         bake_probe_positions_.clear();
         bake_probe_total_ = 0;
         bake_total_texel_samples_ = 0;
@@ -1308,7 +1347,7 @@ namespace himalaya::app {
         bake_probe_placement_pending_ = false;
         bake_instance_indices_.clear();
         bake_lightmap_sizes_.clear();
-        bake_lightmap_keys_.clear();
+        // bake_lightmap_keys_ intentionally retained for baked angle scanning
         bake_probe_positions_.clear();
         bake_probe_total_ = 0;
         bake_total_texel_samples_ = 0;

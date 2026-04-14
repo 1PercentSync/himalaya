@@ -364,6 +364,43 @@ namespace himalaya::app {
         [[nodiscard]] framework::RenderMode bake_pre_mode() const;
 
         /**
+         * @brief Computes per-instance lightmap cache keys for all bakeable instances.
+         *
+         * Filters out degenerate and transparent instances, then computes a
+         * content hash key for each remaining instance. The result is stored
+         * internally and accessible via bake_lightmap_keys().
+         *
+         * Called by Application after scene/HDR load (for baked angle scanning)
+         * and internally by start_bake().
+         *
+         * @param mesh_instances     All scene instances.
+         * @param meshes             All loaded meshes (vertex/index counts).
+         * @param materials          All material instances (alpha mode filtering).
+         * @param cpu_vertices       Per-mesh CPU vertex data (hash input).
+         * @param cpu_indices        Per-mesh CPU index data (hash input).
+         * @param scene_hash         Content hash of the scene file.
+         * @param hdr_hash           Content hash of the HDR environment file.
+         * @param scene_textures_hash Composite hash of all scene texture source bytes.
+         */
+        void compute_lightmap_keys(
+            std::span<const framework::MeshInstance> mesh_instances,
+            std::span<const framework::Mesh> meshes,
+            std::span<const framework::MaterialInstance> materials,
+            std::span<const std::vector<framework::Vertex>> cpu_vertices,
+            std::span<const std::vector<uint32_t>> cpu_indices,
+            const std::string &scene_hash,
+            const std::string &hdr_hash,
+            const std::string &scene_textures_hash);
+
+        /**
+         * @brief Returns the cached per-instance lightmap keys.
+         *
+         * Populated by compute_lightmap_keys() or start_bake(). Retained
+         * across cancel/complete (only invalidated by scene/HDR change).
+         */
+        [[nodiscard]] const std::vector<std::string> &bake_lightmap_keys() const;
+
+        /**
          * @brief Returns the current bake state.
          */
         [[nodiscard]] framework::BakeState bake_state() const;
