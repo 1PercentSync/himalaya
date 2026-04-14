@@ -168,7 +168,7 @@
 - [x] `framework/CMakeLists.txt`：添加 `lightmap_uv_generator.cpp`
 - [x] `lightmap_uv_generator.h/.cpp` 重构：新增 `wait()` 方法（join 不 cancel），`cancel()` 复用 `wait()`，新增 `~LightmapUVGenerator()` 调用 `cancel()`（防止析构时 worker 未响应 jthread stop_token 导致卡住）
 - [x] `scene_loader.h`：修正已提交的声明（删除 `has_pending_uvs()`，`apply_lightmap_uvs()` 文档更新为不清空 pending）+ 新增 `uv_pending_prims_` / `uv_pending_hashes_` 数据成员 + `prepare_uv_requests()` / `apply_lightmap_uvs()` 方法声明
-- [ ] `scene_loader.cpp`：`load_meshes()` 去除 xatlas 阻塞（无 TEXCOORD_1 的 mesh 上传 uv1=0，记录 pending）
+- [x] `scene_loader.cpp`：`load_meshes()` 去除 xatlas 阻塞（无 TEXCOORD_1 的 mesh 上传 uv1=0，记录 pending）
 - [ ] `scene_loader.cpp`：`prepare_uv_requests()` 实现（从 pending + cpu data 构造 Request 列表）
 - [ ] `scene_loader.cpp`：`apply_lightmap_uvs()` 实现（全量重建 VB/IB：pending 走 xatlas 缓存 + cache miss 时 warn log，其余原样，需 immediate scope，不清空 pending）
 - [ ] `config.h`：`AppConfig` 新增 `bg_uv_auto_start`（bool）+ `bg_uv_thread_count`（uint32_t）
