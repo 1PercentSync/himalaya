@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段七 — PT 烘焙器
-- **进度**：Step 12.6c 进行中（2/7 完成）
+- **进度**：Step 12.6c 进行中（3/7 完成）
 
 ### 下一个任务
 
-Step 12.6c 第 3 项：`lightmap_uv.cpp` `write_cache()` / `read_cache()` 适配新 flags 字段。
+Step 12.6c 第 4 项：`lightmap_uv.cpp` `AddMesh` 失败分流——mesh 固有错误缓存 fallback，`Error` 类型不缓存。
 
 ---
 

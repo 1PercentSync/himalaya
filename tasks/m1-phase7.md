@@ -199,7 +199,7 @@
 
 - [x] `lightmap_uv.h`：`LightmapUVResult` 新增 `bool is_fallback`
 - [x] `lightmap_uv.h`：`CacheHeader` 新增 `uint32_t flags`（8→12 字节）
-- [ ] `lightmap_uv.cpp`：`write_cache()` / `read_cache()` 适配新 flags 字段
+- [x] `lightmap_uv.cpp`：`write_cache()` / `read_cache()` 适配新 flags 字段
 - [ ] `lightmap_uv.cpp`：`AddMesh` 失败分流——mesh 固有错误缓存 fallback，`Error` 类型不缓存
 - [ ] `lightmap_uv.cpp`：`Generate` 后 0×0 atlas 标记 `is_fallback=true`
 - [ ] `scene_loader.cpp`：`apply_lightmap_uvs()` 检测 `is_fallback` 时 warn
