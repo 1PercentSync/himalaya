@@ -144,8 +144,12 @@ namespace himalaya::app {
          *
          * Must be called within a begin_immediate() / end_immediate() scope.
          * Does not clear pending state — safe to call on every Bake (cache hits are fast).
+         *
+         * @param pack_resolution xatlas atlas packing resolution, passed through
+         *                        to generate_lightmap_uv() on cache miss fallback.
+         *                        Should match BakeConfig::min_resolution.
          */
-        void apply_lightmap_uvs();
+        void apply_lightmap_uvs(uint32_t pack_resolution);
 
         /**
          * @brief Content hash of the scene file (XXH3_128, hex).

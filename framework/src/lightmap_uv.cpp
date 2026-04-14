@@ -128,7 +128,8 @@ namespace himalaya::framework {
 
     LightmapUVResult generate_lightmap_uv(const std::span<const Vertex> vertices,
                                           const std::span<const uint32_t> indices,
-                                          const std::string &mesh_hash) {
+                                          const std::string &mesh_hash,
+                                          const uint32_t pack_resolution) {
         assert(!vertices.empty() && !indices.empty());
 
         // Try cache first
@@ -174,7 +175,8 @@ namespace himalaya::framework {
 
         xatlas::ChartOptions chart_options;
         xatlas::PackOptions pack_options;
-        pack_options.padding = 2; // Gutter: 2 texel padding around UV islands
+        pack_options.padding = 2;
+        pack_options.resolution = (pack_resolution > 0) ? pack_resolution : 0;
 
         if constexpr (kDefaultLightmapUVQuality == LightmapUVQuality::Production) {
             chart_options.maxIterations = 4;

@@ -135,7 +135,7 @@ namespace himalaya::app {
             // Auto-start background UV generation if configured
             if (scene_ok && config_.bg_uv_auto_start) {
                 auto requests = scene_loader_.prepare_uv_requests();
-                uv_generator_.start(std::move(requests), config_.bg_uv_thread_count);
+                uv_generator_.start(std::move(requests), config_.bg_uv_thread_count, bake_config_.min_resolution);
             }
         }
 
@@ -227,7 +227,7 @@ namespace himalaya::app {
             // Auto-start background UV generation if configured
             if (ok && config_.bg_uv_auto_start) {
                 auto requests = scene_loader_.prepare_uv_requests();
-                uv_generator_.start(std::move(requests), config_.bg_uv_thread_count);
+                uv_generator_.start(std::move(requests), config_.bg_uv_thread_count, bake_config_.min_resolution);
             }
         }
 
@@ -280,13 +280,13 @@ namespace himalaya::app {
         // Ensure all xatlas UV caches are populated
         if (!uv_generator_.running()) {
             auto requests = scene_loader_.prepare_uv_requests();
-            uv_generator_.start(std::move(requests), config_.bg_uv_thread_count);
+            uv_generator_.start(std::move(requests), config_.bg_uv_thread_count, bake_config_.min_resolution);
         }
         uv_generator_.wait();
 
         // Rebuild all VB/IB with lightmap UVs (cache hits after generator wait)
         context_.begin_immediate();
-        scene_loader_.apply_lightmap_uvs();
+        scene_loader_.apply_lightmap_uvs(bake_config_.min_resolution);
         context_.end_immediate();
 
         // Rebuild BLAS/TLAS with new VB/IB handles
@@ -721,7 +721,7 @@ namespace himalaya::app {
         // ---- Background UV generation actions ----
         if (actions.bg_uv_start_requested) {
             auto requests = scene_loader_.prepare_uv_requests();
-            uv_generator_.start(std::move(requests), config_.bg_uv_thread_count);
+            uv_generator_.start(std::move(requests), config_.bg_uv_thread_count, bake_config_.min_resolution);
         }
         if (actions.bg_uv_stop_requested) {
             uv_generator_.cancel();

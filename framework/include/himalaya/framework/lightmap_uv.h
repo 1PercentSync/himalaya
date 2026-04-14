@@ -70,12 +70,17 @@ namespace himalaya::framework {
      *
      * This is a pure CPU function — no GPU or RHI involvement.
      *
-     * @param vertices   Source vertex array (only positions are used by xatlas).
-     * @param indices    Source index array (uint32_t triangle list).
-     * @param mesh_hash  Pre-computed content hash of positions + indices.
+     * @param vertices        Source vertex array (only positions are used by xatlas).
+     * @param indices         Source index array (uint32_t triangle list).
+     * @param mesh_hash       Pre-computed content hash of positions + indices.
+     * @param pack_resolution xatlas atlas packing resolution. Should match
+     *                        BakeConfig::min_resolution so that UV island padding
+     *                        (2 texels at pack_resolution) is >= 2 texels at any
+     *                        bake resolution >= min_resolution.
      * @return LightmapUVResult with generated lightmap UVs, new indices, and remap table.
      */
     [[nodiscard]] LightmapUVResult generate_lightmap_uv(std::span<const Vertex> vertices,
                                                         std::span<const uint32_t> indices,
-                                                        const std::string &mesh_hash);
+                                                        const std::string &mesh_hash,
+                                                        uint32_t pack_resolution);
 } // namespace himalaya::framework
