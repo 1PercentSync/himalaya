@@ -1037,21 +1037,26 @@ namespace himalaya::app {
             VK_IMAGE_LAYOUT_UNDEFINED,
             VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 
-        // Import baker images once — shared between RT dispatch and blit preview.
+        // Import baker accumulation — shared between RT dispatch and blit preview.
         // Single import per VkImage ensures RG tracks barriers correctly.
         framework::RGResourceId rg_accum;
-        const bool has_baker_images = bake_accumulation_.valid() && bake_lightmap_width_ > 0;
-        if (has_baker_images) {
+        const bool has_lightmap_images = bake_accumulation_.valid() && bake_lightmap_width_ > 0;
+        const bool has_probe_images = bake_probe_accumulation_.valid() && bake_probe_total_ > 0;
+        if (has_lightmap_images) {
             rg_accum = render_graph_.import_image(
                 "baker_accumulation", bake_accumulation_,
                 VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
+        } else if (has_probe_images) {
+            rg_accum = render_graph_.import_image(
+                "probe_accumulation", bake_probe_accumulation_,
+                VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
         }
 
-        // Baker RT dispatch (if actively accumulating)
-        const bool actively_baking = bake_state_ == BakeState::BakingLightmaps
-                                     && !lightmap_finalize_pending_
-                                     && lightmap_baker_pass_.sample_count() < bake_locked_config_.lightmap_spp;
-        if (actively_baking && has_baker_images) {
+        // Lightmap baker RT dispatch (if actively accumulating lightmaps)
+        const bool actively_baking_lightmaps = bake_state_ == BakeState::BakingLightmaps
+                                               && !lightmap_finalize_pending_
+                                               && lightmap_baker_pass_.sample_count() < bake_locked_config_.lightmap_spp;
+        if (actively_baking_lightmaps && has_lightmap_images) {
             auto rg_aux_albedo = render_graph_.import_image(
                 "baker_aux_albedo", bake_aux_albedo_,
                 VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
@@ -1073,6 +1078,28 @@ namespace himalaya::app {
                 .frame_index = input.frame_index,
                 .frame_number = frame_counter_,
             }, rg_accum, rg_aux_albedo, rg_aux_normal, rg_pos_map, rg_nrm_map);
+        }
+
+        // Probe baker RT dispatch (if actively accumulating probes)
+        const bool actively_baking_probes = bake_state_ == BakeState::BakingProbes
+                                            && !bake_probe_placement_pending_
+                                            && !bake_probe_finalize_pending_
+                                            && bake_probe_total_ > 0
+                                            && probe_baker_pass_.sample_count() < bake_locked_config_.probe_spp;
+        if (actively_baking_probes && has_probe_images) {
+            auto rg_aux_albedo = render_graph_.import_image(
+                "probe_aux_albedo", bake_probe_aux_albedo_,
+                VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
+            auto rg_aux_normal = render_graph_.import_image(
+                "probe_aux_normal", bake_probe_aux_normal_,
+                VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
+
+            probe_baker_pass_.record(render_graph_, {
+                .swapchain = {},
+                .hdr_color = {},
+                .frame_index = input.frame_index,
+                .frame_number = frame_counter_,
+            }, rg_accum, rg_aux_albedo, rg_aux_normal);
         }
 
         // --- Preview pipeline: clear hdr → blit accumulation → tonemapping → ImGui ---
@@ -1111,8 +1138,8 @@ namespace himalaya::app {
                                                         &clear_color, 1, &range);
                                });
 
-        // Blit accumulation preview into hdr_color (centered, aspect-ratio preserved)
-        if (has_baker_images) {
+        // Blit lightmap accumulation preview into hdr_color (centered, aspect-ratio preserved)
+        if (has_lightmap_images) {
 
             const std::array blit_resources = {
                 framework::RGResourceUsage{
