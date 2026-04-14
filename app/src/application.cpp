@@ -223,6 +223,7 @@ namespace himalaya::app {
         camera_controller_.set_focus_target(&scene_loader_.scene_bounds());
 
         config_.scene_path = path;
+        bake_angles_dirty_ = true;
         save_config(config_);
     }
 
@@ -238,6 +239,7 @@ namespace himalaya::app {
         }
 
         config_.env_path = path;
+        bake_angles_dirty_ = true;
 
         // Restore persisted HDR sun coordinates for the new environment
         if (const auto it = config_.hdr_sun_coords.find(path);
@@ -360,6 +362,7 @@ namespace himalaya::app {
             if (renderer_.bake_state() == framework::BakeState::Complete) {
                 render_mode_ = renderer_.bake_pre_mode();
                 renderer_.complete_bake();
+                bake_angles_dirty_ = true;
             }
 
             update();
@@ -514,6 +517,15 @@ namespace himalaya::app {
             display_light_yaw_deg = glm::degrees(std::atan2(dir.x, -dir.z));
         }
 
+        // Compute bake cache key (probe_set_key: scene + hdr + scene_textures)
+        std::string bake_cache_key;
+        if (!config_.scene_path.empty() && !config_.env_path.empty()) {
+            const std::string key_input = scene_loader_.scene_hash()
+                + framework::content_hash(config_.env_path)
+                + scene_loader_.scene_textures_hash();
+            bake_cache_key = framework::content_hash(key_input.data(), key_input.size());
+        }
+
         // Debug UI
         DebugUIContext ui_ctx{
             .delta_time = delta_time,
@@ -569,6 +581,12 @@ namespace himalaya::app {
             .bg_uv_completed = uv_generator_.completed(),
             .bg_uv_total = uv_generator_.total(),
             .max_thread_count = std::thread::hardware_concurrency(),
+            .bake_config = bake_config_,
+            .bake_progress = renderer_.bake_progress(),
+            .has_scene = !config_.scene_path.empty(),
+            .has_hdr = !config_.env_path.empty(),
+            .bake_cache_key = bake_cache_key,
+            .bake_angles_dirty = bake_angles_dirty_,
             .scene_stats = {
                 .total_instances = total_instances,
                 .total_meshes = static_cast<uint32_t>(meshes.size()),
@@ -675,6 +693,27 @@ namespace himalaya::app {
         }
         if (actions.bg_uv_config_changed) {
             save_config(config_);
+        }
+
+        // ---- Bake actions ----
+        if (actions.bake_start_requested) {
+            start_bake_session();
+            bake_angles_dirty_ = true;
+        }
+        if (actions.bake_cancel_requested) {
+            renderer_.cancel_bake();
+            render_mode_ = renderer_.bake_pre_mode();
+        }
+        if (actions.bake_config_changed) {
+            save_config(config_);
+        }
+        if (actions.clear_bake_cache_requested) {
+            framework::clear_cache("bake");
+            bake_angles_dirty_ = true;
+        }
+        if (actions.clear_uv_cache_requested) {
+            framework::clear_cache("lightmap_uv_debug");
+            framework::clear_cache("lightmap_uv_release");
         }
 
         // ---- Effective present mode (user preference + PT/Bake tearing override) ----

@@ -210,6 +210,9 @@ namespace himalaya::app {
         /** @brief Bake configuration parameters. */
         framework::BakeConfig bake_config_{};
 
+        /** @brief Dirty flag for baked angle list rescanning in DebugUI. */
+        bool bake_angles_dirty_ = true;
+
         // --- Left-click drag state (IBL rotation or fallback light direction) ---
 
         /** @brief Previous cursor X for left-click drag delta. */
