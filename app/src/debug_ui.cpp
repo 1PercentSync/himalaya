@@ -956,7 +956,7 @@ namespace himalaya::app {
                 // SPP per Frame — adjustable during baking (not locked)
                 {
                     auto spp = static_cast<int>(ctx.bake_config.spp_per_frame);
-                    if (ImGui::SliderInt("SPP per Frame", &spp, 1, 512)) {
+                    if (ImGui::SliderInt("SPP per Frame", &spp, 1, 2048)) {
                         ctx.bake_config.spp_per_frame = static_cast<uint32_t>(spp);
                     }
                     if (ImGui::IsItemHovered()) {

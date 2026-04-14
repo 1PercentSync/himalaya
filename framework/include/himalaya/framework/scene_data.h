@@ -351,7 +351,7 @@ namespace himalaya::framework {
 
         /** @brief Number of SPP batched per frame during baking.
          *  Higher values improve GPU utilization but reduce UI responsiveness. */
-        uint32_t spp_per_frame = 16;
+        uint32_t spp_per_frame = 64;
 
         /** @brief Probes with average luminance below this threshold are rejected.
          *  Rejected probes do not produce KTX2 files or manifest entries. */
