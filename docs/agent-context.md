@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段七 — PT 烘焙器
-- **进度**：Step 12.5 prepare_uv_requests() 完成
+- **进度**：Step 12.5 LightmapUVResult cache_hit 重构完成
 
 ### 下一个任务
 
-Step 12.5：`scene_loader.cpp` apply_lightmap_uvs() 实现，详见 `docs/current-phase.md` Step 12.5 章节。
+Step 12.5：`scene_loader.cpp` apply_lightmap_uvs() 实现（检查 cache_hit + warn），详见 `docs/current-phase.md` Step 12.5 章节。
 
 ---
 
