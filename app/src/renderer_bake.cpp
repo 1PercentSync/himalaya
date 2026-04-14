@@ -786,8 +786,107 @@ namespace himalaya::app {
     }
 
     void Renderer::begin_probe_bake_instance(const uint32_t probe_index) {
-        // Step 12 item 5: create cubemap images, barrier, clear, configure pass
-        (void)probe_index;
+        bake_current_probe_ = probe_index;
+        const uint32_t res = bake_locked_config_.probe_face_resolution;
+        const auto &pos = bake_probe_positions_[probe_index];
+
+        // Create per-probe cubemap images (array_layers=6 → auto CUBE_COMPATIBLE + CUBE view)
+        bake_probe_accumulation_ = resource_manager_->create_image({
+            .width = res, .height = res, .depth = 1,
+            .mip_levels = 1, .array_layers = 6, .sample_count = 1,
+            .format = rhi::Format::R32G32B32A32Sfloat,
+            .usage = rhi::ImageUsage::Storage | rhi::ImageUsage::TransferSrc |
+                     rhi::ImageUsage::TransferDst | rhi::ImageUsage::Sampled,
+        }, "bake_probe_accumulation");
+
+        bake_probe_aux_albedo_ = resource_manager_->create_image({
+            .width = res, .height = res, .depth = 1,
+            .mip_levels = 1, .array_layers = 6, .sample_count = 1,
+            .format = rhi::Format::R16G16B16A16Sfloat,
+            .usage = rhi::ImageUsage::Storage | rhi::ImageUsage::TransferSrc,
+        }, "bake_probe_aux_albedo");
+
+        bake_probe_aux_normal_ = resource_manager_->create_image({
+            .width = res, .height = res, .depth = 1,
+            .mip_levels = 1, .array_layers = 6, .sample_count = 1,
+            .format = rhi::Format::R16G16B16A16Sfloat,
+            .usage = rhi::ImageUsage::Storage | rhi::ImageUsage::TransferSrc,
+        }, "bake_probe_aux_normal");
+
+        // Barrier: UNDEFINED → GENERAL for all 3 cubemaps
+        rhi::CommandBuffer imm_cmd(ctx_->immediate_command_buffer);
+
+        const std::array<VkImageMemoryBarrier2, 3> initial_barriers = {{
+            {
+                .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+                .srcStageMask = VK_PIPELINE_STAGE_2_NONE,
+                .srcAccessMask = VK_ACCESS_2_NONE,
+                .dstStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+                .dstAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT,
+                .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+                .newLayout = VK_IMAGE_LAYOUT_GENERAL,
+                .image = resource_manager_->get_image(bake_probe_accumulation_).image,
+                .subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 6},
+            },
+            {
+                .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+                .srcStageMask = VK_PIPELINE_STAGE_2_NONE,
+                .srcAccessMask = VK_ACCESS_2_NONE,
+                .dstStageMask = VK_PIPELINE_STAGE_2_RAY_TRACING_SHADER_BIT_KHR,
+                .dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+                .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+                .newLayout = VK_IMAGE_LAYOUT_GENERAL,
+                .image = resource_manager_->get_image(bake_probe_aux_albedo_).image,
+                .subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 6},
+            },
+            {
+                .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+                .srcStageMask = VK_PIPELINE_STAGE_2_NONE,
+                .srcAccessMask = VK_ACCESS_2_NONE,
+                .dstStageMask = VK_PIPELINE_STAGE_2_RAY_TRACING_SHADER_BIT_KHR,
+                .dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+                .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+                .newLayout = VK_IMAGE_LAYOUT_GENERAL,
+                .image = resource_manager_->get_image(bake_probe_aux_normal_).image,
+                .subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 6},
+            },
+        }};
+        VkDependencyInfo dep{};
+        dep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+        dep.imageMemoryBarrierCount = static_cast<uint32_t>(initial_barriers.size());
+        dep.pImageMemoryBarriers = initial_barriers.data();
+        imm_cmd.pipeline_barrier(dep);
+
+        // Clear accumulation to black (6 layers)
+        {
+            VkClearColorValue clear_color{};
+            VkImageSubresourceRange range{VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 6};
+            vkCmdClearColorImage(imm_cmd.handle(),
+                                resource_manager_->get_image(bake_probe_accumulation_).image,
+                                VK_IMAGE_LAYOUT_GENERAL,
+                                &clear_color, 1, &range);
+        }
+
+        // Configure probe baker pass
+        probe_baker_pass_.set_probe_images(
+            bake_probe_accumulation_, bake_probe_aux_albedo_, bake_probe_aux_normal_, res);
+        probe_baker_pass_.set_probe_position(pos.x, pos.y, pos.z);
+        probe_baker_pass_.reset_accumulation();
+
+        // Set baker parameters from locked config
+        probe_baker_pass_.set_max_bounces(bake_locked_config_.max_bounces);
+        probe_baker_pass_.set_env_sampling(
+            bake_locked_config_.env_sampling && ibl_.alias_table_buffer().valid());
+        probe_baker_pass_.set_emissive_light_count(
+            bake_locked_config_.emissive_nee ? emissive_light_builder_.emissive_count() : 0u);
+
+        bake_probe_finalize_pending_ = false;
+        bake_instance_start_time_ = std::chrono::steady_clock::now();
+
+        spdlog::info("Probe bake instance {} / {} started: pos=({:.2f}, {:.2f}, {:.2f}), face_res={}",
+                     probe_index + 1, bake_probe_total_,
+                     static_cast<double>(pos.x), static_cast<double>(pos.y),
+                     static_cast<double>(pos.z), res);
     }
 
     void Renderer::destroy_probe_bake_instance_images() {
