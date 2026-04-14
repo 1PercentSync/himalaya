@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段七 — PT 烘焙器
-- **进度**：Step 13.6 完成，Step 14 设计完成，待实现
+- **进度**：Step 14 进行中（1/8 完成：BakeConfig::spp_per_frame）
 
 ### 下一个任务
 
-实现 Step 14：Bake Multi-SPP 优化（单帧多 SPP dispatch，提升 GPU 利用率）。
+Step 14 第 2 小项：`lightmap_baker_pass.h/.cpp` record() 新增 batch_spp 参数。
 
 ---
 

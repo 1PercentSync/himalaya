@@ -281,7 +281,7 @@
 
 ## Step 14：Bake Multi-SPP 优化
 
-- [ ] `scene_data.h`：BakeConfig 新增 `uint32_t spp_per_frame = 16`
+- [x] `scene_data.h`：BakeConfig 新增 `uint32_t spp_per_frame = 16`
 - [ ] `lightmap_baker_pass.h/.cpp`：`record()` 新增 `uint32_t batch_spp` 参数（默认 1），内部循环 batch_spp 次 push_constants + trace_rays + inter-dispatch memory barrier，record 结束后 `sample_count_ += batch_spp; frame_seed_ += batch_spp`
 - [ ] `probe_baker_pass.h/.cpp`：`record()` 新增 `uint32_t batch_spp` 参数（默认 1），外层循环 batch_spp（内层循环 6 face），SPP 之间插入 memory barrier
 - [ ] `renderer_bake.cpp`：`render_baking()` BakingLightmaps 分支计算 `batch = min(remaining, spp_per_frame)` 并传给 `lightmap_baker_pass_.record()`（`spp_per_frame` 从 `bake_config_` 实时读取，不走 locked config）
