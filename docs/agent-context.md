@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段七 — PT 烘焙器
-- **进度**：Step 12.6a 进行中（3/5 完成）
+- **进度**：Step 12.6a 进行中（4/5 完成）
 
 ### 下一个任务
 
-Step 12.6a 第 4 项：`lightmap_bake_finalize()` aux barrier 修正为 `srcStageMask = RT_SHADER` + `srcAccessMask = NONE`。
+Step 12.6a 第 5 项：`application.cpp` `start_bake_session()` 开头补 `vkQueueWaitIdle(context_.graphics_queue)`。
 
 ---
 
