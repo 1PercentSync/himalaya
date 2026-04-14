@@ -370,4 +370,4 @@
 
 ### 17g：Probe per-face 亮度剔除
 
-- [ ] `renderer_bake.cpp`：`probe_bake_finalize()` 亮度检查改为 per-face，任一面平均亮度低于 `probe_min_luminance` 则整个 probe 丢弃（捕获 placement filter 漏掉的部分嵌入几何体的 probe）
+- [x] `renderer_bake.cpp`：`probe_bake_finalize()` 亮度检查改为 per-face，任一面平均亮度低于 `probe_min_luminance` 则整个 probe 丢弃（捕获 placement filter 漏掉的部分嵌入几何体的 probe）
