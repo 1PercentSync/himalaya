@@ -75,13 +75,18 @@ namespace himalaya::passes {
          * @param rg_aux_normal   RG resource for aux normal (Write).
          * @param rg_position_map RG resource for position map (Read).
          * @param rg_normal_map   RG resource for normal map (Read).
+         * @param batch_spp       Number of SPP to dispatch in this single RG pass.
+         *                        Each dispatch uses incremented sample_count/frame_seed.
+         *                        Inter-dispatch memory barriers ensure accumulation
+         *                        imageStore visibility for the next imageLoad.
          */
         void record(framework::RenderGraph &rg, const framework::FrameContext &ctx,
                     framework::RGResourceId rg_accumulation,
                     framework::RGResourceId rg_aux_albedo,
                     framework::RGResourceId rg_aux_normal,
                     framework::RGResourceId rg_position_map,
-                    framework::RGResourceId rg_normal_map);
+                    framework::RGResourceId rg_normal_map,
+                    uint32_t batch_spp);
 
         /**
          * @brief Rebuild RT pipeline by recompiling shaders from disk.

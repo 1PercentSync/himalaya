@@ -209,7 +209,8 @@ namespace himalaya::passes {
                                    const framework::RGResourceId rg_aux_albedo,
                                    const framework::RGResourceId rg_aux_normal,
                                    const framework::RGResourceId rg_pos_map,
-                                   const framework::RGResourceId rg_nrm_map) {
+                                   const framework::RGResourceId rg_nrm_map,
+                                   const uint32_t batch_spp) {
         if (rt_pipeline_.pipeline == VK_NULL_HANDLE) {
             return;
         }
@@ -244,13 +245,14 @@ namespace himalaya::passes {
         };
 
         // Capture current accumulation state for the lambda
-        const uint32_t current_sample = sample_count_;
-        const uint32_t current_seed = frame_seed_;
+        const uint32_t start_sample = sample_count_;
+        const uint32_t start_seed = frame_seed_;
         const uint32_t lm_w = lightmap_width_;
         const uint32_t lm_h = lightmap_height_;
+        const uint32_t batch = batch_spp;
 
         rg.add_pass("Lightmap Baker", resources,
-                     [this, &rg, &ctx, current_sample, current_seed, lm_w, lm_h,
+                     [this, &rg, &ctx, start_sample, start_seed, lm_w, lm_h, batch,
                       rg_accum, rg_aux_albedo, rg_aux_normal, rg_pos_map, rg_nrm_map](
                          const rhi::CommandBuffer &cmd) {
                          cmd.bind_rt_pipeline(rt_pipeline_);
@@ -350,38 +352,58 @@ namespace himalaya::passes {
 
                          cmd.push_rt_descriptor_set(rt_pipeline_.layout, 3, writes);
 
-                         // Push constants — baker always disables firefly clamping (max_clamp = 0)
-                         const PTPushConstants pc{
-                             .max_bounces = max_bounces_,
-                             .sample_count = current_sample,
-                             .frame_seed = current_seed,
-                             .blue_noise_index = blue_noise_index_,
-                             .max_clamp = 0.0f,
-                             .env_sampling = env_sampling_ ? 1u : 0u,
-                             .directional_lights = 0u,
-                             .emissive_light_count = emissive_light_count_,
-                             .lod_max_level = lod_max_level_,
-                             .lightmap_width = lm_w,
-                             .lightmap_height = lm_h,
-                             .probe_pos_x = 0.0f,
-                             .probe_pos_y = 0.0f,
-                             .probe_pos_z = 0.0f,
-                             .face_index = 0,
-                         };
-                         cmd.push_constants(
-                             rt_pipeline_.layout,
-                             VK_SHADER_STAGE_RAYGEN_BIT_KHR |
-                                 VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR |
-                                 VK_SHADER_STAGE_ANY_HIT_BIT_KHR,
-                             &pc, sizeof(pc));
+                         for (uint32_t s = 0; s < batch; ++s) {
+                             PTPushConstants pc{
+                                 .max_bounces = max_bounces_,
+                                 .sample_count = start_sample + s,
+                                 .frame_seed = start_seed + s,
+                                 .blue_noise_index = blue_noise_index_,
+                                 .max_clamp = 0.0f,
+                                 .env_sampling = env_sampling_ ? 1u : 0u,
+                                 .directional_lights = 0u,
+                                 .emissive_light_count = emissive_light_count_,
+                                 .lod_max_level = lod_max_level_,
+                                 .lightmap_width = lm_w,
+                                 .lightmap_height = lm_h,
+                                 .probe_pos_x = 0.0f,
+                                 .probe_pos_y = 0.0f,
+                                 .probe_pos_z = 0.0f,
+                                 .face_index = 0,
+                             };
+                             cmd.push_constants(
+                                 rt_pipeline_.layout,
+                                 VK_SHADER_STAGE_RAYGEN_BIT_KHR |
+                                     VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR |
+                                     VK_SHADER_STAGE_ANY_HIT_BIT_KHR,
+                                 &pc, sizeof(pc));
 
-                         // Dispatch trace_rays at lightmap resolution
-                         cmd.trace_rays(rt_pipeline_, lm_w, lm_h);
+                             cmd.trace_rays(rt_pipeline_, lm_w, lm_h);
+
+                             // Memory barrier between dispatches: imageStore must be
+                             // visible to the next dispatch's imageLoad (accumulation
+                             // running average). Not needed after the last dispatch.
+                             if (s + 1 < batch) {
+                                 VkMemoryBarrier2 barrier{
+                                     .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
+                                     .srcStageMask = VK_PIPELINE_STAGE_2_RAY_TRACING_SHADER_BIT_KHR,
+                                     .srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+                                     .dstStageMask = VK_PIPELINE_STAGE_2_RAY_TRACING_SHADER_BIT_KHR,
+                                     .dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT
+                                                    | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+                                 };
+                                 VkDependencyInfo dep{
+                                     .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+                                     .memoryBarrierCount = 1,
+                                     .pMemoryBarriers = &barrier,
+                                 };
+                                 cmd.pipeline_barrier(dep);
+                             }
+                         }
                      });
 
         // Advance accumulation state after recording
-        ++sample_count_;
-        ++frame_seed_;
+        sample_count_ += batch_spp;
+        frame_seed_ += batch_spp;
     }
 
     // ---- Baker image configuration ----
