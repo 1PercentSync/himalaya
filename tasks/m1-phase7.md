@@ -274,3 +274,7 @@
 - [x] `debug_ui.h`：`DebugUIContext` 新增 `float scene_aabb_longest_edge`
 - [x] `application.cpp`：从 scene AABB 计算 longest edge 填入 DebugUIContext
 - [x] `debug_ui.cpp`：Enclosure Factor slider 旁 `SameLine` + `Text("= %.2f m")` 显示绝对阈值（无场景时不显示）
+
+## Step 13.6：审查修复（Step 13.5 Codex 复查）
+
+- [ ] `renderer_bake.cpp`：`start_bake()` 中 `compute_lightmap_keys()` 改为传入原始 vertex/index 数据（`scene_loader` 的 `uv_original_vertices_` / `uv_original_indices_`，而非 post-UV 的 `cpu_vertices` / `cpu_indices`）
