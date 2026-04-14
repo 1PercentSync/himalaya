@@ -172,7 +172,7 @@
 - [x] `scene_loader.cpp`：`prepare_uv_requests()` 实现（从 pending + cpu data 构造 Request 列表）
 - [x] `lightmap_uv.h/.cpp` 重构：`LightmapUVResult` 新增 `bool cache_hit` 字段，`generate_lightmap_uv()` 设置该字段
 - [x] `scene_loader.cpp`：`apply_lightmap_uvs()` 实现（全量重建 VB/IB：pending 走 xatlas 缓存 + 检查 `cache_hit` miss 时 warn log，其余原样，需 immediate scope，不清空 pending）
-- [ ] `config.h`：`AppConfig` 新增 `bg_uv_auto_start`（bool）+ `bg_uv_thread_count`（uint32_t）
+- [x] `config.h`：`AppConfig` 新增 `bg_uv_auto_start`（bool）+ `bg_uv_thread_count`（uint32_t）
 - [ ] `config.cpp`：JSON 读写新增两个字段
 - [ ] `debug_ui.h`：`DebugUIContext` 新增 bg_uv 字段（thread_count&、auto_start&、running、completed、total、max_thread_count）+ `DebugUIActions` 新增 bg_uv_start_requested / bg_uv_stop_requested / bg_uv_config_changed
 - [ ] `debug_ui.cpp`：Baking header 内新增 Lightmap UV Generation 子面板（Auto-start checkbox + Threads slider + Start/Stop 按钮 + Status 文本）
