@@ -377,10 +377,9 @@
 - [x] `descriptors.cpp`：Set 0 binding 4（TLAS）和 binding 5（GeometryInfo）stageFlags 追加 `COMPUTE_BIT`（`probe_filter.comp` compute pipeline 需要访问这两个绑定）
 - [x] `renderer_bake.cpp`：`bake_probe_aux_albedo_` / `bake_probe_aux_normal_` 创建时 usage 追加 `TransferDst`（Step 16a 的 `vkCmdClearColorImage` 需要此 flag）
 
-### 17i：Lightmap UV padding 与 bake 分辨率对齐
+### 17i：Lightmap UV padding 与 bake 分辨率对齐 + 默认值调优
 
 - [x] `scene_data.h`：`BakeConfig::min_resolution` 默认值 32 → 64
-- [x] `lightmap_uv.h/.cpp`：`generate_lightmap_uv()` 签名新增 `uint32_t pack_resolution` 参数，设置 `pack_options.resolution`
-- [x] `lightmap_uv_generator.h/.cpp`：`start()` 新增 `pack_resolution` 参数，存储并传递给 worker
-- [x] `scene_loader.h/.cpp`：`apply_lightmap_uvs()` 新增 `pack_resolution` 参数
-- [x] `application.cpp`：所有调用侧传入 `bake_config_.min_resolution`
+- [x] `lightmap_uv.cpp`：新增 `kPackResolution = 64` 内部常量，`pack_options.resolution` 固定为 64（匹配 UI 滑条下限，保证 padding >= 2 texels；不跟随运行时 `min_resolution` 以保持 UV 缓存稳定性）
+- [x] `scene_data.h`：`lightmap_spp` 512 → 1024，`probe_spp` 256 → 512，`spp_per_frame` 16 → 512
+- [x] `debug_ui.cpp`：Texels/m 滑条上限 50 → 200，Min Resolution 滑条下限 4 → 64，SPP per Frame 滑条上限 512 → 8192
