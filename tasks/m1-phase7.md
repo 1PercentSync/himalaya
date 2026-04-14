@@ -184,7 +184,7 @@
 
 ### 12.6a：Vulkan 正确性修复
 
-- [ ] `renderer_bake.cpp`：`bake_normal_map_` 创建时 usage 补 `TransferSrc`
+- [x] `renderer_bake.cpp`：`bake_normal_map_` 创建时 usage 补 `TransferSrc`
 - [ ] `renderer_bake.cpp`：`lightmap_bake_finalize()` 全部 readback buffer 补 `vmaInvalidateAllocation()`，upload buffer 补 `vmaFlushAllocation()`
 - [ ] `renderer_bake.cpp`：`probe_bake_finalize()` 全部 readback/upload buffer 补 VMA coherence 操作
 - [ ] `renderer_bake.cpp`：`lightmap_bake_finalize()` aux barrier 修正为 `srcStageMask = RT_SHADER` + `srcAccessMask = NONE`
