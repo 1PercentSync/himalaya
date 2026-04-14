@@ -178,7 +178,7 @@
 - [x] `debug_ui.cpp`：Baking header 内新增 Lightmap UV Generation 子面板（Auto-start checkbox + Threads slider + Start/Stop 按钮 + Status 文本）
 - [x] `application.cpp`：持有 `LightmapUVGenerator`，场景加载后 auto-start 逻辑，DebugUIActions 处理（start/stop/config save），线程数首次解析并持久化
 - [x] `scene_loader.h/.cpp` 修复：新增 `uv_original_vertices_` / `uv_original_indices_`（原始数据备份），`load_meshes()` 记录 pending 时同时保存副本，`prepare_uv_requests()` 和 `apply_lightmap_uvs()` 从原始数据读取，`destroy()` 清理 pending 数据
-- [ ] `application.cpp`：Start Bake 流程前置步骤（始终：if !running → start; wait → apply_lightmap_uvs → build_scene_rt → start_bake）
+- [x] `application.cpp`：Start Bake 流程前置步骤（始终：if !running → start; wait → apply_lightmap_uvs → build_scene_rt → start_bake）
 
 ## Step 13：ImGui 烘焙控制面板
 
