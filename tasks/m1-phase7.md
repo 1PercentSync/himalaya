@@ -277,4 +277,4 @@
 
 ## Step 13.6：审查修复（Step 13.5 Codex 复查）
 
-- [ ] `renderer_bake.cpp`：`start_bake()` 中 `compute_lightmap_keys()` 改为传入原始 vertex/index 数据（`scene_loader` 的 `uv_original_vertices_` / `uv_original_indices_`，而非 post-UV 的 `cpu_vertices` / `cpu_indices`）
+- [x] `renderer_bake.cpp`：`start_bake()` 移除 `compute_lightmap_keys()` 调用，使用 Application 预计算的原始数据 keys（而非 post-UV 数据重算）
