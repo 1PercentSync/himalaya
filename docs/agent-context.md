@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段七 — PT 烘焙器
-- **进度**：Step 14 进行中（5/8 完成）
+- **进度**：Step 14 进行中（6/8 完成）
 
 ### 下一个任务
 
-Step 14 第 6 小项：`debug_ui.cpp` Baking 参数面板新增 "SPP per Frame" SliderInt。
+Step 14 第 7 小项：`config.h` + `config.cpp` 新增 `bake_spp_per_frame` JSON 读写。
 
 ---
 

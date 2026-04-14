@@ -286,6 +286,6 @@
 - [x] `probe_baker_pass.h/.cpp`：`record()` 新增 `uint32_t batch_spp` 参数，外层循环 batch_spp（内层循环 6 face），SPP 之间插入 memory barrier
 - [x] `renderer_bake.cpp`：`render_baking()` BakingLightmaps 分支计算 `batch = min(remaining, spp_per_frame)` 并传给 `lightmap_baker_pass_.record()`（`spp_per_frame` 从 `input.bake_config` 实时读取，不走 locked config）
 - [x] `renderer_bake.cpp`：`render_baking()` BakingProbes 分支同理计算 batch 传给 `probe_baker_pass_.record()`
-- [ ] `debug_ui.cpp`：Baking 参数面板新增 "SPP per Frame" SliderInt（范围 1-512），烘焙期间不锁定
+- [x] `debug_ui.cpp`：Baking 参数面板新增 "SPP per Frame" SliderInt（范围 1-512），烘焙期间不锁定
 - [ ] `config.h` + `config.cpp`：AppConfig 新增 `bake_spp_per_frame` + JSON 读写
 - [ ] `application.cpp`：DebugUIContext 填充 spp_per_frame 引用 + 变化检测持久化
