@@ -1110,25 +1110,31 @@ namespace himalaya::app {
                             }
                         }
 
-                        // For each angle, count lightmap and probe KTX2 files
+                        // For each angle, count lightmap and probe files
                         for (const uint32_t rot : found_angles) {
                             char rot_str[4];
                             std::snprintf(rot_str, sizeof(rot_str), "%03u", rot);
-                            const std::string rot_prefix = ctx.bake_cache_key + "_rot"
-                                + std::string(rot_str);
+                            const std::string rot_suffix = "_rot" + std::string(rot_str);
 
+                            // Lightmaps: verify each per-instance key file exists
                             uint32_t lm_count = 0;
+                            for (const auto &key : ctx.bake_lightmap_keys) {
+                                const auto path = framework::cache_path(
+                                    "bake", key + rot_suffix, ".ktx2");
+                                if (std::filesystem::exists(path, ec)) {
+                                    ++lm_count;
+                                }
+                            }
+
+                            // Probes: count probe KTX2 files by prefix
                             uint32_t probe_count = 0;
+                            const std::string probe_prefix = ctx.bake_cache_key + rot_suffix + "_probe";
                             for (const auto &f : std::filesystem::directory_iterator(bake_dir, ec)) {
                                 if (!f.is_regular_file() || f.path().extension() != ".ktx2") {
                                     continue;
                                 }
-                                const auto name = f.path().stem().string();
-                                if (!name.starts_with(rot_prefix)) { continue; }
-                                if (name.find("_probe") != std::string::npos) {
+                                if (f.path().stem().string().starts_with(probe_prefix)) {
                                     ++probe_count;
-                                } else {
-                                    ++lm_count;
                                 }
                             }
 
