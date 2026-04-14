@@ -44,8 +44,10 @@ namespace himalaya::framework {
         float instance_elapsed_s = 0.0f;  ///< Current item wall-clock elapsed.
         float total_elapsed_s = 0.0f;     ///< Total bake session wall-clock elapsed.
 
-        // --- Progress weighting (texel-samples) ---
-        uint64_t completed_texel_samples = 0; ///< Texel-samples finished so far.
-        uint64_t total_texel_samples = 0;     ///< Pre-computed total work.
+        // --- Per-phase progress (texel-samples) ---
+        uint64_t lm_completed_texel_samples = 0;  ///< Lightmap texel-samples finished.
+        uint64_t lm_total_texel_samples = 0;       ///< Lightmap total (known at bake start).
+        uint64_t probe_completed_texel_samples = 0; ///< Probe texel-samples finished.
+        uint64_t probe_total_texel_samples = 0;     ///< Probe total (known after placement).
     };
 } // namespace himalaya::framework
