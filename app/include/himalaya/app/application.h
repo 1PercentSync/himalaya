@@ -11,6 +11,7 @@
 #include <himalaya/app/renderer.h>
 #include <himalaya/app/scene_loader.h>
 #include <himalaya/framework/camera.h>
+#include <himalaya/framework/lightmap_uv_generator.h>
 #include <himalaya/framework/imgui_backend.h>
 #include <himalaya/rhi/context.h>
 #include <himalaya/rhi/descriptors.h>
@@ -332,5 +333,17 @@ namespace himalaya::app {
 
         /** @brief Error message shown in DebugUI (empty = no error, auto-dismissed after timeout). */
         std::string error_message_;
+
+        /** @brief Background lightmap UV generator (thread pool). */
+        framework::LightmapUVGenerator uv_generator_{};
+
+        /**
+         * @brief Resolves bg_uv_thread_count if 0 (first launch) and persists.
+         *
+         * Called once at init after config load. Sets thread count to
+         * max(1, hardware_concurrency - 4) so the ImGui slider always
+         * displays a valid value.
+         */
+        void resolve_thread_count();
     };
 } // namespace himalaya::app

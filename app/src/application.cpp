@@ -15,6 +15,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <thread>
 
 #include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
@@ -48,6 +49,7 @@ namespace himalaya::app {
             : spdlog::level::from_str(config_.log_level));
 
         pt_allow_tearing_ = config_.pt_allow_tearing;
+        resolve_thread_count();
 
         glfwInit();
         glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
@@ -120,6 +122,12 @@ namespace himalaya::app {
                                          scene_loader_.cpu_indices());
                 context_.end_immediate();
             }
+
+            // Auto-start background UV generation if configured
+            if (scene_ok && config_.bg_uv_auto_start) {
+                auto requests = scene_loader_.prepare_uv_requests();
+                uv_generator_.start(std::move(requests), config_.bg_uv_thread_count);
+            }
         }
 
         update_shadow_config_from_scene();
@@ -170,6 +178,7 @@ namespace himalaya::app {
     // ---- Runtime scene/environment switching ----
 
     void Application::switch_scene(const std::string &path) {
+        uv_generator_.cancel();
         vkQueueWaitIdle(context_.graphics_queue);
 
         renderer_.abort_denoise();
@@ -199,6 +208,12 @@ namespace himalaya::app {
                                          scene_loader_.cpu_vertices(),
                                          scene_loader_.cpu_indices());
                 context_.end_immediate();
+            }
+
+            // Auto-start background UV generation if configured
+            if (ok && config_.bg_uv_auto_start) {
+                auto requests = scene_loader_.prepare_uv_requests();
+                uv_generator_.start(std::move(requests), config_.bg_uv_thread_count);
             }
         }
 
@@ -236,7 +251,18 @@ namespace himalaya::app {
         save_config(config_);
     }
 
+    void Application::resolve_thread_count() {
+        if (config_.bg_uv_thread_count == 0) {
+            const auto hw = std::thread::hardware_concurrency();
+            config_.bg_uv_thread_count = (hw > 4) ? (hw - 4) : 1;
+            save_config(config_);
+            spdlog::info("Resolved bg_uv_thread_count to {} (hardware_concurrency={})",
+                         config_.bg_uv_thread_count, hw);
+        }
+    }
+
     void Application::destroy() {
+        uv_generator_.cancel();
         vkQueueWaitIdle(context_.graphics_queue);
 
         imgui_backend_.destroy();
@@ -483,6 +509,12 @@ namespace himalaya::app {
             .scene_path = config_.scene_path,
             .env_path = config_.env_path,
             .error_message = error_message_,
+            .bg_uv_thread_count = config_.bg_uv_thread_count,
+            .bg_uv_auto_start = config_.bg_uv_auto_start,
+            .bg_uv_running = uv_generator_.running(),
+            .bg_uv_completed = uv_generator_.completed(),
+            .bg_uv_total = uv_generator_.total(),
+            .max_thread_count = std::thread::hardware_concurrency(),
             .scene_stats = {
                 .total_instances = total_instances,
                 .total_meshes = static_cast<uint32_t>(meshes.size()),
@@ -577,6 +609,18 @@ namespace himalaya::app {
 
         if (actions.pt_denoise_requested) {
             renderer_.request_manual_denoise();
+        }
+
+        // ---- Background UV generation actions ----
+        if (actions.bg_uv_start_requested) {
+            auto requests = scene_loader_.prepare_uv_requests();
+            uv_generator_.start(std::move(requests), config_.bg_uv_thread_count);
+        }
+        if (actions.bg_uv_stop_requested) {
+            uv_generator_.cancel();
+        }
+        if (actions.bg_uv_config_changed) {
+            save_config(config_);
         }
 
         // ---- Effective present mode (user preference + PT/Bake tearing override) ----
