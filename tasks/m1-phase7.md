@@ -338,3 +338,31 @@
 ### 16e：`compress_bc6h` 出口 barrier 放宽
 
 - [x] `texture_compress.cpp`：最终 barrier `dstStageMask` 从 `FRAGMENT_SHADER_BIT` 改为 `ALL_COMMANDS_BIT`（调用侧不限于 fragment shader 消费，bake 管线需要 transfer readback）
+
+## Step 17：审查修复（Phase 7 全面审查）
+
+### 17a：FrameContext 悬空引用修复
+
+- [ ] `renderer_bake.cpp`：`render_baking()` 中 `lightmap_baker_pass_.record()` 和 `probe_baker_pass_.record()` 的 FrameContext 从临时对象改为局部变量（与 `renderer_pt.cpp` 的 `frame_ctx` 模式一致，确保 lambda 捕获的 `&ctx` 在 `execute()` 时仍有效）
+
+### 17b：`cubemap_filter` 除零防护
+
+- [ ] `cubemap_filter.cpp`：`mip_roughness` 计算增加 `mip_count <= 1` 防护（`0.0f`），避免 `0.0f / 0.0f = NaN` 传入 prefilter shader
+
+### 17c：Windows `rename` 原子替换修复
+
+- [ ] `cache.cpp`：`atomic_write_file()` rename 前先 `std::filesystem::remove(path, ec)`
+- [ ] `lightmap_uv.cpp`：`write_cache()` rename 前先 `std::filesystem::remove(path, ec)`
+
+### 17d：零可烘焙 instance 时 probe placement 防护
+
+- [ ] `renderer_bake.cpp`：`render_baking()` BakingProbes 首帧 placement 前检查 TLAS 有效性，无效时跳过 placement 直接写空 manifest 并进入 Complete
+
+### 17e：`closesthit.rchit` basis 函数去重
+
+- [ ] `closesthit.rchit`：内联 `build_orthonormal_basis` 替换为调用 `pt_common.glsl` 中的共享版本
+
+### 17f：Cache key 稳定性加固
+
+- [ ] `scene_loader.h`：新增 `uv_original_vertices()` / `uv_original_indices()` const accessor
+- [ ] `application.cpp`：`refresh_lightmap_keys()` 改为使用原始数据 accessor（无论 `apply_lightmap_uvs()` 是否已执行，key 始终一致）

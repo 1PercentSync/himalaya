@@ -326,7 +326,7 @@ Position/normal map 通过 `sampler2D`（nearest, clamp）采样而非 storage i
   - Baker GlobalUBO override 由 Application 在 RenderInput 中设置：`ibl_intensity = 1.0`（归一化烘焙），`lights = {}`（空 span → `directional_light_count = 0`，不烘焙方向光）
   - Baker 独立 push constant：`pc.max_bounces` / `pc.env_sampling` / `pc.emissive_light_count` 从 `RenderInput::bake_config` 读取（独立于参考视图）
   - Baker allow tearing：Application 层设置 present mode（`BakeConfig::allow_tearing`，沿用 PT allow tearing 模式）
-  - Cache key 扩展：lightmap key = `scene_hash + geometry_hash + transform_hash + hdr_hash + scene_textures_hash`（per-instance），probe set key = `scene_hash + hdr_hash + scene_textures_hash`（不含 position——位置是 bake 产物）。`rotation_int`（0-359 整数度数）编码在文件名后缀
+  - Cache key 扩展：lightmap key = `scene_hash + geometry_hash + transform_hash + hdr_hash + scene_textures_hash`（per-instance），probe set key = `scene_hash + hdr_hash + scene_textures_hash`（不含 position——位置是 bake 产物）。`rotation_int`（0-359 整数度数）编码在文件名后缀。**设计意图**：key 仅包含输入数据（场景几何、变换、HDR、纹理），不包含烘焙参数（分辨率、SPP、bounces 等）——参数变更时用户手动 Clear Bake Cache 重置，避免参数微调导致全量缓存失效和孤立文件堆积
   - `scene_textures_hash`：场景加载时复用纹理缓存 pipeline 已算的 `source_hashes`（per-texture 源文件字节 hash），按 glTF 纹理数组索引顺序拼接后 hash，存储在 SceneLoader 上
   - Lightmap 文件：`<lm_hash>_rot<NNN>.ktx2`；Probe 文件：`<probe_set_hash>_rot<NNN>_probe<III>.ktx2` + `<probe_set_hash>_rot<NNN>_manifest.bin`（存 probe_count + positions vec3[]）。同一角度重新 bake 覆盖旧文件
   - 完整性校验：Phase 8 逐角度检查所有 instance lightmap 文件 + manifest + 所有 probe 文件齐全才视为有效角度
