@@ -7,6 +7,7 @@
 #include <himalaya/app/renderer.h>
 
 #include <himalaya/framework/cache.h>
+#include <himalaya/framework/cubemap_filter.h>
 #include <himalaya/framework/frame_context.h>
 #include <himalaya/framework/ktx2.h>
 #include <himalaya/framework/probe_placement.h>
@@ -878,15 +879,191 @@ namespace himalaya::app {
             }
         }
 
-        // Scope 2 + KTX2 write + cleanup will follow in subsequent items
-        // For now, clean up Scope 1 buffers
+        // === Scope 2: Upload denoised → prefilter → BC6H compress → readback BC6H ===
+        const uint32_t mip_count = static_cast<uint32_t>(std::floor(std::log2(res))) + 1;
+
+        // Create prefilter destination cubemap (RGBA16F, full mip chain)
+        auto prefilter_target = resource_manager_->create_image({
+            .width = res, .height = res, .depth = 1,
+            .mip_levels = mip_count, .array_layers = kFaceCount, .sample_count = 1,
+            .format = rhi::Format::R16G16B16A16Sfloat,
+            .usage = rhi::ImageUsage::Storage | rhi::ImageUsage::Sampled
+                     | rhi::ImageUsage::TransferSrc,
+        }, "probe_prefilter_target");
+
+        // Compute total BC6H size across all mip levels (6 faces each)
+        uint64_t total_bc6h_size = 0;
+        std::vector<uint64_t> mip_bc6h_offsets(mip_count);
+        std::vector<uint64_t> mip_bc6h_sizes(mip_count);
+        for (uint32_t m = 0; m < mip_count; ++m) {
+            mip_bc6h_offsets[m] = total_bc6h_size;
+            const uint32_t mip_w = std::max(1u, res >> m);
+            const uint32_t mip_h = std::max(1u, res >> m);
+            const uint64_t mip_size = static_cast<uint64_t>((mip_w + 3) / 4)
+                                      * ((mip_h + 3) / 4) * 16 * kFaceCount;
+            mip_bc6h_sizes[m] = mip_size;
+            total_bc6h_size += mip_size;
+        }
+
+        auto rb_bc6h = resource_manager_->create_buffer(
+            {total_bc6h_size, rhi::BufferUsage::TransferDst, rhi::MemoryUsage::GpuToCpu},
+            "probe_rb_bc6h");
+
+        std::vector<std::function<void()>> compress_deferred;
+        rhi::ImageHandle bc6h_image;
+
+        ctx_->begin_immediate();
+        {
+            rhi::CommandBuffer cmd(ctx_->immediate_command_buffer);
+
+            // Upload denoised data → accumulation cubemap
+            VkImageMemoryBarrier2 to_dst{};
+            to_dst.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+            to_dst.srcStageMask = VK_PIPELINE_STAGE_2_NONE;
+            to_dst.srcAccessMask = VK_ACCESS_2_NONE;
+            to_dst.dstStageMask = VK_PIPELINE_STAGE_2_COPY_BIT;
+            to_dst.dstAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
+            to_dst.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+            to_dst.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+            to_dst.image = resource_manager_->get_image(bake_probe_accumulation_).image;
+            to_dst.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, kFaceCount};
+
+            VkDependencyInfo dep_dst{};
+            dep_dst.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+            dep_dst.imageMemoryBarrierCount = 1;
+            dep_dst.pImageMemoryBarriers = &to_dst;
+            cmd.pipeline_barrier(dep_dst);
+
+            VkBufferImageCopy upload_region{};
+            upload_region.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, kFaceCount};
+            upload_region.imageExtent = {res, res, 1};
+
+            vkCmdCopyBufferToImage(cmd.handle(),
+                resource_manager_->get_buffer(upload_buf).buffer,
+                resource_manager_->get_image(bake_probe_accumulation_).image,
+                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &upload_region);
+
+            // Transition accumulation TRANSFER_DST → SHADER_READ_ONLY (prefilter sampling)
+            VkImageMemoryBarrier2 to_read{};
+            to_read.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+            to_read.srcStageMask = VK_PIPELINE_STAGE_2_COPY_BIT;
+            to_read.srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
+            to_read.dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+            to_read.dstAccessMask = VK_ACCESS_2_SHADER_SAMPLED_READ_BIT;
+            to_read.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+            to_read.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            to_read.image = resource_manager_->get_image(bake_probe_accumulation_).image;
+            to_read.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, kFaceCount};
+
+            VkDependencyInfo dep_read{};
+            dep_read.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+            dep_read.imageMemoryBarrierCount = 1;
+            dep_read.pImageMemoryBarriers = &to_read;
+            cmd.pipeline_barrier(dep_read);
+
+            // Prefilter: accumulation (SHADER_READ_ONLY) → prefilter_target (mip chain)
+            framework::prefilter_cubemap(*ctx_, *resource_manager_, shader_compiler_,
+                                         bake_probe_accumulation_, prefilter_target,
+                                         mip_count, compress_deferred);
+
+            // BC6H compress: prefilter_target → bc6h_image (6 faces × N mips)
+            bc6h_image = prefilter_target;
+            framework::BC6HCompressInput compress_input{&bc6h_image, "probe_bc6h"};
+            framework::compress_bc6h(*ctx_, *resource_manager_, shader_compiler_,
+                                     {&compress_input, 1}, compress_deferred);
+            // bc6h_image now points to BC6H version; prefilter_target pushed to deferred
+            prefilter_target = {};
+
+            // Transition BC6H → TRANSFER_SRC for readback
+            VkImageMemoryBarrier2 bc6h_to_src{};
+            bc6h_to_src.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+            bc6h_to_src.srcStageMask = VK_PIPELINE_STAGE_2_COPY_BIT;
+            bc6h_to_src.srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
+            bc6h_to_src.dstStageMask = VK_PIPELINE_STAGE_2_COPY_BIT;
+            bc6h_to_src.dstAccessMask = VK_ACCESS_2_TRANSFER_READ_BIT;
+            bc6h_to_src.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            bc6h_to_src.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+            bc6h_to_src.image = resource_manager_->get_image(bc6h_image).image;
+            bc6h_to_src.subresourceRange = {
+                VK_IMAGE_ASPECT_COLOR_BIT, 0, mip_count, 0, kFaceCount
+            };
+
+            VkDependencyInfo dep_bc6h{};
+            dep_bc6h.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+            dep_bc6h.imageMemoryBarrierCount = 1;
+            dep_bc6h.pImageMemoryBarriers = &bc6h_to_src;
+            cmd.pipeline_barrier(dep_bc6h);
+
+            // Readback BC6H: per-mip copy (each with layerCount=6)
+            for (uint32_t m = 0; m < mip_count; ++m) {
+                const uint32_t mip_w = std::max(1u, res >> m);
+                const uint32_t mip_h = std::max(1u, res >> m);
+
+                VkBufferImageCopy bc6h_region{};
+                bc6h_region.bufferOffset = mip_bc6h_offsets[m];
+                bc6h_region.imageSubresource = {
+                    VK_IMAGE_ASPECT_COLOR_BIT, m, 0, kFaceCount
+                };
+                bc6h_region.imageExtent = {mip_w, mip_h, 1};
+
+                vkCmdCopyImageToBuffer(cmd.handle(),
+                    resource_manager_->get_image(bc6h_image).image,
+                    VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                    resource_manager_->get_buffer(rb_bc6h).buffer, 1, &bc6h_region);
+            }
+        }
+        ctx_->end_immediate();
+
+        // Flush deferred cleanup (destroys old prefilter target, pipelines, samplers)
+        for (auto &fn : compress_deferred) { fn(); }
+        compress_deferred.clear();
+
+        // Destroy BC6H image (data now in staging buffer)
+        resource_manager_->destroy_image(bc6h_image);
+
+        // === CPU: Write KTX2 (face_count=6, N mip levels) ===
+        {
+            const auto *bc6h_ptr = static_cast<const uint8_t *>(
+                resource_manager_->get_buffer(rb_bc6h).allocation_info.pMappedData);
+            const auto rot = format_rotation(bake_rotation_int_);
+            char probe_suffix[16];
+            std::snprintf(probe_suffix, sizeof(probe_suffix), "_probe%03u", bake_current_probe_);
+            const auto file_path = framework::cache_path(
+                "bake", bake_probe_set_key_ + "_rot" + rot + probe_suffix, ".ktx2");
+
+            std::vector<framework::Ktx2WriteLevel> levels(mip_count);
+            for (uint32_t m = 0; m < mip_count; ++m) {
+                levels[m] = {bc6h_ptr + mip_bc6h_offsets[m], mip_bc6h_sizes[m]};
+            }
+
+            if (framework::write_ktx2(file_path, rhi::Format::Bc6hUfloatBlock,
+                                      res, res, kFaceCount, levels)) {
+                spdlog::info("Probe finalize: wrote {}", file_path.string());
+            } else {
+                spdlog::error("Probe finalize: failed to write {}", file_path.string());
+            }
+        }
+
+        // === Cleanup staging buffers ===
         resource_manager_->destroy_buffer(rb_beauty);
         resource_manager_->destroy_buffer(rb_albedo);
         resource_manager_->destroy_buffer(rb_normal);
         resource_manager_->destroy_buffer(upload_buf);
+        resource_manager_->destroy_buffer(rb_bc6h);
 
-        // Reset pending flag (advance logic added in later items)
+        // === Destroy probe instance images + advance ===
+        destroy_probe_bake_instance_images();
         bake_probe_finalize_pending_ = false;
+
+        const uint32_t next = bake_current_probe_ + 1;
+        if (next < bake_probe_total_) {
+            ctx_->begin_immediate();
+            begin_probe_bake_instance(next);
+            ctx_->end_immediate();
+        } else {
+            spdlog::info("All {} probes baked", bake_probe_total_);
+            bake_state_ = BakeState::Complete;
+        }
     }
 
     void Renderer::destroy_bake_instance_images() {
