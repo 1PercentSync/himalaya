@@ -319,7 +319,7 @@ namespace himalaya::framework {
         uint32_t max_resolution = 2048;
 
         /** @brief Lightmap target sample count (SPP). OIDN denoising allows lower values. */
-        uint32_t lightmap_spp = 512;
+        uint32_t lightmap_spp = 1024;
 
         /** @brief Probe cubemap face resolution in texels. */
         uint32_t probe_face_resolution = 512;
@@ -335,7 +335,7 @@ namespace himalaya::framework {
 
         /** @brief Probe target sample count (SPP). OIDN denoising allows lower values.
          *  Half of lightmap SPP: prefilter mip chain provides additional spatial averaging. */
-        uint32_t probe_spp = 256;
+        uint32_t probe_spp = 512;
 
         /** @brief Baker max ray bounce depth (independent from PT reference view). */
         uint32_t max_bounces = 32;
