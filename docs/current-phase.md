@@ -994,6 +994,6 @@ Phase 6 Step 12-12.5 完成后的全面审查发现的 bug 修复、同步正确
   - **Cache 操作**：Cache 面板新增 Clear Bake Cache 按钮（清除全部 bake 缓存）+ Clear Lightmap UV Cache 按钮（清除 lightmap_uv 缓存）
 - 类型提取：`BakeState` 从 `Renderer` 嵌套枚举迁移到 `framework/scene_data.h`（与 `RenderMode` 一致）；新增 `framework/render_progress.h` 定义 `BakeProgress` 只读快照结构体（运行时状态快照类型的统一存放位置）。`renderer.h` 改为 include 这两个头文件，`BakeProgress` / `BakeState` 不再是 `Renderer` 的嵌套类型
 - `app/renderer.h`：`bake_progress()` accessor 返回 `framework::BakeProgress`
-- `app/config.cpp`：烘焙参数持久化（texels_per_meter、min_resolution、max_resolution、lightmap_spp、probe_face_resolution、probe_spacing、filter_ray_count、enclosure_threshold_factor、probe_spp、baker max_bounces、env_sampling、emissive_nee、allow_tearing、bg_uv_auto_start、bg_uv_thread_count）
+- `app/config.cpp`：烘焙参数持久化仅 `bake_allow_tearing`（其余参数使用 BakeConfig 默认值，不持久化）。bg_uv_auto_start、bg_uv_thread_count 已在 Step 12.5 持久化
 
 **验证**：所有参数 slider 功能正常，Start/Cancel 按钮正确触发/中止，进度信息和吞吐量实时更新，accumulation 全屏预览（经 blit + tonemapping）在烘焙进行中显示实时画面，已 bake 角度列表正确显示
