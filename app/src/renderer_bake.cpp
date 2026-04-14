@@ -199,8 +199,8 @@ namespace himalaya::app {
             begin_bake_instance(0, mesh_instances, meshes);
         } else {
             spdlog::info("No bakeable instances, skipping lightmap baking");
-            // Step 12 will transition to BakingProbes here
-            bake_state_ = BakeState::Complete;
+            bake_state_ = BakeState::BakingProbes;
+            bake_probe_placement_pending_ = true;
         }
     }
 
@@ -750,8 +750,8 @@ namespace himalaya::app {
             ctx_->end_immediate();
         } else {
             spdlog::info("All {} lightmap instances baked", bake_total_instances_);
-            // Step 12 will transition to BakingProbes here
-            bake_state_ = BakeState::Complete;
+            bake_state_ = BakeState::BakingProbes;
+            bake_probe_placement_pending_ = true;
         }
     }
 
