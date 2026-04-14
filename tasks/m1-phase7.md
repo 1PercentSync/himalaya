@@ -258,7 +258,7 @@
 
 ### 13.5e：Cache 按钮一致性
 
-- [ ] `debug_ui.cpp`：烘焙期间 `Clear Bake Cache` + `Clear All Cache` 灰显禁用
+- [x] `debug_ui.cpp`：烘焙期间 `Clear Bake Cache` + `Clear All Cache` 灰显禁用
 - [ ] `debug_ui.h`：`DebugUIActions` 新增 `clear_all_cache_requested`
 - [ ] `debug_ui.cpp`：`Clear All Cache` 改为设 action flag（不再直接调用 `clear_all_cache()`）
 - [ ] `application.cpp`：处理 `clear_all_cache_requested`（调用 `clear_all_cache()` + 设 `bake_angles_dirty_`）
