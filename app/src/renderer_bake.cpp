@@ -1605,6 +1605,13 @@ namespace himalaya::app {
         // --- Build render graph ---
         render_graph_.clear();
 
+        // FrameContext shared by baker passes and tonemapping.
+        // Must be a local variable (not a temporary) so that lambda captures
+        // of &ctx inside pass record() remain valid through execute().
+        framework::FrameContext frame_ctx{};
+        frame_ctx.frame_index = input.frame_index;
+        frame_ctx.frame_number = frame_counter_;
+
         const auto swapchain_image = render_graph_.import_image(
             "Swapchain",
             swapchain_image_handles_[input.image_index],
@@ -1650,12 +1657,9 @@ namespace himalaya::app {
                                       - lightmap_baker_pass_.sample_count();
             const uint32_t batch = std::min(remaining, input.bake_config.spp_per_frame);
 
-            lightmap_baker_pass_.record(render_graph_, {
-                .swapchain = {},
-                .hdr_color = {},
-                .frame_index = input.frame_index,
-                .frame_number = frame_counter_,
-            }, rg_accum, rg_aux_albedo, rg_aux_normal, rg_pos_map, rg_nrm_map, batch);
+            lightmap_baker_pass_.record(render_graph_, frame_ctx,
+                                         rg_accum, rg_aux_albedo, rg_aux_normal,
+                                         rg_pos_map, rg_nrm_map, batch);
         }
 
         // Probe baker RT dispatch (if actively accumulating probes)
@@ -1676,12 +1680,8 @@ namespace himalaya::app {
                                       - probe_baker_pass_.sample_count();
             const uint32_t batch = std::min(remaining, input.bake_config.spp_per_frame);
 
-            probe_baker_pass_.record(render_graph_, {
-                .swapchain = {},
-                .hdr_color = {},
-                .frame_index = input.frame_index,
-                .frame_number = frame_counter_,
-            }, rg_accum, rg_aux_albedo, rg_aux_normal, batch);
+            probe_baker_pass_.record(render_graph_, frame_ctx,
+                                      rg_accum, rg_aux_albedo, rg_aux_normal, batch);
         }
 
         // --- Preview pipeline: clear hdr → blit accumulation → tonemapping → ImGui ---
@@ -1880,12 +1880,8 @@ namespace himalaya::app {
         const auto hdr_backing = render_graph_.get_managed_backing_image(managed_hdr_color_);
         descriptor_manager_->update_render_target(input.frame_index, 0, hdr_backing, default_sampler_);
 
-        framework::FrameContext frame_ctx{};
         frame_ctx.swapchain = swapchain_image;
         frame_ctx.hdr_color = hdr_resource;
-        frame_ctx.frame_index = input.frame_index;
-        frame_ctx.frame_number = frame_counter_;
-
         tonemapping_pass_.record(render_graph_, frame_ctx);
 
         // ImGui pass
