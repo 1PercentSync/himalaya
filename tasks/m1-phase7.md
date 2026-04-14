@@ -188,7 +188,7 @@
 - [x] `renderer_bake.cpp`：`lightmap_bake_finalize()` 全部 readback buffer 补 `vmaInvalidateAllocation()`，upload buffer 补 `vmaFlushAllocation()`
 - [x] `renderer_bake.cpp`：`probe_bake_finalize()` 全部 readback/upload buffer 补 VMA coherence 操作
 - [x] `renderer_bake.cpp`：`lightmap_bake_finalize()` aux barrier 修正为 `srcStageMask = RT_SHADER` + `srcAccessMask = NONE`
-- [ ] `application.cpp`：`start_bake_session()` 开头补 `vkQueueWaitIdle(context_.graphics_queue)`
+- [x] `application.cpp`：`start_bake_session()` 开头补 `vkQueueWaitIdle(context_.graphics_queue)`
 
 ### 12.6b：逻辑 bug 修复
 
