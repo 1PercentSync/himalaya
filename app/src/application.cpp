@@ -356,6 +356,12 @@ namespace himalaya::app {
                 renderer_.probe_bake_finalize();
             }
 
+            // Bake complete: restore pre-bake render mode and reset state.
+            if (renderer_.bake_state() == Renderer::BakeState::Complete) {
+                render_mode_ = renderer_.bake_pre_mode();
+                renderer_.complete_bake();
+            }
+
             update();
             render();
             end_frame();

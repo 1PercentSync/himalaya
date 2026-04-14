@@ -1282,6 +1282,21 @@ namespace himalaya::app {
         bake_probe_total_ = 0;
     }
 
+    void Renderer::complete_bake() {
+        spdlog::info("Bake complete. {} lightmap instances, {} probes.",
+                     bake_total_instances_, bake_probe_total_);
+
+        bake_state_ = BakeState::Idle;
+        lightmap_finalize_pending_ = false;
+        bake_probe_finalize_pending_ = false;
+        bake_probe_placement_pending_ = false;
+        bake_instance_indices_.clear();
+        bake_lightmap_sizes_.clear();
+        bake_lightmap_keys_.clear();
+        bake_probe_positions_.clear();
+        bake_probe_total_ = 0;
+    }
+
     Renderer::BakeState Renderer::bake_state() const {
         return bake_state_;
     }

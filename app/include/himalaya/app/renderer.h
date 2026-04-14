@@ -354,6 +354,16 @@ namespace himalaya::app {
         void cancel_bake();
 
         /**
+         * @brief Resets bake state to Idle after a completed bake session.
+         *
+         * Called by Application when BakeState::Complete is detected.
+         * Unlike cancel_bake(), does not destroy per-instance images
+         * (already cleaned up by finalize) and logs completion instead
+         * of cancellation.
+         */
+        void complete_bake();
+
+        /**
          * @brief Returns the RenderMode recorded before entering Baking.
          *
          * Application restores this after cancel or complete.
