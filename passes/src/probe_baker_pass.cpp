@@ -174,7 +174,8 @@ namespace himalaya::passes {
                                 const framework::FrameContext &ctx,
                                 const framework::RGResourceId rg_accum,
                                 const framework::RGResourceId rg_aux_albedo,
-                                const framework::RGResourceId rg_aux_normal) {
+                                const framework::RGResourceId rg_aux_normal,
+                                const uint32_t batch_spp) {
         if (rt_pipeline_.pipeline == VK_NULL_HANDLE) {
             return;
         }
@@ -199,12 +200,13 @@ namespace himalaya::passes {
         };
 
         // Capture current state for the lambda
-        const uint32_t current_sample = sample_count_;
-        const uint32_t current_seed = frame_seed_;
+        const uint32_t start_sample = sample_count_;
+        const uint32_t start_seed = frame_seed_;
         const uint32_t res = face_res_;
+        const uint32_t batch = batch_spp;
 
         rg.add_pass("Probe Baker", resources,
-                    [this, &ctx, current_sample, current_seed, res](
+                    [this, &ctx, start_sample, start_seed, res, batch](
                 const rhi::CommandBuffer &cmd) {
                         cmd.bind_rt_pipeline(rt_pipeline_);
 
@@ -218,7 +220,7 @@ namespace himalaya::passes {
                             rt_pipeline_.layout, 0,
                             sets.data(), static_cast<uint32_t>(sets.size()));
 
-                        // Sobol SSBO descriptor (shared across all 6 face dispatches)
+                        // Sobol SSBO descriptor (shared across all dispatches)
                         const auto &sobol = rm_->get_buffer(sobol_buffer_);
                         VkDescriptorBufferInfo sobol_info{
                             .buffer = sobol.buffer,
@@ -226,89 +228,109 @@ namespace himalaya::passes {
                             .range = sobol.desc.size,
                         };
 
-                        // 6 dispatches — one per cubemap face
-                        for (uint32_t face = 0; face < kFaceCount; ++face) {
-                            // Per-face image views for push descriptors
-                            VkDescriptorImageInfo accum_info{
-                                .imageView = accum_face_views_[face],
-                                .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
-                            };
-                            VkDescriptorImageInfo albedo_info{
-                                .imageView = aux_albedo_face_views_[face],
-                                .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
-                            };
-                            VkDescriptorImageInfo normal_info{
-                                .imageView = aux_normal_face_views_[face],
-                                .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
-                            };
+                        for (uint32_t s = 0; s < batch; ++s) {
+                            // 6 dispatches per SPP — one per cubemap face
+                            for (uint32_t face = 0; face < kFaceCount; ++face) {
+                                VkDescriptorImageInfo accum_info{
+                                    .imageView = accum_face_views_[face],
+                                    .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
+                                };
+                                VkDescriptorImageInfo albedo_info{
+                                    .imageView = aux_albedo_face_views_[face],
+                                    .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
+                                };
+                                VkDescriptorImageInfo normal_info{
+                                    .imageView = aux_normal_face_views_[face],
+                                    .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
+                                };
 
-                            const std::array<VkWriteDescriptorSet, 4> writes = {
-                                {
+                                const std::array<VkWriteDescriptorSet, 4> writes = {
                                     {
-                                        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-                                        .dstBinding = 0,
-                                        .descriptorCount = 1,
-                                        .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-                                        .pImageInfo = &accum_info,
-                                    },
-                                    {
-                                        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-                                        .dstBinding = 1,
-                                        .descriptorCount = 1,
-                                        .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-                                        .pImageInfo = &albedo_info,
-                                    },
-                                    {
-                                        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-                                        .dstBinding = 2,
-                                        .descriptorCount = 1,
-                                        .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-                                        .pImageInfo = &normal_info,
-                                    },
-                                    {
-                                        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-                                        .dstBinding = 3,
-                                        .descriptorCount = 1,
-                                        .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-                                        .pBufferInfo = &sobol_info,
-                                    },
-                                }
-                            };
+                                        {
+                                            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                                            .dstBinding = 0,
+                                            .descriptorCount = 1,
+                                            .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+                                            .pImageInfo = &accum_info,
+                                        },
+                                        {
+                                            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                                            .dstBinding = 1,
+                                            .descriptorCount = 1,
+                                            .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+                                            .pImageInfo = &albedo_info,
+                                        },
+                                        {
+                                            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                                            .dstBinding = 2,
+                                            .descriptorCount = 1,
+                                            .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+                                            .pImageInfo = &normal_info,
+                                        },
+                                        {
+                                            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                                            .dstBinding = 3,
+                                            .descriptorCount = 1,
+                                            .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                                            .pBufferInfo = &sobol_info,
+                                        },
+                                    }
+                                };
 
-                            cmd.push_rt_descriptor_set(rt_pipeline_.layout, 3, writes);
+                                cmd.push_rt_descriptor_set(rt_pipeline_.layout, 3, writes);
 
-                            // Push constants — per-face: face_index varies, rest shared
-                            const PTPushConstants pc{
-                                .max_bounces = max_bounces_,
-                                .sample_count = current_sample,
-                                .frame_seed = current_seed,
-                                .blue_noise_index = blue_noise_index_,
-                                .max_clamp = 0.0f,
-                                .env_sampling = env_sampling_ ? 1u : 0u,
-                                .directional_lights = 0u,
-                                .emissive_light_count = emissive_light_count_,
-                                .lod_max_level = 0u,
-                                .lightmap_width = 0u,
-                                .lightmap_height = 0u,
-                                .probe_pos_x = probe_pos_x_,
-                                .probe_pos_y = probe_pos_y_,
-                                .probe_pos_z = probe_pos_z_,
-                                .face_index = face,
-                            };
-                            cmd.push_constants(
-                                rt_pipeline_.layout,
-                                VK_SHADER_STAGE_RAYGEN_BIT_KHR |
-                                VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR |
-                                VK_SHADER_STAGE_ANY_HIT_BIT_KHR,
-                                &pc, sizeof(pc));
+                                const PTPushConstants pc{
+                                    .max_bounces = max_bounces_,
+                                    .sample_count = start_sample + s,
+                                    .frame_seed = start_seed + s,
+                                    .blue_noise_index = blue_noise_index_,
+                                    .max_clamp = 0.0f,
+                                    .env_sampling = env_sampling_ ? 1u : 0u,
+                                    .directional_lights = 0u,
+                                    .emissive_light_count = emissive_light_count_,
+                                    .lod_max_level = 0u,
+                                    .lightmap_width = 0u,
+                                    .lightmap_height = 0u,
+                                    .probe_pos_x = probe_pos_x_,
+                                    .probe_pos_y = probe_pos_y_,
+                                    .probe_pos_z = probe_pos_z_,
+                                    .face_index = face,
+                                };
+                                cmd.push_constants(
+                                    rt_pipeline_.layout,
+                                    VK_SHADER_STAGE_RAYGEN_BIT_KHR |
+                                    VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR |
+                                    VK_SHADER_STAGE_ANY_HIT_BIT_KHR,
+                                    &pc, sizeof(pc));
 
-                            cmd.trace_rays(rt_pipeline_, res, res);
+                                cmd.trace_rays(rt_pipeline_, res, res);
+                            }
+
+                            // Memory barrier between SPP rounds: imageStore from all
+                            // 6 faces must be visible to the next round's imageLoad.
+                            // Not needed after the last round.
+                            if (s + 1 < batch) {
+                                VkMemoryBarrier2 barrier{
+                                    .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
+                                    .srcStageMask = VK_PIPELINE_STAGE_2_RAY_TRACING_SHADER_BIT_KHR,
+                                    .srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+                                    .dstStageMask = VK_PIPELINE_STAGE_2_RAY_TRACING_SHADER_BIT_KHR,
+                                    .dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT
+                                                   | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+                                };
+                                VkDependencyInfo dep{
+                                    .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+                                    .memoryBarrierCount = 1,
+                                    .pMemoryBarriers = &barrier,
+                                };
+                                cmd.pipeline_barrier(dep);
+                            }
                         }
                     });
 
-        // Advance accumulation state after recording (once per frame, not per face)
-        ++sample_count_;
-        ++frame_seed_;
+        // Advance accumulation state after recording (once per batch, not per face)
+        sample_count_ += batch_spp;
+        frame_seed_ += batch_spp;
     }
 
     // ---- Probe image configuration ----

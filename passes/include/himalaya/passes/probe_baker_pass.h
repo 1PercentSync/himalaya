@@ -71,19 +71,22 @@ namespace himalaya::passes {
          * @brief Register RG resource usage and provide the 6-face RT dispatch callback.
          *
          * Caller imports probe images into the RG once and passes the resource IDs.
-         * One RG pass is added containing 6 sequential dispatches (one per face),
-         * each with its own push descriptor update and push constant face_index.
+         * One RG pass is added containing batch_spp rounds of 6 sequential dispatches
+         * (one per face), each with its own push descriptor update and push constant
+         * face_index. Inter-SPP memory barriers ensure accumulation visibility.
          *
          * @param rg               Render graph to add the pass to.
          * @param ctx              Per-frame context (frame_index for global descriptor sets).
          * @param rg_accumulation  RG resource for accumulation cubemap (ReadWrite).
          * @param rg_aux_albedo    RG resource for aux albedo array (Write).
          * @param rg_aux_normal    RG resource for aux normal array (Write).
+         * @param batch_spp        Number of SPP to dispatch in this single RG pass.
          */
         void record(framework::RenderGraph &rg, const framework::FrameContext &ctx,
                     framework::RGResourceId rg_accumulation,
                     framework::RGResourceId rg_aux_albedo,
-                    framework::RGResourceId rg_aux_normal);
+                    framework::RGResourceId rg_aux_normal,
+                    uint32_t batch_spp);
 
         /**
          * @brief Rebuild RT pipeline by recompiling shaders from disk.
