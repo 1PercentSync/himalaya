@@ -195,11 +195,10 @@ namespace himalaya::app {
             bake_probe_set_key_ = framework::content_hash(probe_key_input.data(), probe_key_input.size());
         }
 
-        // Compute lightmap keys (reuses compute_lightmap_keys, may already be populated
-        // by Application after scene/HDR load, but start_bake always refreshes)
-        compute_lightmap_keys(mesh_instances, meshes, materials,
-                              cpu_vertices, cpu_indices,
-                              scene_hash, hdr_hash, scene_textures_hash);
+        // bake_lightmap_keys_ already populated by Application::refresh_lightmap_keys()
+        // using original (pre-UV) vertex/index data. Keys are based on original geometry
+        // because xatlas output is a deterministic function of the input mesh —
+        // the original data hash uniquely identifies the bake result.
 
         // Build parallel arrays: instance indices + lightmap resolutions
         bake_instance_indices_.clear();
