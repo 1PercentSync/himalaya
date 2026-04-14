@@ -139,6 +139,41 @@ namespace himalaya::app {
         return true;
     }
 
+    // ---- Bakeable instance iteration ----
+
+    /**
+     * @brief Iterates over bakeable instances, invoking a callback for each.
+     *
+     * Bakeable = non-degenerate (vertex_count > 0, index_count >= 3) and
+     * non-transparent (alpha_mode != Blend). Single source of truth for the
+     * filtering logic — used by both compute_lightmap_keys() and start_bake().
+     *
+     * @param mesh_instances All scene instances.
+     * @param meshes         All loaded meshes.
+     * @param materials      All material instances.
+     * @param callback       Invoked with (scene_instance_index, inst, mesh) for each bakeable instance.
+     */
+    template<typename Fn>
+    static void for_each_bakeable_instance(
+        const std::span<const framework::MeshInstance> mesh_instances,
+        const std::span<const framework::Mesh> meshes,
+        const std::span<const framework::MaterialInstance> materials,
+        Fn &&callback) {
+        for (uint32_t i = 0; i < static_cast<uint32_t>(mesh_instances.size()); ++i) {
+            const auto &inst = mesh_instances[i];
+            const auto &mesh = meshes[inst.mesh_id];
+
+            if (mesh.vertex_count == 0 || mesh.index_count < 3) {
+                continue;
+            }
+            if (materials[inst.material_id].alpha_mode == framework::AlphaMode::Blend) {
+                continue;
+            }
+
+            callback(i, inst, mesh);
+        }
+    }
+
     // ---- Lightmap key computation ----
 
     void Renderer::compute_lightmap_keys(
@@ -153,32 +188,18 @@ namespace himalaya::app {
 
         bake_lightmap_keys_.clear();
 
-        for (uint32_t i = 0; i < static_cast<uint32_t>(mesh_instances.size()); ++i) {
-            const auto &inst = mesh_instances[i];
-            const auto &mesh = meshes[inst.mesh_id];
-
-            // Skip degenerate meshes
-            if (mesh.vertex_count == 0 || mesh.index_count < 3) {
-                continue;
-            }
-
-            // Skip transparent instances (AlphaMode::Blend)
-            if (materials[inst.material_id].alpha_mode == framework::AlphaMode::Blend) {
-                continue;
-            }
-
-            // Compute per-instance lightmap cache key:
-            // scene_hash + vertices_hash + indices_hash + transform_hash + hdr_hash + scene_textures_hash
-            const auto &verts = cpu_vertices[inst.mesh_id];
-            const auto &idxs = cpu_indices[inst.mesh_id];
-            const auto vertices_hash = framework::content_hash(verts.data(), verts.size() * sizeof(framework::Vertex));
-            const auto indices_hash = framework::content_hash(idxs.data(), idxs.size() * sizeof(uint32_t));
-            const auto transform_hash = framework::content_hash(&inst.transform, sizeof(glm::mat4));
-            const std::string key_input = scene_hash + vertices_hash + indices_hash
-                                          + transform_hash + hdr_hash + scene_textures_hash;
-            bake_lightmap_keys_.push_back(
-                framework::content_hash(key_input.data(), key_input.size()));
-        }
+        for_each_bakeable_instance(mesh_instances, meshes, materials,
+            [&](uint32_t /*scene_idx*/, const framework::MeshInstance &inst, const framework::Mesh &/*mesh*/) {
+                const auto &verts = cpu_vertices[inst.mesh_id];
+                const auto &idxs = cpu_indices[inst.mesh_id];
+                const auto vertices_hash = framework::content_hash(verts.data(), verts.size() * sizeof(framework::Vertex));
+                const auto indices_hash = framework::content_hash(idxs.data(), idxs.size() * sizeof(uint32_t));
+                const auto transform_hash = framework::content_hash(&inst.transform, sizeof(glm::mat4));
+                const std::string key_input = scene_hash + vertices_hash + indices_hash
+                                              + transform_hash + hdr_hash + scene_textures_hash;
+                bake_lightmap_keys_.push_back(
+                    framework::content_hash(key_input.data(), key_input.size()));
+            });
     }
 
     const std::vector<std::string> &Renderer::bake_lightmap_keys() const {
@@ -237,33 +258,23 @@ namespace himalaya::app {
         bake_lightmap_sizes_.clear();
         uint32_t key_idx = 0;
 
-        for (uint32_t i = 0; i < static_cast<uint32_t>(mesh_instances.size()); ++i) {
-            const auto &inst = mesh_instances[i];
-            const auto &mesh = meshes[inst.mesh_id];
+        for_each_bakeable_instance(mesh_instances, meshes, materials,
+            [&](uint32_t scene_idx, const framework::MeshInstance &inst, const framework::Mesh &/*mesh*/) {
+                const float area = compute_world_surface_area(
+                    cpu_vertices[inst.mesh_id], cpu_indices[inst.mesh_id], inst.transform);
+                const auto raw = static_cast<uint32_t>(
+                    std::round(std::sqrt(area) * config.texels_per_meter));
+                const uint32_t clamped = std::clamp(raw, config.min_resolution, config.max_resolution);
+                const uint32_t resolution = align_to_4(clamped);
 
-            if (mesh.vertex_count == 0 || mesh.index_count < 3) {
-                continue;
-            }
-            if (materials[inst.material_id].alpha_mode == framework::AlphaMode::Blend) {
-                continue;
-            }
+                bake_instance_indices_.push_back(scene_idx);
+                bake_lightmap_sizes_.push_back(resolution);
 
-            // Compute lightmap resolution from world-space surface area
-            const float area = compute_world_surface_area(
-                cpu_vertices[inst.mesh_id], cpu_indices[inst.mesh_id], inst.transform);
-            const auto raw = static_cast<uint32_t>(
-                std::round(std::sqrt(area) * config.texels_per_meter));
-            const uint32_t clamped = std::clamp(raw, config.min_resolution, config.max_resolution);
-            const uint32_t resolution = align_to_4(clamped);
-
-            bake_instance_indices_.push_back(i);
-            bake_lightmap_sizes_.push_back(resolution);
-
-            spdlog::info("Bake instance {}: mesh_id={}, area={:.2f}m², resolution={}, key={}",
-                         i, inst.mesh_id, static_cast<double>(area), resolution,
-                         bake_lightmap_keys_[key_idx]);
-            ++key_idx;
-        }
+                spdlog::info("Bake instance {}: mesh_id={}, area={:.2f}m², resolution={}, key={}",
+                             scene_idx, inst.mesh_id, static_cast<double>(area), resolution,
+                             bake_lightmap_keys_[key_idx]);
+                ++key_idx;
+            });
 
         bake_total_instances_ = static_cast<uint32_t>(bake_instance_indices_.size());
         bake_current_instance_ = 0;
