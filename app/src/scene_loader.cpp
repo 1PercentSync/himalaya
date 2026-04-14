@@ -404,6 +404,8 @@ namespace himalaya::app {
                     // Record for deferred generation (uv1 stays {0,0})
                     uv_pending_prims_.push_back(static_cast<uint32_t>(meshes_.size()));
                     uv_pending_hashes_.push_back(mesh_hash);
+                    uv_original_vertices_.push_back(vertices);
+                    uv_original_indices_.push_back(indices);
 
                     spdlog::info("  Prim {}: lightmap UV deferred ({} verts, {} indices, hash {:.8})",
                                  meshes_.size(), vertices.size(), indices.size(), mesh_hash);
@@ -771,6 +773,10 @@ namespace himalaya::app {
         scene_bounds_ = {glm::vec3(0.0f), glm::vec3(0.0f)};
         scene_hash_.clear();
         scene_textures_hash_.clear();
+        uv_pending_prims_.clear();
+        uv_pending_hashes_.clear();
+        uv_original_vertices_.clear();
+        uv_original_indices_.clear();
 
         resource_manager_ = nullptr;
         descriptor_manager_ = nullptr;
@@ -833,24 +839,28 @@ namespace himalaya::app {
         for (uint32_t i = 0; i < mesh_count; ++i) {
             // Apply xatlas for pending prims
             if (pending_set.contains(i)) {
-                const auto &hash = uv_pending_hashes_[pending_hash_map[i]];
+                const auto pending_idx = pending_hash_map[i];
+                const auto &hash = uv_pending_hashes_[pending_idx];
+                const auto &orig_verts = uv_original_vertices_[pending_idx];
+                const auto &orig_indices = uv_original_indices_[pending_idx];
+
                 auto uv_result = framework::generate_lightmap_uv(
-                    cpu_vertices_[i], cpu_indices_[i], hash);
+                    orig_verts, orig_indices, hash);
 
                 if (!uv_result.cache_hit) {
                     spdlog::warn("apply_lightmap_uvs: cache miss for prim {} (hash {:.8}) "
                                  "— expected cache hit after generator wait", i, hash);
                 }
 
-                // Rebuild vertex array: copy attributes from original via remap, write xatlas uv1
+                // Rebuild vertex array from originals via remap, write xatlas uv1
                 const auto new_vert_count = uv_result.vertex_remap.size();
                 std::vector<framework::Vertex> new_vertices(new_vert_count);
                 for (size_t v = 0; v < new_vert_count; ++v) {
-                    new_vertices[v] = cpu_vertices_[i][uv_result.vertex_remap[v]];
+                    new_vertices[v] = orig_verts[uv_result.vertex_remap[v]];
                     new_vertices[v].uv1 = uv_result.lightmap_uvs[v];
                 }
                 cpu_vertices_[i] = std::move(new_vertices);
-                cpu_indices_[i] = std::move(uv_result.new_indices);
+                cpu_indices_[i] = uv_result.new_indices;
             }
 
             // Destroy old VB/IB
@@ -902,10 +912,9 @@ namespace himalaya::app {
         std::vector<framework::LightmapUVGenerator::Request> requests;
         requests.reserve(uv_pending_prims_.size());
         for (size_t i = 0; i < uv_pending_prims_.size(); ++i) {
-            const auto prim = uv_pending_prims_[i];
             requests.push_back({
-                .vertices = cpu_vertices_[prim],
-                .indices = cpu_indices_[prim],
+                .vertices = uv_original_vertices_[i],
+                .indices = uv_original_indices_[i],
                 .mesh_hash = uv_pending_hashes_[i],
             });
         }

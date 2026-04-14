@@ -205,11 +205,17 @@ namespace himalaya::app {
         /** @brief Sampler handles created from glTF sampler definitions. */
         std::vector<rhi::SamplerHandle> samplers_;
 
-        /** @brief Prim indices that need xatlas UV generation (parallel to uv_pending_hashes_). */
+        /** @brief Prim indices that need xatlas UV generation (parallel arrays below). */
         std::vector<uint32_t> uv_pending_prims_;
 
         /** @brief Pre-computed mesh hashes for pending prims (parallel to uv_pending_prims_). */
         std::vector<std::string> uv_pending_hashes_;
+
+        /** @brief Original vertices before xatlas (parallel to uv_pending_prims_). */
+        std::vector<std::vector<framework::Vertex>> uv_original_vertices_;
+
+        /** @brief Original indices before xatlas (parallel to uv_pending_prims_). */
+        std::vector<std::vector<uint32_t>> uv_original_indices_;
 
         // ---- Private loading stages ----
 
