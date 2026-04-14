@@ -53,6 +53,9 @@ namespace himalaya::framework {
 
         /** @brief True if loaded from disk cache, false if xatlas ran. */
         bool cache_hit = false;
+
+        /** @brief True if this is a degenerate fallback (xatlas failed or 0x0 atlas). */
+        bool is_fallback = false;
     };
 
     /**
