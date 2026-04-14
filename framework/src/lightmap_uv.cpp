@@ -191,6 +191,12 @@ namespace himalaya::framework {
 
         LightmapUVResult result;
 
+        // Degenerate atlas (all triangles have zero area or no valid charts)
+        if (atlas->width == 0 || atlas->height == 0) {
+            spdlog::warn("lightmap_uv: xatlas produced 0x0 atlas for mesh {:.8}", mesh_hash);
+            result.is_fallback = true;
+        }
+
         // Normalize UVs from [0, atlas_size] to [0, 1]
         const float inv_w = (atlas->width > 0) ? 1.0f / static_cast<float>(atlas->width) : 0.0f;
         const float inv_h = (atlas->height > 0) ? 1.0f / static_cast<float>(atlas->height) : 0.0f;
