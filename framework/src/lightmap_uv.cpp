@@ -153,15 +153,22 @@ namespace himalaya::framework {
         if (error != xatlas::AddMeshError::Success) {
             spdlog::error("lightmap_uv: xatlas AddMesh failed: {}", xatlas::StringForEnum(error));
             xatlas::Destroy(atlas);
-            // Cache and return degenerate result — identity remap, zero UVs
+
+            // Degenerate fallback: identity remap, zero UVs
             LightmapUVResult fallback;
+            fallback.is_fallback = true;
             fallback.lightmap_uvs.resize(vertices.size(), glm::vec2(0.0f));
             fallback.new_indices.assign(indices.begin(), indices.end());
             fallback.vertex_remap.resize(vertices.size());
             for (uint32_t i = 0; i < vertices.size(); ++i) {
                 fallback.vertex_remap[i] = i;
             }
-            write_cache(mesh_hash, fallback);
+
+            // Mesh-inherent errors (bad geometry): cache to avoid repeated attempts.
+            // API error (null atlas / misuse): don't cache, preserve retry opportunity.
+            if (error != xatlas::AddMeshError::Error) {
+                write_cache(mesh_hash, fallback);
+            }
             return fallback;
         }
 
