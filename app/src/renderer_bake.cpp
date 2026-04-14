@@ -240,7 +240,8 @@ namespace himalaya::app {
             .width = res, .height = res, .depth = 1,
             .mip_levels = 1, .array_layers = 1, .sample_count = 1,
             .format = rhi::Format::R32G32B32A32Sfloat,
-            .usage = rhi::ImageUsage::ColorAttachment | rhi::ImageUsage::Sampled,
+            .usage = rhi::ImageUsage::ColorAttachment | rhi::ImageUsage::Sampled
+                     | rhi::ImageUsage::TransferSrc,
         }, "bake_normal_map");
 
         bake_albedo_map_ = resource_manager_->create_image({
