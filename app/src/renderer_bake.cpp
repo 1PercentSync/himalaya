@@ -1202,6 +1202,98 @@ namespace himalaya::app {
                                    });
         }
 
+        // Blit probe cubemap cross-unfold preview into hdr_color
+        if (has_probe_images) {
+            const std::array probe_blit_resources = {
+                framework::RGResourceUsage{
+                    hdr_resource,
+                    framework::RGAccessType::Write,
+                    framework::RGStage::Transfer,
+                },
+                framework::RGResourceUsage{
+                    rg_accum,
+                    framework::RGAccessType::Read,
+                    framework::RGStage::Transfer,
+                },
+            };
+
+            const uint32_t face_res = bake_locked_config_.probe_face_resolution;
+
+            render_graph_.add_pass("Probe Cross Preview", probe_blit_resources,
+                                   [this, face_res](const rhi::CommandBuffer &pass_cmd) {
+                                       const auto hdr_handle = render_graph_.get_managed_backing_image(
+                                           managed_hdr_color_);
+                                       const auto &hdr_img = resource_manager_->get_image(hdr_handle);
+                                       const auto &accum_img = resource_manager_->get_image(
+                                           bake_probe_accumulation_);
+
+                                       const auto screen_w = static_cast<float>(hdr_img.desc.width);
+                                       const auto screen_h = static_cast<float>(hdr_img.desc.height);
+
+                                       // Cross total: 4 × face_res wide, 3 × face_res tall
+                                       const float cross_w = static_cast<float>(face_res * 4);
+                                       const float cross_h = static_cast<float>(face_res * 3);
+                                       const float cross_aspect = cross_w / cross_h;
+                                       const float screen_aspect = screen_w / screen_h;
+
+                                       // Fit cross into screen, centered
+                                       float dst_w, dst_h;
+                                       if (cross_aspect > screen_aspect) {
+                                           dst_w = screen_w;
+                                           dst_h = screen_w / cross_aspect;
+                                       } else {
+                                           dst_h = screen_h;
+                                           dst_w = screen_h * cross_aspect;
+                                       }
+                                       const float offset_x = (screen_w - dst_w) * 0.5f;
+                                       const float offset_y = (screen_h - dst_h) * 0.5f;
+                                       const float cell_w = dst_w / 4.0f;
+                                       const float cell_h = dst_h / 3.0f;
+
+                                       // Face → grid position (col, row)
+                                       //   0(+X): col=2, row=1    1(-X): col=0, row=1
+                                       //   2(+Y): col=1, row=0    3(-Y): col=1, row=2
+                                       //   4(+Z): col=1, row=1    5(-Z): col=3, row=1
+                                       constexpr struct { uint32_t col, row; } face_grid[6] = {
+                                           {2, 1}, {0, 1}, {1, 0}, {1, 2}, {1, 1}, {3, 1},
+                                       };
+
+                                       for (uint32_t face = 0; face < 6; ++face) {
+                                           const auto [col, row] = face_grid[face];
+                                           const auto x0 = static_cast<int32_t>(
+                                               offset_x + static_cast<float>(col) * cell_w);
+                                           const auto y0 = static_cast<int32_t>(
+                                               offset_y + static_cast<float>(row) * cell_h);
+                                           const auto x1 = static_cast<int32_t>(
+                                               offset_x + static_cast<float>(col + 1) * cell_w);
+                                           const auto y1 = static_cast<int32_t>(
+                                               offset_y + static_cast<float>(row + 1) * cell_h);
+
+                                           VkImageBlit region{};
+                                           region.srcSubresource = {
+                                               VK_IMAGE_ASPECT_COLOR_BIT, 0, face, 1
+                                           };
+                                           region.srcOffsets[0] = {0, 0, 0};
+                                           region.srcOffsets[1] = {
+                                               static_cast<int32_t>(face_res),
+                                               static_cast<int32_t>(face_res), 1
+                                           };
+                                           region.dstSubresource = {
+                                               VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1
+                                           };
+                                           region.dstOffsets[0] = {x0, y0, 0};
+                                           region.dstOffsets[1] = {x1, y1, 1};
+
+                                           vkCmdBlitImage(pass_cmd.handle(),
+                                                          accum_img.image,
+                                                          VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                                                          hdr_img.image,
+                                                          VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                                                          1, &region, VK_FILTER_LINEAR);
+                                       }
+                                   });
+        }
+
         // Update Set 2 binding 0 with hdr_color for tonemapping
         const auto hdr_backing = render_graph_.get_managed_backing_image(managed_hdr_color_);
         descriptor_manager_->update_render_target(input.frame_index, 0, hdr_backing, default_sampler_);
