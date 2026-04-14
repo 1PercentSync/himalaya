@@ -353,9 +353,6 @@ namespace himalaya::app {
         /** @brief True if the user clicked the Cancel Bake button. */
         bool bake_cancel_requested = false;
 
-        /** @brief True if any bake config parameter changed (triggers config save). */
-        bool bake_config_changed = false;
-
         /** @brief True if the user clicked the Clear Bake Cache button. */
         bool clear_bake_cache_requested = false;
 
