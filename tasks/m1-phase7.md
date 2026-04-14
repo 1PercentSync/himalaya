@@ -193,7 +193,7 @@
 ### 12.6b：逻辑 bug 修复
 
 - [x] `renderer_bake.cpp`：`bake_rotation_int_` 负角度修正（fmod + 负值修正 + round + %360）
-- [ ] `renderer_bake.cpp` + `application.cpp`：`BakeState::Complete` 自动恢复 `bake_pre_mode_`
+- [x] `renderer_bake.cpp` + `application.cpp`：`BakeState::Complete` 自动恢复 `bake_pre_mode_`
 
 ### 12.6c：lightmap UV 缓存健壮性
 
