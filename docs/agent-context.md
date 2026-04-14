@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段七 — PT 烘焙器
-- **进度**：Step 15 完成（8/8）
+- **进度**：Step 16 进行中（16a 1/2）
 
 ### 下一个任务
 
-Step 15 全部完成。等待用户指示下一步（编译验证或继续下一 Step）。
+Step 16a 第二项：reference view aux image 在 accumulation reset 时追加 clear。
 
 ---
 

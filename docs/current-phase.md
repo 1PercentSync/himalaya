@@ -43,6 +43,12 @@ Step 12.5: 延迟 Lightmap UV 生成（后台并行 + bake 时应用 + 质量分
 Step 12.6: 审查修复（Steps 12-12.5 正确性 + 同步修复）
     ↓
 Step 13: ImGui 烘焙控制面板
+    ↓
+Step 14: Bake Multi-SPP 优化
+    ↓
+Step 15: Probe 亮度后置过滤 + Manifest 延迟写入
+    ↓
+Step 16: 审查修复（Steps 13.7-15 正确性 + 代码质量）
 ```
 
 ### 总览
@@ -65,6 +71,9 @@ Step 13: ImGui 烘焙控制面板
 | 12.5 | 延迟 Lightmap UV 生成 | 场景加载不阻塞 xatlas；后台生成填充缓存；Bake 时读缓存重建 VB/IB + BLAS/TLAS，渲染无回归 |
 | 12.6 | 审查修复（Steps 12-12.5） | 无 validation 报错（AMD/NVIDIA），lightmap/probe bake 端到端正确（降噪数据无损坏），负角度 bake 缓存 key 正确，BakeState::Complete 自动恢复 RenderMode |
 | 13 | ImGui 烘焙面板 | 烘焙参数可调，触发/取消/进度显示正常，accumulation 预览实时更新 |
+| 14 | Bake Multi-SPP 优化 | spp_per_frame=1 行为不变，spp_per_frame=16+ GPU 利用率显著提高，无 validation 报错 |
+| 15 | Probe 亮度后置过滤 | 全黑 probe 不生成 KTX2，manifest 只在 bake 完成后写入，Cancel 不残留 manifest |
+| 16 | 审查修复（Steps 13.7-15） | Probe/reference view aux 降噪质量改善，spp_per_frame=0 防护，无 validation 报错，IBL 无回归 |
 
 ---
 
@@ -1176,3 +1185,53 @@ Baking 参数面板新增 "Probe Min Luminance" slider（范围 0.0 ~ 0.01，格
 - KTX2 编号连续，completeness check 通过
 - 非全黑 probe 正常 bake，输出不变
 - 无 validation 报错
+
+---
+
+### Step 16：审查修复（Steps 13.7-15 正确性 + 代码质量）
+
+Steps 13.7-15 完成后全面审查（含 Codex 独立复查）发现的正确性问题和代码质量改进。
+
+#### 16a：Aux image 未初始化修复
+
+**问题**：probe baker 的 `begin_probe_bake_instance()` 只 clear accumulation cubemap，aux_albedo 和 aux_normal 从 `UNDEFINED → GENERAL` 后内容是 VRAM 垃圾。closesthit 仅在 bounce 0 命中时写 aux（`pc.lightmap_width == 0u` 守卫），miss shader 不写 aux。天空方向的 texel aux 数据为垃圾，OIDN 用脏 guide image 降噪产生偏差。
+
+Reference view 存在相同问题：managed aux image（`managed_pt_aux_albedo_` / `managed_pt_aux_normal_`）创建或 resize 后内容未定义，miss 像素的 aux 为垃圾。
+
+Lightmap baker 无此问题——aux 通过 blit 从光栅化 albedo/normal map 预填充，所有 texel 有值。
+
+**修复**：
+
+- Probe：`begin_probe_bake_instance()` accumulation clear 后追加 `vkCmdClearColorImage` 清零两张 aux cubemap（vec4(0)，同一 GENERAL layout，无额外 barrier）
+- Reference view：accumulation reset 时追加一次性 aux clear（reset 时 sample_count=0，首帧 closesthit 会写入命中 texel 的正确 aux，miss texel 保持清零——零值告诉 OIDN "此处无表面"，回退纯空间降噪）
+
+#### 16b：`spp_per_frame` 零值防护
+
+**问题**：UI slider 最小值 1，但 config.json 可手动编辑为 0。`std::min(remaining, 0u) = 0`，baker 每帧不 dispatch，`sample_count_` 不增长，bake 永远无法结束。
+
+**修复**：Application config 加载后 `bake_config_.spp_per_frame = std::max(1u, config_.bake_spp_per_frame)`。
+
+#### 16c：Bakeable instance 过滤逻辑去重
+
+**问题**：`compute_lightmap_keys()`（L154-181）和 `start_bake()`（L240-266）各自独立写了一遍 bakeable instance 过滤条件（`vertex_count==0 / index_count<3 / AlphaMode::Blend`）。两个循环必须产出完全相同的 instance 序列，否则 `bake_lightmap_keys_[key_idx]` 和 `bake_instance_indices_[i]` 错位。
+
+**修复**：提取 `for_each_bakeable_instance()` 模板或 lambda 接受回调的遍历函数，`compute_lightmap_keys()` 和 `start_bake()` 都调用它。
+
+#### 16d：`cancel_bake` / `complete_bake` 去重
+
+**问题**：两个方法除 `destroy_bake_instance_images()` 调用和日志外，12+ 行字段重置完全相同。
+
+**修复**：提取 `reset_bake_state()` 私有方法，包含共享的重置逻辑。`cancel_bake()` 先销毁 instance image 再调用它，`complete_bake()` 直接调用。
+
+#### 16e：`compress_bc6h` 出口 barrier 放宽
+
+**问题**：`texture_compress.cpp` 最终 barrier `dstStageMask = FRAGMENT_SHADER_BIT`，假设消费者是 fragment shader。bake 管线拿 BC6H image 做 transfer readback，需要的是 `COPY_BIT`。当前调用侧用 `srcStage=COPY_BIT` 能工作但语义不精确（依赖 compress 内部实现细节）。
+
+**修复**：`compress_bc6h()` 最终 barrier `dstStageMask` 改为 `ALL_COMMANDS_BIT`，`dstAccessMask` 改为 `MEMORY_READ_BIT`。调用侧无需关心 compress 内部实现，自由使用输出 image。IBL 管线不受影响（ALL_COMMANDS 是 FRAGMENT_SHADER 的超集）。
+
+**验证**：
+- Probe bake 输出 KTX2 质量改善（天空方向 face 降噪不再有垃圾 aux 干扰）
+- Reference view denoise 在 resize 后首次触发时天空区域无伪影
+- `spp_per_frame` 设 0 后 bake 仍正常进行（clamp 到 1）
+- 无 validation 报错
+- IBL 初始化行为不变（compress_bc6h barrier 放宽无回归）

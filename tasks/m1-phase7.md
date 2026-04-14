@@ -315,3 +315,26 @@
 - [x] `renderer_bake.cpp`：所有 probe 完成后写入 manifest（accepted positions + count）
 - [x] `render_progress.h`：`BakeProgress` 新增 `probes_rejected`
 - [x] `debug_ui.cpp`：Baking 参数面板新增 "Probe Min Luminance" slider + 进度面板显示 rejected 数
+
+## Step 16：审查修复（Steps 13.7-15 正确性 + 代码质量）
+
+### 16a：Aux image 未初始化修复
+
+- [x] `renderer_bake.cpp`：`begin_probe_bake_instance()` accumulation clear 后追加 `vkCmdClearColorImage` 清零 `bake_probe_aux_albedo_` 和 `bake_probe_aux_normal_`（6 layer，GENERAL layout）
+- [ ] `renderer_pt.cpp`：reference view aux image（`managed_pt_aux_albedo_` / `managed_pt_aux_normal_`）在 accumulation reset 时追加 clear（miss texel 的 aux 为 VRAM 垃圾，OIDN guide 数据不正确）
+
+### 16b：`spp_per_frame` 零值防护
+
+- [ ] `application.cpp`：config 加载 `bake_config_.spp_per_frame` 后 `std::max(1u, ...)`（0 值导致 bake 死循环）
+
+### 16c：Bakeable instance 过滤逻辑去重
+
+- [ ] `renderer_bake.cpp`：提取共享 bakeable instance 迭代逻辑（`compute_lightmap_keys()` 和 `start_bake()` 的重复过滤条件合并为一个遍历函数）
+
+### 16d：`cancel_bake` / `complete_bake` 去重
+
+- [ ] `renderer.h` + `renderer_bake.cpp`：提取 `reset_bake_state()` 私有方法，`cancel_bake()` 和 `complete_bake()` 调用它
+
+### 16e：`compress_bc6h` 出口 barrier 放宽
+
+- [ ] `texture_compress.cpp`：最终 barrier `dstStageMask` 从 `FRAGMENT_SHADER_BIT` 改为 `ALL_COMMANDS_BIT`（调用侧不限于 fragment shader 消费，bake 管线需要 transfer readback）
