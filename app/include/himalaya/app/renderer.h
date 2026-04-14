@@ -893,6 +893,12 @@ namespace himalaya::app {
         /** @brief Deferred probe placement flag (avoid nested immediate scopes in start_bake). */
         bool bake_probe_placement_pending_ = false;
 
+        /** @brief Number of probes that passed luminance check (KTX2 file index). */
+        uint32_t bake_probe_accepted_count_ = 0;
+
+        /** @brief World-space positions of accepted probes (for deferred manifest write). */
+        std::vector<glm::vec3> bake_probe_accepted_positions_;
+
         // --- Private helpers ---
 
         /**
