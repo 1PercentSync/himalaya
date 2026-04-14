@@ -44,6 +44,9 @@ namespace himalaya::framework {
             std::string mesh_hash;
         };
 
+        /** @brief Cancels any running generation on destruction. */
+        ~LightmapUVGenerator();
+
         /**
          * @brief Starts background generation with the given thread count.
          *
@@ -59,11 +62,19 @@ namespace himalaya::framework {
         /**
          * @brief Requests cancellation and joins all worker threads.
          *
-         * The currently executing mesh on each thread will complete before
-         * the thread exits. Remaining unstarted tasks are skipped.
-         * Safe to call when not running (no-op).
+         * Sets the cancel flag, then calls wait(). The currently executing
+         * mesh on each thread will complete before the thread exits.
+         * Remaining unstarted tasks are skipped. Safe to call when not running (no-op).
          */
         void cancel();
+
+        /**
+         * @brief Blocks until all worker threads finish (no cancellation).
+         *
+         * Joins all threads without setting the cancel flag — all queued
+         * tasks will complete. Safe to call when not running (no-op).
+         */
+        void wait();
 
         /** @brief Returns true if any worker thread is still running. */
         [[nodiscard]] bool running() const;

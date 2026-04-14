@@ -8,6 +8,10 @@
 #include <spdlog/spdlog.h>
 
 namespace himalaya::framework {
+    LightmapUVGenerator::~LightmapUVGenerator() {
+        cancel();
+    }
+
     void LightmapUVGenerator::start(std::vector<Request> requests, const uint32_t thread_count) {
         // Cancel any previous run
         cancel();
@@ -48,6 +52,10 @@ namespace himalaya::framework {
 
     void LightmapUVGenerator::cancel() {
         cancel_.store(true, std::memory_order_relaxed);
+        wait();
+    }
+
+    void LightmapUVGenerator::wait() {
         for (auto &w : workers_) {
             if (w.joinable()) {
                 w.join();
