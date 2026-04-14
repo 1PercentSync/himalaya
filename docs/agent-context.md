@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段七 — PT 烘焙器
-- **进度**：Step 13 第 10/13 项完成（已 bake 角度列表）
+- **进度**：Step 13 第 11/13 项完成（Cache 清理按钮）
 
 ### 下一个任务
 
-Step 13 第 11 项：`debug_ui.cpp` — Cache 面板新增 Clear Bake Cache + Clear Lightmap UV Cache 按钮。
+Step 13 第 12 项：`application.cpp` — 处理新增 DebugUIActions + 填充 DebugUIContext bake 字段。
 
 ---
 
