@@ -403,8 +403,41 @@ namespace himalaya::app {
             void compute();
         };
 
+        /**
+         * @brief Smoothed bake throughput (texel-samples/s).
+         *
+         * Accumulates dispatch count over a 1-second window, then
+         * computes texel-samples/s from total dispatches × texels per
+         * dispatch / window elapsed. Displayed value stays stable
+         * between updates (no flickering). Not reset on instance/probe
+         * transition — the metric is already per-texel normalized.
+         */
+        struct BakeThroughput {
+            /** @brief Smoothed throughput in texel-samples per second. */
+            double throughput = 0.0;
+
+            /**
+             * @brief Feed one frame's dispatch data.
+             * @param delta_time Frame delta in seconds.
+             * @param texels_per_dispatch Texels dispatched this frame (0 = no dispatch).
+             */
+            void push(float delta_time, uint64_t texels_per_dispatch);
+
+            /** @brief Reset state (called when bake session starts). */
+            void reset();
+
+        private:
+            static constexpr float kUpdateInterval = 1.0f;
+            uint32_t dispatch_count_ = 0;
+            uint64_t texels_per_dispatch_ = 0;
+            float elapsed_ = 0.0f;
+        };
+
         /** @brief Frame time statistics accumulator. */
         FrameStats frame_stats_;
+
+        /** @brief Bake throughput accumulator. */
+        BakeThroughput bake_throughput_;
     };
 
 } // namespace himalaya::app

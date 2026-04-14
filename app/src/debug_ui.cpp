@@ -136,6 +136,34 @@ namespace himalaya::app {
         low1_fps = 1000.0f / low1_frame_time_ms;
     }
 
+    // ---- BakeThroughput ----
+
+    void DebugUI::BakeThroughput::push(const float delta_time,
+                                       const uint64_t texels_per_dispatch) {
+        if (texels_per_dispatch > 0) {
+            ++dispatch_count_;
+            texels_per_dispatch_ = texels_per_dispatch;
+        }
+        elapsed_ += delta_time;
+
+        if (elapsed_ >= kUpdateInterval) {
+            if (dispatch_count_ > 0 && texels_per_dispatch_ > 0) {
+                throughput = static_cast<double>(dispatch_count_)
+                    * static_cast<double>(texels_per_dispatch_)
+                    / static_cast<double>(elapsed_);
+            }
+            dispatch_count_ = 0;
+            elapsed_ = 0.0f;
+        }
+    }
+
+    void DebugUI::BakeThroughput::reset() {
+        throughput = 0.0;
+        dispatch_count_ = 0;
+        texels_per_dispatch_ = 0;
+        elapsed_ = 0.0f;
+    }
+
     // ---- DebugUI ----
 
     // ReSharper disable once CppParameterMayBeConstPtrOrRef
