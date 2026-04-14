@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段七 — PT 烘焙器
-- **进度**：Step 17 待实现（0/5，17c 已取消）
+- **进度**：Step 17 实现中（1/5，17c 已取消）
 
 ### 下一个任务
 
-Step 17a：FrameContext 悬空引用修复（`renderer_bake.cpp`）
+Step 17b：`cubemap_filter` 除零防护（`cubemap_filter.cpp`）
 
 ---
 

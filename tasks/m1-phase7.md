@@ -343,7 +343,7 @@
 
 ### 17a：FrameContext 悬空引用修复
 
-- [ ] `renderer_bake.cpp`：`render_baking()` 中 `lightmap_baker_pass_.record()` 和 `probe_baker_pass_.record()` 的 FrameContext 从临时对象改为局部变量（与 `renderer_pt.cpp` 的 `frame_ctx` 模式一致，确保 lambda 捕获的 `&ctx` 在 `execute()` 时仍有效）
+- [x] `renderer_bake.cpp`：`render_baking()` 中 `lightmap_baker_pass_.record()` 和 `probe_baker_pass_.record()` 的 FrameContext 从临时对象改为局部变量（与 `renderer_pt.cpp` 的 `frame_ctx` 模式一致，确保 lambda 捕获的 `&ctx` 在 `execute()` 时仍有效）
 
 ### 17b：`cubemap_filter` 除零防护
 
