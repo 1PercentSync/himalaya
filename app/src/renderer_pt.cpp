@@ -47,13 +47,17 @@ namespace himalaya::app {
                                                                     VK_IMAGE_LAYOUT_GENERAL,
                                                                     accum_has_data);
 
-        // Aux images are fully overwritten each frame (bounce 0 imageStore)
+        // Aux images: hit pixels are overwritten each frame (bounce 0 imageStore),
+        // but miss pixels (sky) are never written by closesthit or miss shader.
+        // Preserve content so miss pixels retain the zero from the reset clear.
+        // On first frame after reset (sample_count==0), a clear pass below
+        // initializes all texels to zero — OIDN expects (0,0,0) for no-surface.
         const auto aux_albedo_resource = render_graph_.use_managed_image(managed_pt_aux_albedo_,
                                                                          VK_IMAGE_LAYOUT_GENERAL,
-                                                                         false);
+                                                                         accum_has_data);
         const auto aux_normal_resource = render_graph_.use_managed_image(managed_pt_aux_normal_,
                                                                          VK_IMAGE_LAYOUT_GENERAL,
-                                                                         false);
+                                                                         accum_has_data);
 
         // --- Construct FrameContext ---
         framework::FrameContext frame_ctx{};
@@ -105,6 +109,42 @@ namespace himalaya::app {
         prev_emissive_nee_ = pt.emissive_nee;
         prev_lod_max_level_ = pt.lod_max_level;
         prev_ibl_intensity_ = input.ibl_intensity;
+
+        // --- Clear aux images on first frame after accumulation reset ---
+        // Miss rays (sky) never write aux in closesthit, so without this
+        // clear, miss pixels would carry VRAM garbage into OIDN guide images.
+        // OIDN expects (0,0,0) for pixels without a surface hit.
+        if (!accum_has_data) {
+            const std::array clear_resources = {
+                framework::RGResourceUsage{
+                    aux_albedo_resource,
+                    framework::RGAccessType::Write,
+                    framework::RGStage::Transfer,
+                },
+                framework::RGResourceUsage{
+                    aux_normal_resource,
+                    framework::RGAccessType::Write,
+                    framework::RGStage::Transfer,
+                },
+            };
+            render_graph_.add_pass("PT Aux Clear", clear_resources,
+                                   [this](const rhi::CommandBuffer &pass_cmd) {
+                                       VkClearColorValue clear_color{};
+                                       VkImageSubresourceRange range{
+                                           VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1
+                                       };
+                                       vkCmdClearColorImage(pass_cmd.handle(),
+                                           resource_manager_->get_image(
+                                               render_graph_.get_managed_backing_image(managed_pt_aux_albedo_)).image,
+                                           VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                                           &clear_color, 1, &range);
+                                       vkCmdClearColorImage(pass_cmd.handle(),
+                                           resource_manager_->get_image(
+                                               render_graph_.get_managed_backing_image(managed_pt_aux_normal_)).image,
+                                           VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                                           &clear_color, 1, &range);
+                                   });
+        }
 
         // --- Denoise trigger guard ---
         if (const uint32_t sample_count = reference_view_pass_.sample_count();
