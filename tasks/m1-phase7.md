@@ -376,3 +376,10 @@
 
 - [x] `descriptors.cpp`：Set 0 binding 4（TLAS）和 binding 5（GeometryInfo）stageFlags 追加 `COMPUTE_BIT`（`probe_filter.comp` compute pipeline 需要访问这两个绑定）
 - [x] `renderer_bake.cpp`：`bake_probe_aux_albedo_` / `bake_probe_aux_normal_` 创建时 usage 追加 `TransferDst`（Step 16a 的 `vkCmdClearColorImage` 需要此 flag）
+
+### 17i：Lightmap UV padding 与 bake 分辨率对齐
+
+- [ ] `scene_data.h`：`BakeConfig::min_resolution` 默认值 32 → 64
+- [ ] `lightmap_uv.cpp`：`PackOptions::resolution` 设为 `min_resolution`（通过新增函数参数传入），保证 padding 在任意 bake 分辨率下 >= 2 texels
+- [ ] `lightmap_uv.h`：`generate_lightmap_uv()` 签名新增 `uint32_t pack_resolution` 参数
+- [ ] 调用侧适配：`scene_loader.cpp` 和 `lightmap_uv_generator.cpp` 传入 `min_resolution`
