@@ -381,7 +381,7 @@ namespace himalaya::app {
                     }
                 }
 
-                // Lightmap UV generation via xatlas (skip if TEXCOORD_1 present or degenerate)
+                // Lightmap UV: record pending for deferred xatlas, or log TEXCOORD_1 source
                 if (has_texcoord_1) {
                     spdlog::info("  Prim {}: lightmap UV from TEXCOORD_1", meshes_.size());
                 } else if (vertices.size() >= 3 && indices.size() >= 3) {
@@ -399,22 +399,12 @@ namespace himalaya::app {
                     }
                     const auto mesh_hash = framework::content_hash(hash_buf.data(), hash_buf.size());
 
-                    auto uv_result = framework::generate_lightmap_uv(vertices, indices, mesh_hash);
+                    // Record for deferred generation (uv1 stays {0,0})
+                    uv_pending_prims_.push_back(static_cast<uint32_t>(meshes_.size()));
+                    uv_pending_hashes_.push_back(mesh_hash);
 
-                    // Rebuild vertex array: copy attributes from original via remap, write xatlas uv1
-                    const auto new_vert_count = uv_result.vertex_remap.size();
-                    std::vector<framework::Vertex> new_vertices(new_vert_count);
-                    for (size_t i = 0; i < new_vert_count; ++i) {
-                        new_vertices[i] = vertices[uv_result.vertex_remap[i]];
-                        new_vertices[i].uv1 = uv_result.lightmap_uvs[i];
-                    }
-
-                    spdlog::info("  Prim {}: lightmap UV from xatlas ({} -> {} verts, {} indices)",
-                                 meshes_.size(), vertices.size(), new_vert_count,
-                                 uv_result.new_indices.size());
-
-                    vertices = std::move(new_vertices);
-                    indices = std::move(uv_result.new_indices);
+                    spdlog::info("  Prim {}: lightmap UV deferred ({} verts, {} indices, hash {:.8})",
+                                 meshes_.size(), vertices.size(), indices.size(), mesh_hash);
                 }
 
                 // Create GPU vertex and index buffers
