@@ -225,6 +225,7 @@ namespace himalaya::app {
 
         config_.scene_path = path;
         bake_angles_dirty_ = true;
+        refresh_lightmap_keys();
         save_config(config_);
     }
 
@@ -241,6 +242,7 @@ namespace himalaya::app {
 
         config_.env_path = path;
         bake_angles_dirty_ = true;
+        refresh_lightmap_keys();
 
         // Restore persisted HDR sun coordinates for the new environment
         if (const auto it = config_.hdr_sun_coords.find(path);
@@ -300,6 +302,21 @@ namespace himalaya::app {
         context_.end_immediate();
 
         render_mode_ = framework::RenderMode::Baking;
+    }
+
+    void Application::refresh_lightmap_keys() {
+        if (config_.scene_path.empty() || config_.env_path.empty()) {
+            return;
+        }
+        renderer_.compute_lightmap_keys(
+            scene_loader_.mesh_instances(),
+            scene_loader_.meshes(),
+            scene_loader_.material_instances(),
+            scene_loader_.cpu_vertices(),
+            scene_loader_.cpu_indices(),
+            scene_loader_.scene_hash(),
+            framework::content_hash(config_.env_path),
+            scene_loader_.scene_textures_hash());
     }
 
     void Application::resolve_thread_count() {
@@ -587,6 +604,7 @@ namespace himalaya::app {
             .has_scene = !config_.scene_path.empty(),
             .has_hdr = !config_.env_path.empty(),
             .bake_cache_key = bake_cache_key,
+            .bake_lightmap_keys = renderer_.bake_lightmap_keys(),
             .bake_angles_dirty = bake_angles_dirty_,
             .scene_stats = {
                 .total_instances = total_instances,

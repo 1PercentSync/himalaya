@@ -351,6 +351,14 @@ namespace himalaya::app {
         void start_bake_session();
 
         /**
+         * @brief Recomputes per-instance lightmap cache keys if scene and HDR are loaded.
+         *
+         * Called after scene load, HDR load, or any event that invalidates keys.
+         * No-op when either scene or HDR is unavailable.
+         */
+        void refresh_lightmap_keys();
+
+        /**
          * @brief Resolves bg_uv_thread_count if 0 (first launch) and persists.
          *
          * Called once at init after config load. Sets thread count to
