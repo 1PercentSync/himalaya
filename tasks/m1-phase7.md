@@ -163,7 +163,7 @@
 
 - [x] `lightmap_uv.h`：新增 `LightmapUVQuality` 枚举（Fast / Production）+ `kDefaultLightmapUVQuality` 编译期常量（函数签名不变，内部使用常量）
 - [x] `lightmap_uv.cpp`：quality 分支（Fast: maxIterations=1 bruteForce=false，Production: maxIterations=4 bruteForce=true）+ 缓存 category 隔离（`lightmap_uv_debug` / `lightmap_uv_release`）
-- [ ] `lightmap_uv_generator.h`：新建 `LightmapUVGenerator` 类声明（Request struct + start/cancel/running/completed/total）
+- [x] `lightmap_uv_generator.h`：新建 `LightmapUVGenerator` 类声明（Request struct + start/cancel/running/completed/total）
 - [ ] `lightmap_uv_generator.cpp`：新建线程池实现（jthread + atomic next_task/completed/cancel）
 - [ ] `framework/CMakeLists.txt`：添加 `lightmap_uv_generator.cpp`
 - [ ] `scene_loader.h`：新增 `uv_pending_prims_` / `uv_pending_hashes_` 数据成员 + `prepare_uv_requests()` / `apply_lightmap_uvs()` / `has_pending_uvs()` 方法声明
