@@ -1326,14 +1326,16 @@ namespace himalaya::app {
             .width = res, .height = res, .depth = 1,
             .mip_levels = 1, .array_layers = 6, .sample_count = 1,
             .format = rhi::Format::R16G16B16A16Sfloat,
-            .usage = rhi::ImageUsage::Storage | rhi::ImageUsage::TransferSrc,
+            .usage = rhi::ImageUsage::Storage | rhi::ImageUsage::TransferSrc
+                     | rhi::ImageUsage::TransferDst,
         }, "bake_probe_aux_albedo");
 
         bake_probe_aux_normal_ = resource_manager_->create_image({
             .width = res, .height = res, .depth = 1,
             .mip_levels = 1, .array_layers = 6, .sample_count = 1,
             .format = rhi::Format::R16G16B16A16Sfloat,
-            .usage = rhi::ImageUsage::Storage | rhi::ImageUsage::TransferSrc,
+            .usage = rhi::ImageUsage::Storage | rhi::ImageUsage::TransferSrc
+                     | rhi::ImageUsage::TransferDst,
         }, "bake_probe_aux_normal");
 
         // Barrier: UNDEFINED → GENERAL for all 3 cubemaps
