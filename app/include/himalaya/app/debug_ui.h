@@ -249,6 +249,9 @@ namespace himalaya::app {
         /** @brief True if an HDR environment is loaded (Start Bake precondition). */
         bool has_hdr;
 
+        /** @brief Longest edge of the scene AABB in meters (for enclosure threshold display). 0 = no scene. */
+        float scene_aabb_longest_edge;
+
         /**
          * @brief Probe set cache key for baked angle directory scanning.
          *
