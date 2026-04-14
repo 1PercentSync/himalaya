@@ -1019,23 +1019,29 @@ namespace himalaya::app {
                                 static_cast<double>(bp.instance_elapsed_s),
                                 static_cast<double>(bp.total_elapsed_s));
 
-                    // Progress percentage + ETA
-                    if (bp.total_texel_samples > 0) {
-                        const double pct = static_cast<double>(bp.completed_texel_samples)
-                            / static_cast<double>(bp.total_texel_samples) * 100.0;
-                        ImGui::Text("Progress: %.1f%%", pct);
+                    // Per-phase progress percentage + ETA
+                    {
+                        const uint64_t completed = bp.state == framework::BakeState::BakingLightmaps
+                            ? bp.lm_completed_texel_samples : bp.probe_completed_texel_samples;
+                        const uint64_t total = bp.state == framework::BakeState::BakingLightmaps
+                            ? bp.lm_total_texel_samples : bp.probe_total_texel_samples;
 
-                        if (bake_throughput_.throughput > 0.0) {
-                            const uint64_t remaining = bp.total_texel_samples
-                                - bp.completed_texel_samples;
-                            const double eta_s = static_cast<double>(remaining)
-                                / bake_throughput_.throughput;
-                            if (eta_s < 3600.0) {
-                                ImGui::SameLine();
-                                ImGui::Text("  ETA: %.0fs", eta_s);
-                            } else {
-                                ImGui::SameLine();
-                                ImGui::Text("  ETA: %.1fh", eta_s / 3600.0);
+                        if (total > 0) {
+                            const double pct = static_cast<double>(completed)
+                                / static_cast<double>(total) * 100.0;
+                            ImGui::Text("Progress: %.1f%%", pct);
+
+                            if (bake_throughput_.throughput > 0.0) {
+                                const uint64_t remaining = total - completed;
+                                const double eta_s = static_cast<double>(remaining)
+                                    / bake_throughput_.throughput;
+                                if (eta_s < 3600.0) {
+                                    ImGui::SameLine();
+                                    ImGui::Text("  ETA: %.0fs", eta_s);
+                                } else {
+                                    ImGui::SameLine();
+                                    ImGui::Text("  ETA: %.1fh", eta_s / 3600.0);
+                                }
                             }
                         }
                     }
