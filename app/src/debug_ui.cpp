@@ -924,6 +924,10 @@ namespace himalaya::app {
                     }
                 }
 
+                slider_float_deferred("Probe Min Luminance",
+                                      &ctx.bake_config.probe_min_luminance,
+                                      0.0f, 0.1f, "%.5f");
+
                 // Baker rendering parameters
                 {
                     auto bounces = static_cast<int>(ctx.bake_config.max_bounces);
@@ -1014,6 +1018,9 @@ namespace himalaya::app {
                         ImGui::Text("Probe: %u / %u    %u / %u SPP",
                                     bp.current_probe + 1, bp.total_probes,
                                     bp.probe_sample_count, bp.probe_target_spp);
+                        if (bp.probes_rejected > 0) {
+                            ImGui::Text("Rejected: %u", bp.probes_rejected);
+                        }
                     }
 
                     // Throughput — feed BakeThroughput accumulator

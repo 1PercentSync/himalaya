@@ -66,6 +66,9 @@ namespace himalaya::app {
         /** @brief Number of SPP batched per frame during baking. */
         uint32_t bake_spp_per_frame = 16;
 
+        /** @brief Minimum average luminance for a probe to be accepted during baking. */
+        float bake_probe_min_luminance = 1e-4f;
+
         /**
          * @brief Auto-start background lightmap UV generation on scene load.
          *
