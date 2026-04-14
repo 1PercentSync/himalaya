@@ -817,4 +817,18 @@ namespace himalaya::app {
     const std::string &SceneLoader::scene_textures_hash() const {
         return scene_textures_hash_;
     }
+
+    std::vector<framework::LightmapUVGenerator::Request> SceneLoader::prepare_uv_requests() const {
+        std::vector<framework::LightmapUVGenerator::Request> requests;
+        requests.reserve(uv_pending_prims_.size());
+        for (size_t i = 0; i < uv_pending_prims_.size(); ++i) {
+            const auto prim = uv_pending_prims_[i];
+            requests.push_back({
+                .vertices = cpu_vertices_[prim],
+                .indices = cpu_indices_[prim],
+                .mesh_hash = uv_pending_hashes_[i],
+            });
+        }
+        return requests;
+    }
 } // namespace himalaya::app
