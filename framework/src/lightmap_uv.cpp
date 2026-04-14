@@ -78,6 +78,7 @@ namespace himalaya::framework {
             return std::nullopt;
         }
 
+        result.is_fallback = (header.flags & 1u) != 0;
         return result;
     }
 
@@ -98,6 +99,7 @@ namespace himalaya::framework {
         CacheHeader header{};
         header.vertex_count = static_cast<uint32_t>(result.lightmap_uvs.size());
         header.index_count = static_cast<uint32_t>(result.new_indices.size());
+        header.flags = result.is_fallback ? 1u : 0u;
 
         ofs.write(reinterpret_cast<const char *>(&header), sizeof(header));
         ofs.write(reinterpret_cast<const char *>(result.lightmap_uvs.data()),
