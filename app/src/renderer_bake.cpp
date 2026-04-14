@@ -68,6 +68,38 @@ namespace himalaya::app {
         return buf;
     }
 
+    /**
+     * @brief Writes the probe manifest file (accepted probe count + positions).
+     *
+     * Binary format: uint32_t probe_count, then probe_count × glm::vec3 positions.
+     * Uses atomic write (write-to-temp + rename) for crash safety.
+     */
+    static void write_probe_manifest(const std::string &probe_set_key,
+                                     uint32_t rotation_int,
+                                     std::span<const glm::vec3> accepted_positions) {
+        const auto rot = format_rotation(rotation_int);
+        const auto manifest_path = framework::cache_path(
+            "bake", probe_set_key + "_rot" + rot + "_manifest", ".bin");
+        const auto count = static_cast<uint32_t>(accepted_positions.size());
+        const size_t data_size = sizeof(uint32_t)
+            + accepted_positions.size() * sizeof(glm::vec3);
+        std::vector<uint8_t> manifest_data(data_size);
+        std::memcpy(manifest_data.data(), &count, sizeof(uint32_t));
+        if (!accepted_positions.empty()) {
+            std::memcpy(manifest_data.data() + sizeof(uint32_t),
+                        accepted_positions.data(),
+                        accepted_positions.size() * sizeof(glm::vec3));
+        }
+        if (framework::atomic_write_file(manifest_path,
+                                         manifest_data.data(), data_size)) {
+            spdlog::info("Wrote probe manifest: {} accepted probes -> {}",
+                         count, manifest_path.string());
+        } else {
+            spdlog::error("Failed to write probe manifest: {}",
+                          manifest_path.string());
+        }
+    }
+
     // ---- Bake completeness check ----
 
     bool Renderer::is_bake_angle_complete(
@@ -973,6 +1005,8 @@ namespace himalaya::app {
                     begin_probe_bake_instance(next);
                     ctx_->end_immediate();
                 } else {
+                    write_probe_manifest(bake_probe_set_key_, bake_rotation_int_,
+                                         bake_probe_accepted_positions_);
                     spdlog::info("All {} probes baked ({} accepted)",
                                  bake_probe_total_, bake_probe_accepted_count_);
                     bake_state_ = framework::BakeState::Complete;
@@ -1209,6 +1243,8 @@ namespace himalaya::app {
             begin_probe_bake_instance(next);
             ctx_->end_immediate();
         } else {
+            write_probe_manifest(bake_probe_set_key_, bake_rotation_int_,
+                                 bake_probe_accepted_positions_);
             spdlog::info("All {} probes baked ({} accepted)",
                          bake_probe_total_, bake_probe_accepted_count_);
             bake_state_ = framework::BakeState::Complete;
@@ -1520,6 +1556,8 @@ namespace himalaya::app {
                         begin_probe_bake_instance(0);
                         ctx_->end_immediate();
                     } else {
+                        write_probe_manifest(bake_probe_set_key_, bake_rotation_int_,
+                                             bake_probe_accepted_positions_);
                         spdlog::info("No valid probes after filtering, skipping probe baking");
                         bake_state_ = framework::BakeState::Complete;
                     }
