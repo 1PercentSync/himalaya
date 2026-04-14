@@ -329,7 +329,7 @@
 
 ### 16c：Bakeable instance 过滤逻辑去重
 
-- [ ] `renderer_bake.cpp`：提取共享 bakeable instance 迭代逻辑（`compute_lightmap_keys()` 和 `start_bake()` 的重复过滤条件合并为一个遍历函数）
+- [x] `renderer_bake.cpp`：提取共享 bakeable instance 迭代逻辑（`compute_lightmap_keys()` 和 `start_bake()` 的重复过滤条件合并为一个遍历函数）
 
 ### 16d：`cancel_bake` / `complete_bake` 去重
 
