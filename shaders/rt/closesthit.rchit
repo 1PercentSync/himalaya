@@ -393,14 +393,8 @@ void main() {
     }
 
     // ---- Multi-lobe BRDF sampling ----
-    // Orthonormal basis from shading normal (isotropic BRDF, any basis works)
     vec3 T_basis, B_basis;
-    if (abs(N_shading.z) < 0.999) {
-        T_basis = normalize(cross(vec3(0.0, 0.0, 1.0), N_shading));
-    } else {
-        T_basis = normalize(cross(vec3(1.0, 0.0, 0.0), N_shading));
-    }
-    B_basis = cross(N_shading, T_basis);
+    build_orthonormal_basis(N_shading, T_basis, B_basis);
 
     // Random numbers for lobe selection and sampling
     uint dim_base = 2u + payload.bounce * DIMS_PER_BOUNCE;
