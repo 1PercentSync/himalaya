@@ -57,6 +57,13 @@ namespace himalaya::app {
         bool pt_allow_tearing = false;
 
         /**
+         * @brief Override present mode to IMMEDIATE during baking.
+         *
+         * Same semantics as pt_allow_tearing but for the bake pipeline.
+         */
+        bool bake_allow_tearing = false;
+
+        /**
          * @brief Auto-start background lightmap UV generation on scene load.
          *
          * When true, background xatlas generation starts immediately after

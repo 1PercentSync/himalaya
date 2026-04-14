@@ -80,6 +80,9 @@ namespace himalaya::app {
             if (json.contains("pt_allow_tearing") && json["pt_allow_tearing"].is_boolean()) {
                 config.pt_allow_tearing = json["pt_allow_tearing"].get<bool>();
             }
+            if (json.contains("bake_allow_tearing") && json["bake_allow_tearing"].is_boolean()) {
+                config.bake_allow_tearing = json["bake_allow_tearing"].get<bool>();
+            }
             if (json.contains("bg_uv_auto_start") && json["bg_uv_auto_start"].is_boolean()) {
                 config.bg_uv_auto_start = json["bg_uv_auto_start"].get<bool>();
             }
@@ -126,6 +129,7 @@ namespace himalaya::app {
                     j["auto_denoise_interval"] = config.auto_denoise_interval;
                 }
                 j["pt_allow_tearing"] = config.pt_allow_tearing;
+                j["bake_allow_tearing"] = config.bake_allow_tearing;
                 j["bg_uv_auto_start"] = config.bg_uv_auto_start;
                 if (config.bg_uv_thread_count > 0) {
                     j["bg_uv_thread_count"] = config.bg_uv_thread_count;
