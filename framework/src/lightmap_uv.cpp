@@ -25,12 +25,19 @@ namespace himalaya::framework {
 
     // --- Cache read/write helpers ---
 
+    /** @brief Cache category for the current build configuration (debug/release isolation). */
+#ifdef NDEBUG
+    static constexpr std::string_view kCacheCategory = "lightmap_uv_release";
+#else
+    static constexpr std::string_view kCacheCategory = "lightmap_uv_debug";
+#endif
+
     /**
      * Attempts to load a LightmapUVResult from disk cache.
      * Returns nullopt on cache miss or any read/validation failure.
      */
     static std::optional<LightmapUVResult> read_cache(const std::string &mesh_hash) {
-        const auto path = cache_path("lightmap_uv", mesh_hash, ".bin");
+        const auto path = cache_path(kCacheCategory, mesh_hash, ".bin");
         std::ifstream ifs(path, std::ios::binary);
         if (!ifs) {
             return std::nullopt;
@@ -76,7 +83,7 @@ namespace himalaya::framework {
      * Writes a LightmapUVResult to disk cache (best-effort, failure is non-fatal).
      */
     static void write_cache(const std::string &mesh_hash, const LightmapUVResult &result) {
-        const auto path = cache_path("lightmap_uv", mesh_hash, ".bin");
+        const auto path = cache_path(kCacheCategory, mesh_hash, ".bin");
         auto tmp_path = path;
         tmp_path += ".tmp";
 
@@ -154,11 +161,16 @@ namespace himalaya::framework {
         }
 
         xatlas::ChartOptions chart_options;
-        chart_options.maxIterations = 4; // Higher = better chart quality, cached so one-time cost
-
         xatlas::PackOptions pack_options;
-        pack_options.padding = 2;        // Gutter: 2 texel padding around UV islands
-        pack_options.bruteForce = true;  // Best packing utilization, cached so one-time cost
+        pack_options.padding = 2; // Gutter: 2 texel padding around UV islands
+
+        if constexpr (kDefaultLightmapUVQuality == LightmapUVQuality::Production) {
+            chart_options.maxIterations = 4;
+            pack_options.bruteForce = true;
+        } else {
+            chart_options.maxIterations = 1;
+            pack_options.bruteForce = false;
+        }
 
         xatlas::Generate(atlas, chart_options, pack_options);
 
