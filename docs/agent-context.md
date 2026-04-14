@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段七 — PT 烘焙器
-- **进度**：Step 12.5 第 1 小项完成（lightmap_uv.h Quality 枚举）
+- **进度**：Step 12.5 第 2 小项完成（lightmap_uv.cpp quality 分支 + 缓存隔离）
 
 ### 下一个任务
 
-Step 12.5 第 2 小项：`lightmap_uv.cpp` quality 分支 + 缓存 category 隔离，详见 `docs/current-phase.md` Step 12.5 章节。
+Step 12.5 第 3 小项：`lightmap_uv_generator.h` 新建 LightmapUVGenerator 类声明，详见 `docs/current-phase.md` Step 12.5 章节。
 
 ---
 
