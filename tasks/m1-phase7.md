@@ -219,7 +219,7 @@
 - [x] `renderer_bake.cpp`：`start_bake()` 预算 `total_texel_samples`（lightmap 阶段 + probe 预估），`bake_progress()` 实现（汇总各字段 + 计算 elapsed + completed_texel_samples）
 - [x] 类型提取：`BakeState` 迁移到 `scene_data.h`（与 `RenderMode` 一致）+ 新增 `framework/render_progress.h`（`BakeProgress`）+ `renderer.h` 去除嵌套类型改为 include + `renderer_bake.cpp` 更新所有 `Renderer::BakeState` / `Renderer::BakeProgress` 引用
 - [x] `debug_ui.h`：`DebugUIContext` 新增 bake 相关字段（`BakeConfig&`、`BakeProgress`、`bake_cache_key`、dirty flag 等）+ `DebugUIActions` 新增 bake 动作（start / cancel / config_changed / clear_bake_cache / clear_uv_cache）
-- [ ] `debug_ui.cpp`：`BakeThroughput` 内部类（复刻 FrameStats，1 秒窗口平滑 texel-samples/s，全程不 reset）
+- [x] `debug_ui.cpp`：`BakeThroughput` 内部类（复刻 FrameStats，1 秒窗口平滑 texel-samples/s，全程不 reset）
 - [ ] `debug_ui.cpp`：Baking collapsing header — 参数配置（texels_per_meter / min_res / max_res / lightmap SPP / probe face res / probe spacing / filter ray count / enclosure threshold factor + 绝对阈值显示 / probe SPP / baker max_bounces / baker env_sampling / baker emissive_nee / baker allow_tearing）
 - [ ] `debug_ui.cpp`：Start Bake 按钮（唯一入口，旁显当前角度 + tooltip）+ Cancel 按钮（恢复原 RenderMode + 显示取消信息）
 - [ ] `debug_ui.cpp`：Bake 期间 UI 锁定（bake 参数 slider + Load Scene + Load HDR + Reload Shaders + PT checkbox 全部灰显，PT 面板不显示，UV Generation Start 灰显）
