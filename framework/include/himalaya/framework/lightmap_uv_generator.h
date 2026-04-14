@@ -1,0 +1,93 @@
+#pragma once
+
+/**
+ * @file lightmap_uv_generator.h
+ * @brief Background thread pool for parallel xatlas lightmap UV generation.
+ */
+
+#include <himalaya/framework/lightmap_uv.h>
+#include <himalaya/framework/mesh.h>
+
+#include <atomic>
+#include <cstdint>
+#include <string>
+#include <thread>
+#include <vector>
+
+namespace himalaya::framework {
+    /**
+     * @brief Runs xatlas lightmap UV generation on a background thread pool.
+     *
+     * Each request is an independent mesh (vertices + indices + hash).
+     * Results are written to disk cache only — the returned LightmapUVResult
+     * is discarded. The caller later reads from cache via generate_lightmap_uv().
+     *
+     * Thread-safe: running()/completed()/total() may be called from any thread.
+     * start() and cancel() must be called from the main thread.
+     */
+    class LightmapUVGenerator {
+    public:
+        /**
+         * @brief Per-mesh generation request.
+         *
+         * Owns copies of vertex/index data so the generator is independent
+         * of the original SceneLoader data lifetime.
+         */
+        struct Request {
+            /** @brief Vertex data (positions used by xatlas, full Vertex for API compatibility). */
+            std::vector<Vertex> vertices;
+
+            /** @brief Index data (uint32_t triangle list). */
+            std::vector<uint32_t> indices;
+
+            /** @brief Pre-computed content hash of positions + indices. */
+            std::string mesh_hash;
+        };
+
+        /**
+         * @brief Starts background generation with the given thread count.
+         *
+         * If already running, cancels the previous run first.
+         * Each worker picks tasks via atomic fetch_add and calls
+         * generate_lightmap_uv() (which writes to disk cache on miss).
+         *
+         * @param requests     Mesh generation requests (moved, owned by generator).
+         * @param thread_count Number of worker threads to spawn.
+         */
+        void start(std::vector<Request> requests, uint32_t thread_count);
+
+        /**
+         * @brief Requests cancellation and joins all worker threads.
+         *
+         * The currently executing mesh on each thread will complete before
+         * the thread exits. Remaining unstarted tasks are skipped.
+         * Safe to call when not running (no-op).
+         */
+        void cancel();
+
+        /** @brief Returns true if any worker thread is still running. */
+        [[nodiscard]] bool running() const;
+
+        /** @brief Returns the number of completed mesh generations. */
+        [[nodiscard]] uint32_t completed() const;
+
+        /** @brief Returns the total number of requests in the current run. */
+        [[nodiscard]] uint32_t total() const;
+
+    private:
+        /** @brief Task list, moved in at start(). */
+        std::vector<Request> requests_;
+
+        /** @brief Next task index for atomic work-stealing. */
+        std::atomic<uint32_t> next_task_{0};
+
+        /** @brief Number of completed tasks. */
+        std::atomic<uint32_t> completed_{0};
+
+        /** @brief Cancellation flag checked by workers between tasks. */
+        std::atomic<bool> cancel_{false};
+
+        /** @brief Worker threads (joined on cancel or destruction). */
+        std::vector<std::jthread> workers_;
+    };
+} // namespace himalaya::framework
