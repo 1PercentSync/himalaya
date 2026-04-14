@@ -325,7 +325,7 @@
 
 ### 16b：`spp_per_frame` 零值防护
 
-- [ ] `application.cpp`：config 加载 `bake_config_.spp_per_frame` 后 `std::max(1u, ...)`（0 值导致 bake 死循环）
+- [x] `application.cpp`：config 加载 `bake_config_.spp_per_frame` 后 `std::max(1u, ...)`（0 值导致 bake 死循环）
 
 ### 16c：Bakeable instance 过滤逻辑去重
 
