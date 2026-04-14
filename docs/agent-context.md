@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段七 — PT 烘焙器
-- **进度**：Step 12 前七小项完成（含十字展开预览）
+- **进度**：Step 12 前八小项完成，`probe_bake_finalize()` 是 stub
 
 ### 下一个任务
 
-Step 12 第八小项：`application.cpp` 检测 `bake_probe_finalize_pending_` → 调用 `probe_bake_finalize()`。
+Step 12 第九小项：`probe_bake_finalize()` Scope 1——readback accumulation + aux（layerCount=6）。
 
 设计详见 `docs/current-phase.md` Step 12 章节，任务清单见 `tasks/m1-phase7.md` Step 12 部分。无设计决策空间，按文档直接实现。
 
