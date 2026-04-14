@@ -16,6 +16,7 @@
 #include <cmath>
 #include <cstdio>
 #include <filesystem>
+#include <fstream>
 #include <set>
 
 #include <glm/trigonometric.hpp>
@@ -141,20 +142,16 @@ namespace himalaya::app {
     // ---- BakeThroughput ----
 
     void DebugUI::BakeThroughput::push(const float delta_time,
-                                       const uint64_t texels_per_dispatch) {
-        if (texels_per_dispatch > 0) {
-            ++dispatch_count_;
-            texels_per_dispatch_ = texels_per_dispatch;
-        }
+                                       const uint64_t texel_samples) {
+        accumulated_texel_samples_ += texel_samples;
         elapsed_ += delta_time;
 
         if (elapsed_ >= kUpdateInterval) {
-            if (dispatch_count_ > 0 && texels_per_dispatch_ > 0) {
-                throughput = static_cast<double>(dispatch_count_)
-                    * static_cast<double>(texels_per_dispatch_)
+            if (accumulated_texel_samples_ > 0) {
+                throughput = static_cast<double>(accumulated_texel_samples_)
                     / static_cast<double>(elapsed_);
             }
-            dispatch_count_ = 0;
+            accumulated_texel_samples_ = 0;
             elapsed_ = 0.0f;
         }
     }
@@ -1020,14 +1017,15 @@ namespace himalaya::app {
                     }
 
                     // Throughput — feed BakeThroughput accumulator
-                    uint64_t texels = 0;
+                    uint64_t texels_per_spp = 0;
                     if (bp.state == framework::BakeState::BakingLightmaps) {
-                        texels = static_cast<uint64_t>(bp.lm_width) * bp.lm_height;
+                        texels_per_spp = static_cast<uint64_t>(bp.lm_width) * bp.lm_height;
                     } else {
-                        texels = static_cast<uint64_t>(bp.probe_face_res)
+                        texels_per_spp = static_cast<uint64_t>(bp.probe_face_res)
                             * bp.probe_face_res * 6;
                     }
-                    bake_throughput_.push(ctx.delta_time, texels);
+                    bake_throughput_.push(ctx.delta_time,
+                        texels_per_spp * ctx.bake_config.spp_per_frame);
 
                     if (bake_throughput_.throughput > 0.0) {
                         ImGui::Text("%.1f M paths/s", bake_throughput_.throughput / 1e6);
@@ -1096,13 +1094,14 @@ namespace himalaya::app {
                             }
                         }
 
-                        // For each angle, count lightmap and probe files
+                        // For each angle, verify completeness before adding to list
+                        const auto expected_lm = static_cast<uint32_t>(ctx.bake_lightmap_keys.size());
                         for (const uint32_t rot : found_angles) {
                             char rot_str[4];
                             std::snprintf(rot_str, sizeof(rot_str), "%03u", rot);
                             const std::string rot_suffix = "_rot" + std::string(rot_str);
 
-                            // Lightmaps: verify each per-instance key file exists
+                            // Lightmaps: verify every per-instance key file exists
                             uint32_t lm_count = 0;
                             for (const auto &key : ctx.bake_lightmap_keys) {
                                 const auto path = framework::cache_path(
@@ -1111,18 +1110,32 @@ namespace himalaya::app {
                                     ++lm_count;
                                 }
                             }
+                            if (lm_count < expected_lm) { continue; }
 
-                            // Probes: count probe KTX2 files by prefix
-                            uint32_t probe_count = 0;
-                            const std::string probe_prefix = ctx.bake_cache_key + rot_suffix + "_probe";
-                            for (const auto &f : std::filesystem::directory_iterator(bake_dir, ec)) {
-                                if (!f.is_regular_file() || f.path().extension() != ".ktx2") {
-                                    continue;
+                            // Read probe count from manifest header (uint32_t at offset 0)
+                            uint32_t manifest_probe_count = 0;
+                            {
+                                const auto manifest_path = framework::cache_path(
+                                    "bake", ctx.bake_cache_key + rot_suffix + "_manifest", ".bin");
+                                std::ifstream mf(manifest_path, std::ios::binary);
+                                if (mf) {
+                                    mf.read(reinterpret_cast<char *>(&manifest_probe_count),
+                                            sizeof(uint32_t));
                                 }
-                                if (f.path().stem().string().starts_with(probe_prefix)) {
+                            }
+
+                            // Probes: verify every probe KTX2 exists
+                            uint32_t probe_count = 0;
+                            for (uint32_t pi = 0; pi < manifest_probe_count; ++pi) {
+                                char probe_suffix[16];
+                                std::snprintf(probe_suffix, sizeof(probe_suffix), "_probe%03u", pi);
+                                const auto path = framework::cache_path(
+                                    "bake", ctx.bake_cache_key + rot_suffix + std::string(probe_suffix), ".ktx2");
+                                if (std::filesystem::exists(path, ec)) {
                                     ++probe_count;
                                 }
                             }
+                            if (probe_count < manifest_probe_count) { continue; }
 
                             baked_angles_.push_back({rot, lm_count, probe_count});
                         }

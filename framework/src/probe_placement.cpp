@@ -108,6 +108,8 @@ namespace himalaya::framework {
             void *mapped = rm.get_buffer(candidate_buf).allocation_info.pMappedData;
             assert(mapped && "CpuToGpu buffer must be persistently mapped");
             std::memcpy(mapped, candidates.data(), candidate_bytes);
+            vmaFlushAllocation(ctx.allocator,
+                rm.get_buffer(candidate_buf).allocation, 0, VK_WHOLE_SIZE);
         }
 
         // Compile compute shader and create one-shot pipeline
@@ -166,6 +168,11 @@ namespace himalaya::framework {
             cmd.dispatch(groups, 1, 1);
         }
         ctx.end_immediate(); // GPU completes, results available via mapped memory
+
+        // Invalidate readback buffer for CPU cache coherency.
+        // GpuToCpu memory may be HOST_CACHED but not HOST_COHERENT.
+        vmaInvalidateAllocation(ctx.allocator,
+            rm.get_buffer(result_buf).allocation, 0, VK_WHOLE_SIZE);
 
         // Cleanup pipeline (one-shot, no longer needed)
         pipeline.destroy(ctx.device);
