@@ -355,7 +355,7 @@
 
 ### 17d：零可烘焙 instance 时 probe placement 防护
 
-- [ ] `renderer_bake.cpp`：`render_baking()` BakingProbes 首帧 placement 前检查 TLAS 有效性，无效时跳过 placement 直接写空 manifest 并进入 Complete
+- [x] `renderer_bake.cpp`：`render_baking()` BakingProbes 首帧 placement 前检查 TLAS 有效性，无效时跳过 placement 直接写空 manifest 并进入 Complete
 
 ### 17e：`closesthit.rchit` basis 函数去重
 
