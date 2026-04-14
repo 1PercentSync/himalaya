@@ -176,7 +176,7 @@
 - [x] `config.cpp`：JSON 读写新增两个字段
 - [x] `debug_ui.h`：`DebugUIContext` 新增 bg_uv 字段（thread_count&、auto_start&、running、completed、total、max_thread_count）+ `DebugUIActions` 新增 bg_uv_start_requested / bg_uv_stop_requested / bg_uv_config_changed
 - [x] `debug_ui.cpp`：Baking header 内新增 Lightmap UV Generation 子面板（Auto-start checkbox + Threads slider + Start/Stop 按钮 + Status 文本）
-- [ ] `application.cpp`：持有 `LightmapUVGenerator`，场景加载后 auto-start 逻辑，DebugUIActions 处理（start/stop/config save），线程数首次解析并持久化
+- [x] `application.cpp`：持有 `LightmapUVGenerator`，场景加载后 auto-start 逻辑，DebugUIActions 处理（start/stop/config save），线程数首次解析并持久化
 - [ ] `application.cpp`：Start Bake 流程前置步骤（始终：if !running → start; wait → apply_lightmap_uvs → build_scene_rt → start_bake）
 
 ## Step 13：ImGui 烘焙控制面板
