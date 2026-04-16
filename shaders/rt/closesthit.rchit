@@ -258,7 +258,7 @@ void main() {
                 vec3 env_dir = rotate_y(L, global.ibl_rotation_sin,
                                         global.ibl_rotation_cos);
                 vec3 env_color = texture(cubemaps[nonuniformEXT(global.skybox_cubemap_index)],
-                                         env_dir).rgb * global.ibl_intensity;
+                                         env_dir).rgb * global.indirect_intensity;
 
                 // Evaluate full BRDF at light direction
                 vec3 H = normalize(V + L);

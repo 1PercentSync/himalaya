@@ -24,7 +24,7 @@ void main() {
 
     // Sample skybox cubemap
     vec3 env_color = texture(cubemaps[nonuniformEXT(global.skybox_cubemap_index)], dir).rgb
-                     * global.ibl_intensity;
+                     * global.indirect_intensity;
 
     payload.color = env_color;
     payload.hit_distance = -1.0; // signal path termination
