@@ -149,6 +149,18 @@ layout (set = 0, binding = 3) readonly buffer InstanceBuffer {
     GPUInstanceData instances[];
 };
 
+/** Probe data (std430, 48 bytes). Parallax AABB fields reserved for Phase 8.5. */
+struct GPUProbeData {
+    vec3 position;          // offset  0 — probe world-space position (+4B pad)
+    vec3 aabb_min;          // offset 16 — parallax correction AABB min (+4B pad)
+    vec3 aabb_max;          // offset 32 — parallax correction AABB max
+    uint cubemap_index;     // offset 44 — bindless cubemaps[] index
+};                          // total: 48 bytes
+
+layout (set = 0, binding = 9) readonly buffer ProbeBuffer {
+    GPUProbeData probes[];
+};
+
 // ---- Set 0: RT-only bindings (guarded by HIMALAYA_RT) ----
 
 #ifdef HIMALAYA_RT

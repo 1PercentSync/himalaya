@@ -164,6 +164,17 @@ namespace himalaya::rhi {
         void write_set0_emissive_alias_table(BufferHandle buffer, uint64_t size) const;
 
         /**
+         * @brief Writes the probe data SSBO to Set 0 binding 9 across all frames.
+         *
+         * Binding 9 is STORAGE_BUFFER (PARTIALLY_BOUND), available regardless of
+         * RT support. Forward shader reads probe data for baked indirect specular.
+         *
+         * @param buffer Probe data buffer handle.
+         * @param size   Buffer size in bytes.
+         */
+        void write_set0_probe_buffer(BufferHandle buffer, uint64_t size) const;
+
+        /**
          * @brief Registers a cubemap+sampler pair into the bindless cubemap array.
          *
          * Writes a combined image sampler descriptor into Set 1, binding 1.
@@ -245,7 +256,7 @@ namespace himalaya::rhi {
 
         // ---- Layouts ----
 
-        /** @brief Set 0: GlobalUBO (0) + LightBuffer (1) + MaterialBuffer (2) + InstanceBuffer (3); RT adds TLAS (4) + GeometryInfoBuffer (5) + EnvAliasTable (6) + EmissiveTriangles (7) + EmissiveAliasTable (8). */
+        /** @brief Set 0: GlobalUBO (0) + LightBuffer (1) + MaterialBuffer (2) + InstanceBuffer (3) + ProbeBuffer (9); RT adds TLAS (4) + GeometryInfoBuffer (5) + EnvAliasTable (6) + EmissiveTriangles (7) + EmissiveAliasTable (8). */
         VkDescriptorSetLayout set0_layout_ = VK_NULL_HANDLE;
 
         /** @brief Set 1: bindless sampler2D array (binding 0) + samplerCube array (binding 1). */

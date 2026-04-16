@@ -511,6 +511,23 @@ namespace himalaya::framework {
         glm::vec2 uv2;             ///< offset 88 — vertex 2 texture coordinate
     };
 
+    /**
+     * @brief Per-probe GPU data (Set 0, Binding 9 SSBO element).
+     *
+     * std430 layout, 48 bytes per element.
+     * Shader reads via probes[probe_index]. Each probe stores its world-space
+     * position, an AABB for parallax correction (Phase 8.5, filled with zeros
+     * in Phase 8), and a bindless cubemap index.
+     */
+    struct GPUProbeData {
+        glm::vec3 position;      ///<  offset  0 — probe world-space position
+        float _pad0;             ///<  offset 12 — pad to vec3 alignment (16)
+        glm::vec3 aabb_min;      ///<  offset 16 — parallax correction AABB min (Phase 8.5, zero in Phase 8)
+        float _pad1;             ///<  offset 28 — pad to vec3 alignment (32)
+        glm::vec3 aabb_max;      ///<  offset 32 — parallax correction AABB max (Phase 8.5, zero in Phase 8)
+        uint32_t cubemap_index;  ///<  offset 44 — bindless cubemaps[] index
+    };
+
     // ---- CPU-side Draw Grouping ----
 
     /**
@@ -569,6 +586,11 @@ namespace himalaya::framework {
     static_assert(offsetof(GPUInstanceData, lightmap_index) == 116);
     static_assert(offsetof(GPUInstanceData, probe_index) == 120);
     static_assert(sizeof(PushConstantData) == 4, "PushConstantData must be 4 bytes");
+    static_assert(sizeof(GPUProbeData) == 48, "GPUProbeData must be 48 bytes (std430)");
+    static_assert(offsetof(GPUProbeData, position) == 0);
+    static_assert(offsetof(GPUProbeData, aabb_min) == 16);
+    static_assert(offsetof(GPUProbeData, aabb_max) == 32);
+    static_assert(offsetof(GPUProbeData, cubemap_index) == 44);
     static_assert(sizeof(EmissiveTriangle) == 96, "EmissiveTriangle must be 96 bytes (std430)");
     static_assert(offsetof(EmissiveTriangle, v0) == 0);
     static_assert(offsetof(EmissiveTriangle, v1) == 16);
