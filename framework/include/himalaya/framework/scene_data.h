@@ -373,7 +373,7 @@ namespace himalaya::framework {
         glm::vec2 screen_size; ///< offset 272
         float time; ///< offset 280 — elapsed time in seconds
         uint32_t directional_light_count = 0; ///< offset 284 — number of active directional lights
-        float ibl_intensity = 1.0f; ///< offset 288 — IBL environment light multiplier
+        float indirect_intensity = 1.0f; ///< offset 288 — indirect light intensity multiplier
         uint32_t irradiance_cubemap_index = UINT32_MAX; ///< offset 292 — bindless index into cubemaps[]
         uint32_t prefiltered_cubemap_index = UINT32_MAX; ///< offset 296 — bindless index into cubemaps[]
         uint32_t brdf_lut_index = UINT32_MAX; ///< offset 300 — bindless index into textures[]
@@ -523,7 +523,7 @@ namespace himalaya::framework {
     static_assert(offsetof(GlobalUniformData, screen_size) == 272);
     static_assert(offsetof(GlobalUniformData, time) == 280);
     static_assert(offsetof(GlobalUniformData, directional_light_count) == 284);
-    static_assert(offsetof(GlobalUniformData, ibl_intensity) == 288);
+    static_assert(offsetof(GlobalUniformData, indirect_intensity) == 288);
     static_assert(offsetof(GlobalUniformData, debug_render_mode) == 320);
     static_assert(offsetof(GlobalUniformData, feature_flags) == 324);
     static_assert(offsetof(GlobalUniformData, shadow_cascade_count) == 328);

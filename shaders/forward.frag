@@ -287,17 +287,17 @@ void main() {
     vec3 color;
     switch (global.debug_render_mode) {
         case DEBUG_MODE_DIFFUSE_ONLY:
-            color = direct_diffuse + global.ibl_intensity * ibl_diffuse * diffuse_ao;
+            color = direct_diffuse + global.indirect_intensity * ibl_diffuse * diffuse_ao;
             break;
         case DEBUG_MODE_SPECULAR_ONLY:
-            color = direct_specular + global.ibl_intensity * ibl_specular * specular_ao;
+            color = direct_specular + global.indirect_intensity * ibl_specular * specular_ao;
             break;
         case DEBUG_MODE_IBL_ONLY:
-            color = global.ibl_intensity * (ibl_diffuse * diffuse_ao + ibl_specular * specular_ao);
+            color = global.indirect_intensity * (ibl_diffuse * diffuse_ao + ibl_specular * specular_ao);
             break;
         default: // DEBUG_MODE_FULL_PBR
             color = (direct_diffuse + direct_specular)
-                  + global.ibl_intensity * (ibl_diffuse * diffuse_ao + ibl_specular * specular_ao)
+                  + global.indirect_intensity * (ibl_diffuse * diffuse_ao + ibl_specular * specular_ao)
                   + emissive;
             break;
     }

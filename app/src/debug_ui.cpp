@@ -785,7 +785,7 @@ namespace himalaya::app {
                 if (baking) { ImGui::EndDisabled(); }
             }
 
-            slider_float_deferred("IBL Intensity", &ctx.ibl_intensity, 0.0f, 5.0f, "%.2f");
+            slider_float_deferred("IBL Intensity", &ctx.indirect_intensity, 0.0f, 5.0f, "%.2f");
             slider_float_deferred("EV", &ctx.ev, -4.0f, 4.0f, "%.1f");
 
             // Debug render mode

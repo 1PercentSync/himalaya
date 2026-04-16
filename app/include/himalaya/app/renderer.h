@@ -92,8 +92,8 @@ namespace himalaya::app {
         /** @brief All scene mesh instances (transform, mesh_id, material_id). */
         std::span<const framework::MeshInstance> mesh_instances;
 
-        /** @brief IBL environment light intensity multiplier. */
-        float ibl_intensity;
+        /** @brief Indirect light intensity multiplier. */
+        float indirect_intensity;
 
         /** @brief Exposure value (linear scale, from pow(2, EV)). */
         float exposure;
@@ -696,8 +696,8 @@ namespace himalaya::app {
         /** @brief Cached LOD max level from previous PT frame (change detection → reset). */
         uint32_t prev_lod_max_level_ = 4;
 
-        /** @brief Cached IBL intensity from previous PT frame (change detection → reset). */
-        float prev_ibl_intensity_ = 1.0f;
+        /** @brief Cached indirect intensity from previous PT frame (change detection → reset). */
+        float prev_indirect_intensity_ = 1.0f;
 
         /** @brief Current MSAA sample count (1 = no MSAA, default 4x). */
         uint32_t current_sample_count_ = 4;

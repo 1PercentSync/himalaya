@@ -38,7 +38,7 @@ namespace himalaya::app {
             static_cast<float>(swapchain_->extent.width),
             static_cast<float>(swapchain_->extent.height));
         ubo_data.time = static_cast<float>(glfwGetTime());
-        ubo_data.ibl_intensity = input.ibl_intensity;
+        ubo_data.indirect_intensity = input.indirect_intensity;
         ubo_data.irradiance_cubemap_index = ibl_.irradiance_cubemap_index().index;
         ubo_data.prefiltered_cubemap_index = ibl_.prefiltered_cubemap_index().index;
         ubo_data.brdf_lut_index = ibl_.brdf_lut_index().index;

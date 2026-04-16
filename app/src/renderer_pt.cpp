@@ -93,7 +93,7 @@ namespace himalaya::app {
             pt.directional_lights != prev_directional_lights_ ||
             pt.emissive_nee != prev_emissive_nee_ ||
             pt.lod_max_level != prev_lod_max_level_ ||
-            input.ibl_intensity != prev_ibl_intensity_) {
+            input.indirect_intensity != prev_indirect_intensity_) {
             reset_pt_accumulation();
         }
         prev_pt_view_projection_ = input.camera.view_projection;
@@ -108,7 +108,7 @@ namespace himalaya::app {
         prev_directional_lights_ = pt.directional_lights;
         prev_emissive_nee_ = pt.emissive_nee;
         prev_lod_max_level_ = pt.lod_max_level;
-        prev_ibl_intensity_ = input.ibl_intensity;
+        prev_indirect_intensity_ = input.indirect_intensity;
 
         // --- Clear aux images on first frame after accumulation reset ---
         // Miss rays (sky) never write aux in closesthit, so without this
