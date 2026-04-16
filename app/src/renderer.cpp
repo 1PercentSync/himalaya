@@ -69,6 +69,9 @@ namespace himalaya::app {
         if (input.features.contact_shadows) {
             ubo_data.feature_flags |= 1u << 2; // FEATURE_CONTACT_SHADOWS
         }
+        if (input.features.lightmap_probe) {
+            ubo_data.feature_flags |= 1u << 3; // FEATURE_LIGHTMAP_PROBE
+        }
 
         // --- Phase 5 matrices ---
         ubo_data.inv_projection = glm::inverse(input.camera.projection);
