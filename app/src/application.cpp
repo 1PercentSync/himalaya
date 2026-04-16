@@ -139,10 +139,11 @@ namespace himalaya::app {
             }
         }
 
-        // Compute lightmap keys for bake progress UI.
-        // switch_scene() / switch_environment() call this on runtime changes,
+        // Compute lightmap keys and scan bake cache for available angles.
+        // switch_scene() / switch_environment() call these on runtime changes,
         // but init() loads scene/HDR directly — must be called here as well.
         refresh_lightmap_keys();
+        trigger_bake_scan();
 
         update_shadow_config_from_scene();
         auto_position_camera();
