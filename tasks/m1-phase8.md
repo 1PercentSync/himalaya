@@ -38,9 +38,9 @@
 
 ## Step 5：BakeDataManager — 扫描与校验
 
-- [ ] 新增 `framework/bake_data_manager.h`：类声明（`init` / `destroy` / `scan` / `available_angles` / `has_bake_data`）
-- [ ] 新增 `framework/bake_data_manager.cpp`：`scan()` 实现（从 `debug_ui.cpp` 迁移扫描 + 校验逻辑）
-- [ ] `framework/CMakeLists.txt`：添加 `bake_data_manager.cpp`
+- [x] 新增 `framework/bake_data_manager.h`：类声明（`init` / `destroy` / `scan` / `available_angles` / `has_bake_data`）
+- [x] 新增 `framework/bake_data_manager.cpp`：`scan()` 实现（从 `debug_ui.cpp` 迁移扫描 + 校验逻辑）
+- [x] `framework/CMakeLists.txt`：添加 `bake_data_manager.cpp`
 - [ ] `app/renderer.h`：新增 `BakeDataManager bake_data_manager_` 成员 + init/destroy 调用
 - [ ] `app/debug_ui.h` + `app/debug_ui.cpp`：移除本地扫描逻辑，改为从 DebugUIContext 读取 BakeDataManager 数据
 
