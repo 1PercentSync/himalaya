@@ -1,6 +1,7 @@
 # Milestone 1：接口与目标结构
 
 > 本文档包含 M1 的目标文件结构和关键接口定义。
+> 反映当前 Phase 结束时的目标状态——在 Phase 开始前更新至该 Phase 的设计目标，实现完成后应与代码一致。
 > 设计决策与理由见 `m1-design-decisions-core.md`，长远架构目标见 `../project/architecture.md`，M1 功能范围见 `milestone-1.md`。
 
 ---
@@ -58,7 +59,8 @@ framework/
 │   ├── cubemap_filter.h         # Cubemap prefilter 通用工具（阶段七，从 IBL 提取）
 │   ├── bake_denoiser.h          # 同步 OIDN 降噪（阶段七引入）
 │   ├── lightmap_uv.h            # Lightmap UV 生成 + xatlas 集成 + 缓存（阶段七引入）
-│   └── probe_placement.h       # Probe 自动放置（均匀网格 + RT 几何过滤）（阶段七引入）
+│   ├── probe_placement.h       # Probe 自动放置（均匀网格 + RT 几何过滤）（阶段七引入）
+│   └── bake_data_manager.h     # Bake 数据管理（扫描/校验/加载/卸载/probe 分配）（阶段八引入）
 └── src/
     └── ...
 ```
@@ -467,7 +469,7 @@ struct GlobalUniformData {
     glm::vec2 screen_size;                      // offset 272
     float time;                                 // offset 280 — 程序运行时间（秒），M2 水面/云层等动画用
     uint32_t directional_light_count;           // offset 284 — 活跃方向光数量
-    float ibl_intensity;                        // offset 288 — IBL 环境光强度乘数
+    float indirect_intensity;                    // offset 288 — 间接光照强度乘数（Phase 8 从 ibl_intensity 重命名）
     uint32_t irradiance_cubemap_index;          // offset 292 — cubemaps[] 下标
     uint32_t prefiltered_cubemap_index;         // offset 296 — cubemaps[] 下标
     uint32_t brdf_lut_index;                    // offset 300 — textures[] 下标
@@ -524,7 +526,9 @@ struct GPUInstanceData {
     glm::vec4 normal_col1;                      // 16 bytes — normal matrix column 1 (xyz, w unused)
     glm::vec4 normal_col2;                      // 16 bytes — normal matrix column 2 (xyz, w unused)
     uint32_t material_index;                    //  4 bytes — MaterialBuffer SSBO 索引
-    uint32_t _padding[3];                       // 12 bytes — 对齐到 128 bytes (16 的倍数)
+    uint32_t lightmap_index;                    //  4 bytes — bindless textures[] 索引，UINT32_MAX = 无（阶段八引入）
+    uint32_t probe_index;                       //  4 bytes — ProbeBuffer SSBO 索引，UINT32_MAX = 无（阶段八引入）
+    uint32_t _padding;                          //  4 bytes — 对齐到 128 bytes (16 的倍数)
 };
 
 // Per-draw push constant — 4 bytes
@@ -561,6 +565,23 @@ struct EmissiveTriangle {
 // Step 11: 60B — + env_mis_weight(4)
 // Step 12: 64B — + last_brdf_pdf(4)
 // Step 13: 72B — + cone_width(4) + cone_spread(4)
+
+// --- 阶段八引入 ---
+
+// 间接光照模式（Application 层状态）
+enum class IndirectLightingMode : uint8_t {
+    IBL,             ///< IBL Split-Sum 近似，自由旋转
+    LightmapProbe,   ///< 烘焙 lightmap + reflection probe，角度跳切
+};
+
+// Probe GPU 数据 — std430 layout, 48 bytes per element
+// 对应 shader: Set 0, Binding 9 (ProbeBuffer SSBO，非 RT-only，PARTIALLY_BOUND)
+struct GPUProbeData {
+    glm::vec3 position;                         // offset  0 — probe 世界空间位置 (+4B pad)
+    glm::vec3 aabb_min;                         // offset 16 — 视差校正 AABB 最小角 (+4B pad)（Phase 8.5，Phase 8 填零）
+    glm::vec3 aabb_max;                         // offset 32 — 视差校正 AABB 最大角
+    uint32_t cubemap_index;                     // offset 44 — bindless cubemaps[] 索引
+};  // total: 48 bytes
 ```
 
 ---
@@ -675,6 +696,64 @@ public:
     /// 原始 equirectangular 输入图像的尺寸（HDR Sun 坐标转换用）
     uint32_t equirect_width() const;
     uint32_t equirect_height() const;
+};
+```
+
+---
+
+### Layer 1 — BakeDataManager 接口（framework/bake_data_manager.h，阶段八引入）
+
+管理烘焙产物的生命周期：扫描缓存目录、完整性校验、KTX2 加载/卸载、bindless 注册/注销、CPU probe-to-instance 分配。Renderer 持有实例。设计决策见 `m1-rt-decisions.md`「Phase 8 间接光照集成决策」。
+
+```cpp
+class BakeDataManager {
+public:
+    /// 已 bake 角度概要信息
+    struct AngleInfo {
+        uint32_t rotation;       ///< 角度（整数度，0-359）
+        uint32_t lightmap_count; ///< 该角度的 lightmap 文件数
+        uint32_t probe_count;    ///< 该角度的 probe 文件数
+    };
+
+    /// 初始化（接收子系统引用）
+    void init(rhi::ResourceManager& rm, rhi::DescriptorManager& dm,
+              rhi::SamplerHandle lightmap_sampler,
+              rhi::SamplerHandle probe_sampler);
+
+    /// 销毁（卸载当前角度 + 释放内部资源）
+    void destroy();
+
+    /// 扫描 cache_root()/bake/ 目录，逐角度完整性校验，构建可用角度列表
+    void scan(std::span<const std::string> lightmap_keys,
+              const std::string& probe_set_key);
+
+    /// 加载指定角度的 lightmap + probe 数据（KTX2 → GPU → bindless → probe 分配）
+    /// 在 begin_immediate() / end_immediate() scope 内执行
+    void load_angle(uint32_t rotation_int,
+                    std::span<const std::string> lightmap_keys,
+                    const std::string& probe_set_key,
+                    std::span<const MeshInstance> mesh_instances);
+
+    /// 卸载当前角度（注销 bindless + 销毁 GPU image + 清空 per-instance 数据）
+    void unload_angle();
+
+    /// 查询可用角度列表
+    std::span<const AngleInfo> available_angles() const;
+
+    /// 是否有可用的 bake 数据
+    bool has_bake_data() const;
+
+    /// 是否已加载某个角度
+    bool is_angle_loaded() const;
+
+    /// 当前加载的角度
+    uint32_t loaded_rotation() const;
+
+    /// 查询 per-instance lightmap bindless index（parallel to mesh_instances，UINT32_MAX = 无）
+    std::span<const uint32_t> lightmap_indices() const;
+
+    /// 查询 per-instance probe index（parallel to mesh_instances，UINT32_MAX = 无）
+    std::span<const uint32_t> probe_indices() const;
 };
 ```
 
@@ -924,7 +1003,8 @@ struct RenderFeatures {
     bool shadows;                    // 阶段四引入
     bool ao;                         // 阶段五引入
     bool contact_shadows;            // 阶段五引入
-    // 后处理 flags 随阶段八扩展
+    bool lightmap_probe = false;     // 阶段八引入 — Lightmap/Probe 间接光照模式激活
+    // 后处理 flags 随阶段十扩展
 };
 ```
 
@@ -940,6 +1020,7 @@ Shader 端常量定义在 `bindings.glsl`：
 #define FEATURE_SHADOWS         (1u << 0)
 #define FEATURE_AO              (1u << 1)
 #define FEATURE_CONTACT_SHADOWS (1u << 2)
+#define FEATURE_LIGHTMAP_PROBE  (1u << 3)   // 阶段八引入
 ```
 
 #### ShadowConfig（阶段四引入）
@@ -1034,7 +1115,7 @@ struct RenderInput {
     std::span<const framework::Mesh> meshes;
     std::span<const framework::MaterialInstance> materials;
     std::span<const framework::MeshInstance> mesh_instances;
-    float ibl_intensity;
+    float indirect_intensity;
     float exposure;
     float ibl_rotation_sin;
     float ibl_rotation_cos;
@@ -1236,6 +1317,7 @@ public:
 #define FEATURE_SHADOWS         (1u << 0)
 #define FEATURE_AO              (1u << 1)
 #define FEATURE_CONTACT_SHADOWS (1u << 2)
+#define FEATURE_LIGHTMAP_PROBE  (1u << 3)   // 阶段八引入
 
 // Shadow cascade 常量
 #define MAX_SHADOW_CASCADES 4
@@ -1518,6 +1600,7 @@ struct RenderFeatures {
 #define FEATURE_SHADOWS         (1u << 0)
 #define FEATURE_AO              (1u << 1)
 #define FEATURE_CONTACT_SHADOWS (1u << 2)
+#define FEATURE_LIGHTMAP_PROBE  (1u << 3)   // 阶段八引入
 ```
 
 #### GlobalUniformData 扩展（阶段五）
