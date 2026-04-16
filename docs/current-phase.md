@@ -219,6 +219,7 @@ BakeDataManager 实现角度加载（KTX2 → GPU → bindless）和卸载。
   - `indirect_intensity` 乘数应用于两种模式的 indirect 结果
 - `shaders/forward.frag`：更新 debug render mode `DEBUG_MODE_IBL_ONLY` → `DEBUG_MODE_INDIRECT_ONLY`（显示当前激活的间接光照）
 - `shaders/common/bindings.glsl`：`#define DEBUG_MODE_IBL_ONLY 3` → `#define DEBUG_MODE_INDIRECT_ONLY 3`
+- `app/debug_ui.cpp`：Debug View 标签 `"IBL Only"` → `"Indirect Only"`（与 shader 端重命名同步）
 
 **设计要点**：
 - Lightmap 分支中不做 IBL rotation（probe cubemap 已在世界空间正确方向）

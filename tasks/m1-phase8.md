@@ -61,6 +61,7 @@
 - [ ] `shaders/forward.frag`：IBL 分支 — 保持现有逻辑
 - [ ] `shaders/forward.frag`：indirect_intensity 乘数 + AO/SO 应用于两种模式
 - [ ] `shaders/common/bindings.glsl`：`DEBUG_MODE_IBL_ONLY` → `DEBUG_MODE_INDIRECT_ONLY`
+- [ ] `app/debug_ui.cpp`：Debug View 标签 `"IBL Only"` → `"Indirect Only"`
 
 ## Step 8：模式切换 + 角度选择 UI
 
