@@ -170,7 +170,7 @@ BakeDataManager 实现角度加载（KTX2 → GPU → bindless）和卸载。
 
 #### 6a. Lightmap 加载
 
-- `bake_data_manager.h`：`load_angle(rotation_int, lightmap_keys, mesh_instances)` / `unload_angle()`
+- `bake_data_manager.h`：`load_angle(rotation_int, lightmap_keys, bakeable_indices, probe_set_key, mesh_instances)` / `unload_angle()`（签名包含 `bakeable_indices` 用于将 bakeable 索引映射回全 instance 索引，`probe_set_key` 用于 probe 文件路径构建）
 - `bake_data_manager.cpp`：
   - 遍历 lightmap_keys，构建文件路径 `cache_path("bake", key + "_rot" + NNN, ".ktx2")`
   - 使用已有 KTX2 加载工具读取 BC6H 数据 → 创建 GPU image → 注册 `register_texture(image, linear_clamp_sampler)`

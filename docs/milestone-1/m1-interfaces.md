@@ -728,8 +728,10 @@ public:
 
     /// 加载指定角度的 lightmap + probe 数据（KTX2 → GPU → bindless → probe 分配）
     /// 在 begin_immediate() / end_immediate() scope 内执行
+    /// bakeable_indices 将 bakeable 索引映射回全 instance 索引（parallel to lightmap_keys）
     void load_angle(uint32_t rotation_int,
                     std::span<const std::string> lightmap_keys,
+                    std::span<const uint32_t> bakeable_indices,
                     const std::string& probe_set_key,
                     std::span<const MeshInstance> mesh_instances);
 
@@ -743,7 +745,7 @@ public:
     bool has_bake_data() const;
 
     /// 是否已加载某个角度
-    bool is_angle_loaded() const;
+    bool is_loaded() const;
 
     /// 当前加载的角度
     uint32_t loaded_rotation() const;

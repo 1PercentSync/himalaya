@@ -46,10 +46,10 @@
 
 ## Step 6：BakeDataManager — 加载与卸载
 
-- [ ] `bake_data_manager.h` / `.cpp`：`load_angle()` — lightmap KTX2 加载 + bindless 注册 + per-instance `lightmap_indices_`
-- [ ] `bake_data_manager.h` / `.cpp`：`load_angle()` — probe KTX2 加载 + bindless cubemap 注册 + ProbeBuffer SSBO 填充
-- [ ] `bake_data_manager.h` / `.cpp`：`load_angle()` — CPU probe-to-instance 分配（最近 probe by AABB center 距离）+ per-instance `probe_indices_`
-- [ ] `bake_data_manager.h` / `.cpp`：`unload_angle()` — bindless 注销 + image 销毁 + 清空 indices
+- [x] `bake_data_manager.h` / `.cpp`：`load_angle()` — lightmap KTX2 加载 + bindless 注册 + per-instance `lightmap_indices_`
+- [x] `bake_data_manager.h` / `.cpp`：`load_angle()` — probe KTX2 加载 + bindless cubemap 注册 + ProbeBuffer SSBO 填充
+- [x] `bake_data_manager.h` / `.cpp`：`load_angle()` — CPU probe-to-instance 分配（最近 probe by AABB center 距离）+ per-instance `probe_indices_`
+- [x] `bake_data_manager.h` / `.cpp`：`unload_angle()` — bindless 注销 + image 销毁 + 清空 indices
 - [ ] `app/renderer.h` / `.cpp`：新增 `switch_bake_angle()` 方法（GPU idle → unload → load）
 - [ ] `app/renderer*.cpp`：InstanceBuffer 填充时从 `bake_data_manager_` 查询 lightmap_index / probe_index
 
