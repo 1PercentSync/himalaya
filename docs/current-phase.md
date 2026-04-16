@@ -118,6 +118,10 @@ Step 11: 边缘情况 + Debug 渲染模式 + 收尾
 - `shaders/shadow.vert`：`frag_material_index` → `frag_instance_index`（location 1, flat uint = `gl_InstanceIndex`）
 - `shaders/shadow_masked.frag`：通过 `instances[frag_instance_index].material_index` 读取
 
+**设计要点**：
+- **invariant gl_Position 不受影响**：forward.vert 新增 `frag_uv1`（location 5）不影响 `invariant gl_Position` 保证——invariant 只约束 gl_Position 的计算路径（两个 shader 中完全相同），与其他 output varying 无关。depth_prepass.vert 不新增 `frag_uv1`
+- **shadow.vert 不声明 `in_uv1`**：shadow pass 不使用 lightmap UV（只需 position + uv0 做 alpha mask），无需声明 `layout(location = 4) in vec2 in_uv1`。与重构前行为一致——shadow.vert 只声明它实际使用的顶点属性
+
 **验证**：光栅化渲染无回归（含 alpha mask 物体），PT 参考视图无回归，Bake 模式无回归。无 validation 报错
 
 ---
