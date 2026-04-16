@@ -19,15 +19,18 @@ namespace himalaya::rhi {
 
 namespace himalaya::framework {
 
+    struct MeshInstance;
+
     /**
      * @brief Manages baked lighting data lifecycle.
      *
      * Scans the bake cache directory for completed angles, validates file
-     * completeness, and provides the available angle list to the UI.
-     * Loading/unloading (KTX2 -> GPU -> bindless) added in Step 6.
+     * completeness, loads angle data (KTX2 -> GPU -> bindless), and
+     * provides per-instance lightmap/probe indices for InstanceBuffer filling.
      *
      * Owned by Renderer. Application drives scan() at appropriate times
-     * (scene/HDR load, bake complete, cache clear).
+     * (scene/HDR load, bake complete, cache clear). Renderer drives
+     * load_angle() / unload_angle() within immediate command scopes.
      */
     class BakeDataManager {
     public:
@@ -44,7 +47,7 @@ namespace himalaya::framework {
          * @brief Initializes subsystem references for later use.
          *
          * Stores non-owning references to ResourceManager and DescriptorManager,
-         * plus sampler handles needed by load_angle() (Step 6).
+         * plus sampler handles needed by load_angle().
          *
          * @param rm               GPU resource pool.
          * @param dm               Descriptor set management.
@@ -57,6 +60,8 @@ namespace himalaya::framework {
 
         /**
          * @brief Releases internal resources and clears state.
+         *
+         * Calls unload_angle() if data is currently loaded.
          */
         void destroy();
 
@@ -74,6 +79,38 @@ namespace himalaya::framework {
                   const std::string& probe_set_key);
 
         /**
+         * @brief Loads a bake angle: reads KTX2 files, creates GPU images,
+         *        registers bindless textures, and computes per-instance indices.
+         *
+         * Must be called within an active immediate command scope
+         * (Context::begin_immediate / end_immediate). Caller must ensure
+         * GPU is idle before calling (vkQueueWaitIdle). If data is already
+         * loaded, unloads the previous angle first.
+         *
+         * @param rotation_int     Bake angle in integer degrees (0-359).
+         * @param lightmap_keys    Per-bakeable-instance lightmap cache key hashes.
+         * @param bakeable_indices Mapping from bakeable index to full instance index
+         *                         (parallel to lightmap_keys).
+         * @param probe_set_key    Probe set cache key hash.
+         * @param mesh_instances   All scene mesh instances (for probe-to-instance
+         *                         assignment via AABB center distance).
+         */
+        void load_angle(uint32_t rotation_int,
+                        std::span<const std::string> lightmap_keys,
+                        std::span<const uint32_t> bakeable_indices,
+                        const std::string& probe_set_key,
+                        std::span<const MeshInstance> mesh_instances);
+
+        /**
+         * @brief Unloads the current angle: unregisters bindless descriptors,
+         *        destroys GPU images and probe buffer, clears per-instance indices.
+         *
+         * Caller must ensure GPU is idle before calling (vkQueueWaitIdle).
+         * Safe to call when nothing is loaded (no-op).
+         */
+        void unload_angle();
+
+        /**
          * @brief Returns the list of validated available bake angles.
          *
          * Populated by scan(). Empty before first scan or when no valid
@@ -86,21 +123,78 @@ namespace himalaya::framework {
          */
         [[nodiscard]] bool has_bake_data() const;
 
+        /**
+         * @brief Returns true if a bake angle is currently loaded on the GPU.
+         */
+        [[nodiscard]] bool is_loaded() const;
+
+        /**
+         * @brief Returns the currently loaded angle in integer degrees.
+         *
+         * Only meaningful when is_loaded() returns true.
+         */
+        [[nodiscard]] uint32_t loaded_rotation() const;
+
+        /**
+         * @brief Returns per-instance lightmap bindless indices.
+         *
+         * Parallel to mesh_instances (UINT32_MAX = no lightmap for that instance).
+         * Empty when no angle is loaded.
+         */
+        [[nodiscard]] std::span<const uint32_t> lightmap_indices() const;
+
+        /**
+         * @brief Returns per-instance probe buffer indices.
+         *
+         * Parallel to mesh_instances (UINT32_MAX = no probe for that instance).
+         * Empty when no angle is loaded.
+         */
+        [[nodiscard]] std::span<const uint32_t> probe_indices() const;
+
     private:
-        /** @brief GPU resource pool (used by load/unload in Step 6). */
+        /** @brief GPU resource pool. */
         rhi::ResourceManager* resource_manager_ = nullptr;
 
-        /** @brief Descriptor set management (used by load/unload in Step 6). */
+        /** @brief Descriptor set management. */
         rhi::DescriptorManager* descriptor_manager_ = nullptr;
 
-        /** @brief Linear clamp sampler for lightmap textures (Step 6). */
+        /** @brief Linear clamp sampler for lightmap textures. */
         rhi::SamplerHandle lightmap_sampler_{};
 
-        /** @brief Default linear repeat sampler for probe cubemaps (Step 6). */
+        /** @brief Default linear repeat sampler for probe cubemaps. */
         rhi::SamplerHandle probe_sampler_{};
 
         /** @brief Validated available angles (populated by scan()). */
         std::vector<AngleInfo> available_angles_;
+
+        // --- Loaded angle state ---
+
+        /** @brief True when a bake angle is loaded on the GPU. */
+        bool is_loaded_ = false;
+
+        /** @brief Currently loaded rotation angle in integer degrees. */
+        uint32_t loaded_rotation_ = 0;
+
+        /** @brief GPU images for loaded lightmaps (parallel to lightmap_bindless_). */
+        std::vector<rhi::ImageHandle> lightmap_images_;
+
+        /** @brief Bindless indices for loaded lightmaps in textures[] (parallel to lightmap_images_). */
+        std::vector<rhi::BindlessIndex> lightmap_bindless_;
+
+        /** @brief GPU cubemap images for loaded probes (parallel to probe_bindless_). */
+        std::vector<rhi::ImageHandle> probe_images_;
+
+        /** @brief Bindless indices for loaded probe cubemaps in cubemaps[] (parallel to probe_images_). */
+        std::vector<rhi::BindlessIndex> probe_bindless_;
+
+        /** @brief ProbeBuffer SSBO (Set 0, Binding 9). Invalid when not loaded. */
+        rhi::BufferHandle probe_buffer_{};
+
+        /** @brief Per-instance lightmap bindless indices (parallel to mesh_instances, UINT32_MAX = none). */
+        std::vector<uint32_t> lightmap_indices_;
+
+        /** @brief Per-instance probe buffer indices (parallel to mesh_instances, UINT32_MAX = none). */
+        std::vector<uint32_t> probe_indices_;
     };
 
 } // namespace himalaya::framework
