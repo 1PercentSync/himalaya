@@ -25,6 +25,7 @@ target_sources(himalaya_framework PRIVATE
         src/lightmap_uv_generator.cpp
         src/bake_denoiser.cpp
         src/probe_placement.cpp
+        src/bake_data_manager.cpp
 )
 
 target_include_directories(himalaya_framework PUBLIC include)
