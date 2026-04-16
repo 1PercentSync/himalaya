@@ -6,13 +6,13 @@
 
 ## Step 1：`indirect_intensity` 重命名
 
-- [ ] `framework/scene_data.h`：`GlobalUniformData::ibl_intensity` → `indirect_intensity` + `static_assert` 更新
-- [ ] `shaders/common/bindings.glsl`：`GlobalUBO.ibl_intensity` → `indirect_intensity`
-- [ ] `shaders/forward.frag`：4 处 `global.ibl_intensity` → `global.indirect_intensity`
-- [ ] `app/renderer.h`：`RenderInput::ibl_intensity` → `indirect_intensity` + `prev_ibl_intensity_` → `prev_indirect_intensity_`
-- [ ] `app/application.h` + `app/application.cpp`：`ibl_intensity_` → `indirect_intensity_` + RenderInput 填充
-- [ ] `app/renderer.cpp` + `app/renderer_pt.cpp`：UBO 填充 + PT 变化检测
-- [ ] `app/debug_ui.h` + `app/debug_ui.cpp`：`DebugUIContext` 字段 + slider 引用更新
+- [x] `framework/scene_data.h`：`GlobalUniformData::ibl_intensity` → `indirect_intensity` + `static_assert` 更新
+- [x] `shaders/common/bindings.glsl`：`GlobalUBO.ibl_intensity` → `indirect_intensity`
+- [x] `shaders/forward.frag`：4 处 `global.ibl_intensity` → `global.indirect_intensity`
+- [x] `app/renderer.h`：`RenderInput::ibl_intensity` → `indirect_intensity` + `prev_ibl_intensity_` → `prev_indirect_intensity_`
+- [x] `app/application.h` + `app/application.cpp`：`ibl_intensity_` → `indirect_intensity_` + RenderInput 填充
+- [x] `app/renderer.cpp` + `app/renderer_pt.cpp`：UBO 填充 + PT 变化检测
+- [x] `app/debug_ui.h` + `app/debug_ui.cpp`：`DebugUIContext` 字段 + slider 引用更新
 
 ## Step 2：IndirectLightingMode enum + FEATURE_LIGHTMAP_PROBE
 
