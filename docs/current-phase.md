@@ -98,8 +98,8 @@ Step 11: 边缘情况 + Debug 渲染模式 + 收尾
 
 #### 3a. GPUInstanceData 扩展
 
-- `framework/scene_data.h`：`GPUInstanceData` 的 `_padding[3]` 改为 `lightmap_index`（uint32）+ `probe_index`（uint32）+ `_padding`（uint32），struct 保持 128 bytes
-- `shaders/common/bindings.glsl`：`GPUInstanceData` 对应更新
+- `framework/scene_data.h`：`GPUInstanceData` 的 `_padding[3]` 改为 `lightmap_index`（uint32）+ `probe_index`（uint32）+ `_padding`（uint32），struct 保持 128 bytes。更新 `static_assert` 偏移校验
+- `shaders/common/bindings.glsl`：`GPUInstanceData` 对应更新（`_padding[3]` → 具名字段）
 - `app/renderer.cpp` 或 `app/renderer_rasterization.cpp`：InstanceBuffer 填充时将 `lightmap_index` 和 `probe_index` 写为 `UINT32_MAX`（哨兵值）
 
 #### 3b. instance_index 重构（forward）
@@ -151,7 +151,12 @@ Framework 层新建 `BakeDataManager` 类，迁移已有的 bake 角度扫描与
 - `app/debug_ui.cpp`：移除 `baked_angles_` 本地列表和扫描逻辑，改为从 `DebugUIContext` 中读取 BakeDataManager 提供的可用角度列表
 - `app/debug_ui.h`：`DebugUIContext` 新增 `std::span<const BakeDataManager::AngleInfo> available_angles` 字段，移除 `bake_angles_dirty`
 
-**验证**：有已 bake 数据时 UI 角度列表显示正确（与重构前一致），无已 bake 数据时列表为空。扫描时机与重构前一致
+**设计要点**：
+- `scan()` 的调用时机由 Application 驱动：场景+HDR 加载完毕后、bake 完成后（`BakeState::Complete`）、Clear Bake Cache 后。Application 计算 lightmap_keys（通过 `Renderer::compute_lightmap_keys()`）和 probe_set_key（`content_hash(scene_hash + hdr_hash + scene_textures_hash)`，与现有 `bake_cache_key` 计算方式一致），传给 `scan()`
+- `DebugUIContext` 中原有的 `bake_cache_key` 和 `bake_angles_dirty` 不再需要——角度列表由 BakeDataManager 持有，通过 `available_angles()` span 传入 DebugUIContext
+- `BakeDataManager::init()` 接收 `ResourceManager*` 和 `DescriptorManager*`（存储引用，后续 load/unload 使用）+ 两个 `SamplerHandle`（lightmap 用 linear clamp，probe 用 default linear repeat）。不接收 `Context*`——immediate scope 由调用方（Renderer）管理
+
+**验证**：有已 bake 数据时 UI 角度列表显示正确（与重构前一致），无已 bake 数据时列表为空
 
 ---
 
@@ -170,19 +175,19 @@ BakeDataManager 实现角度加载（KTX2 → GPU → bindless）和卸载。
 #### 6b. Probe 加载 + 分配
 
 - `bake_data_manager.cpp`：
-  - 读取 manifest 文件 → probe_count + positions
-  - 逐 probe 加载 KTX2 cubemap → 创建 GPU cubemap image → 注册 `register_cubemap(image, default_sampler)`
-  - 填充 `GPUProbeData` 数组（position、aabb_min/max 暂填零、cubemap_index）→ 上传 ProbeBuffer SSBO → `write_set0_probe_buffer()`
-  - CPU probe-to-instance 分配：每个 instance 的世界空间 AABB 中心 → 找最近 probe → 存储 `probe_indices_`
+  - 读取 manifest 文件（二进制格式：`uint32_t probe_count` + `glm::vec3[probe_count] positions`，与 `renderer_bake.cpp::write_probe_manifest()` 写入格式一致）
+  - 逐 probe 加载 KTX2 cubemap（文件路径 `cache_path("bake", probe_set_key + "_rot" + NNN + "_probe" + MMM, ".ktx2")`）→ 创建 GPU cubemap image → 注册 `register_cubemap(image, default_sampler)`
+  - 填充 `GPUProbeData` 数组（position 从 manifest 读取、aabb_min/max 填零（Phase 8.5 使用）、cubemap_index 从 `register_cubemap` 返回）→ 创建 ProbeBuffer SSBO（BakeDataManager 内部通过 ResourceManager 创建 GPU_ONLY buffer + immediate scope 上传）→ 通过 `DescriptorManager::write_set0_probe_buffer(buffer, size)` 写入 Set 0 binding 9
+  - CPU probe-to-instance 分配：每个 instance 的 `MeshInstance::world_bounds` AABB 中心（`(min + max) * 0.5f`）→ 找最近 probe（欧氏距离）→ 存储 `probe_indices_`
 
 #### 6c. 卸载
 
-- `bake_data_manager.cpp`：`unload_angle()` 注销 bindless（`unregister_texture` / `unregister_cubemap`）、销毁 GPU image、清空 `lightmap_indices_` / `probe_indices_`
+- `bake_data_manager.cpp`：`unload_angle()` 注销 bindless（`unregister_texture` / `unregister_cubemap`）、销毁 GPU image、销毁 ProbeBuffer SSBO、清空 `lightmap_indices_` / `probe_indices_`
 
 #### 6d. Renderer 集成
 
 - `app/renderer.h`：新增 `switch_bake_angle(uint32_t rotation_int)` 方法
-- `app/renderer.cpp`：`switch_bake_angle()` 实现——`vkQueueWaitIdle` → `bake_data_manager_.unload_angle()` → immediate scope 内 `bake_data_manager_.load_angle()` → `end_immediate()`
+- `app/renderer.cpp`：`switch_bake_angle()` 实现——`vkQueueWaitIdle` → `bake_data_manager_.unload_angle()` → `ctx_->begin_immediate()` → `bake_data_manager_.load_angle()` → `ctx_->end_immediate()`（immediate scope 由 Renderer 管理，BakeDataManager 内部不持有 Context 引用）
 - `app/renderer.cpp`：InstanceBuffer 填充逻辑从 `bake_data_manager_` 查询 `lightmap_index` / `probe_index`（当前无已加载角度时全部为 `UINT32_MAX`）
 
 **设计要点**：
@@ -204,7 +209,7 @@ BakeDataManager 实现角度加载（KTX2 → GPU → bindless）和卸载。
   - `bool use_lightmap = (feature_flags & FEATURE_LIGHTMAP_PROBE) != 0u && inst.lightmap_index != 0xFFFFFFFFu`
   - **Lightmap 分支**（`use_lightmap == true`）：
     - Diffuse：`texture(textures[nonuniformEXT(inst.lightmap_index)], frag_uv1).rgb * diffuse_color`（lightmap 存储入射辐照度，需乘表面漫反射色）
-    - Specular：若 `inst.probe_index != 0xFFFFFFFFu`，从 ProbeBuffer 读 probe data，`textureLod(cubemaps[probe.cubemap_index], R, roughness * (textureQueryLevels(...) - 1))`；否则回退 IBL specular
+    - Specular：若 `inst.probe_index != 0xFFFFFFFFu`，从 ProbeBuffer 读 probe data，`textureLod(cubemaps[nonuniformEXT(probe.cubemap_index)], R, roughness * float(textureQueryLevels(cubemaps[nonuniformEXT(probe.cubemap_index)]) - 1))`；否则回退 IBL specular（使用 `ibl_rotation_sin/cos` 旋转 R）
   - **IBL 分支**（`use_lightmap == false`）：保持现有 IBL 采样逻辑（含 IBL rotation）
   - AO/SO 应用于两种模式的 indirect 结果（与决策一致）
   - `indirect_intensity` 乘数应用于两种模式的 indirect 结果
@@ -229,17 +234,19 @@ BakeDataManager 实现角度加载（KTX2 → GPU → bindless）和卸载。
 
 实现完整的 UI 交互流程：模式切换、角度选择、Bake 后自动启用。
 
-- `app/debug_ui.h`：`DebugUIContext` 新增 `IndirectLightingMode& indirect_lighting_mode` 引用、`bool has_bake_data`（可用角度非空）
+- `app/debug_ui.h`：`DebugUIContext` 新增 `IndirectLightingMode& indirect_lighting_mode` 引用、`bool has_bake_data`（可用角度非空）、`uint32_t loaded_bake_rotation`（当前加载的角度，UI 高亮用）
+- `app/debug_ui.h`：`DebugUIActions` 新增 `bool angle_switch_requested = false` + `uint32_t new_angle_rotation = 0`（角度列表点击时设置）
 - `app/debug_ui.cpp`：
   - 模式 toggle：`has_bake_data == false` 时 Lightmap/Probe 选项灰显
-  - 已 bake 角度列表：每项可点击，点击触发 `DebugUIActions` 中的角度切换请求
+  - 已 bake 角度列表：每项可点击（当前加载角度高亮），点击设置 `actions.angle_switch_requested = true` + `actions.new_angle_rotation = rot`
   - `"IBL Intensity"` slider label 根据 `indirect_lighting_mode` 动态显示：IBL 模式 → `"IBL Intensity"`，Lightmap/Probe 模式 → `"Indirect Intensity"`
   - Bake 期间模式 toggle 灰显
 - `app/application.cpp`：
-  - 检测 DebugUI 的角度切换请求 → 调用 `renderer_.switch_bake_angle(rotation)`
-  - 检测模式切换 → IBL → LightmapProbe：调用 `switch_bake_angle()` 加载首个可用角度（或上次选中角度）；LightmapProbe → IBL：调用 `unload_angle()` 释放资源
+  - 检测 `actions.angle_switch_requested` → 调用 `renderer_.switch_bake_angle(actions.new_angle_rotation)`
+  - 检测模式切换 → IBL → LightmapProbe：调用 `switch_bake_angle()` 加载首个可用角度（或上次选中角度）；LightmapProbe → IBL：调用 `renderer_.unload_bake_angle()` 释放资源
   - Bake 完成后（`BakeState::Complete` 检测）：调用 `bake_data_manager_.scan()` 刷新角度列表，自动切换到 LightmapProbe 模式 + 加载刚 bake 的角度
 - `app/application.cpp`：`IndirectLightingMode` 与 `RenderFeatures::lightmap_probe` 同步（模式为 LightmapProbe 时 flag = true）
+- `app/application.cpp`：**IBL 旋转同步**——Lightmap/Probe 模式激活或角度切换时，将 `ibl_rotation_deg_` 设置为当前已加载角度的度数（确保 IBL 回退分支使用正确的旋转值，且 `ibl_rotation_sin/cos` 写入 GlobalUBO 后与 bake 数据一致）
 - `app/debug_ui.cpp`：Lightmap/Probe 模式下 Start Bake 按钮灰显（Bake 操作仅在 IBL 模式下可触发）
 
 **验证**：
@@ -278,8 +285,9 @@ Lightmap/Probe 模式下 IBL 旋转不能自由拖动，改为拖过阈值后跳
 
 **设计要点**：
 - Phase 8 使用固定阈值（如 15°），Phase 8.5 细化为与角度差成比例的映射
-- 已 bake 角度按度数排序，拖拽方向决定是找下一个还是上一个
+- 已 bake 角度按度数升序排序，视为环形列表（359° 之后是 0°）。拖拽方向（正/负角度偏移）决定在环形列表中向前还是向后查找下一个角度
 - 只有 1 个已 bake 角度时拖拽无效果
+- 切换后重置累积偏移量，防止连续快速跳变
 
 **验证**：Lightmap/Probe 模式下拖拽 IBL 旋转超过阈值后跳到下一个角度，画面正确更新
 

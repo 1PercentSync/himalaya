@@ -24,7 +24,7 @@
 
 ## Step 3：GPUInstanceData 扩展 + instance_index 重构
 
-- [ ] `framework/scene_data.h` + `shaders/common/bindings.glsl`：GPUInstanceData `_padding[3]` → `lightmap_index` + `probe_index` + `_padding`
+- [ ] `framework/scene_data.h` + `shaders/common/bindings.glsl`：GPUInstanceData `_padding[3]` → `lightmap_index` + `probe_index` + `_padding` + `static_assert` 更新
 - [ ] `app/renderer*.cpp`：InstanceBuffer 填充 lightmap_index / probe_index 为 `UINT32_MAX`
 - [ ] `shaders/forward.vert` + `shaders/forward.frag`：`frag_material_index` → `frag_instance_index` + 新增 `frag_uv1`
 - [ ] `shaders/depth_prepass.vert` + `shaders/depth_prepass.frag` + `shaders/depth_prepass_masked.frag`：`frag_material_index` → `frag_instance_index`
@@ -66,9 +66,10 @@
 
 - [ ] `app/debug_ui.h` + `.cpp`：IndirectLightingMode toggle（无 bake 数据时灰显 Lightmap/Probe）
 - [ ] `app/debug_ui.cpp`：Indirect Intensity slider label 根据模式动态显示
-- [ ] `app/debug_ui.cpp`：已 bake 角度列表可点击切换 + 角度切换 action
+- [ ] `app/debug_ui.h`：`DebugUIActions` 新增 `bool angle_switch_requested` + `uint32_t new_angle_rotation`
+- [ ] `app/debug_ui.cpp`：已 bake 角度列表可点击切换（当前角度高亮）
 - [ ] `app/application.cpp`：检测角度切换 action → 调用 `switch_bake_angle()`
-- [ ] `app/application.cpp`：模式切换 → IBL↔LightmapProbe 加载/卸载
+- [ ] `app/application.cpp`：模式切换 → IBL↔LightmapProbe 加载/卸载 + IBL 旋转同步到已加载角度
 - [ ] `app/application.cpp`：Bake 完成后自动切换 LightmapProbe + 加载角度
 - [ ] `app/debug_ui.cpp`：Lightmap/Probe 模式下 Start Bake 灰显
 
