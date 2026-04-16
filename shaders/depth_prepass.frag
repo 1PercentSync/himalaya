@@ -18,13 +18,13 @@
 layout(location = 0) in vec3 frag_normal;
 layout(location = 1) in vec2 frag_uv0;
 layout(location = 2) in vec4 frag_tangent;
-layout(location = 3) flat in uint frag_material_index;
+layout(location = 3) flat in uint frag_instance_index;
 
 layout(location = 0) out vec4 out_normal;
 layout(location = 1) out float out_roughness;
 
 void main() {
-    GPUMaterialData mat = materials[frag_material_index];
+    GPUMaterialData mat = materials[instances[frag_instance_index].material_index];
 
     // Sample normal map
     vec2 normal_rg = texture(textures[nonuniformEXT(mat.normal_tex)], frag_uv0).rg;

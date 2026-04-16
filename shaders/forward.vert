@@ -28,7 +28,8 @@ layout(location = 0) out vec3 frag_world_pos;
 layout(location = 1) out vec3 frag_normal;
 layout(location = 2) out vec2 frag_uv0;
 layout(location = 3) out vec4 frag_tangent;
-layout(location = 4) flat out uint frag_material_index;
+layout(location = 4) flat out uint frag_instance_index;
+layout(location = 5) out vec2 frag_uv1;
 
 // Guarantee bit-identical gl_Position with depth_prepass.vert for EQUAL depth test
 invariant gl_Position;
@@ -51,5 +52,6 @@ void main() {
     // Tangent uses the same normal matrix; preserve handedness in w
     frag_tangent = vec4(normalize(normal_matrix * in_tangent.xyz), in_tangent.w);
 
-    frag_material_index = inst.material_index;
+    frag_instance_index = gl_InstanceIndex;
+    frag_uv1 = in_uv1;
 }

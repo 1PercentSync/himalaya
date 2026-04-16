@@ -27,7 +27,7 @@ layout (location = 2) in vec2 in_uv0;
 // ---- Outputs to fragment shader ----
 
 layout (location = 0) out vec2 frag_uv0;
-layout (location = 1) flat out uint frag_material_index;
+layout (location = 1) flat out uint frag_instance_index;
 
 void main() {
     GPUInstanceData inst = instances[gl_InstanceIndex];
@@ -36,5 +36,5 @@ void main() {
     gl_Position = global.cascade_view_proj[cascade_index] * world_pos;
 
     frag_uv0 = in_uv0;
-    frag_material_index = inst.material_index;
+    frag_instance_index = gl_InstanceIndex;
 }

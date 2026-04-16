@@ -16,10 +16,10 @@
 #include "common/bindings.glsl"
 
 layout (location = 0) in vec2 frag_uv0;
-layout (location = 1) flat in uint frag_material_index;
+layout (location = 1) flat in uint frag_instance_index;
 
 void main() {
-    GPUMaterialData mat = materials[frag_material_index];
+    GPUMaterialData mat = materials[instances[frag_instance_index].material_index];
 
     float alpha = texture(textures[nonuniformEXT(mat.base_color_tex)], frag_uv0).a * mat.base_color_factor.a;
     if (alpha < mat.alpha_cutoff) {
