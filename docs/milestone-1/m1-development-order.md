@@ -150,12 +150,34 @@
 
 ## 阶段八：间接光照集成
 
-- Lightmap 加载与 UV2 顶点属性处理
-- Lightmap 采样集成到 Forward Lighting Pass（动态分支，per-object 属性条件执行）
-- Reflection Probes 数据加载
-- Reflection Probe 视差校正采样集成到 Forward Lighting Pass
+**Layer 1 BakeDataManager + Layer 2 Forward 集成 + Layer 3 模式切换 UI**
 
-**产出：** 光栅化模式下室内场景有了间接光照（Lightmap），不再是纯黑的角落。光滑表面反射周围环境（Reflection Probes），不再只反射天空。这是画面写实度的一个重要跳跃。
+- `indirect_intensity` 参数重命名（`ibl_intensity` → `indirect_intensity`，全代码库重构）
+- `IndirectLightingMode` enum + `FEATURE_LIGHTMAP_PROBE` feature flag
+- GPUInstanceData 扩展（`lightmap_index` + `probe_index`，哨兵值 `0xFFFFFFFF`）
+- instance_index vert→frag 重构（三对 shader 统一传 `gl_InstanceIndex`，frag 读 InstanceBuffer）
+- GPUProbeData struct + ProbeBuffer SSBO（Set 0 binding 9，非 RT-only，Phase 8.5 视差校正 AABB 预留）
+- BakeDataManager（framework 层：bake 缓存扫描与完整性校验，KTX2 加载/卸载 + bindless 注册，CPU probe-to-instance 分配）
+- Forward shader 间接光照集成：Lightmap 采样（入射辐照度 × diffuse_color）+ Probe cubemap 采样（roughness-based mip LOD）
+- IBL / Lightmap+Probe 模式切换 UI + 角度选择 + bake 完成后自动启用
+- AO/SO 按模式自动预设（切换时加载该模式的 AOConfig，两模式各自记忆）
+- Lightmap/Probe 模式 IBL 旋转跳变（拖拽超阈值跳到下一个已 bake 角度）
+
+**产出：** 光栅化模式下室内场景有了间接光照（Lightmap），不再是纯黑的角落。光滑表面反射周围环境（Reflection Probes），不再只反射天空。IBL / Lightmap+Probe 两种模式可切换，多角度 bake 数据可选择。画面写实度的一个重要跳跃。
+
+> 详细步骤见 `../current-phase.md`
+
+---
+
+## 阶段八点五：间接光照质量提升
+
+- Reflection Probe 视差校正（Parallax Corrected Cubemap，AABB proxy 反射向量修正）
+- 多 Probe 混合 + roughness 阈值（per-pixel 混合，光滑表面用单 probe 避免重影）
+- GPU per-pixel probe 网格查找（替代 CPU per-instance 分配，大物体不同位置自动用不同 probe）
+- IBL 旋转拖拽距离-角度映射细化（非线性，反映角度差）
+- Lightmap 接缝处理（视实测情况决定是否需要 texel dilation）
+
+**产出：** 反射效果贴合房间墙壁（视差校正），大物体反射连续过渡（多 probe 混合），整体间接光照质量提升。
 
 ---
 
@@ -204,10 +226,13 @@
               │            阶段八（间接光照集成，依赖阶段七的烘焙产出）
               │                      │
               │                      ↓
+              │            阶段八点五（间接光照质量提升，依赖阶段八基础设施）
+              │                      │
+              │                      ↓
               │            阶段九（依赖阶段三的 HDR Color、Depth）
               │                      │
               │                      ↓
               └──────────→ 阶段十（依赖阶段二的 Render Graph）
 ```
 
-阶段四、五在代码依赖上都需要阶段三完成，但它们之间没有硬依赖——理论上可以调换顺序。选择当前顺序的理由是：阶段四的阴影对画面立体感的提升最直接，阶段五的 temporal filtering 是重要基础设施。阶段六引入 RT 基础设施，阶段七的烘焙器依赖阶段六，阶段八的间接光照集成依赖阶段七的烘焙产出。阶段九的透明和阶段十的后处理与 RT 无硬依赖，顺延即可。
+阶段四、五在代码依赖上都需要阶段三完成，但它们之间没有硬依赖——理论上可以调换顺序。选择当前顺序的理由是：阶段四的阴影对画面立体感的提升最直接，阶段五的 temporal filtering 是重要基础设施。阶段六引入 RT 基础设施，阶段七的烘焙器依赖阶段六，阶段八的间接光照集成依赖阶段七的烘焙产出。阶段八点五是阶段八的质量提升迭代，视差校正和多 probe 混合等增强依赖阶段八的基础设施。阶段九的透明和阶段十的后处理与 RT 无硬依赖，顺延即可。

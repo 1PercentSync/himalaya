@@ -402,3 +402,33 @@ Screen-space ray march + 世界空间搜索距离 + 深度自适应 thickness（
 ### GPU 上传
 
 批量 immediate command scope（`begin_immediate()` → 录制所有 copy → `end_immediate()` 单次 submit）。`upload_image_all_levels()` 单 staging buffer + 批量 copy region 上传预建 mip chain。
+
+---
+
+## 间接光照集成（Phase 8）
+
+### 两种间接光照模式
+
+Application 层 `IndirectLightingMode` enum（IBL / LightmapProbe）控制。Shader 端 `feature_flags` bit 3 接收。`ibl_intensity` 重命名为 `indirect_intensity`（底层同一参数，UI 按模式显示不同文案）。
+
+### Per-instance 烘焙数据
+
+GPUInstanceData 扩展 `lightmap_index`（bindless textures[] index）+ `probe_index`（ProbeBuffer SSBO index），哨兵值 `UINT32_MAX` 表示"无"。索引始终反映 instance 有无数据（不因模式切换改变），模式切换由全局 flag 控制。
+
+### Probe 数据
+
+Set 0 binding 9 ProbeBuffer SSBO（非 RT-only，PARTIALLY_BOUND），`GPUProbeData`（48B：position + aabb_min/max 预留 + cubemap_index）。Phase 8 CPU per-instance 分配（最近 probe），Phase 8.5 升级 GPU per-pixel 网格查找。
+
+### Vert→Frag 重构
+
+三对 shader 统一传 `frag_instance_index`（= gl_InstanceIndex），frag 直接读 InstanceBuffer。forward.vert 额外传 `frag_uv1`（lightmap UV）。
+
+### AO/SO 交互
+
+两种模式均应用 SSAO 和 SO（lightmap/probe 分辨率不足以表达屏幕分辨率级别的细粒度遮蔽）。切换模式时自动加载该模式的 AOConfig 预设值。
+
+### BakeDataManager
+
+Framework 层新类，Renderer 持有。管理 bake 数据扫描/校验/加载/卸载/probe 分配。多角度按需加载（一次只加载一个角度）。
+
+**升级路径**：Phase 8.5 视差校正使用已预留的 AABB 字段，multi-probe 混合替换 CPU 分配为 GPU 网格查找。

@@ -1088,3 +1088,101 @@ Push constant 新增 `uint lod_max_level`，应用时 `final_lod = clamp(compute
 | Shadow ray（NEE） | 单独 miss group，miss = 未遮挡 |
 | 顶点格式硬编码 | `vertexFormat` = `R32G32B32_SFLOAT`（position offset 0），`indexType` = `UINT32` |
 | GLSL 扩展 | `GL_EXT_ray_tracing` + `GL_EXT_buffer_reference` / `buffer_reference2` + `GL_EXT_shader_explicit_arithmetic_types_int64` + `GL_EXT_nonuniform_qualifier` |
+
+---
+
+## Phase 8 间接光照集成决策
+
+### 间接光照模式
+
+光栅化渲染内有两种间接光照模式，由 Application 层 `IndirectLightingMode` enum 控制：
+
+| 模式 | 间接光来源 | IBL 旋转行为 | Indirect Intensity 语义 |
+|------|-----------|-------------|------------------------|
+| IBL | IBL Split-Sum 近似（无 lightmap/probe） | 自由旋转 | IBL 环境光强度 |
+| LightmapProbe | 烘焙 lightmap + reflection probe | 已 bake 角度间跳切 | 间接光整体增益 |
+
+Shader 端通过 `feature_flags` bit 3（`FEATURE_LIGHTMAP_PROBE`）接收。Application 同步 `IndirectLightingMode` enum 与 `RenderFeatures::lightmap_probe` bool。
+
+`ibl_intensity` 重命名为 `indirect_intensity`，底层是同一个参数。UI 根据模式显示不同文案：IBL 模式 → `"IBL Intensity"`，Lightmap/Probe 模式 → `"Indirect Intensity"`。
+
+### GPUInstanceData 扩展
+
+利用现有 `_padding[3]`（12 bytes）中的 2 个 slot：
+
+```cpp
+uint32_t material_index;
+uint32_t lightmap_index;  // bindless textures[] index, UINT32_MAX = no lightmap
+uint32_t probe_index;     // ProbeBuffer SSBO index, UINT32_MAX = no probe
+uint32_t _padding;        // 保留 1 个
+```
+
+struct 保持 128 bytes 不变。哨兵值 `0xFFFFFFFF` 表示"无"，shader 动态分支检查。per-instance 索引始终反映该 instance 是否有 lightmap/probe（不因模式切换而改变），模式切换由全局 feature flag 控制。
+
+### Vert→Frag 数据传递
+
+三对 shader（forward、depth_prepass、shadow）统一从传递 `frag_material_index` 改为传递 `frag_instance_index`（= `gl_InstanceIndex`），fragment shader 通过 `instances[frag_instance_index]` 直接读取 InstanceBuffer SSBO。
+
+forward.vert 额外新增 `frag_uv1`（location 5, vec2，插值传递 lightmap UV）。
+
+好处：未来新增 per-instance 字段零 vert/frag 接口改动。
+
+### Probe 数据 GPU 存储
+
+新增 Set 0 binding 9 ProbeBuffer SSBO（**不受** `HIMALAYA_RT` 守卫，光栅化 forward shader 需要访问）：
+
+```glsl
+struct GPUProbeData {
+    vec3 position;      // 12 bytes (+4 pad)
+    vec3 aabb_min;      // 12 bytes (+4 pad) — Phase 8.5 视差校正用，Phase 8 填零
+    vec3 aabb_max;      // 12 bytes           — 同上
+    uint cubemap_index; //  4 bytes — bindless cubemaps[] index
+};                      // 48 bytes
+
+layout(set = 0, binding = 9) readonly buffer ProbeBuffer {
+    GPUProbeData probes[];
+};
+```
+
+`PARTIALLY_BOUND`，无 probe 数据时不写入。`aabb_min/max` 预留给 Phase 8.5 视差校正，Phase 8 不使用。
+
+### Probe Mip Count
+
+Probe specular 的 roughness-based LOD 使用 `textureQueryLevels(cubemaps[probe.cubemap_index])` 在 shader 内获取 mip 级数，零数据传递、零 GlobalUBO 膨胀。
+
+### Probe-to-instance 分配
+
+Phase 8：CPU per-instance 分配。BakeDataManager 加载 probe 位置后，对每个 instance 找最近 probe（世界空间 AABB 中心到 probe 位置的欧氏距离），存储 `probe_index`。
+
+Phase 8.5 演进：GPU per-pixel 网格查找。`probe_index` 字段闲置（可保留作为 grid 空洞 fallback）。
+
+### 无 Lightmap Instance 处理
+
+Lightmap/Probe 模式下 `lightmap_index == UINT32_MAX` 的 instance 回退到 IBL 间接光照。同理 `probe_index == UINT32_MAX` 的 instance specular 回退 IBL prefiltered cubemap。IBL cubemap 在两种模式下始终保持绑定可用。
+
+### AO/SO 与间接光照交互
+
+- **SSAO**：两种模式均应用 SSAO（lightmap 分辨率不足以表达屏幕分辨率级别的细粒度遮蔽）
+- **GTSO/SO**：两种模式均应用 specular occlusion
+- **Per-mode 预设**：模式切换时自动加载该模式的 AOConfig 预设值（Lightmap/Probe 模式默认较小 radius + 较低 intensity），两种模式各自记忆用户的调整
+
+### 多角度资源管理
+
+按需加载：只加载当前角度。切换角度时 `vkQueueWaitIdle` → 卸载旧 → 加载新。VRAM 只占一套。切换是低频操作（用户手动点击或拖拽跳变），短暂加载停顿可接受。
+
+### BakeDataManager 架构
+
+Framework 层新类，Renderer 持有。职责：
+
+- 扫描 `cache_root()/bake/` 目录，完整性校验，构建可用角度列表（从 DebugUI 迁移）
+- 加载角度：KTX2 lightmap/probe → GPU image → bindless 注册 → ProbeBuffer SSBO → probe 分配
+- 卸载角度：bindless 注销 → image 销毁 → 清空 per-instance 数据
+- 提供 per-instance lightmap_index / probe_index 给 Renderer 填充 InstanceBuffer
+
+### Lightmap 存储内容
+
+Baker raygen 发射 cosine-weighted 射线，cosine 因子与 PDF 抵消，lightmap 存储**入射辐照度**（Li），不含表面自身 BRDF。forward.frag 采样时需乘 `diffuse_color`（Lambertian BRDF 的漫反射色）：
+
+```glsl
+vec3 indirect_diffuse = lightmap_color * diffuse_color;
+```
