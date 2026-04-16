@@ -41,9 +41,9 @@ namespace himalaya::framework {
                         break;
                     }
 
-                    generate_lightmap_uv(requests_[idx].vertices,
-                                         requests_[idx].indices,
-                                         requests_[idx].mesh_hash);
+                    (void)generate_lightmap_uv(requests_[idx].vertices,
+                                              requests_[idx].indices,
+                                              requests_[idx].mesh_hash);
                     completed_.fetch_add(1, std::memory_order_relaxed);
                 }
             });
