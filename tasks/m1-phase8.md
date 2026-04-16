@@ -68,11 +68,11 @@
 - [x] `app/debug_ui.h` + `.cpp`：IndirectLightingMode toggle（无 bake 数据时灰显 Lightmap/Probe）
 - [x] `app/debug_ui.cpp`：Indirect Intensity slider label 根据模式动态显示
 - [x] `app/debug_ui.h`：`DebugUIActions` 新增 `bool angle_switch_requested` + `uint32_t new_angle_rotation`
-- [ ] `app/debug_ui.cpp`：已 bake 角度列表可点击切换（当前角度高亮）
-- [ ] `app/application.cpp`：检测角度切换 action → 调用 `switch_bake_angle()`
-- [ ] `app/application.cpp`：模式切换 → IBL↔LightmapProbe 加载/卸载 + IBL 旋转同步到已加载角度
-- [ ] `app/application.cpp`：Bake 完成后自动切换 LightmapProbe + 加载角度
-- [ ] `app/debug_ui.cpp`：Lightmap/Probe 模式下 Start Bake 灰显
+- [x] `app/debug_ui.cpp`：已 bake 角度列表可点击切换（当前角度高亮）
+- [x] `app/application.cpp`：检测角度切换 action → 调用 `switch_bake_angle()`
+- [x] `app/application.cpp`：模式切换 → IBL↔LightmapProbe 加载/卸载 + IBL 旋转同步到已加载角度
+- [x] `app/application.cpp`：Bake 完成后自动切换 LightmapProbe + 加载角度
+- [x] `app/debug_ui.cpp`：Lightmap/Probe 模式下 Start Bake 灰显
 
 ## Step 9：AO/SO 按模式自动预设
 
