@@ -29,7 +29,9 @@ struct GPUInstanceData {
     mat4 model;                     // 64 bytes — world-space transform
     mat3 normal_matrix;             // 48 bytes — transpose(inverse(mat3(model))), precomputed
     uint material_index;            //  4 bytes — index into MaterialBuffer SSBO
-    uint _padding[3];               // 12 bytes — align to 128 (multiple of 16)
+    uint lightmap_index;            //  4 bytes — bindless index into textures[] (0xFFFFFFFF = no lightmap)
+    uint probe_index;               //  4 bytes — index into ProbeBuffer SSBO (0xFFFFFFFF = no probe)
+    uint _padding;                  //  4 bytes — align to 128 (multiple of 16)
 };
 
 /** PBR material data (std430, 80 bytes). */

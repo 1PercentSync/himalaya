@@ -469,7 +469,9 @@ namespace himalaya::framework {
         glm::vec4 normal_col1;   ///< 16 bytes — normal matrix column 1 (xyz, w unused)
         glm::vec4 normal_col2;   ///< 16 bytes — normal matrix column 2 (xyz, w unused)
         uint32_t material_index; ///<  4 bytes — index into MaterialBuffer SSBO
-        uint32_t _padding[3]{};  ///< 12 bytes — align to 128 (multiple of 16)
+        uint32_t lightmap_index = UINT32_MAX; ///<  4 bytes — bindless index into textures[] (UINT32_MAX = no lightmap)
+        uint32_t probe_index = UINT32_MAX;    ///<  4 bytes — index into ProbeBuffer SSBO (UINT32_MAX = no probe)
+        uint32_t _padding{};     ///<  4 bytes — align to 128 (multiple of 16)
     };
 
     /**
@@ -564,6 +566,8 @@ namespace himalaya::framework {
     static_assert(sizeof(GPUInstanceData) == 128, "GPUInstanceData must be 128 bytes (std430)");
     static_assert(offsetof(GPUInstanceData, normal_col0) == 64);
     static_assert(offsetof(GPUInstanceData, material_index) == 112);
+    static_assert(offsetof(GPUInstanceData, lightmap_index) == 116);
+    static_assert(offsetof(GPUInstanceData, probe_index) == 120);
     static_assert(sizeof(PushConstantData) == 4, "PushConstantData must be 4 bytes");
     static_assert(sizeof(EmissiveTriangle) == 96, "EmissiveTriangle must be 96 bytes (std430)");
     static_assert(offsetof(EmissiveTriangle, v0) == 0);
