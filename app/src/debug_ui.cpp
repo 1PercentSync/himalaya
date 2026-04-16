@@ -783,7 +783,30 @@ namespace himalaya::app {
                 if (baking) { ImGui::EndDisabled(); }
             }
 
-            slider_float_deferred("IBL Intensity", &ctx.indirect_intensity, 0.0f, 5.0f, "%.2f");
+            // Indirect lighting mode toggle
+            {
+                const bool is_ibl = ctx.indirect_lighting_mode == framework::IndirectLightingMode::IBL;
+                const bool is_lp = !is_ibl;
+
+                if (ImGui::RadioButton("IBL", is_ibl)) {
+                    ctx.indirect_lighting_mode = framework::IndirectLightingMode::IBL;
+                }
+                ImGui::SameLine();
+
+                const bool can_select_lp = ctx.has_bake_data;
+                if (!can_select_lp) { ImGui::BeginDisabled(); }
+                if (ImGui::RadioButton("Lightmap/Probe", is_lp)) {
+                    ctx.indirect_lighting_mode = framework::IndirectLightingMode::LightmapProbe;
+                }
+                if (!can_select_lp) { ImGui::EndDisabled(); }
+                if (!can_select_lp && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
+                    ImGui::SetTooltip("No baked lighting data available");
+                }
+            }
+
+            const char *intensity_label = ctx.indirect_lighting_mode == framework::IndirectLightingMode::IBL
+                ? "IBL Intensity" : "Indirect Intensity";
+            slider_float_deferred(intensity_label, &ctx.indirect_intensity, 0.0f, 5.0f, "%.2f");
             slider_float_deferred("EV", &ctx.ev, -4.0f, 4.0f, "%.1f");
 
             // Debug render mode

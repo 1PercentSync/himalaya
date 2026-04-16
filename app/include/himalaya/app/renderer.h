@@ -419,6 +419,12 @@ namespace himalaya::app {
         /** @brief Returns true if at least one validated bake angle exists. */
         [[nodiscard]] bool has_bake_data() const;
 
+        /** @brief Returns true if a bake angle is currently loaded on the GPU. */
+        [[nodiscard]] bool bake_data_loaded() const;
+
+        /** @brief Returns the currently loaded bake rotation in integer degrees (0 if not loaded). */
+        [[nodiscard]] uint32_t bake_data_manager_loaded_rotation() const;
+
         /**
          * @brief Switches to a different bake angle: GPU idle, unload old, load new.
          *

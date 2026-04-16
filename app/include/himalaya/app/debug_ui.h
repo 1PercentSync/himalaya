@@ -24,6 +24,7 @@ namespace himalaya::framework {
     struct Camera;
     struct ContactShadowConfig;
     enum class DenoiseState : uint8_t;
+    enum class IndirectLightingMode : uint8_t;
     struct PTConfig;
     enum class RenderMode : uint8_t;
     struct RenderFeatures;
@@ -173,6 +174,18 @@ namespace himalaya::app {
 
         /** @brief Editable reference to the indirect light intensity. */
         float& indirect_intensity;
+
+        /** @brief Current indirect lighting mode (mutable — toggle changes it). */
+        framework::IndirectLightingMode& indirect_lighting_mode;
+
+        /** @brief Whether any validated bake data is available (controls mode toggle gray-out). */
+        bool has_bake_data;
+
+        /** @brief Currently loaded bake rotation in integer degrees (UI highlight; 0 if none loaded). */
+        uint32_t loaded_bake_rotation;
+
+        /** @brief Whether bake data is currently loaded on the GPU. */
+        bool bake_data_loaded;
 
         /** @brief Editable reference to the exposure value in EV stops. */
         float& ev;
@@ -358,6 +371,12 @@ namespace himalaya::app {
 
         /** @brief True if the user clicked the Clear All Cache button. */
         bool clear_all_cache_requested = false;
+
+        /** @brief True if the user clicked a bake angle entry to switch to it. */
+        bool angle_switch_requested = false;
+
+        /** @brief Bake angle in integer degrees (valid only when angle_switch_requested is true). */
+        uint32_t new_angle_rotation = 0;
     };
 
     /**

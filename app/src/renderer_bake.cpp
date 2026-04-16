@@ -223,6 +223,14 @@ namespace himalaya::app {
         return bake_data_manager_.has_bake_data();
     }
 
+    bool Renderer::bake_data_loaded() const {
+        return bake_data_manager_.is_loaded();
+    }
+
+    uint32_t Renderer::bake_data_manager_loaded_rotation() const {
+        return bake_data_manager_.loaded_rotation();
+    }
+
     void Renderer::switch_bake_angle(const uint32_t rotation_int,
                                      const std::span<const framework::MeshInstance> mesh_instances) {
         // Ensure GPU is idle before destroying/creating resources
