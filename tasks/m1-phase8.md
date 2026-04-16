@@ -16,10 +16,10 @@
 
 ## Step 2：IndirectLightingMode enum + FEATURE_LIGHTMAP_PROBE
 
-- [ ] `framework/scene_data.h`：新增 `IndirectLightingMode` enum + `RenderFeatures::lightmap_probe` bool
-- [ ] `shaders/common/bindings.glsl`：新增 `#define FEATURE_LIGHTMAP_PROBE (1u << 3)`
-- [ ] `app/application.h`：新增 `indirect_lighting_mode_` 成员
-- [ ] `app/renderer.h`：`RenderInput` 新增 `indirect_lighting_mode` 字段
+- [x] `framework/scene_data.h`：新增 `IndirectLightingMode` enum + `RenderFeatures::lightmap_probe` bool
+- [x] `shaders/common/bindings.glsl`：新增 `#define FEATURE_LIGHTMAP_PROBE (1u << 3)`
+- [x] `app/application.h`：新增 `indirect_lighting_mode_` 成员
+- [x] `app/renderer.h`：`RenderInput` 新增 `indirect_lighting_mode` 字段
 - [ ] `app/application.cpp` + `app/renderer.cpp`：RenderInput 填充 + `fill_common_gpu_data()` feature_flags 写入
 
 ## Step 3：GPUInstanceData 扩展 + instance_index 重构
