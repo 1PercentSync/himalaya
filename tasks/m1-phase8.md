@@ -24,8 +24,8 @@
 
 ## Step 3：GPUInstanceData 扩展 + instance_index 重构
 
-- [ ] `framework/scene_data.h` + `shaders/common/bindings.glsl`：GPUInstanceData `_padding[3]` → `lightmap_index` + `probe_index` + `_padding` + `static_assert` 更新
-- [ ] `app/renderer*.cpp`：InstanceBuffer 填充 lightmap_index / probe_index 为 `UINT32_MAX`
+- [x] `framework/scene_data.h` + `shaders/common/bindings.glsl`：GPUInstanceData `_padding[3]` → `lightmap_index` + `probe_index` + `_padding` + `static_assert` 更新
+- [x] `app/renderer*.cpp`：InstanceBuffer 填充 lightmap_index / probe_index 为 `UINT32_MAX`（default member initializer 自动生效，无需修改填充代码）
 - [ ] `shaders/forward.vert` + `shaders/forward.frag`：`frag_material_index` → `frag_instance_index` + 新增 `frag_uv1`
 - [ ] `shaders/depth_prepass.vert` + `shaders/depth_prepass.frag` + `shaders/depth_prepass_masked.frag`：`frag_material_index` → `frag_instance_index`
 - [ ] `shaders/shadow.vert` + `shaders/shadow_masked.frag`：`frag_material_index` → `frag_instance_index`

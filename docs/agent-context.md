@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段八 — 间接光照集成（实现中）
-- **进度**：Step 2 全部完成（IndirectLightingMode enum + FEATURE_LIGHTMAP_PROBE flag + RenderInput 填充 + feature_flags 写入）
+- **进度**：Step 3 进行中 — 小项 1-2 完成（GPUInstanceData 扩展 + InstanceBuffer 填充），小项 3-5 待做（shader instance_index 重构）
 
 ### 下一个任务
 
-Step 3：GPUInstanceData 扩展 + instance_index Vert→Frag 重构。
+Step 3 小项 3-5：forward / depth_prepass / shadow 三对 shader 的 frag_material_index → frag_instance_index 重构。
 
 ---
 
