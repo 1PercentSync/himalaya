@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段八 — 间接光照集成（实现中）
-- **进度**：Step 3 全部完成（GPUInstanceData 扩展 + InstanceBuffer 填充 + 三对 shader instance_index 重构）
+- **进度**：Step 4 全部完成（GPUProbeData struct + ProbeBuffer SSBO binding 9 + descriptor layout/pool 扩展）
 
 ### 下一个任务
 
-Step 4：GPUProbeData + ProbeBuffer SSBO（Set 0 binding 9）。
+Step 5：BakeDataManager — 扫描与校验。
 
 ---
 

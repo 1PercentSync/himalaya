@@ -32,9 +32,9 @@
 
 ## Step 4：GPUProbeData + ProbeBuffer SSBO
 
-- [ ] `framework/scene_data.h`：新增 `GPUProbeData` struct（48 bytes：position + aabb_min + aabb_max + cubemap_index）
-- [ ] `shaders/common/bindings.glsl`：新增 `GPUProbeData` struct + `layout(set = 0, binding = 9) readonly buffer ProbeBuffer`（非 RT-only，PARTIALLY_BOUND）
-- [ ] `rhi/descriptors.h` + `rhi/descriptors.cpp`：Set 0 layout 新增 binding 9 + `write_set0_probe_buffer()` 方法
+- [x] `framework/scene_data.h`：新增 `GPUProbeData` struct（48 bytes：position + aabb_min + aabb_max + cubemap_index）
+- [x] `shaders/common/bindings.glsl`：新增 `GPUProbeData` struct + `layout(set = 0, binding = 9) readonly buffer ProbeBuffer`（非 RT-only，PARTIALLY_BOUND）
+- [x] `rhi/descriptors.h` + `rhi/descriptors.cpp`：Set 0 layout 新增 binding 9 + `write_set0_probe_buffer()` 方法
 
 ## Step 5：BakeDataManager — 扫描与校验
 
