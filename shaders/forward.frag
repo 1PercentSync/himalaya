@@ -237,17 +237,49 @@ void main() {
         direct_specular += D * Vis * F * radiance;
     }
 
-    // ---- IBL environment lighting (split for debug modes) ----
-    vec3 rotated_N = rotate_y(N, global.ibl_rotation_sin, global.ibl_rotation_cos);
-    vec3 rotated_R = rotate_y(R, global.ibl_rotation_sin, global.ibl_rotation_cos);
+    // ---- Indirect lighting (Lightmap/Probe or IBL, split for debug modes) ----
 
-    vec3 irradiance  = texture(cubemaps[nonuniformEXT(global.irradiance_cubemap_index)], rotated_N).rgb;
-    float mip        = roughness * float(global.prefiltered_mip_count - 1u);
-    vec3 prefiltered = textureLod(cubemaps[nonuniformEXT(global.prefiltered_cubemap_index)], rotated_R, mip).rgb;
-    vec2 brdf_lut    = texture(textures[nonuniformEXT(global.brdf_lut_index)], vec2(NdotV, roughness)).rg;
+    // BRDF LUT: shared by both modes (Split-Sum specular reconstruction)
+    vec2 brdf_lut = texture(textures[nonuniformEXT(global.brdf_lut_index)], vec2(NdotV, roughness)).rg;
 
-    vec3 ibl_diffuse  = irradiance * diffuse_color;
-    vec3 ibl_specular = prefiltered * (F0 * brdf_lut.x + brdf_lut.y);
+    // Per-instance bake data
+    GPUInstanceData inst = instances[frag_instance_index];
+    bool use_lightmap = (global.feature_flags & FEATURE_LIGHTMAP_PROBE) != 0u
+                        && inst.lightmap_index != 0xFFFFFFFFu;
+
+    vec3 indirect_diffuse;
+    vec3 indirect_specular;
+
+    if (use_lightmap) {
+        // Lightmap diffuse: stored irradiance × surface albedo
+        indirect_diffuse = texture(textures[nonuniformEXT(inst.lightmap_index)], frag_uv1).rgb
+                           * diffuse_color;
+
+        // Probe specular: roughness-based mip from baked cubemap
+        if (inst.probe_index != 0xFFFFFFFFu) {
+            GPUProbeData probe = probes[inst.probe_index];
+            float probe_mip = roughness * float(textureQueryLevels(cubemaps[nonuniformEXT(probe.cubemap_index)]) - 1);
+            vec3 probe_prefiltered = textureLod(cubemaps[nonuniformEXT(probe.cubemap_index)], R, probe_mip).rgb;
+            indirect_specular = probe_prefiltered * (F0 * brdf_lut.x + brdf_lut.y);
+        } else {
+            // No probe assigned — fall back to IBL specular (rotated to bake angle)
+            vec3 fallback_R = rotate_y(R, global.ibl_rotation_sin, global.ibl_rotation_cos);
+            float fallback_mip = roughness * float(global.prefiltered_mip_count - 1u);
+            vec3 fallback_prefiltered = textureLod(cubemaps[nonuniformEXT(global.prefiltered_cubemap_index)], fallback_R, fallback_mip).rgb;
+            indirect_specular = fallback_prefiltered * (F0 * brdf_lut.x + brdf_lut.y);
+        }
+    } else {
+        // IBL: existing environment lighting (with rotation)
+        vec3 rotated_N = rotate_y(N, global.ibl_rotation_sin, global.ibl_rotation_cos);
+        vec3 rotated_R = rotate_y(R, global.ibl_rotation_sin, global.ibl_rotation_cos);
+
+        vec3 irradiance  = texture(cubemaps[nonuniformEXT(global.irradiance_cubemap_index)], rotated_N).rgb;
+        float mip        = roughness * float(global.prefiltered_mip_count - 1u);
+        vec3 prefiltered = textureLod(cubemaps[nonuniformEXT(global.prefiltered_cubemap_index)], rotated_R, mip).rgb;
+
+        indirect_diffuse  = irradiance * diffuse_color;
+        indirect_specular = prefiltered * (F0 * brdf_lut.x + brdf_lut.y);
+    }
 
     // ---- Ambient Occlusion ----
 
@@ -288,17 +320,17 @@ void main() {
     vec3 color;
     switch (global.debug_render_mode) {
         case DEBUG_MODE_DIFFUSE_ONLY:
-            color = direct_diffuse + global.indirect_intensity * ibl_diffuse * diffuse_ao;
+            color = direct_diffuse + global.indirect_intensity * indirect_diffuse * diffuse_ao;
             break;
         case DEBUG_MODE_SPECULAR_ONLY:
-            color = direct_specular + global.indirect_intensity * ibl_specular * specular_ao;
+            color = direct_specular + global.indirect_intensity * indirect_specular * specular_ao;
             break;
-        case DEBUG_MODE_IBL_ONLY:
-            color = global.indirect_intensity * (ibl_diffuse * diffuse_ao + ibl_specular * specular_ao);
+        case DEBUG_MODE_INDIRECT_ONLY:
+            color = global.indirect_intensity * (indirect_diffuse * diffuse_ao + indirect_specular * specular_ao);
             break;
         default: // DEBUG_MODE_FULL_PBR
             color = (direct_diffuse + direct_specular)
-                  + global.indirect_intensity * (ibl_diffuse * diffuse_ao + ibl_specular * specular_ao)
+                  + global.indirect_intensity * (indirect_diffuse * diffuse_ao + indirect_specular * specular_ao)
                   + emissive;
             break;
     }

@@ -788,7 +788,7 @@ namespace himalaya::app {
 
             // Debug render mode
             constexpr const char *kModeLabels[] = {
-                "Full PBR", "Diffuse Only", "Specular Only", "IBL Only",
+                "Full PBR", "Diffuse Only", "Specular Only", "Indirect Only",
                 "Normal", "Metallic", "Roughness", "AO", "Shadow Cascades", "SSAO",
                 "Contact Shadows",
             };
