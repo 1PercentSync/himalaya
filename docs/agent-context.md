@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段八 — 间接光照集成（实现中）
-- **进度**：Step 6 进行中（load_angle + unload_angle 已完成，Renderer 集成待做）
+- **进度**：Step 6 全部完成（BakeDataManager load/unload + Renderer switch_bake_angle + InstanceBuffer 填充）
 
 ### 下一个任务
 
-Step 6 剩余：Renderer 集成（switch_bake_angle + InstanceBuffer 填充）。
+Step 7：Forward Shader 间接光照集成。
 
 ---
 

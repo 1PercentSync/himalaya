@@ -190,9 +190,9 @@ BakeDataManager 实现角度加载（KTX2 → GPU → bindless）和卸载。
 
 #### 6d. Renderer 集成
 
-- `app/renderer.h`：新增 `switch_bake_angle(uint32_t rotation_int)` 方法
-- `app/renderer.cpp`：`switch_bake_angle()` 实现——`vkQueueWaitIdle` → `bake_data_manager_.unload_angle()` → `ctx_->begin_immediate()` → `bake_data_manager_.load_angle()` → `ctx_->end_immediate()`（immediate scope 由 Renderer 管理，BakeDataManager 内部不持有 Context 引用）
-- `app/renderer.cpp`：InstanceBuffer 填充逻辑从 `bake_data_manager_` 查询 `lightmap_index` / `probe_index`（当前无已加载角度时全部为 `UINT32_MAX`）
+- `app/renderer.h`：新增 `switch_bake_angle(uint32_t rotation_int, std::span<const MeshInstance> mesh_instances)` 方法（额外接收 `mesh_instances` 供 `load_angle` 做 probe-to-instance 分配）
+- `app/renderer_bake.cpp`：`switch_bake_angle()` 实现——`vkQueueWaitIdle` → `bake_data_manager_.unload_angle()` → `ctx_->begin_immediate()` → `bake_data_manager_.load_angle()` → `ctx_->end_immediate()`（immediate scope 由 Renderer 管理，BakeDataManager 内部不持有 Context 引用）
+- `app/renderer_rasterization.cpp`：`build_draw_groups()` 新增 optional `lightmap_indices` / `probe_indices` 参数，camera draw groups 调用点从 `bake_data_manager_` 查询填充（shadow 调用点保持默认 UINT32_MAX）
 
 **设计要点**：
 - Lightmap 纹理注册到 Set 1 binding 0（`textures[]`），使用 linear clamp sampler（Renderer 已有 `linear_clamp_sampler_`，BakeDataManager 通过 init 参数接收）
