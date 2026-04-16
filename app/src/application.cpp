@@ -842,10 +842,6 @@ namespace himalaya::app {
         rhi::CommandBuffer cmd(frame.command_buffer);
         cmd.begin();
 
-        // Sync lightmap_probe feature flag with indirect lighting mode
-        features_.lightmap_probe =
-            indirect_lighting_mode_ == framework::IndirectLightingMode::LightmapProbe;
-
         // Baking mode overrides: normalized IBL intensity, no directional lights
         const bool is_baking = render_mode_ == framework::RenderMode::Baking;
 
@@ -1009,7 +1005,10 @@ namespace himalaya::app {
                 fallback_light_pitch_ = std::clamp(fallback_light_pitch_, -kMaxPitch, kMaxPitch);
             } else if (!alt_held) {
                 // Left drag without Alt: IBL rotation (horizontal only)
-                ibl_yaw_ += dx * kSensitivity;
+                // Blocked in Lightmap/Probe mode (Step 10 will add snap-to-angle)
+                if (indirect_lighting_mode_ != framework::IndirectLightingMode::LightmapProbe) {
+                    ibl_yaw_ += dx * kSensitivity;
+                }
             }
         } else {
             drag_active_ = false;

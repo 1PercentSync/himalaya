@@ -186,13 +186,14 @@ namespace himalaya::app {
         const std::string &scene_textures_hash) {
 
         bake_lightmap_keys_.clear();
+        bake_instance_indices_.clear();
         const auto scene_hash = scene_loader.scene_hash();
         // Use original (pre-xatlas) data so keys are stable regardless of UV application.
         const auto cpu_vertices = scene_loader.original_cpu_vertices();
         const auto cpu_indices = scene_loader.original_cpu_indices();
 
         for_each_bakeable_instance(mesh_instances, meshes, materials,
-            [&](uint32_t /*scene_idx*/, const framework::MeshInstance &inst, const framework::Mesh &/*mesh*/) {
+            [&](uint32_t scene_idx, const framework::MeshInstance &inst, const framework::Mesh &/*mesh*/) {
                 const auto &verts = cpu_vertices[inst.mesh_id];
                 const auto &idxs = cpu_indices[inst.mesh_id];
                 const auto vertices_hash = framework::content_hash(verts.data(), verts.size() * sizeof(framework::Vertex));
@@ -202,6 +203,7 @@ namespace himalaya::app {
                                               + transform_hash + hdr_hash + scene_textures_hash;
                 bake_lightmap_keys_.push_back(
                     framework::content_hash(key_input.data(), key_input.size()));
+                bake_instance_indices_.push_back(scene_idx);
             });
     }
 
@@ -211,6 +213,9 @@ namespace himalaya::app {
 
     void Renderer::scan_bake_data(const std::span<const std::string> lightmap_keys,
                                   const std::string& probe_set_key) {
+        // Store probe_set_key so switch_bake_angle() can use it
+        // even when called outside a bake session.
+        bake_probe_set_key_ = probe_set_key;
         bake_data_manager_.scan(lightmap_keys, probe_set_key);
     }
 
@@ -1492,7 +1497,7 @@ namespace himalaya::app {
         lightmap_finalize_pending_ = false;
         bake_probe_finalize_pending_ = false;
         bake_probe_placement_pending_ = false;
-        bake_instance_indices_.clear();
+        // bake_instance_indices_ intentionally retained for post-bake angle loading
         bake_lightmap_sizes_.clear();
         // bake_lightmap_keys_ intentionally retained for baked angle scanning
         bake_probe_positions_.clear();

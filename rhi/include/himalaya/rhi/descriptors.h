@@ -21,7 +21,7 @@ namespace himalaya::rhi {
     constexpr uint32_t kMaxBindlessTextures = 4096;
 
     /** @brief Maximum number of cubemaps in the bindless array (Set 1, Binding 1). */
-    constexpr uint32_t kMaxBindlessCubemaps = 256;
+    constexpr uint32_t kMaxBindlessCubemaps = 4096;
 
     /** @brief Number of render target bindings in Set 2 (pre-allocated for all M1 phases). */
     constexpr uint32_t kRenderTargetBindingCount = 8;
