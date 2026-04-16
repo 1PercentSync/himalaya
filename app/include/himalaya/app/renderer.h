@@ -420,6 +420,18 @@ namespace himalaya::app {
         [[nodiscard]] bool has_bake_data() const;
 
         /**
+         * @brief Switches to a different bake angle: GPU idle, unload old, load new.
+         *
+         * Waits for GPU idle, unloads any currently loaded angle, then loads
+         * the specified angle within an immediate command scope.
+         *
+         * @param rotation_int   Bake angle in integer degrees (0-359).
+         * @param mesh_instances All scene mesh instances (for probe-to-instance assignment).
+         */
+        void switch_bake_angle(uint32_t rotation_int,
+                               std::span<const framework::MeshInstance> mesh_instances);
+
+        /**
          * @brief Returns the current bake state.
          */
         [[nodiscard]] framework::BakeState bake_state() const;

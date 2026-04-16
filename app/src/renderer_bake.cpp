@@ -223,6 +223,24 @@ namespace himalaya::app {
         return bake_data_manager_.has_bake_data();
     }
 
+    void Renderer::switch_bake_angle(const uint32_t rotation_int,
+                                     const std::span<const framework::MeshInstance> mesh_instances) {
+        // Ensure GPU is idle before destroying/creating resources
+        vkQueueWaitIdle(ctx_->graphics_queue);
+
+        // Unload previous angle (safe no-op if nothing loaded)
+        bake_data_manager_.unload_angle();
+
+        // Load new angle within immediate command scope
+        ctx_->begin_immediate();
+        bake_data_manager_.load_angle(rotation_int,
+                                      bake_lightmap_keys_,
+                                      bake_instance_indices_,
+                                      bake_probe_set_key_,
+                                      mesh_instances);
+        ctx_->end_immediate();
+    }
+
     // ---- Bake session management ----
 
     void Renderer::start_bake(

@@ -54,6 +54,10 @@ namespace himalaya::app {
 
     /**
      * Builds MeshDrawGroup lists from pre-sorted instance indices.
+     *
+     * lightmap_indices / probe_indices are optional (empty = all UINT32_MAX via
+     * GPUInstanceData default member initializers). When non-empty, they are
+     * parallel to mesh_instances and indexed by sorted_indices[i].
      */
     static void build_draw_groups(
         const std::span<const framework::MeshInstance> mesh_instances,
@@ -63,7 +67,9 @@ namespace himalaya::app {
         uint32_t &instance_offset,
         std::vector<framework::MeshDrawGroup> &out_opaque,
         std::vector<framework::MeshDrawGroup> &out_mask,
-        const bool compute_normal_matrix) {
+        const bool compute_normal_matrix,
+        const std::span<const uint32_t> lightmap_indices = {},
+        const std::span<const uint32_t> probe_indices = {}) {
         out_opaque.clear();
         out_mask.clear();
 
@@ -97,7 +103,8 @@ namespace himalaya::app {
             const uint32_t group_first = instance_offset;
 
             for (uint32_t i = group_start; i < group_end; ++i) {
-                const auto &inst = mesh_instances[sorted_indices[i]];
+                const auto idx = sorted_indices[i];
+                const auto &inst = mesh_instances[idx];
                 framework::GPUInstanceData data{};
                 data.model = inst.transform;
                 data.material_index = materials[inst.material_id].buffer_offset;
@@ -106,6 +113,12 @@ namespace himalaya::app {
                     data.normal_col0 = glm::vec4(nm[0], 0.0f);
                     data.normal_col1 = glm::vec4(nm[1], 0.0f);
                     data.normal_col2 = glm::vec4(nm[2], 0.0f);
+                }
+                if (!lightmap_indices.empty()) {
+                    data.lightmap_index = lightmap_indices[idx];
+                }
+                if (!probe_indices.empty()) {
+                    data.probe_index = probe_indices[idx];
                 }
                 gpu_instances[instance_offset++] = data;
             }
@@ -145,7 +158,9 @@ namespace himalaya::app {
 
             build_draw_groups(input.mesh_instances, input.materials,
                               sorted_opaque_indices_, gpu_instances, instance_offset,
-                              opaque_draw_groups_, mask_draw_groups_, true);
+                              opaque_draw_groups_, mask_draw_groups_, true,
+                              bake_data_manager_.lightmap_indices(),
+                              bake_data_manager_.probe_indices());
         }
 
         // --- Shadow setup (recompute for frustum culling — cheap matrix math) ---
