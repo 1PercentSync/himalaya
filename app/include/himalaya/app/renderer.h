@@ -5,6 +5,7 @@
  * @brief Rendering subsystem: pass orchestration, GPU data filling, resource ownership.
  */
 
+#include <himalaya/framework/bake_data_manager.h>
 #include <himalaya/framework/bake_denoiser.h>
 #include <himalaya/framework/cached_shader_compiler.h>
 #include <himalaya/framework/denoiser.h>
@@ -404,6 +405,21 @@ namespace himalaya::app {
         [[nodiscard]] const std::vector<std::string> &bake_lightmap_keys() const;
 
         /**
+         * @brief Scans bake cache for completed angles (delegates to BakeDataManager).
+         *
+         * @param lightmap_keys Per-bakeable-instance lightmap cache key hashes.
+         * @param probe_set_key Probe set cache key hash.
+         */
+        void scan_bake_data(std::span<const std::string> lightmap_keys,
+                            const std::string& probe_set_key);
+
+        /** @brief Returns validated available bake angles (delegates to BakeDataManager). */
+        [[nodiscard]] std::span<const framework::BakeDataManager::AngleInfo> available_bake_angles() const;
+
+        /** @brief Returns true if at least one validated bake angle exists. */
+        [[nodiscard]] bool has_bake_data() const;
+
+        /**
          * @brief Returns the current bake state.
          */
         [[nodiscard]] framework::BakeState bake_state() const;
@@ -795,6 +811,11 @@ namespace himalaya::app {
 
         /** @brief Cached light color+shadow from the previous PT frame (accumulation reset detection). */
         glm::vec4 prev_pt_light_color_shadow_{0.0f};
+
+        // --- Bake data management ---
+
+        /** @brief Bake data lifecycle manager (scan/load/unload baked lighting data). */
+        framework::BakeDataManager bake_data_manager_{};
 
         // --- Bake state ---
 

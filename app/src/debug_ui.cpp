@@ -5,7 +5,6 @@
 
 #include <himalaya/app/debug_ui.h>
 
-#include <himalaya/framework/cache.h>
 #include <himalaya/framework/camera.h>
 #include <himalaya/framework/denoiser.h>    // DenoiseState
 #include <himalaya/framework/scene_data.h>  // RenderMode
@@ -16,8 +15,6 @@
 #include <cmath>
 #include <cstdio>
 #include <filesystem>
-#include <fstream>
-#include <set>
 
 #include <glm/trigonometric.hpp>
 #include <imgui.h>
@@ -1073,92 +1070,12 @@ namespace himalaya::app {
             }
 
             // --- Baked Angle List ---
-            if (!ctx.bake_cache_key.empty()) {
-                // Rescan on dirty flag
-                if (ctx.bake_angles_dirty) {
-                    baked_angles_.clear();
-
-                    const auto bake_dir = framework::cache_root() / "bake";
-                    std::error_code ec;
-                    if (std::filesystem::exists(bake_dir, ec)) {
-                        // Collect unique rotation angles from manifest files
-                        const std::string prefix = ctx.bake_cache_key + "_rot";
-                        std::set<uint32_t> found_angles;
-
-                        for (const auto &entry : std::filesystem::directory_iterator(bake_dir, ec)) {
-                            if (!entry.is_regular_file()) { continue; }
-                            const auto stem = entry.path().stem().string();
-                            if (stem.starts_with(prefix) && stem.ends_with("_manifest")) {
-                                // Extract rotation: <key>_rot<NNN>_manifest
-                                const auto rot_start = prefix.size();
-                                const auto rot_end = stem.find('_', rot_start);
-                                if (rot_end != std::string::npos) {
-                                    try {
-                                        const auto rot = std::stoul(stem.substr(rot_start, rot_end - rot_start));
-                                        found_angles.insert(static_cast<uint32_t>(rot));
-                                    } catch (...) {}
-                                }
-                            }
-                        }
-
-                        // For each angle, verify completeness before adding to list
-                        const auto expected_lm = static_cast<uint32_t>(ctx.bake_lightmap_keys.size());
-                        for (const uint32_t rot : found_angles) {
-                            char rot_str[4];
-                            std::snprintf(rot_str, sizeof(rot_str), "%03u", rot);
-                            const std::string rot_suffix = "_rot" + std::string(rot_str);
-
-                            // Lightmaps: verify every per-instance key file exists
-                            uint32_t lm_count = 0;
-                            for (const auto &key : ctx.bake_lightmap_keys) {
-                                const auto path = framework::cache_path(
-                                    "bake", key + rot_suffix, ".ktx2");
-                                if (std::filesystem::exists(path, ec)) {
-                                    ++lm_count;
-                                }
-                            }
-                            if (lm_count < expected_lm) { continue; }
-
-                            // Read probe count from manifest header (uint32_t at offset 0)
-                            uint32_t manifest_probe_count = 0;
-                            {
-                                const auto manifest_path = framework::cache_path(
-                                    "bake", ctx.bake_cache_key + rot_suffix + "_manifest", ".bin");
-                                std::ifstream mf(manifest_path, std::ios::binary);
-                                if (mf) {
-                                    mf.read(reinterpret_cast<char *>(&manifest_probe_count),
-                                            sizeof(uint32_t));
-                                }
-                            }
-
-                            // Probes: verify every probe KTX2 exists
-                            uint32_t probe_count = 0;
-                            for (uint32_t pi = 0; pi < manifest_probe_count; ++pi) {
-                                char probe_suffix[16];
-                                std::snprintf(probe_suffix, sizeof(probe_suffix), "_probe%03u", pi);
-                                const auto path = framework::cache_path(
-                                    "bake", ctx.bake_cache_key + rot_suffix + std::string(probe_suffix), ".ktx2");
-                                if (std::filesystem::exists(path, ec)) {
-                                    ++probe_count;
-                                }
-                            }
-                            if (probe_count < manifest_probe_count) { continue; }
-
-                            baked_angles_.push_back({rot, lm_count, probe_count});
-                        }
-                    }
-
-                    ctx.bake_angles_dirty = false;
-                }
-
-                // Display
-                if (!baked_angles_.empty()) {
-                    ImGui::Separator();
-                    ImGui::Text("Baked Angles");
-                    for (const auto &[rot, lm, probes] : baked_angles_) {
-                        ImGui::BulletText("%u%s  LM: %u  Probes: %u",
-                                          rot, "\xC2\xB0", lm, probes);
-                    }
+            if (!ctx.available_angles.empty()) {
+                ImGui::Separator();
+                ImGui::Text("Baked Angles");
+                for (const auto& [rot, lm, probes] : ctx.available_angles) {
+                    ImGui::BulletText("%u%s  LM: %u  Probes: %u",
+                                      rot, "\xC2\xB0", lm, probes);
                 }
             }
         }

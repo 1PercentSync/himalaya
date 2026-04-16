@@ -386,6 +386,9 @@ namespace himalaya::app {
                                                                       .compare_op = rhi::CompareOp::Never,
                                                                   }, "Linear Clamp Sampler");
 
+        // --- Bake data manager (scan/load/unload baked lighting data) ---
+        bake_data_manager_.init(rm, dm, linear_clamp_sampler_, default_sampler_);
+
         // --- RT acceleration structure manager (conditional on hardware support) ---
         if (ctx_->rt_supported) {
             as_manager_.init(ctx_);
@@ -469,6 +472,8 @@ namespace himalaya::app {
     }
 
     void Renderer::destroy() {
+        bake_data_manager_.destroy();
+
         // Clean up any in-progress bake state (per-instance images + vectors)
         destroy_bake_instance_images();
         destroy_probe_bake_instance_images();

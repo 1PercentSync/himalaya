@@ -236,7 +236,7 @@ namespace himalaya::app {
         camera_controller_.set_focus_target(&scene_loader_.scene_bounds());
 
         config_.scene_path = path;
-        bake_angles_dirty_ = true;
+        trigger_bake_scan();
         refresh_lightmap_keys();
         save_config(config_);
     }
@@ -254,7 +254,7 @@ namespace himalaya::app {
 
         config_.env_path = path;
         env_content_hash_ = path.empty() ? std::string{} : framework::content_hash(path);
-        bake_angles_dirty_ = true;
+        trigger_bake_scan();
         refresh_lightmap_keys();
 
         // Restore persisted HDR sun coordinates for the new environment
@@ -330,6 +330,19 @@ namespace himalaya::app {
             scene_loader_.scene_textures_hash());
     }
 
+    void Application::trigger_bake_scan() {
+        if (config_.scene_path.empty() || env_content_hash_.empty()) {
+            renderer_.scan_bake_data({}, "");
+            return;
+        }
+        const std::string key_input = scene_loader_.scene_hash()
+            + env_content_hash_
+            + scene_loader_.scene_textures_hash();
+        const auto probe_set_key = framework::content_hash(
+            key_input.data(), key_input.size());
+        renderer_.scan_bake_data(renderer_.bake_lightmap_keys(), probe_set_key);
+    }
+
     void Application::resolve_thread_count() {
         if (config_.bg_uv_thread_count == 0) {
             const auto hw = std::thread::hardware_concurrency();
@@ -391,7 +404,7 @@ namespace himalaya::app {
             if (renderer_.bake_state() == framework::BakeState::Complete) {
                 render_mode_ = renderer_.bake_pre_mode();
                 renderer_.complete_bake();
-                bake_angles_dirty_ = true;
+                trigger_bake_scan();
             }
 
             update();
@@ -546,15 +559,6 @@ namespace himalaya::app {
             display_light_yaw_deg = glm::degrees(std::atan2(dir.x, -dir.z));
         }
 
-        // Compute bake cache key (probe_set_key: scene + hdr + scene_textures)
-        std::string bake_cache_key;
-        if (!config_.scene_path.empty() && !env_content_hash_.empty()) {
-            const std::string key_input = scene_loader_.scene_hash()
-                + env_content_hash_
-                + scene_loader_.scene_textures_hash();
-            bake_cache_key = framework::content_hash(key_input.data(), key_input.size());
-        }
-
         // Debug UI
         DebugUIContext ui_ctx{
             .delta_time = delta_time,
@@ -619,9 +623,7 @@ namespace himalaya::app {
                 const auto ext = b.max - b.min;
                 return std::max({ext.x, ext.y, ext.z, 0.0f});
             }(),
-            .bake_cache_key = bake_cache_key,
-            .bake_lightmap_keys = renderer_.bake_lightmap_keys(),
-            .bake_angles_dirty = bake_angles_dirty_,
+            .available_angles = renderer_.available_bake_angles(),
             .scene_stats = {
                 .total_instances = total_instances,
                 .total_meshes = static_cast<uint32_t>(meshes.size()),
@@ -733,7 +735,7 @@ namespace himalaya::app {
         // ---- Bake actions ----
         if (actions.bake_start_requested) {
             start_bake_session();
-            bake_angles_dirty_ = true;
+            trigger_bake_scan();
         }
         if (actions.bake_cancel_requested) {
             vkQueueWaitIdle(context_.graphics_queue);
@@ -742,7 +744,7 @@ namespace himalaya::app {
         }
         if (actions.clear_bake_cache_requested) {
             framework::clear_cache("bake");
-            bake_angles_dirty_ = true;
+            trigger_bake_scan();
         }
         if (actions.clear_uv_cache_requested) {
             framework::clear_cache("lightmap_uv_debug");
@@ -750,7 +752,7 @@ namespace himalaya::app {
         }
         if (actions.clear_all_cache_requested) {
             framework::clear_all_cache();
-            bake_angles_dirty_ = true;
+            trigger_bake_scan();
         }
 
         // ---- Effective present mode (user preference + PT/Bake tearing override) ----

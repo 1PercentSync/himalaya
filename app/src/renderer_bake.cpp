@@ -209,6 +209,20 @@ namespace himalaya::app {
         return bake_lightmap_keys_;
     }
 
+    void Renderer::scan_bake_data(const std::span<const std::string> lightmap_keys,
+                                  const std::string& probe_set_key) {
+        bake_data_manager_.scan(lightmap_keys, probe_set_key);
+    }
+
+    std::span<const framework::BakeDataManager::AngleInfo>
+    Renderer::available_bake_angles() const {
+        return bake_data_manager_.available_angles();
+    }
+
+    bool Renderer::has_bake_data() const {
+        return bake_data_manager_.has_bake_data();
+    }
+
     // ---- Bake session management ----
 
     void Renderer::start_bake(

@@ -213,9 +213,6 @@ namespace himalaya::app {
         /** @brief Bake configuration parameters. */
         framework::BakeConfig bake_config_{};
 
-        /** @brief Dirty flag for baked angle list rescanning in DebugUI. */
-        bool bake_angles_dirty_ = true;
-
         /** @brief Cached content hash of current HDR file (computed once on load). */
         std::string env_content_hash_;
 
@@ -363,6 +360,14 @@ namespace himalaya::app {
          * No-op when either scene or HDR is unavailable.
          */
         void refresh_lightmap_keys();
+
+        /**
+         * @brief Computes probe_set_key and triggers BakeDataManager::scan().
+         *
+         * No-op (scans with empty key) when either scene or HDR is unavailable.
+         * Called after scene/HDR load, bake complete, and cache clear.
+         */
+        void trigger_bake_scan();
 
         /**
          * @brief Resolves bg_uv_thread_count if 0 (first launch) and persists.

@@ -10,6 +10,7 @@
 #include <string>
 #include <vector>
 
+#include <himalaya/framework/bake_data_manager.h>
 #include <himalaya/framework/render_progress.h>
 #include <himalaya/rhi/swapchain.h>
 
@@ -253,28 +254,12 @@ namespace himalaya::app {
         float scene_aabb_longest_edge;
 
         /**
-         * @brief Probe set cache key for baked angle directory scanning.
+         * @brief Validated available bake angles from BakeDataManager.
          *
-         * Computed from scene_hash + hdr_hash + scene_textures_hash.
-         * Empty when no scene or HDR is loaded.
+         * Populated by BakeDataManager::scan(). Empty when no valid bake
+         * data exists or before first scan.
          */
-        std::string bake_cache_key;
-
-        /**
-         * @brief Per-instance lightmap cache keys for baked angle file verification.
-         *
-         * Populated by Renderer::compute_lightmap_keys() after scene/HDR load.
-         * Empty when no scene or HDR is loaded.
-         */
-        std::span<const std::string> bake_lightmap_keys;
-
-        /**
-         * @brief Dirty flag for baked angle list rescanning.
-         *
-         * Set true on scene load, HDR load, or bake complete.
-         * Cleared after scan executes (when Baking header is expanded).
-         */
-        bool& bake_angles_dirty;
+        std::span<const framework::BakeDataManager::AngleInfo> available_angles;
 
         // --- Scene statistics (display) ---
 
@@ -441,21 +426,11 @@ namespace himalaya::app {
             float elapsed_ = 0.0f;
         };
 
-        /** @brief Summary of a single baked angle in the cache. */
-        struct BakedAngleEntry {
-            uint32_t rotation_deg;     ///< IBL rotation in integer degrees.
-            uint32_t lightmap_count;   ///< Number of lightmap KTX2 files at this angle.
-            uint32_t probe_count;      ///< Number of probe KTX2 files at this angle.
-        };
-
         /** @brief Frame time statistics accumulator. */
         FrameStats frame_stats_;
 
         /** @brief Bake throughput accumulator. */
         BakeThroughput bake_throughput_;
-
-        /** @brief Cached baked angle list (populated on dirty flag scan). */
-        std::vector<BakedAngleEntry> baked_angles_;
     };
 
 } // namespace himalaya::app
