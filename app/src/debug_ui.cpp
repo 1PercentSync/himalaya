@@ -5,6 +5,7 @@
 
 #include <himalaya/app/debug_ui.h>
 
+#include <himalaya/framework/cache.h>
 #include <himalaya/framework/camera.h>
 #include <himalaya/framework/denoiser.h>    // DenoiseState
 #include <himalaya/framework/scene_data.h>  // RenderMode
