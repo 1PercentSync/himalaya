@@ -130,6 +130,17 @@ namespace himalaya::framework {
         Baking,        ///< Lightmap/probe bake mode (GPU full-time baking).
     };
 
+    /**
+     * @brief Indirect lighting source selection.
+     *
+     * Controls whether indirect lighting comes from real-time IBL sampling
+     * or from pre-baked lightmaps and reflection probes.
+     */
+    enum class IndirectLightingMode : uint8_t {
+        IBL,           ///< Real-time IBL sampling (irradiance + prefiltered cubemaps).
+        LightmapProbe, ///< Pre-baked lightmaps (diffuse) + reflection probes (specular).
+    };
+
     /** @brief Bake pipeline state machine. */
     enum class BakeState : uint8_t {
         Idle,             ///< No bake in progress.
@@ -156,6 +167,9 @@ namespace himalaya::framework {
 
         /** @brief Enable contact shadows (ContactShadowsPass + forward shadow attenuation). */
         bool contact_shadows;
+
+        /** @brief Enable lightmap/probe indirect lighting (FEATURE_LIGHTMAP_PROBE bit in feature_flags). */
+        bool lightmap_probe = false;
     };
 
     /**

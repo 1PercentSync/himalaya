@@ -159,6 +159,9 @@ namespace himalaya::app {
         /** @brief Active rendering mode (Rasterization or PathTracing). */
         framework::RenderMode render_mode_ = framework::RenderMode::Rasterization;
 
+        /** @brief Active indirect lighting source (IBL or Lightmap/Probe). */
+        framework::IndirectLightingMode indirect_lighting_mode_ = framework::IndirectLightingMode::IBL;
+
         /** @brief Debug render mode (0=Full PBR, 1-7=debug visualizations). */
         uint32_t debug_render_mode_ = 0;
 

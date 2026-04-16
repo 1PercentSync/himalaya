@@ -107,6 +107,9 @@ namespace himalaya::app {
         /** @brief Debug render mode (0=Full PBR, 1-7=debug visualizations). */
         uint32_t debug_render_mode;
 
+        /** @brief Indirect lighting source selection (IBL or Lightmap/Probe). */
+        framework::IndirectLightingMode indirect_lighting_mode;
+
         /** @brief Runtime feature toggles (skybox, shadows, etc.). */
         const framework::RenderFeatures &features;
 
