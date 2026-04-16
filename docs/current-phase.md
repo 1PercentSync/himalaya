@@ -32,6 +32,8 @@ Step 7: Forward shader 间接光照集成（lightmap + probe 采样）
     ↓
 Step 8: 模式切换 + 角度选择 UI
     ↓
+Step 8.5: Lightmap/Probe 独立开关 + UI 重排
+    ↓
 Step 9: AO/SO 按模式自动预设
     ↓
 Step 10: Lightmap/Probe 模式 IBL 旋转跳变
@@ -51,6 +53,7 @@ Step 11: 边缘情况 + Debug 渲染模式 + 收尾
 | 6 | BakeDataManager 加载与卸载 | 手动调用 load_angle() 后日志输出加载数量 + bindless 索引，unload_angle() 释放无泄漏 |
 | 7 | Forward shader 间接光照集成 | 切换到 Lightmap/Probe 模式后场景可见烘焙间接光照 + probe 反射，IBL 模式无回归 |
 | 8 | 模式切换 + 角度选择 UI | 模式 toggle 可用，角度点击切换正确加载/卸载，bake 完成后自动启用 |
+| 8.5 | Lightmap/Probe 独立开关 + UI 重排 | LP 模式下可独立开关 lightmap/probe，Rendering 区移到 Camera 前 |
 | 9 | AO/SO 按模式自动预设 | 切换模式时 AO 参数自动切换，两模式各自记忆参数 |
 | 10 | IBL 旋转跳变 | Lightmap/Probe 模式下拖拽 IBL 旋转超过阈值跳到下一个已 bake 角度 |
 | 11 | 边缘情况 + debug 模式 | cache 清除回退 IBL，场景/HDR 重载触发重扫描，debug 视图正确 |
@@ -260,6 +263,26 @@ BakeDataManager 实现角度加载（KTX2 → GPU → bindless）和卸载。
 - 角度列表点击切换正确加载新数据
 - Bake 完成后自动启用 Lightmap/Probe 模式 + 加载对应角度
 - Clear Bake Cache 后自动回退 IBL 模式
+
+---
+
+### Step 8.5：Lightmap/Probe 独立开关 + UI 重排
+
+将 `FEATURE_LIGHTMAP_PROBE` 拆为两个独立 feature flag bit，LP 模式下可单独控制 lightmap（diffuse）和 probe（specular）的使用。同时将 Rendering 区移到 Camera 前面。
+
+- `framework/scene_data.h`：`RenderFeatures::lightmap_probe` → `use_lightmap` + `use_probe`（两个 bool，默认 true）
+- `shaders/common/bindings.glsl`：`FEATURE_LIGHTMAP_PROBE (1u << 3)` → `FEATURE_LIGHTMAP (1u << 3)` + `FEATURE_PROBE (1u << 4)`
+- `shaders/forward.frag`：分别检查两个 bit——lightmap off 时 diffuse 走 IBL，probe off 时 specular 走 IBL
+- `app/renderer.cpp`：`fill_common_gpu_data()` 分别设置 bit 3/4
+- `app/application.cpp`：模式切换时同步两个 flag（替代原 `features_.lightmap_probe`）
+- `app/debug_ui.cpp`：LP 模式下显示 Lightmap / Probe 两个 checkbox（IBL 模式下隐藏）
+- `app/debug_ui.cpp`：Rendering 区代码块移到 Camera 区之前
+
+**验证**：
+- LP 模式下可独立开关 lightmap 和 probe，四种组合均正确渲染
+- lightmap off → diffuse 回退 IBL irradiance，probe off → specular 回退 IBL prefiltered
+- IBL 模式下两个 checkbox 不可见
+- Rendering 区在 UI 面板中位于 Camera 区之前
 
 ---
 
