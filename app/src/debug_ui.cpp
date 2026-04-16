@@ -995,14 +995,20 @@ namespace himalaya::app {
                 const bool baking = ctx.bake_progress.state != framework::BakeState::Idle;
 
                 if (!baking) {
-                    // Start Bake button
+                    // Start Bake button (disabled in Lightmap/Probe mode — bake only from IBL mode)
+                    const bool in_lp_mode = ctx.indirect_lighting_mode
+                        == framework::IndirectLightingMode::LightmapProbe;
                     const bool can_start = ctx.rt_supported && ctx.has_scene && ctx.has_hdr
-                        && ctx.render_mode != framework::RenderMode::Baking;
+                        && ctx.render_mode != framework::RenderMode::Baking
+                        && !in_lp_mode;
                     if (!can_start) { ImGui::BeginDisabled(); }
                     if (ImGui::Button("Start Bake")) {
                         actions.bake_start_requested = true;
                     }
                     if (!can_start) { ImGui::EndDisabled(); }
+                    if (in_lp_mode && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
+                        ImGui::SetTooltip("Switch to IBL mode to start a new bake");
+                    }
 
                     // Show current IBL rotation angle next to button
                     ImGui::SameLine();
@@ -1098,8 +1104,18 @@ namespace himalaya::app {
                 ImGui::Separator();
                 ImGui::Text("Baked Angles");
                 for (const auto& [rot, lm, probes] : ctx.available_angles) {
-                    ImGui::BulletText("%u%s  LM: %u  Probes: %u",
-                                      rot, "\xC2\xB0", lm, probes);
+                    const bool is_loaded = ctx.bake_data_loaded
+                        && rot == ctx.loaded_bake_rotation;
+
+                    char label[64];
+                    std::snprintf(label, sizeof(label),
+                                 "%u%s  LM: %u  Probes: %u",
+                                 rot, "\xC2\xB0", lm, probes);
+
+                    if (ImGui::Selectable(label, is_loaded)) {
+                        actions.angle_switch_requested = true;
+                        actions.new_angle_rotation = rot;
+                    }
                 }
             }
         }

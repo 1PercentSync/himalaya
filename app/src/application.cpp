@@ -401,11 +401,21 @@ namespace himalaya::app {
                 renderer_.probe_bake_finalize();
             }
 
-            // Bake complete: restore pre-bake render mode and reset state.
+            // Bake complete: restore pre-bake render mode, auto-switch to LightmapProbe.
             if (renderer_.bake_state() == framework::BakeState::Complete) {
+                const uint32_t baked_rotation = renderer_.bake_rotation_int();
                 render_mode_ = renderer_.bake_pre_mode();
                 renderer_.complete_bake();
                 trigger_bake_scan();
+
+                // Auto-switch to LightmapProbe and load the just-baked angle
+                if (renderer_.has_bake_data()) {
+                    indirect_lighting_mode_ = framework::IndirectLightingMode::LightmapProbe;
+                    features_.lightmap_probe = true;
+                    renderer_.switch_bake_angle(baked_rotation,
+                                                scene_render_data_.mesh_instances);
+                    ibl_yaw_ = glm::radians(static_cast<float>(baked_rotation));
+                }
             }
 
             update();
@@ -760,6 +770,41 @@ namespace himalaya::app {
             trigger_bake_scan();
         }
 
+        // ---- Angle switch (from bake angle list click) ----
+        if (actions.angle_switch_requested) {
+            renderer_.switch_bake_angle(actions.new_angle_rotation,
+                                        scene_render_data_.mesh_instances);
+            ibl_yaw_ = glm::radians(static_cast<float>(actions.new_angle_rotation));
+        }
+
+        // ---- Indirect lighting mode switch ----
+        // Detect change: indirect_lighting_mode_ was mutated by DebugUI radio buttons.
+        // Sync features_.lightmap_probe and handle load/unload.
+        {
+            const bool want_lp = indirect_lighting_mode_ == framework::IndirectLightingMode::LightmapProbe;
+            const bool was_lp = features_.lightmap_probe;
+
+            if (want_lp && !was_lp) {
+                // IBL → LightmapProbe: load bake data
+                if (renderer_.has_bake_data()) {
+                    const auto angles = renderer_.available_bake_angles();
+                    // Use the currently loaded angle if still valid, otherwise first available
+                    uint32_t target_rotation = angles[0].rotation;
+                    if (renderer_.bake_data_loaded()) {
+                        target_rotation = renderer_.bake_data_manager_loaded_rotation();
+                    }
+                    renderer_.switch_bake_angle(target_rotation,
+                                                scene_render_data_.mesh_instances);
+                    ibl_yaw_ = glm::radians(static_cast<float>(target_rotation));
+                }
+                features_.lightmap_probe = true;
+            } else if (!want_lp && was_lp) {
+                // LightmapProbe → IBL: unload bake data
+                renderer_.unload_bake_angle();
+                features_.lightmap_probe = false;
+            }
+        }
+
         // ---- Effective present mode (user preference + PT/Bake tearing override) ----
         // Deferred to end_frame() after present — mid-frame recreate would
         // invalidate the acquired image and renderer's swapchain references.
@@ -796,6 +841,10 @@ namespace himalaya::app {
         const auto &frame = context_.current_frame();
         rhi::CommandBuffer cmd(frame.command_buffer);
         cmd.begin();
+
+        // Sync lightmap_probe feature flag with indirect lighting mode
+        features_.lightmap_probe =
+            indirect_lighting_mode_ == framework::IndirectLightingMode::LightmapProbe;
 
         // Baking mode overrides: normalized IBL intensity, no directional lights
         const bool is_baking = render_mode_ == framework::RenderMode::Baking;

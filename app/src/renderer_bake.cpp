@@ -249,6 +249,11 @@ namespace himalaya::app {
         ctx_->end_immediate();
     }
 
+    void Renderer::unload_bake_angle() {
+        vkQueueWaitIdle(ctx_->graphics_queue);
+        bake_data_manager_.unload_angle();
+    }
+
     // ---- Bake session management ----
 
     void Renderer::start_bake(
@@ -1513,6 +1518,10 @@ namespace himalaya::app {
                      bake_total_instances_, bake_probe_total_, bake_probe_accepted_count_);
 
         reset_bake_state();
+    }
+
+    uint32_t Renderer::bake_rotation_int() const {
+        return bake_rotation_int_;
     }
 
     framework::BakeState Renderer::bake_state() const {

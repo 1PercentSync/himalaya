@@ -438,6 +438,16 @@ namespace himalaya::app {
                                std::span<const framework::MeshInstance> mesh_instances);
 
         /**
+         * @brief Unloads the currently loaded bake angle without loading a new one.
+         *
+         * Waits for GPU idle. Safe to call when nothing is loaded (no-op).
+         */
+        void unload_bake_angle();
+
+        /** @brief Returns the bake rotation angle in integer degrees from the last bake session. */
+        [[nodiscard]] uint32_t bake_rotation_int() const;
+
+        /**
          * @brief Returns the current bake state.
          */
         [[nodiscard]] framework::BakeState bake_state() const;
