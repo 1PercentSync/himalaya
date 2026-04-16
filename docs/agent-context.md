@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段八 — 间接光照集成（实现中）
-- **进度**：Step 7 全部完成（forward.frag lightmap/probe 间接光照集成 + DEBUG_MODE_INDIRECT_ONLY 重命名）
+- **进度**：Step 8 前 3 项完成（IndirectLightingMode toggle + slider label + DebugUIActions 字段）
 
 ### 下一个任务
 
-Step 8：模式切换 + 角度选择 UI。
+Step 8 第 4 项：已 bake 角度列表可点击切换（当前角度高亮）。
 
 ---
 
