@@ -1327,7 +1327,7 @@ public:
 #define DEBUG_MODE_FULL_PBR          0
 #define DEBUG_MODE_DIFFUSE_ONLY      1
 #define DEBUG_MODE_SPECULAR_ONLY     2
-#define DEBUG_MODE_IBL_ONLY          3
+#define DEBUG_MODE_INDIRECT_ONLY     3
 #define DEBUG_MODE_PASSTHROUGH_START 4
 #define DEBUG_MODE_NORMAL            4
 #define DEBUG_MODE_METALLIC          5
