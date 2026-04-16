@@ -24,11 +24,11 @@ CLAUDE.md 已自动加载，以下为额外必读：
 | 文档 | 说明 |
 |------|------|
 | `docs/milestone-1/milestone-1.md` | M1 范围、预期效果、已知局限性 |
-| `docs/current-phase.md` | 当前阶段实现步骤（阶段八，待创建） |
+| `docs/current-phase.md` | 当前阶段实现步骤（阶段八） |
 | `docs/milestone-1/m1-rt-decisions.md` | M1 RT 架构决策（阶段六~八） |
-| `docs/milestone-1/m1-interfaces.md` | M1 接口与目标结构：文件结构、关键接口与数据结构 |
+| `docs/milestone-1/m1-interfaces.md` | M1 接口与目标结构：反映当前 Phase 结束时的目标状态，Phase 开始前更新至设计目标，实现完成后应与代码一致 |
 | `docs/milestone-1/m1-development-order.md` | M1 开发阶段顺序（含阶段六~十） |
-| `tasks/m1-phase8.md` | 阶段八任务清单（待创建） |
+| `tasks/m1-phase8.md` | 阶段八任务清单（复选框进度跟踪） |
 
 ## 按需文档
 

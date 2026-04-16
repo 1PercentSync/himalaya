@@ -1,7 +1,6 @@
 # Milestone 1：接口与目标结构
 
 > 本文档包含 M1 的目标文件结构和关键接口定义。
-> 反映当前 Phase 结束时的目标状态——在 Phase 开始前更新至该 Phase 的设计目标，实现完成后应与代码一致。
 > 设计决策与理由见 `m1-design-decisions-core.md`，长远架构目标见 `../project/architecture.md`，M1 功能范围见 `milestone-1.md`。
 
 ---
