@@ -612,6 +612,15 @@ namespace himalaya::app {
         reference_view_pass_.set_emissive_light_count(emissive_light_builder_.emissive_count());
     }
 
+    void Renderer::destroy_scene_rt() {
+        if (!ctx_->rt_supported) {
+            return;
+        }
+        scene_as_builder_.destroy();
+        emissive_light_builder_.destroy();
+        reference_view_pass_.set_emissive_light_count(0);
+    }
+
     // ---- Environment reload ----
 
     bool Renderer::reload_environment(const std::string &hdr_path) {

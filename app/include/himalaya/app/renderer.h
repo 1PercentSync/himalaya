@@ -224,6 +224,16 @@ namespace himalaya::app {
                             std::span<const std::vector<uint32_t>> mesh_indices);
 
         /**
+         * @brief Destroys RT scene data (BLAS/TLAS + emissive light SSBOs).
+         *
+         * Called when scene resources are destroyed but build_scene_rt() will
+         * not be called (e.g. scene load failure). Prevents stale acceleration
+         * structures from referencing freed VB/IB device addresses.
+         * No-op if RT is not supported or no RT data exists.
+         */
+        void destroy_scene_rt();
+
+        /**
          * @brief Recompiles all shaders from disk and rebuilds every pipeline.
          *
          * Waits for GPU idle, then calls rebuild_pipelines() on each pass.

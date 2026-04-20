@@ -209,6 +209,7 @@ namespace himalaya::app {
 
         renderer_.abort_denoise();
         scene_loader_.destroy();
+        renderer_.destroy_scene_rt();
 
         if (!path.empty()) {
             context_.begin_immediate();
