@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 8.5：Lightmap/Probe 独立开关 + UI 重排。
+Step 8.3：Baking 守卫 + 文档修正 + RT 残留清理。
 
 ---
 
