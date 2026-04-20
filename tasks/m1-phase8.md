@@ -104,9 +104,9 @@
 - [x] `app/application.h`：`uv_generator_` 注释 "Background" → "Synchronous"
 - [x] `app/application.h`：`start_bake_session()` Doxygen 更新（移除已删除的 UV 准备描述）
 - [x] `framework/include/himalaya/framework/lightmap_uv_generator.h`：`@file` / 类文档中 "Background" → "Parallel"（保留多线程事实，去掉异步含义）
-- [ ] `app/debug_ui.cpp`：Baking 期间灰显场景加载 / HDR 加载按钮
-- [ ] `app/debug_ui.cpp`：Baking 期间灰显 IBL/LP radio button + Baked Angle List
-- [ ] `app/application.cpp`：`update_drag_input()` Baking 期间阻止 IBL 旋转拖拽
+- [x] `app/debug_ui.cpp`：Baking 期间灰显场景加载 / HDR 加载按钮（已有守卫，无需修改）
+- [x] `app/debug_ui.cpp`：Baking 期间灰显 IBL/LP radio button + Baked Angle List
+- [x] `app/application.cpp`：`update_drag_input()` Baking 期间阻止 IBL 旋转拖拽
 - [ ] `app/application.cpp`：`switch_scene()` 中 `scene_loader_.destroy()` 后无条件清理 RT 数据（BLAS/TLAS/emissive SSBOs）
 
 ## Step 8.5：Lightmap/Probe 独立开关 + UI 重排
