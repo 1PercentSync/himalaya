@@ -251,7 +251,7 @@ void main() {
     vec3 indirect_specular;
 
     if (use_lightmap) {
-        // Lightmap diffuse: stored irradiance × surface albedo
+        // Lightmap diffuse: stored irradiance, multiplied by surface albedo
         indirect_diffuse = texture(textures[nonuniformEXT(inst.lightmap_index)], frag_uv1).rgb
                            * diffuse_color;
 

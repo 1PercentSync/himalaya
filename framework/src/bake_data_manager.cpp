@@ -12,6 +12,7 @@
 
 #include <spdlog/spdlog.h>
 
+#include <charconv>
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
@@ -95,11 +96,13 @@ namespace himalaya::framework {
                 const auto rot_start = prefix.size();
                 const auto rot_end = stem.find('_', rot_start);
                 if (rot_end != std::string::npos) {
-                    try {
-                        const auto rot = std::stoul(
-                            stem.substr(rot_start, rot_end - rot_start));
-                        found_angles.insert(static_cast<uint32_t>(rot));
-                    } catch (...) {}
+                    uint32_t rot = 0;
+                    const char* begin = stem.data() + rot_start;
+                    const char* end = stem.data() + rot_end;
+                    if (auto [ptr, ec] = std::from_chars(begin, end, rot);
+                        ec == std::errc{} && ptr == end) {
+                        found_angles.insert(rot);
+                    }
                 }
             }
         }
