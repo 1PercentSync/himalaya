@@ -119,16 +119,13 @@ namespace himalaya::app {
                 error_message_ = "Failed to load scene: " + config_.scene_path;
             }
 
-            // Synchronous lightmap UV generation + application.
+            // Lightmap UV generation + GPU buffer rebuild.
             // xatlas cache hits are near-instant; misses block but have no
             // bake data to load anyway (first bake will populate the cache).
             if (scene_ok) {
-                uv_generator_.start(scene_loader_.prepare_uv_requests(),
-                                    std::max(1u, std::thread::hardware_concurrency()));
-                uv_generator_.wait();
-
                 context_.begin_immediate();
-                scene_loader_.apply_lightmap_uvs();
+                scene_loader_.apply_lightmap_uvs(
+                    std::max(1u, std::thread::hardware_concurrency()));
                 context_.end_immediate();
             }
 
@@ -225,14 +222,11 @@ namespace himalaya::app {
                 error_message_.clear();
             }
 
-            // Synchronous lightmap UV generation + application
+            // Lightmap UV generation + GPU buffer rebuild
             if (ok) {
-                uv_generator_.start(scene_loader_.prepare_uv_requests(),
-                                    std::max(1u, std::thread::hardware_concurrency()));
-                uv_generator_.wait();
-
                 context_.begin_immediate();
-                scene_loader_.apply_lightmap_uvs();
+                scene_loader_.apply_lightmap_uvs(
+                    std::max(1u, std::thread::hardware_concurrency()));
                 context_.end_immediate();
             }
 

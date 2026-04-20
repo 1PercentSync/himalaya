@@ -18,11 +18,13 @@
 #include <fastgltf/types.hpp>
 #include <spdlog/spdlog.h>
 
+#include <atomic>
 #include <cassert>
 #include <filesystem>
 #include <limits>
 #include <map>
 #include <stdexcept>
+#include <thread>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -842,10 +844,55 @@ namespace himalaya::app {
         return scene_textures_hash_;
     }
 
-    void SceneLoader::apply_lightmap_uvs() {
-        // Build lookup set for O(1) pending check
-        std::unordered_set<uint32_t> pending_set(uv_pending_prims_.begin(), uv_pending_prims_.end());
-        // Map prim index → pending index for hash lookup
+    void SceneLoader::apply_lightmap_uvs(const uint32_t thread_count) {
+        // Phase 1: parallel xatlas generation (CPU only, thread-safe).
+        // Deduplicate by mesh_hash to avoid workers racing on the same cache file.
+        struct PendingTask {
+            size_t pending_idx;
+            framework::LightmapUVResult result;
+        };
+
+        std::unordered_set<std::string> seen_hashes;
+        std::vector<PendingTask> tasks;
+        tasks.reserve(uv_pending_prims_.size());
+        for (size_t i = 0; i < uv_pending_prims_.size(); ++i) {
+            if (seen_hashes.insert(uv_pending_hashes_[i]).second) {
+                tasks.push_back({.pending_idx = i, .result = {}});
+            }
+        }
+
+        if (!tasks.empty()) {
+            std::atomic<uint32_t> next_task{0};
+            const uint32_t count = std::min(thread_count,
+                                            static_cast<uint32_t>(tasks.size()));
+            std::vector<std::jthread> workers;
+            workers.reserve(count);
+            for (uint32_t t = 0; t < count; ++t) {
+                workers.emplace_back([&] {
+                    while (true) {
+                        const uint32_t idx = next_task.fetch_add(1,
+                                                                 std::memory_order_relaxed);
+                        if (idx >= tasks.size()) { break; }
+                        auto &task = tasks[idx];
+                        task.result = framework::generate_lightmap_uv(
+                            uv_original_vertices_[task.pending_idx],
+                            uv_original_indices_[task.pending_idx],
+                            uv_pending_hashes_[task.pending_idx]);
+                    }
+                });
+            }
+            for (auto &w : workers) { w.join(); }
+        }
+
+        // Build dedup result lookup: hash → LightmapUVResult*
+        std::unordered_map<std::string, framework::LightmapUVResult*> result_map;
+        for (auto &task : tasks) {
+            result_map[uv_pending_hashes_[task.pending_idx]] = &task.result;
+        }
+
+        // Phase 2: sequential vertex remap + GPU buffer upload.
+        std::unordered_set<uint32_t> pending_set(uv_pending_prims_.begin(),
+                                                  uv_pending_prims_.end());
         std::unordered_map<uint32_t, size_t> pending_hash_map;
         for (size_t i = 0; i < uv_pending_prims_.size(); ++i) {
             pending_hash_map[uv_pending_prims_[i]] = i;
@@ -853,35 +900,26 @@ namespace himalaya::app {
 
         const auto mesh_count = static_cast<uint32_t>(meshes_.size());
         for (uint32_t i = 0; i < mesh_count; ++i) {
-            // Apply xatlas for pending prims
             if (pending_set.contains(i)) {
                 const auto pending_idx = pending_hash_map[i];
                 const auto &hash = uv_pending_hashes_[pending_idx];
                 const auto &orig_verts = uv_original_vertices_[pending_idx];
-                const auto &orig_indices = uv_original_indices_[pending_idx];
 
-                auto uv_result = framework::generate_lightmap_uv(
-                    orig_verts, orig_indices, hash);
+                auto *uv_result = result_map[hash];
 
-                if (!uv_result.cache_hit) {
-                    spdlog::warn("apply_lightmap_uvs: cache miss for prim {} (hash {:.8}) "
-                                 "— expected cache hit after generator wait", i, hash);
-                }
-
-                if (uv_result.is_fallback) {
+                if (uv_result->is_fallback) {
                     spdlog::warn("apply_lightmap_uvs: prim {} uses fallback UV "
                                  "(degenerate geometry, hash {:.8})", i, hash);
                 }
 
-                // Rebuild vertex array from originals via remap, write xatlas uv1
-                const auto new_vert_count = uv_result.vertex_remap.size();
+                const auto new_vert_count = uv_result->vertex_remap.size();
                 std::vector<framework::Vertex> new_vertices(new_vert_count);
                 for (size_t v = 0; v < new_vert_count; ++v) {
-                    new_vertices[v] = orig_verts[uv_result.vertex_remap[v]];
-                    new_vertices[v].uv1 = uv_result.lightmap_uvs[v];
+                    new_vertices[v] = orig_verts[uv_result->vertex_remap[v]];
+                    new_vertices[v].uv1 = uv_result->lightmap_uvs[v];
                 }
                 cpu_vertices_[i] = std::move(new_vertices);
-                cpu_indices_[i] = uv_result.new_indices;
+                cpu_indices_[i] = uv_result->new_indices;
             }
 
             // Destroy old VB/IB
@@ -925,27 +963,7 @@ namespace himalaya::app {
             meshes_[i].index_count = static_cast<uint32_t>(cpu_indices_[i].size());
         }
 
-        spdlog::info("apply_lightmap_uvs: rebuilt {}/{} VB/IB ({} pending xatlas)",
-                     mesh_count, mesh_count, uv_pending_prims_.size());
-    }
-
-    std::vector<framework::LightmapUVGenerator::Request> SceneLoader::prepare_uv_requests() const {
-        // Deduplicate by mesh_hash: same geometry shared by multiple instances
-        // would produce identical xatlas output. Without dedup, multiple workers
-        // would race on the same cache .tmp file, risking data corruption.
-        std::unordered_set<std::string> seen_hashes;
-        std::vector<framework::LightmapUVGenerator::Request> requests;
-        requests.reserve(uv_pending_prims_.size());
-        for (size_t i = 0; i < uv_pending_prims_.size(); ++i) {
-            if (!seen_hashes.insert(uv_pending_hashes_[i]).second) {
-                continue; // duplicate hash, skip
-            }
-            requests.push_back({
-                .vertices = uv_original_vertices_[i],
-                .indices = uv_original_indices_[i],
-                .mesh_hash = uv_pending_hashes_[i],
-            });
-        }
-        return requests;
+        spdlog::info("apply_lightmap_uvs: rebuilt {}/{} VB/IB ({} pending xatlas, {} threads)",
+                     mesh_count, mesh_count, uv_pending_prims_.size(), thread_count);
     }
 } // namespace himalaya::app

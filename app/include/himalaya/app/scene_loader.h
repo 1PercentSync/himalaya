@@ -5,7 +5,6 @@
  * @brief glTF scene loading: meshes, materials, textures, and scene graph.
  */
 
-#include <himalaya/framework/lightmap_uv_generator.h>
 #include <himalaya/framework/material_system.h>
 #include <himalaya/framework/mesh.h>
 #include <himalaya/framework/scene_data.h>
@@ -126,26 +125,19 @@ namespace himalaya::app {
         [[nodiscard]] const framework::AABB &scene_bounds() const;
 
         /**
-         * @brief Builds generation requests from pending meshes (copies vertex/index data).
+         * @brief Generates xatlas lightmap UVs and rebuilds all GPU vertex/index buffers.
          *
-         * The returned requests own their data and are safe to pass to
-         * LightmapUVGenerator::start(). May be called multiple times
-         * (e.g. after cancel + restart); the pending list is never cleared.
+         * Phase 1 (parallel CPU): runs xatlas for each pending mesh using a
+         * thread pool with atomic work-stealing. Disk cache is checked first;
+         * cache hits skip xatlas entirely.
+         *
+         * Phase 2 (sequential GPU): remaps vertices with uv1, destroys old
+         * VB/IB, creates and uploads new ones. Must be called within a
+         * begin_immediate() / end_immediate() scope.
+         *
+         * @param thread_count Number of worker threads for parallel xatlas.
          */
-        [[nodiscard]] std::vector<framework::LightmapUVGenerator::Request> prepare_uv_requests() const;
-
-        /**
-         * @brief Applies xatlas lightmap UVs and rebuilds all GPU vertex/index buffers.
-         *
-         * For pending meshes: reads xatlas result from cache (should be cache hit
-         * after background generation), applies vertex remap + uv1.
-         * For non-pending meshes: re-uploads existing data unchanged.
-         * Destroys old VB/IB, creates new ones, updates meshes_/cpu_vertices_/cpu_indices_.
-         *
-         * Must be called within a begin_immediate() / end_immediate() scope.
-         * Does not clear pending state — safe to call on every Bake (cache hits are fast).
-         */
-        void apply_lightmap_uvs();
+        void apply_lightmap_uvs(uint32_t thread_count);
 
         /**
          * @brief Content hash of the scene file (XXH3_128, hex).

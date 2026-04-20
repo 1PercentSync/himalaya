@@ -11,7 +11,6 @@
 #include <himalaya/app/renderer.h>
 #include <himalaya/app/scene_loader.h>
 #include <himalaya/framework/camera.h>
-#include <himalaya/framework/lightmap_uv_generator.h>
 #include <himalaya/framework/imgui_backend.h>
 #include <himalaya/rhi/context.h>
 #include <himalaya/rhi/descriptors.h>
@@ -339,9 +338,6 @@ namespace himalaya::app {
 
         /** @brief Error message shown in DebugUI (empty = no error, auto-dismissed after timeout). */
         std::string error_message_;
-
-        /** @brief Synchronous lightmap UV generator (multi-threaded xatlas). */
-        framework::LightmapUVGenerator uv_generator_{};
 
         /**
          * @brief Starts a bake session.
