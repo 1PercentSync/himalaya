@@ -119,13 +119,12 @@
 
 ## Step 8.45：xatlas 重构 — UV 生成移入烘焙管线
 
-- [ ] 8.45a. 场景加载精简：`load_meshes()` 移除 TEXCOORD_1 读取 / mesh_hash / `uv_pending_*` 记录
-- [ ] 8.45a. `scene_loader.h` 移除 `apply_lightmap_uvs()` / `original_cpu_vertices/indices()` / `uv_pending_*` / `original_cpu_*` 成员
-- [ ] 8.45a. `scene_loader.cpp` 删除 `apply_lightmap_uvs()` 实现 + `destroy()` 中对应 clear
-- [ ] 8.45a. `application.cpp` 移除 `init()` / `switch_scene()` 中的 `apply_lightmap_uvs()` 调用
-- [ ] 8.45a. `lightmap_uv.cpp` 移除 `read_cache()` / `write_cache()` / `CacheHeader` / `kCacheCategory` / `kPackResolution`
-- [ ] 8.45a. `lightmap_uv.h` 移除 `LightmapUVQuality` / `kDefaultLightmapUVQuality`
-- [ ] 8.45a. `generate_lightmap_uv()` 签名改为 `(vertices, indices, pack_resolution)` → 返回 `LightmapUVResult`，移除 `cache_hit` 字段
+- [x] 8.45a. 场景加载精简：`load_meshes()` 移除 TEXCOORD_1 读取 / mesh_hash / `uv_pending_*` 记录
+- [x] 8.45a. `scene_loader.h` 移除 `apply_lightmap_uvs()` / `original_cpu_vertices/indices()` / `uv_pending_*` / `original_cpu_*` 成员
+- [x] 8.45a. `scene_loader.cpp` 删除 `apply_lightmap_uvs()` 实现 + `destroy()` 中对应 clear
+- [x] 8.45a. `application.cpp` 移除 `init()` / `switch_scene()` 中的 `apply_lightmap_uvs()` 调用
+- [x] 8.45a. `lightmap_uv.cpp` 移除 `read_cache()` / `write_cache()` / `CacheHeader` / `kCacheCategory` / `kPackResolution`
+- [x] 8.45a. `generate_lightmap_uv()` 签名改为 `(vertices, indices, pack_resolution)` → 返回 `LightmapUVResult`，移除 `cache_hit` 字段
 - [ ] 8.45b. `compute_lightmap_keys()` 改用原始 geometry hash（positions + indices），不依赖 post-xatlas 数据
 - [ ] 8.45b. `refresh_lightmap_keys()` 移到场景加载后立即调用（不再等待 xatlas）
 - [ ] 8.45c. `start_bake()` 新增 xatlas 阶段：per-mesh 分组取 max resolution → 并行 xatlas → 顺序 VB/IB 重建 → BLAS/TLAS 重建

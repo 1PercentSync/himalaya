@@ -441,10 +441,9 @@ Step 8.2 将 UV 生成从异步后台任务简化为同步调用（`start()` + `
 - `app/src/scene_loader.cpp`：删除 `apply_lightmap_uvs()` 实现、`destroy()` 中对应的 clear 调用
 - `app/src/application.cpp`：`init()` / `switch_scene()` 中移除 `apply_lightmap_uvs()` 调用（场景加载后直接构建 BLAS）
 - `framework/src/lightmap_uv.cpp`：移除 `read_cache()` / `write_cache()` / `CacheHeader` / `kCacheCategory`（独立 xatlas 缓存不再需要）
-- `framework/include/himalaya/framework/lightmap_uv.h`：移除 `LightmapUVQuality` / `kDefaultLightmapUVQuality`（质量选择移入 `generate_lightmap_uv()` 内部，由编译配置决定）
-
 **设计要点**：
 - `generate_lightmap_uv()` 函数保留但签名变更：新增 `uint32_t pack_resolution` 参数（替代内部固定 `kPackResolution = 64`），移除 `mesh_hash` 参数（不再有独立缓存）
+- `LightmapUVQuality` 枚举和 `kDefaultLightmapUVQuality` 常量保留（干净的 Debug/Release 质量抽象）
 - `cpu_vertices_` / `cpu_indices_` 保留（烘焙时 xatlas 输入 + 面积计算 + vertex remap 使用）
 
 #### 8.45b. Cache key 重构
@@ -505,8 +504,7 @@ Cache key 改为基于纯输入（不含 xatlas 中间产物），在 `apply_lig
 
 #### 8.45f. 死代码清理
 
-- 删除 `framework/include/himalaya/framework/lightmap_uv.h` 中的 `LightmapUVQuality` / `kDefaultLightmapUVQuality`
-- 删除 `framework/src/lightmap_uv.cpp` 中的 `CacheHeader` / `read_cache()` / `write_cache()` / `kCacheCategory` / `kPackResolution`
+- 删除 `framework/src/lightmap_uv.cpp` 中的 `CacheHeader` / `read_cache()` / `write_cache()` / `kCacheCategory` / `kPackResolution`（已在 8.45a 完成）
 - 删除 `app/include/himalaya/app/scene_loader.h` 中的 `apply_lightmap_uvs()`、`original_cpu_vertices()` / `original_cpu_indices()` 访问器、`uv_pending_*` / `original_cpu_*` 成员
 - 删除 `app/src/scene_loader.cpp` 中的 `apply_lightmap_uvs()` 实现
 - `app/src/scene_loader.cpp`：`destroy()` 中移除 `original_cpu_*` / `uv_pending_*` 的 clear
