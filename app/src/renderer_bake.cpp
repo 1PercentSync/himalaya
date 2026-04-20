@@ -8,6 +8,7 @@
 
 #include <himalaya/app/scene_loader.h>
 #include <himalaya/framework/cache.h>
+#include <himalaya/framework/lightmap_uv.h>
 #include <himalaya/framework/cubemap_filter.h>
 #include <himalaya/framework/frame_context.h>
 #include <himalaya/framework/ktx2.h>
@@ -21,9 +22,12 @@
 #include <himalaya/rhi/swapchain.h>
 
 #include <array>
+#include <atomic>
 #include <cmath>
 #include <cstdio>
 #include <filesystem>
+#include <thread>
+#include <unordered_map>
 
 #include <glm/glm.hpp>
 #include <spdlog/spdlog.h>
@@ -281,7 +285,7 @@ namespace himalaya::app {
         const std::span<const framework::MaterialInstance> materials,
         const std::span<const std::vector<framework::Vertex>> cpu_vertices,
         const std::span<const std::vector<uint32_t>> cpu_indices,
-        const std::string &scene_hash,
+        SceneLoader &scene_loader,
         const std::string &hdr_hash,
         const std::string &scene_textures_hash,
         const float ibl_rotation_deg,
@@ -297,9 +301,6 @@ namespace himalaya::app {
         bake_locked_config_ = config;
 
         // Rotation encoded as integer degrees 0-359.
-        // ibl_rotation_deg can be negative or > 360 (unbounded accumulation),
-        // so normalize to [0, 360) before casting to uint32_t.
-        // Direct static_cast<uint32_t>(negative float) is undefined behavior.
         {
             float normalized = std::fmod(ibl_rotation_deg, 360.0f);
             if (normalized < 0.0f) {
@@ -308,14 +309,12 @@ namespace himalaya::app {
             bake_rotation_int_ = static_cast<uint32_t>(std::round(normalized)) % 360;
         }
 
-        // Probe set cache key: scene + hdr + scene_textures (no position — positions are bake output)
+        // Probe set cache key: scene + hdr + scene_textures
         {
+            const auto &scene_hash = scene_loader.scene_hash();
             const std::string probe_key_input = scene_hash + hdr_hash + scene_textures_hash;
             bake_probe_set_key_ = framework::content_hash(probe_key_input.data(), probe_key_input.size());
         }
-
-        // bake_lightmap_keys_ already populated by Application::refresh_lightmap_keys()
-        // using post-xatlas vertex/index data (includes lightmap UV topology in hash).
 
         // Build parallel arrays: instance indices + lightmap resolutions
         bake_instance_indices_.clear();
@@ -340,6 +339,80 @@ namespace himalaya::app {
                 ++key_idx;
             });
 
+        // ---- xatlas UV generation ----
+        // Per-mesh: find max resolution among bakeable instances, run xatlas, rebuild VB/IB.
+        {
+            std::unordered_map<uint32_t, uint32_t> mesh_max_resolution;
+            for (uint32_t i = 0; i < static_cast<uint32_t>(bake_instance_indices_.size()); ++i) {
+                const auto &inst = mesh_instances[bake_instance_indices_[i]];
+                auto &max_res = mesh_max_resolution[inst.mesh_id];
+                max_res = std::max(max_res, bake_lightmap_sizes_[i]);
+            }
+
+            struct XatlasTask {
+                uint32_t mesh_id;
+                uint32_t pack_resolution;
+                framework::LightmapUVResult result;
+            };
+            std::vector<XatlasTask> xatlas_tasks;
+            xatlas_tasks.reserve(mesh_max_resolution.size());
+            for (const auto &[mesh_id, res] : mesh_max_resolution) {
+                xatlas_tasks.push_back({mesh_id, res, {}});
+            }
+
+            // Parallel xatlas generation
+            if (!xatlas_tasks.empty()) {
+                std::atomic<uint32_t> next_task{0};
+                const uint32_t thread_count = std::min(
+                    std::max(1u, std::thread::hardware_concurrency()),
+                    static_cast<uint32_t>(xatlas_tasks.size()));
+                std::vector<std::jthread> workers;
+                workers.reserve(thread_count);
+                for (uint32_t t = 0; t < thread_count; ++t) {
+                    workers.emplace_back([&] {
+                        while (true) {
+                            const uint32_t idx = next_task.fetch_add(1, std::memory_order_relaxed);
+                            if (idx >= xatlas_tasks.size()) { break; }
+                            auto &task = xatlas_tasks[idx];
+                            task.result = framework::generate_lightmap_uv(
+                                cpu_vertices[task.mesh_id],
+                                cpu_indices[task.mesh_id],
+                                task.pack_resolution);
+                        }
+                    });
+                }
+            }
+
+            // Sequential VB/IB rebuild (must be in immediate scope)
+            for (const auto &task : xatlas_tasks) {
+                const auto &orig_verts = cpu_vertices[task.mesh_id];
+                const auto new_vert_count = task.result.vertex_remap.size();
+                std::vector<framework::Vertex> new_vertices(new_vert_count);
+                for (size_t v = 0; v < new_vert_count; ++v) {
+                    new_vertices[v] = orig_verts[task.result.vertex_remap[v]];
+                    new_vertices[v].uv1 = task.result.lightmap_uvs[v];
+                }
+                scene_loader.rebuild_mesh_buffers(
+                    task.mesh_id, std::move(new_vertices), task.result.new_indices);
+            }
+
+            // Store xatlas results for UV cache writing in lightmap_bake_finalize()
+            bake_xatlas_results_.clear();
+            for (auto &task : xatlas_tasks) {
+                bake_xatlas_results_[task.mesh_id] = std::move(task.result);
+            }
+
+            // Rebuild BLAS/TLAS (buffer addresses changed)
+            if (ctx_->rt_supported) {
+                build_scene_rt(scene_loader.meshes(),
+                               mesh_instances,
+                               scene_loader.material_instances(),
+                               scene_loader.gpu_materials(),
+                               scene_loader.cpu_vertices(),
+                               scene_loader.cpu_indices());
+            }
+        }
+
         bake_total_instances_ = static_cast<uint32_t>(bake_instance_indices_.size());
         bake_current_instance_ = 0;
         lightmap_finalize_pending_ = false;
@@ -348,8 +421,6 @@ namespace himalaya::app {
         bake_instance_start_time_ = bake_start_time_;
 
         // Pre-compute total texel-samples for progress weighting.
-        // Lightmap contribution: sum of (width * height * lightmap_spp) per instance.
-        // Probe contribution is estimated as 0 here — updated after placement.
         {
             uint64_t lm_total = 0;
             for (const uint32_t res : bake_lightmap_sizes_) {

@@ -6,6 +6,7 @@
  */
 
 #include <himalaya/framework/bake_data_manager.h>
+#include <himalaya/framework/lightmap_uv.h>
 #include <himalaya/framework/bake_denoiser.h>
 #include <himalaya/framework/cached_shader_compiler.h>
 #include <himalaya/framework/denoiser.h>
@@ -37,6 +38,7 @@
 #include <chrono>
 #include <cstdint>
 #include <span>
+#include <unordered_map>
 #include <vector>
 
 namespace himalaya::rhi {
@@ -332,9 +334,9 @@ namespace himalaya::app {
          * @param mesh_instances All scene mesh instances.
          * @param meshes        All loaded meshes (vertex/index counts).
          * @param materials     All material instances (alpha mode filtering).
-         * @param cpu_vertices       Per-mesh CPU vertex data (surface area calculation).
-         * @param cpu_indices        Per-mesh CPU index data (surface area calculation).
-         * @param scene_hash         Content hash of the scene file.
+         * @param cpu_vertices       Per-mesh CPU vertex data (surface area + xatlas input).
+         * @param cpu_indices        Per-mesh CPU index data (surface area + xatlas input).
+         * @param scene_loader       Scene loader (VB/IB rebuild after xatlas).
          * @param hdr_hash           Content hash of the HDR environment file.
          * @param scene_textures_hash Composite hash of all scene texture source bytes.
          * @param ibl_rotation_deg   Current IBL rotation angle in degrees.
@@ -346,7 +348,7 @@ namespace himalaya::app {
                         std::span<const framework::MaterialInstance> materials,
                         std::span<const std::vector<framework::Vertex>> cpu_vertices,
                         std::span<const std::vector<uint32_t>> cpu_indices,
-                        const std::string &scene_hash,
+                        SceneLoader &scene_loader,
                         const std::string &hdr_hash,
                         const std::string &scene_textures_hash,
                         float ibl_rotation_deg,
@@ -901,6 +903,9 @@ namespace himalaya::app {
 
         /** @brief Per-bakeable-instance lightmap cache key hash (parallel to bake_instance_indices_). */
         std::vector<std::string> bake_lightmap_keys_;
+
+        /** @brief Per-mesh xatlas results from the current bake session (mesh_id → result). */
+        std::unordered_map<uint32_t, framework::LightmapUVResult> bake_xatlas_results_;
 
         /** @brief IBL rotation encoded as integer degrees 0-359 for cache file naming. */
         uint32_t bake_rotation_int_ = 0;

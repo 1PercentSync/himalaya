@@ -271,11 +271,8 @@ namespace himalaya::app {
     }
 
     void Application::start_bake_session() {
-        // Lightmap UVs are already applied during scene load (init / switch_scene).
-        // BLAS/TLAS are also current. Just start the bake.
         vkQueueWaitIdle(context_.graphics_queue);
 
-        // Start the bake
         context_.begin_immediate();
         renderer_.start_bake(bake_config_,
                              scene_loader_.mesh_instances(),
@@ -283,7 +280,7 @@ namespace himalaya::app {
                              scene_loader_.material_instances(),
                              scene_loader_.cpu_vertices(),
                              scene_loader_.cpu_indices(),
-                             scene_loader_.scene_hash(),
+                             scene_loader_,
                              env_content_hash_,
                              scene_loader_.scene_textures_hash(),
                              glm::degrees(ibl_yaw_),
