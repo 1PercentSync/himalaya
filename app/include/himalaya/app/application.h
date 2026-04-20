@@ -340,16 +340,14 @@ namespace himalaya::app {
         /** @brief Error message shown in DebugUI (empty = no error, auto-dismissed after timeout). */
         std::string error_message_;
 
-        /** @brief Background lightmap UV generator (thread pool). */
+        /** @brief Synchronous lightmap UV generator (multi-threaded xatlas). */
         framework::LightmapUVGenerator uv_generator_{};
 
         /**
-         * @brief Starts a bake session with UV generation as a prerequisite.
+         * @brief Starts a bake session.
          *
-         * Ensures all xatlas UV caches are populated (starts generator if not
-         * running and waits for completion), then rebuilds all VB/IB with
-         * lightmap UVs, rebuilds BLAS/TLAS, and finally calls start_bake().
-         * Called by the Start Bake button handler (Step 13).
+         * Lightmap UVs are already applied during scene load (init / switch_scene),
+         * so this method simply waits for GPU idle and calls start_bake().
          */
         void start_bake_session();
 

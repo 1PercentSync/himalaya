@@ -2,7 +2,7 @@
 
 /**
  * @file lightmap_uv_generator.h
- * @brief Background thread pool for parallel xatlas lightmap UV generation.
+ * @brief Parallel xatlas lightmap UV generation with thread pool.
  */
 
 #include <himalaya/framework/lightmap_uv.h>
@@ -16,11 +16,14 @@
 
 namespace himalaya::framework {
     /**
-     * @brief Runs xatlas lightmap UV generation on a background thread pool.
+     * @brief Parallel xatlas lightmap UV generation using a thread pool.
      *
      * Each request is an independent mesh (vertices + indices + hash).
      * Results are written to disk cache only — the returned LightmapUVResult
      * is discarded. The caller later reads from cache via generate_lightmap_uv().
+     *
+     * Usage: start() spawns worker threads, wait() blocks until all complete.
+     * Called synchronously during scene load (start + wait).
      *
      * Thread model: all public methods must be called from the main thread.
      * running() and total() read non-atomic members (workers_, requests_)
