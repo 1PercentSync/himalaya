@@ -55,7 +55,64 @@ namespace himalaya::framework {
             rm.upload_image_all_levels(out_handle, ktx2.blob.data(), ktx2.blob.size(),
                                        regions, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT);
         }
+        /**
+         * Reads a single UV bin file from disk.
+         * Format: uint32_t vertex_count + uint32_t index_count + uint32_t flags
+         *       + vec2[vertex_count] + uint32_t[index_count] + uint32_t[vertex_count]
+         */
+        static std::optional<LightmapUVResult> read_uv_bin(const std::filesystem::path& path) {
+            std::ifstream ifs(path, std::ios::binary);
+            if (!ifs) { return std::nullopt; }
+
+            uint32_t vertex_count = 0, index_count = 0, flags = 0;
+            ifs.read(reinterpret_cast<char*>(&vertex_count), sizeof(uint32_t));
+            ifs.read(reinterpret_cast<char*>(&index_count), sizeof(uint32_t));
+            ifs.read(reinterpret_cast<char*>(&flags), sizeof(uint32_t));
+            if (!ifs) { return std::nullopt; }
+
+            const auto expected_size = 3 * sizeof(uint32_t)
+                + vertex_count * sizeof(glm::vec2)
+                + index_count * sizeof(uint32_t)
+                + vertex_count * sizeof(uint32_t);
+            ifs.seekg(0, std::ios::end);
+            if (static_cast<uint64_t>(ifs.tellg()) != expected_size) { return std::nullopt; }
+            ifs.seekg(3 * sizeof(uint32_t));
+
+            LightmapUVResult result;
+            result.is_fallback = (flags & 1u) != 0;
+            result.lightmap_uvs.resize(vertex_count);
+            result.new_indices.resize(index_count);
+            result.vertex_remap.resize(vertex_count);
+
+            ifs.read(reinterpret_cast<char*>(result.lightmap_uvs.data()),
+                     static_cast<std::streamsize>(vertex_count * sizeof(glm::vec2)));
+            ifs.read(reinterpret_cast<char*>(result.new_indices.data()),
+                     static_cast<std::streamsize>(index_count * sizeof(uint32_t)));
+            ifs.read(reinterpret_cast<char*>(result.vertex_remap.data()),
+                     static_cast<std::streamsize>(vertex_count * sizeof(uint32_t)));
+
+            if (!ifs) { return std::nullopt; }
+            return result;
+        }
+
     } // anonymous namespace
+
+    // ---- Public UV data reader ----
+
+    std::vector<std::optional<LightmapUVResult>>
+    BakeDataManager::read_angle_uv_data(const uint32_t rotation_int,
+                                        const std::span<const std::string> lightmap_keys) {
+        char rot_str[4];
+        std::snprintf(rot_str, sizeof(rot_str), "%03u", rotation_int);
+        const std::string rot_suffix = "_rot" + std::string(rot_str) + "_uv";
+
+        std::vector<std::optional<LightmapUVResult>> results(lightmap_keys.size());
+        for (size_t i = 0; i < lightmap_keys.size(); ++i) {
+            const auto path = cache_path("bake", lightmap_keys[i] + rot_suffix, ".bin");
+            results[i] = read_uv_bin(path);
+        }
+        return results;
+    }
 
     void BakeDataManager::init(rhi::ResourceManager& rm, rhi::DescriptorManager& dm,
                                const rhi::SamplerHandle lightmap_sampler,
@@ -115,15 +172,20 @@ namespace himalaya::framework {
             std::snprintf(rot_str, sizeof(rot_str), "%03u", rot);
             const std::string rot_suffix = "_rot" + std::string(rot_str);
 
-            // Lightmaps: verify every per-instance key file exists.
+            // Lightmaps: verify every per-instance KTX2 + UV bin exists.
             uint32_t lm_count = 0;
+            bool uv_complete = true;
             for (const auto& key : lightmap_keys) {
-                const auto path = cache_path("bake", key + rot_suffix, ".ktx2");
-                if (std::filesystem::exists(path, ec)) {
+                const auto ktx2_path = cache_path("bake", key + rot_suffix, ".ktx2");
+                const auto uv_path = cache_path("bake", key + rot_suffix + "_uv", ".bin");
+                if (std::filesystem::exists(ktx2_path, ec)
+                    && std::filesystem::exists(uv_path, ec)) {
                     ++lm_count;
+                } else {
+                    uv_complete = false;
                 }
             }
-            if (lm_count < expected_lm) { continue; }
+            if (lm_count < expected_lm || !uv_complete) { continue; }
 
             // Read probe count from manifest header (uint32_t at offset 0).
             uint32_t manifest_probe_count = 0;

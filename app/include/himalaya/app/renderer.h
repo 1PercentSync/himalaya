@@ -442,9 +442,11 @@ namespace himalaya::app {
          *
          * @param rotation_int   Bake angle in integer degrees (0-359).
          * @param mesh_instances All scene mesh instances (for probe-to-instance assignment).
+         * @param scene_loader   Scene loader (VB/IB rebuild from cached UV data).
          */
         void switch_bake_angle(uint32_t rotation_int,
-                               std::span<const framework::MeshInstance> mesh_instances);
+                               std::span<const framework::MeshInstance> mesh_instances,
+                               SceneLoader &scene_loader);
 
         /**
          * @brief Unloads the currently loaded bake angle without loading a new one.

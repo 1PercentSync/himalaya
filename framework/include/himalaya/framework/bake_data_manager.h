@@ -5,9 +5,11 @@
  * @brief Bake data lifecycle management: scan, validate, load, unload.
  */
 
+#include <himalaya/framework/lightmap_uv.h>
 #include <himalaya/rhi/types.h>
 
 #include <cstdint>
+#include <optional>
 #include <span>
 #include <string>
 #include <vector>
@@ -77,6 +79,21 @@ namespace himalaya::framework {
          */
         void scan(std::span<const std::string> lightmap_keys,
                   const std::string& probe_set_key);
+
+        /**
+         * @brief Reads per-instance UV data for a bake angle from disk cache.
+         *
+         * Returns a vector parallel to lightmap_keys. Each entry is the
+         * LightmapUVResult loaded from the corresponding UV bin file, or
+         * nullopt on read failure. Caller uses these to rebuild VB/IB
+         * before calling load_angle().
+         *
+         * @param rotation_int  Bake angle in integer degrees (0-359).
+         * @param lightmap_keys Per-bakeable-instance lightmap cache key hashes.
+         */
+        [[nodiscard]] static std::vector<std::optional<LightmapUVResult>>
+        read_angle_uv_data(uint32_t rotation_int,
+                           std::span<const std::string> lightmap_keys);
 
         /**
          * @brief Loads a bake angle: reads KTX2 files, creates GPU images,

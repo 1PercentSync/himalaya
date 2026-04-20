@@ -28,6 +28,7 @@
 #include <filesystem>
 #include <thread>
 #include <unordered_map>
+#include <unordered_set>
 
 #include <glm/glm.hpp>
 #include <spdlog/spdlog.h>
@@ -254,14 +255,51 @@ namespace himalaya::app {
     }
 
     void Renderer::switch_bake_angle(const uint32_t rotation_int,
-                                     const std::span<const framework::MeshInstance> mesh_instances) {
-        // Ensure GPU is idle before destroying/creating resources
+                                     const std::span<const framework::MeshInstance> mesh_instances,
+                                     SceneLoader &scene_loader) {
         vkQueueWaitIdle(ctx_->graphics_queue);
-
-        // Unload previous angle (safe no-op if nothing loaded)
         bake_data_manager_.unload_angle();
 
-        // Load new angle within immediate command scope
+        // Read UV data from bake cache and rebuild VB/IB
+        const auto uv_data = framework::BakeDataManager::read_angle_uv_data(
+            rotation_int, bake_lightmap_keys_);
+
+        // Per-mesh dedup: only rebuild each mesh once
+        std::unordered_set<uint32_t> rebuilt_meshes;
+        const auto cpu_vertices = scene_loader.cpu_vertices();
+        for (size_t i = 0; i < uv_data.size(); ++i) {
+            if (!uv_data[i]) { continue; }
+            const auto &inst = mesh_instances[bake_instance_indices_[i]];
+            if (!rebuilt_meshes.insert(inst.mesh_id).second) { continue; }
+
+            const auto &uv = *uv_data[i];
+            const auto &orig_verts = cpu_vertices[inst.mesh_id];
+            const auto new_vert_count = uv.vertex_remap.size();
+            std::vector<framework::Vertex> new_vertices(new_vert_count);
+            for (size_t v = 0; v < new_vert_count; ++v) {
+                new_vertices[v] = orig_verts[uv.vertex_remap[v]];
+                new_vertices[v].uv1 = uv.lightmap_uvs[v];
+            }
+
+            ctx_->begin_immediate();
+            scene_loader.rebuild_mesh_buffers(
+                inst.mesh_id, std::move(new_vertices), uv.new_indices);
+            ctx_->end_immediate();
+        }
+
+        // Rebuild BLAS/TLAS if any mesh was modified
+        if (!rebuilt_meshes.empty() && ctx_->rt_supported) {
+            ctx_->begin_immediate();
+            build_scene_rt(scene_loader.meshes(),
+                           mesh_instances,
+                           scene_loader.material_instances(),
+                           scene_loader.gpu_materials(),
+                           scene_loader.cpu_vertices(),
+                           scene_loader.cpu_indices());
+            ctx_->end_immediate();
+        }
+
+        // Load lightmap KTX2s + probes
         ctx_->begin_immediate();
         bake_data_manager_.load_angle(rotation_int,
                                       bake_lightmap_keys_,

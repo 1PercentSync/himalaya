@@ -376,7 +376,8 @@ namespace himalaya::app {
                     indirect_lighting_mode_ = framework::IndirectLightingMode::LightmapProbe;
                     features_.lightmap_probe = true;
                     renderer_.switch_bake_angle(baked_rotation,
-                                                scene_render_data_.mesh_instances);
+                                                scene_render_data_.mesh_instances,
+                                                scene_loader_);
                     ibl_yaw_ = glm::radians(static_cast<float>(baked_rotation));
                 }
             }
@@ -729,7 +730,8 @@ namespace himalaya::app {
         // ---- Angle switch (from bake angle list click) ----
         if (actions.angle_switch_requested) {
             renderer_.switch_bake_angle(actions.new_angle_rotation,
-                                        scene_render_data_.mesh_instances);
+                                        scene_render_data_.mesh_instances,
+                                        scene_loader_);
             ibl_yaw_ = glm::radians(static_cast<float>(actions.new_angle_rotation));
         }
 
@@ -750,7 +752,8 @@ namespace himalaya::app {
                         target_rotation = renderer_.bake_data_manager_loaded_rotation();
                     }
                     renderer_.switch_bake_angle(target_rotation,
-                                                scene_render_data_.mesh_instances);
+                                                scene_render_data_.mesh_instances,
+                                                scene_loader_);
                     ibl_yaw_ = glm::radians(static_cast<float>(target_rotation));
                 }
                 features_.lightmap_probe = true;
