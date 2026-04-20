@@ -994,6 +994,45 @@ namespace himalaya::app {
             }
         }
 
+        // === CPU: Write UV data (xatlas result for this instance's mesh) ===
+        {
+            const uint32_t scene_idx = bake_instance_indices_[bake_current_instance_];
+            const auto &inst = mesh_instances[scene_idx];
+            const auto it = bake_xatlas_results_.find(inst.mesh_id);
+            if (it != bake_xatlas_results_.end()) {
+                const auto &uv = it->second;
+                const auto rot = format_rotation(bake_rotation_int_);
+                const auto uv_path = framework::cache_path(
+                    "bake", bake_lightmap_keys_[bake_current_instance_] + "_rot" + rot + "_uv", ".bin");
+
+                const auto vert_count = static_cast<uint32_t>(uv.lightmap_uvs.size());
+                const auto idx_count = static_cast<uint32_t>(uv.new_indices.size());
+                const uint32_t flags = uv.is_fallback ? 1u : 0u;
+
+                const size_t data_size = 3 * sizeof(uint32_t)
+                    + vert_count * sizeof(glm::vec2)
+                    + idx_count * sizeof(uint32_t)
+                    + vert_count * sizeof(uint32_t);
+                std::vector<uint8_t> buf(data_size);
+                auto *dst = buf.data();
+
+                std::memcpy(dst, &vert_count, sizeof(uint32_t)); dst += sizeof(uint32_t);
+                std::memcpy(dst, &idx_count, sizeof(uint32_t)); dst += sizeof(uint32_t);
+                std::memcpy(dst, &flags, sizeof(uint32_t)); dst += sizeof(uint32_t);
+                std::memcpy(dst, uv.lightmap_uvs.data(), vert_count * sizeof(glm::vec2));
+                dst += vert_count * sizeof(glm::vec2);
+                std::memcpy(dst, uv.new_indices.data(), idx_count * sizeof(uint32_t));
+                dst += idx_count * sizeof(uint32_t);
+                std::memcpy(dst, uv.vertex_remap.data(), vert_count * sizeof(uint32_t));
+
+                if (framework::atomic_write_file(uv_path, buf.data(), buf.size())) {
+                    spdlog::info("Bake finalize: wrote UV {}", uv_path.string());
+                } else {
+                    spdlog::error("Bake finalize: failed to write UV {}", uv_path.string());
+                }
+            }
+        }
+
         // === Cleanup staging buffers ===
         resource_manager_->destroy_buffer(rb_beauty);
         resource_manager_->destroy_buffer(rb_albedo);
