@@ -101,9 +101,9 @@
 
 ## Step 8.3：Baking 守卫 + 文档修正 + RT 残留清理
 
-- [ ] `app/application.h`：`uv_generator_` 注释 "Background" → "Synchronous"
-- [ ] `app/application.h`：`start_bake_session()` Doxygen 更新（移除已删除的 UV 准备描述）
-- [ ] `framework/include/himalaya/framework/lightmap_uv_generator.h`：`@file` / 类文档中 "Background" → "Parallel"（保留多线程事实，去掉异步含义）
+- [x] `app/application.h`：`uv_generator_` 注释 "Background" → "Synchronous"
+- [x] `app/application.h`：`start_bake_session()` Doxygen 更新（移除已删除的 UV 准备描述）
+- [x] `framework/include/himalaya/framework/lightmap_uv_generator.h`：`@file` / 类文档中 "Background" → "Parallel"（保留多线程事实，去掉异步含义）
 - [ ] `app/debug_ui.cpp`：Baking 期间灰显场景加载 / HDR 加载按钮
 - [ ] `app/debug_ui.cpp`：Baking 期间灰显 IBL/LP radio button + Baked Angle List
 - [ ] `app/application.cpp`：`update_drag_input()` Baking 期间阻止 IBL 旋转拖拽
