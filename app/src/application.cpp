@@ -53,7 +53,6 @@ namespace himalaya::app {
         bake_config_.allow_tearing = config_.bake_allow_tearing;
         bake_config_.spp_per_frame = std::max(1u, config_.bake_spp_per_frame);
         bake_config_.probe_min_luminance = config_.bake_probe_min_luminance;
-        resolve_thread_count();
 
         glfwInit();
         glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
@@ -125,7 +124,7 @@ namespace himalaya::app {
             // bake data to load anyway (first bake will populate the cache).
             if (scene_ok) {
                 uv_generator_.start(scene_loader_.prepare_uv_requests(),
-                                    config_.bg_uv_thread_count);
+                                    std::max(1u, std::thread::hardware_concurrency()));
                 uv_generator_.wait();
 
                 context_.begin_immediate();
@@ -228,7 +227,7 @@ namespace himalaya::app {
             // Synchronous lightmap UV generation + application
             if (ok) {
                 uv_generator_.start(scene_loader_.prepare_uv_requests(),
-                                    config_.bg_uv_thread_count);
+                                    std::max(1u, std::thread::hardware_concurrency()));
                 uv_generator_.wait();
 
                 context_.begin_immediate();
@@ -344,18 +343,9 @@ namespace himalaya::app {
         renderer_.scan_bake_data(renderer_.bake_lightmap_keys(), probe_set_key);
     }
 
-    void Application::resolve_thread_count() {
-        if (config_.bg_uv_thread_count == 0) {
-            const auto hw = std::thread::hardware_concurrency();
-            config_.bg_uv_thread_count = (hw > 4) ? (hw - 4) : 1;
-            save_config(config_);
-            spdlog::info("Resolved bg_uv_thread_count to {} (hardware_concurrency={})",
-                         config_.bg_uv_thread_count, hw);
-        }
-    }
+
 
     void Application::destroy() {
-        uv_generator_.cancel();
         vkQueueWaitIdle(context_.graphics_queue);
 
         imgui_backend_.destroy();
@@ -622,12 +612,6 @@ namespace himalaya::app {
             .scene_path = config_.scene_path,
             .env_path = config_.env_path,
             .error_message = error_message_,
-            .bg_uv_thread_count = config_.bg_uv_thread_count,
-            .bg_uv_auto_start = config_.bg_uv_auto_start,
-            .bg_uv_running = uv_generator_.running(),
-            .bg_uv_completed = uv_generator_.completed(),
-            .bg_uv_total = uv_generator_.total(),
-            .max_thread_count = std::thread::hardware_concurrency(),
             .bake_config = bake_config_,
             .bake_progress = renderer_.bake_progress(),
             .has_scene = !config_.scene_path.empty(),
@@ -734,17 +718,6 @@ namespace himalaya::app {
             renderer_.request_manual_denoise();
         }
 
-        // ---- Background UV generation actions ----
-        if (actions.bg_uv_start_requested) {
-            auto requests = scene_loader_.prepare_uv_requests();
-            uv_generator_.start(std::move(requests), config_.bg_uv_thread_count);
-        }
-        if (actions.bg_uv_stop_requested) {
-            uv_generator_.cancel();
-        }
-        if (actions.bg_uv_config_changed) {
-            save_config(config_);
-        }
 
         // ---- Bake actions ----
         if (actions.bake_start_requested) {

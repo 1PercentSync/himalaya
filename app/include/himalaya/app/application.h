@@ -369,13 +369,5 @@ namespace himalaya::app {
          */
         void trigger_bake_scan();
 
-        /**
-         * @brief Resolves bg_uv_thread_count if 0 (first launch) and persists.
-         *
-         * Called once at init after config load. Sets thread count to
-         * max(1, hardware_concurrency - 4) so the ImGui slider always
-         * displays a valid value.
-         */
-        void resolve_thread_count();
     };
 } // namespace himalaya::app

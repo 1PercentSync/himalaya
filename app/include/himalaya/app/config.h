@@ -69,22 +69,7 @@ namespace himalaya::app {
         /** @brief Minimum average luminance for a probe to be accepted during baking. */
         float bake_probe_min_luminance = 1e-4f;
 
-        /**
-         * @brief Auto-start background lightmap UV generation on scene load.
-         *
-         * When true, background xatlas generation starts immediately after
-         * scene loading completes, pre-populating the disk cache.
-         */
-        bool bg_uv_auto_start = false;
-
-        /**
-         * @brief Thread count for background lightmap UV generation.
-         *
-         * 0 means not configured — resolved to max(1, hardware_concurrency - 4)
-         * on first use and persisted. Slider range: 1 to hardware_concurrency.
-         */
-        uint32_t bg_uv_thread_count = 0;
-    };
+        };
 
     /**
      * @brief Returns the config file path: `%LOCALAPPDATA%\himalaya\config.json`.

@@ -229,25 +229,7 @@ namespace himalaya::app {
         /** @brief Error message to show in UI (empty = no error). */
         const std::string& error_message;
 
-        // --- Background UV generation (Baking panel) ---
 
-        /** @brief Background UV thread count (mutable — slider). */
-        uint32_t& bg_uv_thread_count;
-
-        /** @brief Auto-start on scene load (mutable — checkbox). */
-        bool& bg_uv_auto_start;
-
-        /** @brief True if background generator is currently running (read-only). */
-        bool bg_uv_running;
-
-        /** @brief Number of completed mesh UV generations in current run (read-only). */
-        uint32_t bg_uv_completed;
-
-        /** @brief Total mesh UV generation requests in current run (read-only). */
-        uint32_t bg_uv_total;
-
-        /** @brief Maximum thread count for slider upper bound (hardware_concurrency, read-only). */
-        uint32_t max_thread_count;
 
         // --- Bake parameters and progress ---
 
@@ -347,15 +329,6 @@ namespace himalaya::app {
 
         /** @brief New auto denoise interval (valid only when denoise_interval_changed is true). */
         uint32_t new_denoise_interval = 0;
-
-        /** @brief True if the user clicked the background UV Start button. */
-        bool bg_uv_start_requested = false;
-
-        /** @brief True if the user clicked the background UV Stop button. */
-        bool bg_uv_stop_requested = false;
-
-        /** @brief True if bg_uv_auto_start or bg_uv_thread_count changed (triggers config save). */
-        bool bg_uv_config_changed = false;
 
         /** @brief True if the user clicked the Start Bake button. */
         bool bake_start_requested = false;
