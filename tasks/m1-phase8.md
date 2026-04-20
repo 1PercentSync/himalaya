@@ -80,8 +80,8 @@
 - [x] `app/application.cpp`：`switch_environment()` — 同上
 - [x] `app/application.cpp`：`clear_bake_cache` / `clear_all_cache` — 同上
 - [ ] `app/application.cpp`：加载 bake 角度前确保 lightmap UV 就绪（提取 `start_bake_session()` 前半段为可复用函数）
-- [ ] `app/src/renderer_bake.cpp`：`compute_lightmap_keys()` 使用 post-xatlas 数据（含 UV hash）
-- [ ] `app/application.cpp`：`switch_scene()` / `switch_environment()` 中 `refresh_lightmap_keys()` 与 `trigger_bake_scan()` 调用顺序修正
+- [x] `app/src/renderer_bake.cpp`：`compute_lightmap_keys()` 使用 post-xatlas 数据（含 UV hash）
+- [x] `app/application.cpp`：`switch_scene()` / `switch_environment()` 中 `refresh_lightmap_keys()` 与 `trigger_bake_scan()` 调用顺序修正
 - [x] `app/renderer.h`：移除 `RenderInput::indirect_lighting_mode` + 对应填充代码
 - [x] `shaders/forward.frag`：修正注释（stored irradiance × surface albedo → stored irradiance, multiplied by surface albedo）
 - [x] `framework/src/bake_data_manager.cpp`：`scan()` 中 `std::stoul` + `catch(...)` → `std::from_chars`
