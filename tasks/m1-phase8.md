@@ -117,6 +117,23 @@
 - [x] `app/include/himalaya/app/application.h`：移除 `uv_generator_` 成员 + `lightmap_uv_generator.h` include
 - [x] `app/src/application.cpp`：`init()` / `switch_scene()` 调用改为 `scene_loader_.apply_lightmap_uvs(thread_count)`（合并原三行为一行）
 
+## Step 8.45：xatlas 重构 — UV 生成移入烘焙管线
+
+- [ ] 8.45a. 场景加载精简：`load_meshes()` 移除 TEXCOORD_1 读取 / mesh_hash / `uv_pending_*` 记录
+- [ ] 8.45a. `scene_loader.h` 移除 `apply_lightmap_uvs()` / `original_cpu_vertices/indices()` / `uv_pending_*` / `original_cpu_*` 成员
+- [ ] 8.45a. `scene_loader.cpp` 删除 `apply_lightmap_uvs()` 实现 + `destroy()` 中对应 clear
+- [ ] 8.45a. `application.cpp` 移除 `init()` / `switch_scene()` 中的 `apply_lightmap_uvs()` 调用
+- [ ] 8.45a. `lightmap_uv.cpp` 移除 `read_cache()` / `write_cache()` / `CacheHeader` / `kCacheCategory` / `kPackResolution`
+- [ ] 8.45a. `lightmap_uv.h` 移除 `LightmapUVQuality` / `kDefaultLightmapUVQuality`
+- [ ] 8.45a. `generate_lightmap_uv()` 签名改为 `(vertices, indices, pack_resolution)` → 返回 `LightmapUVResult`，移除 `cache_hit` 字段
+- [ ] 8.45b. `compute_lightmap_keys()` 改用原始 geometry hash（positions + indices），不依赖 post-xatlas 数据
+- [ ] 8.45b. `refresh_lightmap_keys()` 移到场景加载后立即调用（不再等待 xatlas）
+- [ ] 8.45c. `start_bake()` 新增 xatlas 阶段：per-mesh 分组取 max resolution → 并行 xatlas → 顺序 VB/IB 重建 → BLAS/TLAS 重建
+- [ ] 8.45d. `lightmap_bake_finalize()` 新增 UV 数据写入（`<key>_rot<NNN>_uv.bin`，atomic_write_file）
+- [ ] 8.45e. `bake_data_manager.cpp`：`load_angle()` 新增 UV 恢复阶段（读 UV bin → per-mesh 去重 → VB/IB 重建 → BLAS/TLAS 重建）
+- [ ] 8.45e. `bake_data_manager.cpp`：`scan()` 校验逻辑新增 UV bin 文件存在性检查
+- [ ] 8.45f. 死代码清理：确认所有已移除的声明/实现无残留引用
+
 ## Step 8.5：Lightmap/Probe 独立开关 + UI 重排
 
 - [ ] `framework/scene_data.h`：`RenderFeatures::lightmap_probe` → `use_lightmap` + `use_probe`

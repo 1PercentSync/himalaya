@@ -40,6 +40,8 @@ Step 8.3: Baking 守卫 + 文档修正 + RT 残留清理
     ↓
 Step 8.4: LightmapUVGenerator 内联重构
     ↓
+Step 8.45: xatlas 重构 — UV 生成移入烘焙管线
+    ↓
 Step 8.5: Lightmap/Probe 独立开关 + UI 重排
     ↓
 Step 9: AO/SO 按模式自动预设
@@ -65,6 +67,7 @@ Step 11: 边缘情况 + Debug 渲染模式 + 收尾
 | 8.2 | Lightmap UV 同步加载 + 流程简化 | 场景加载后 UV 始终就绪，异步 UV 控件移除，bake/角度加载路径简化 |
 | 8.3 | Baking 守卫 + 文档修正 + RT 残留清理 | Baking 期间场景/HDR/IBL 旋转/模式切换全部禁止，文档同步，场景加载失败清理 RT |
 | 8.4 | LightmapUVGenerator 内联重构 | Generator 类删除，apply_lightmap_uvs() 内部并行 xatlas，调用方一行完成 |
+| 8.45 | xatlas 重构 — UV 生成移入烘焙管线 | 场景加载不运行 xatlas，烘焙时 xatlas+bake 一体化，bake cache 含 UV 数据，加载 bake 数据时恢复 UV |
 | 8.5 | Lightmap/Probe 独立开关 + UI 重排 | LP 模式下可独立开关 lightmap/probe，Rendering 区移到 Camera 前 |
 | 9 | AO/SO 按模式自动预设 | 切换模式时 AO 参数自动切换，两模式各自记忆参数 |
 | 10 | IBL 旋转跳变 | Lightmap/Probe 模式下拖拽 IBL 旋转超过阈值跳到下一个已 bake 角度 |
@@ -410,6 +413,111 @@ Step 8.2 将 UV 生成从异步后台任务简化为同步调用（`start()` + `
 - xatlas 缓存命中时几乎零延迟，缓存未命中时多线程并行生成
 - `LightmapUVGenerator` 类无残留引用
 - 编译通过，无 validation 报错
+
+---
+
+### Step 8.45：xatlas 重构 — UV 生成移入烘��管线
+
+将 xatlas lightmap UV 生成从场景加载时预处理重构为烘焙管线的一部分。烘焙视为黑盒：输入 = glTF 场景 + HDR 环境，输出 = lightmap + UV 拓扑。每个烘焙角度独立存储 UV 数据和 lightmap 结果，角度之间互不依赖。
+
+#### 设计决策
+
+| 决策 | 结论 |
+|------|------|
+| xatlas 粒度 | Per-mesh（非 per-instance），取同一 mesh 所有 instance 中最大 bake resolution 作为 pack resolution |
+| glTF TEXCOORD_1 | 统一覆盖，全部走 xatlas（忽略 glTF 自带 UV1） |
+| xatlas 质量 | 保持 Debug/Release 编译期区分（Fast / Production） |
+| 独立 xatlas 缓存 | 删除 `lightmap_uv_debug/release` 目录，UV 作为 bake 输出的一部分存储 |
+| Cache key | `hash(scene_hash + geometry_hash + transform_hash + hdr_hash + scene_textures_hash)`——纯输入，不含 bake config |
+| 多角度一致性 | 每个角度独立存储自己的 UV + lightmap，无需跨角度校验 |
+| BC6H 兼容性 | bake resolution 经 `align4()` 对齐后作为 xatlas pack resolution，保证输出尺寸为 4 的倍数 |
+
+#### 8.45a. 场景加载精简——移除 xatlas
+
+从场��加载路径中移除所有 xatlas 相关逻辑。场景加载后 UV1 全部为 `{0,0}`。
+
+- `app/src/scene_loader.cpp`：`load_meshes()` 移除 TEXCOORD_1 读取、mesh_hash 计算、`uv_pending_*` 记录逻辑。所有 primitive 的 UV1 保持默认值
+- `app/include/himalaya/app/scene_loader.h`：移除 `apply_lightmap_uvs()` 方法声明、`original_cpu_vertices()` / `original_cpu_indices()` 访问器、`uv_pending_prims_` / `uv_pending_hashes_` / `uv_original_vertices_` / `uv_original_indices_` / `original_cpu_vertices_` / `original_cpu_indices_` 成员
+- `app/src/scene_loader.cpp`：删除 `apply_lightmap_uvs()` 实现、`destroy()` 中对应的 clear 调用
+- `app/src/application.cpp`：`init()` / `switch_scene()` 中移除 `apply_lightmap_uvs()` 调用（场景加载后直接构建 BLAS）
+- `framework/src/lightmap_uv.cpp`：移除 `read_cache()` / `write_cache()` / `CacheHeader` / `kCacheCategory`（独立 xatlas 缓存不再需要）
+- `framework/include/himalaya/framework/lightmap_uv.h`：移除 `LightmapUVQuality` / `kDefaultLightmapUVQuality`（质量选择移入 `generate_lightmap_uv()` 内部，由编译配置决定）
+
+**设计要点**：
+- `generate_lightmap_uv()` 函数保留但签名变更：新增 `uint32_t pack_resolution` 参数（替代内部固定 `kPackResolution = 64`），移除 `mesh_hash` 参数（不再有独立缓存）
+- `cpu_vertices_` / `cpu_indices_` 保留（烘焙时 xatlas 输入 + 面积计算 + vertex remap 使用）
+
+#### 8.45b. Cache key 重构
+
+Cache key 改为基于纯输入（不含 xatlas 中间产物），在 `apply_lightmap_uvs()` 之前即可计算。
+
+- `app/src/renderer_bake.cpp`：`compute_lightmap_keys()` 改用原始 geometry hash（`hash(positions + indices)`），不再依赖 post-xatlas 顶点数据。移除 `scene_loader.cpu_vertices()` / `cpu_indices()` 的使用，改用 `scene_loader.original_cpu_vertices()` 或直接从 `cpu_vertices_` 中提取 positions
+- `app/src/application.cpp`：`refresh_lightmap_keys()` 不再依赖 `apply_lightmap_uvs()` 完成，可在场景加载后立即调用
+
+**设计要点**：
+- per-instance key = `hash(scene_hash + geometry_positions_indices_hash + transform_hash + hdr_hash + scene_textures_hash)`
+- `geometry_positions_indices_hash` 从 `cpu_vertices_` 提取 positions + 从 `cpu_indices_` 提取 indices（与原 `load_meshes()` 中的 mesh_hash 计算方式一致，但此处由 `compute_lightmap_keys()` 执行）
+
+#### 8.45c. 烘焙启动——集成 xatlas
+
+`start_bake()` 在烘焙开始时运行 xatlas、重建 VB/IB 和 BLAS。
+
+- `app/src/renderer_bake.cpp`：`start_bake()` 新增 xatlas 阶段（在现有分辨率计算之后、`begin_bake_instance()` 之前）：
+  1. Per-mesh 分组：遍历 bakeable instances，按 `mesh_id` 分组取 max resolution
+  2. 并行 xatlas 生成：对每个 unique mesh 调用 `generate_lightmap_uv(vertices, indices, pack_resolution)`（`std::jthread` + atomic work-stealing，复用 Step 8.4 的并行模式）
+  3. 顺序 VB/IB 重建：对每个受影响的 mesh，用 vertex_remap 重建顶点（写入 UV1），销毁旧 VB/IB，创建并上传新 VB/IB，更新 `Mesh` 和 `cpu_vertices_` / `cpu_indices_`
+  4. 重建 BLAS/TLAS（buffer 地址已变）
+- `app/include/himalaya/app/renderer.h`：`start_bake()` 签名可能需要额外参数（`SceneLoader&`，用于直接访问和修改 VB/IB）
+- `framework/include/himalaya/framework/lightmap_uv.h`：`generate_lightmap_uv()` 签名改为 `(vertices, indices, pack_resolution)` → 返回 `LightmapUVResult`
+
+**设计要点**：
+- xatlas 对非 bakeable instance（Blend 材质、退化几何）的 mesh 不运行，这些 mesh 的 UV1 保持 `{0,0}`
+- `LightmapUVResult` 结构体保留 `lightmap_uvs`、`new_indices`、`vertex_remap`、`is_fallback`，移除 `cache_hit`（不再有独立缓存）
+
+#### 8.45d. 烘焙结果写入——UV 数据随 lightmap 存储
+
+每个 instance 的烘焙结果同时写入 lightmap KTX2 和 UV 数据文件。
+
+- `app/src/renderer_bake.cpp`：`lightmap_bake_finalize()` 末尾新增 UV 数据写入：
+  - 文件路径：`cache_path("bake", lightmap_key + "_rot" + NNN + "_uv", ".bin")`
+  - 文件格式：二进制——`uint32_t vertex_count` + `uint32_t index_count` + `uint32_t flags`（bit 0: is_fallback）+ `vec2[vertex_count] lightmap_uvs` + `uint32_t[index_count] new_indices` + `uint32_t[vertex_count] vertex_remap`（复用 `CacheHeader` 格式）
+  - 使用 `atomic_write_file()` 保证原子性
+
+**设计要点**：
+- UV 数据 per-instance 存储（虽然 UV 是 per-mesh 的，多 instance 共享同一 mesh 时存在冗余，但 UV 数据体积远小于 KTX2，简化实现优先）
+- 同一 mesh 的所有 instance 写入相同的 UV 数据（因为 xatlas 是 per-mesh 运行的）
+
+#### 8.45e. 加载烘焙数据——恢复 UV + VB/IB + BLAS
+
+`BakeDataManager::load_angle()` 扩展为同时加载 UV 数据并重建 GPU 资源。
+
+- `framework/include/himalaya/framework/bake_data_manager.h`：`load_angle()` 签名扩展，新增参数：`SceneLoader&`（或等效的 VB/IB 重建接口）、`cpu_vertices` / `cpu_indices` span（用于 vertex remap）
+- `framework/src/bake_data_manager.cpp`：`load_angle()` 新增 UV 恢复阶段（在 KTX2 加载之前）：
+  1. 对每个 bakeable instance 读取 `<key>_rot<NNN>_uv.bin`
+  2. Per-mesh 去重（按 `mesh_id`，只取第一个读到的 UV 结果）
+  3. 对每个受影响的 mesh：用 vertex_remap 重建顶点（从原始 `cpu_vertices` 复制 + 写入 UV1），销毁旧 VB/IB，创建并上传新 VB/IB
+  4. 重建 BLAS/TLAS
+  5. 继续原有的 KTX2 加载 + bindless 注册流程
+
+**设计要点**：
+- `unload_angle()` 不回退 VB/IB��UV1 留在原处，不采样时无影响，下次 `load_angle` 会覆盖）
+- `scan()` 校验逻辑新增 UV bin 文件存在性检查（lightmap KTX2 + UV bin + probe KTX2 全部存在才算 complete）
+
+#### 8.45f. 死代码清理
+
+- 删除 `framework/include/himalaya/framework/lightmap_uv.h` 中的 `LightmapUVQuality` / `kDefaultLightmapUVQuality`
+- 删除 `framework/src/lightmap_uv.cpp` 中的 `CacheHeader` / `read_cache()` / `write_cache()` / `kCacheCategory` / `kPackResolution`
+- 删除 `app/include/himalaya/app/scene_loader.h` 中的 `apply_lightmap_uvs()`、`original_cpu_vertices()` / `original_cpu_indices()` 访问器、`uv_pending_*` / `original_cpu_*` 成员
+- 删除 `app/src/scene_loader.cpp` 中的 `apply_lightmap_uvs()` 实现
+- `app/src/scene_loader.cpp`：`destroy()` 中移除 `original_cpu_*` / `uv_pending_*` 的 clear
+
+**验证**：
+- 场景加载后 UV1 全部为 `{0,0}`，BLAS 构建成功，光栅化 + PT 渲染正常
+- 启动烘焙 → xatlas 运行 → VB/IB 重建 → BLAS 重建 → PosNormalMapPass UV 空间光栅化正确 → lightmap 烘焙正确
+- 烘焙完成后 bake cache 中同时存在 KTX2 和 UV bin 文件
+- 重启渲染器 → 加载场景 → scan 发现已有 bake 角度 → load_angle 读取 UV + 重建 VB/IB/BLAS + 加载 lightmap → 前向渲染采样正确
+- 切换角度 → unload + load 新角度 UV + lightmap → 正确切换
+- 无 validation 报错，无资源泄漏
 
 ---
 

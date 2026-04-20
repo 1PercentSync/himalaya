@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 8.5：Lightmap/Probe 独立开关 + UI 重排。
+Step 8.45：xatlas 重构 — UV 生成移入烘焙管线。
 
 ---
 
