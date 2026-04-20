@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 8.5：Lightmap/Probe 独立开关 + UI 重排。
+Step 8.4：LightmapUVGenerator 内联重构。
 
 ---
 

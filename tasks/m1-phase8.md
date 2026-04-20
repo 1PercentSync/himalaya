@@ -109,6 +109,14 @@
 - [x] `app/application.cpp`：`update_drag_input()` Baking 期间阻止 IBL 旋转拖拽
 - [x] `app/application.cpp`：`switch_scene()` 中 `scene_loader_.destroy()` 后无条件清理 RT 数据（BLAS/TLAS/emissive SSBOs）
 
+## Step 8.4：LightmapUVGenerator 内联重构
+
+- [ ] `framework/src/lightmap_uv_generator.cpp` + `framework/include/himalaya/framework/lightmap_uv_generator.h`：删除整个类
+- [ ] `framework/CMakeLists.txt`：移除 `lightmap_uv_generator.cpp`
+- [ ] `app/src/scene_loader.cpp` + `app/include/himalaya/app/scene_loader.h`：`apply_lightmap_uvs(uint32_t thread_count)` 内部并行化 xatlas 生成（Phase 1 并行 + Phase 2 顺序 GPU 上传），删除 `prepare_uv_requests()`
+- [ ] `app/include/himalaya/app/application.h`：移除 `uv_generator_` 成员 + `lightmap_uv_generator.h` include
+- [ ] `app/src/application.cpp`：`init()` / `switch_scene()` 调用改为 `scene_loader_.apply_lightmap_uvs(thread_count)`（合并原三行为一行）
+
 ## Step 8.5：Lightmap/Probe 独立开关 + UI 重排
 
 - [ ] `framework/scene_data.h`：`RenderFeatures::lightmap_probe` → `use_lightmap` + `use_probe`

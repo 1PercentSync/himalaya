@@ -38,6 +38,8 @@ Step 8.2: Lightmap UV 同步加载 + 流程简化
     ↓
 Step 8.3: Baking 守卫 + 文档修正 + RT 残留清理
     ↓
+Step 8.4: LightmapUVGenerator 内联重构
+    ↓
 Step 8.5: Lightmap/Probe 独立开关 + UI 重排
     ↓
 Step 9: AO/SO 按模式自动预设
@@ -62,6 +64,7 @@ Step 11: 边缘情况 + Debug 渲染模式 + 收尾
 | 8.1 | Bake 数据生命周期修复 | 场景/HDR/缓存变化时正确卸载+回退，key 含 UV hash，死数据清理 |
 | 8.2 | Lightmap UV 同步加载 + 流程简化 | 场景加载后 UV 始终就绪，异步 UV 控件移除，bake/角度加载路径简化 |
 | 8.3 | Baking 守卫 + 文档修正 + RT 残留清理 | Baking 期间场景/HDR/IBL 旋转/模式切换全部禁止，文档同步，场景加载失败清理 RT |
+| 8.4 | LightmapUVGenerator 内联重构 | Generator 类删除，apply_lightmap_uvs() 内部并行 xatlas，调用方一行完成 |
 | 8.5 | Lightmap/Probe 独立开关 + UI 重排 | LP 模式下可独立开关 lightmap/probe，Rendering 区移到 Camera 前 |
 | 9 | AO/SO 按模式自动预设 | 切换模式时 AO 参数自动切换，两模式各自记忆参数 |
 | 10 | IBL 旋转跳变 | Lightmap/Probe 模式下拖拽 IBL 旋转超过阈值跳到下一个已 bake 角度 |
@@ -377,6 +380,35 @@ Baking 期间以下操作会导致场景数据交叉引用、IBL 旋转与 bake 
 - Baking 期间左键拖拽不旋转 IBL
 - 场景加载失败后切换到 PT 模式无 validation 报错（TLAS 已清理）
 - 文档注释与 8.2 简化后的行为一致
+- 编译通过，无 validation 报错
+
+---
+
+### Step 8.4：LightmapUVGenerator 内联重构
+
+Step 8.2 将 UV 生成从异步后台任务简化为同步调用（`start()` + `wait()`），使 `LightmapUVGenerator` 类不再有独立存在的必要。当前流程存在冗余：Generator 多线程将 xatlas 结果写入磁盘缓存 → `apply_lightmap_uvs()` 单线程再从磁盘读取。重构后消除中间磁盘往返，将多线程 xatlas 生成内联到 `apply_lightmap_uvs()` 中。
+
+#### 核心变化
+
+- **删除 `LightmapUVGenerator` 类**：`lightmap_uv_generator.h` / `.cpp` 整文件删除，`framework/CMakeLists.txt` 移除源文件条目
+- **`SceneLoader::apply_lightmap_uvs(uint32_t thread_count)`**：签名增加 `thread_count` 参数，内部分两阶段：
+  - **Phase 1（并行 CPU）**：对所有 pending mesh 用 `std::jthread` + atomic work-stealing 并行调用 `generate_lightmap_uv()`，结果收集到 `std::vector<LightmapUVResult>`。复用 Generator 原有的并行模式
+  - **Phase 2（顺序 GPU）**：逐 mesh remap 顶点 + 创建/上传 VB/IB（必须在 immediate scope 内单线程执行）
+- **删除 `SceneLoader::prepare_uv_requests()`**：不再需要拷贝数据构造 Request
+- **删除 `Application::uv_generator_` 成员**：移除头文件 include
+- **`Application::init()` / `switch_scene()`**：原三行（`prepare` + `start` + `wait`）合并为一行 `apply_lightmap_uvs(thread_count)`
+
+#### 设计要点
+
+- `generate_lightmap_uv()` 函数本身不变——磁盘缓存仍有跨会话价值（首次生成写缓存，后续启动 cache hit 跳过 xatlas）
+- Phase 1 的并行安全由 `generate_lightmap_uv()` 内部保证（每个 mesh 独立文件，atomic write-to-temp + rename）
+- `uv_pending_prims_` / `uv_pending_hashes_` / `uv_original_vertices_` / `uv_original_indices_` 等 SceneLoader 内部状态不变
+- `scene_loader.h` 移除 `lightmap_uv_generator.h` include（不再依赖 Generator 的 Request 类型）
+
+**验证**：
+- 场景加载后 `cpu_vertices()` 中 uv1 数据正确（与重构前一致）
+- xatlas 缓存命中时几乎零延迟，缓存未命中时多线程并行生成
+- `LightmapUVGenerator` 类无残留引用
 - 编译通过，无 validation 报错
 
 ---
