@@ -79,7 +79,7 @@
 - [x] `app/application.cpp`：`switch_scene()` — LP 模式时先 unload bake + 回退 IBL
 - [x] `app/application.cpp`：`switch_environment()` — 同上
 - [x] `app/application.cpp`：`clear_bake_cache` / `clear_all_cache` — 同上
-- [ ] 延续到 Step 8.2：lightmap UV 同步加载 + bake 角度加载前 UV 就绪保证
+- [x] ~~bake 角度加载前 UV 就绪保证~~ → 延续到 Step 8.2（UV 同步加载）
 - [x] `app/src/renderer_bake.cpp`：`compute_lightmap_keys()` 使用 post-xatlas 数据（含 UV hash）
 - [x] `app/application.cpp`：`switch_scene()` / `switch_environment()` 中 `refresh_lightmap_keys()` 与 `trigger_bake_scan()` 调用顺序修正
 - [x] `app/renderer.h`：移除 `RenderInput::indirect_lighting_mode` + 对应填充代码
