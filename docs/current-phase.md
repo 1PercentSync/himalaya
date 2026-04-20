@@ -32,6 +32,8 @@ Step 7: Forward shader 间接光照集成（lightmap + probe 采样）
     ↓
 Step 8: 模式切换 + 角度选择 UI
     ↓
+Step 8.1: Bake 数据生命周期修复
+    ↓
 Step 8.5: Lightmap/Probe 独立开关 + UI 重排
     ↓
 Step 9: AO/SO 按模式自动预设
@@ -53,6 +55,7 @@ Step 11: 边缘情况 + Debug 渲染模式 + 收尾
 | 6 | BakeDataManager 加载与卸载 | 手动调用 load_angle() 后日志输出加载数量 + bindless 索引，unload_angle() 释放无泄漏 |
 | 7 | Forward shader 间接光照集成 | 切换到 Lightmap/Probe 模式后场景可见烘焙间接光照 + probe 反射，IBL 模式无回归 |
 | 8 | 模式切换 + 角度选择 UI | 模式 toggle 可用，角度点击切换正确加载/卸载，bake 完成后自动启用 |
+| 8.1 | Bake 数据生命周期修复 | 场景/HDR/缓存变化时正确卸载+回退，加载 bake 前 UV 就绪，key 含 UV hash |
 | 8.5 | Lightmap/Probe 独立开关 + UI 重排 | LP 模式下可独立开关 lightmap/probe，Rendering 区移到 Camera 前 |
 | 9 | AO/SO 按模式自动预设 | 切换模式时 AO 参数自动切换，两模式各自记忆参数 |
 | 10 | IBL 旋转跳变 | Lightmap/Probe 模式下拖拽 IBL 旋转超过阈值跳到下一个已 bake 角度 |
@@ -266,6 +269,43 @@ BakeDataManager 实现角度加载（KTX2 → GPU → bindless）和卸载。
 
 ---
 
+### Step 8.1：Bake 数据生命周期修复
+
+Phase 8 审查发现的生命周期和数据一致性问题。必须在 Step 8.5 之前修复，否则后续开发/测试中切换场景或 HDR 会触发越界访问。
+
+#### 8.1a. 场景/HDR/缓存变化时卸载 bake 数据并回退 IBL
+
+- `app/application.cpp`：`switch_scene()`、`switch_environment()`、`clear_bake_cache`、`clear_all_cache` 四个触发点，在变化前：若当前处于 LightmapProbe 模式 → `renderer_.unload_bake_angle()` → `indirect_lighting_mode_ = IBL` → `features_.lightmap_probe = false`
+- 从 Step 11 提前：Step 11 中 "Clear Bake Cache" 和 "场景重载 / HDR 重载" 的卸载+回退逻辑移至此处
+
+#### 8.1b. 加载已有 bake 数据前确保 lightmap UV 就绪
+
+- `app/application.cpp`：在 `switch_bake_angle()` 调用前，复用 `start_bake_session()` 的 UV 准备流程（确保后台生成器完成 → `apply_lightmap_uvs()` → 重建 BLAS/TLAS）。若 UV 已 apply 则为幂等 no-op
+- 提取 `start_bake_session()` 的前半段为可复用函数（如 `ensure_lightmap_uvs()`），`start_bake_session()` 和 bake 角度加载路径共用
+
+#### 8.1c. Lightmap cache key 加入 UV hash
+
+- `app/src/renderer_bake.cpp`：`compute_lightmap_keys()` 改为使用 post-xatlas 的 `cpu_vertices_` / `cpu_indices_`（含 uv1），而非 `original_cpu_vertices_`
+- `compute_lightmap_keys()` 必须在 `apply_lightmap_uvs()` 之后调用
+- `switch_scene()` 和 `switch_environment()` 中修正 `refresh_lightmap_keys()` 与 `trigger_bake_scan()` 的调用顺序（先 refresh 再 scan，与 `init()` 一致）
+
+#### 8.1d. 清理死数据 + 小修
+
+- `app/renderer.h`：移除 `RenderInput::indirect_lighting_mode` 字段
+- `app/application.cpp`：移除对应的 RenderInput 填充
+- `shaders/forward.frag`：修正注释 `"stored irradiance × surface albedo"` → `"stored irradiance, multiplied by surface albedo"`
+- `framework/src/bake_data_manager.cpp`：`scan()` 中 `std::stoul` + `catch(...)` → `std::from_chars`
+
+**验证**：
+- 场景切换时若处于 LP 模式 → 自动卸载 bake 数据 + 回退 IBL，无 validation 报错
+- HDR 切换时同上
+- Clear Bake Cache / Clear All Cache 时同上
+- 重启渲染器 → 加载场景 → 点击已有 bake 角度 → lightmap UV 自动 apply → 采样正确（非全零）
+- 清除 UV 缓存但保留 bake 缓存 → 加载 bake 角度时 xatlas 重新生成 → key 不匹配 → 旧 bake 数据不被错误使用
+- 编译通过，`RenderInput` 中无 `indirect_lighting_mode` 字段
+
+---
+
 ### Step 8.5：Lightmap/Probe 独立开关 + UI 重排
 
 将 `FEATURE_LIGHTMAP_PROBE` 拆为两个独立 feature flag bit，LP 模式下可单独控制 lightmap（diffuse）和 probe（specular）的使用。同时将 Rendering 区移到 Camera 前面。
@@ -321,18 +361,14 @@ Lightmap/Probe 模式下 IBL 旋转不能自由拖动，改为拖过阈值后跳
 
 ---
 
-### Step 11：边缘情况 + Debug 渲染模式 + 收尾
+### Step 11：Debug 渲染模式 + 收尾
 
-处理边缘情况，添加 debug 视图，完成收尾。
+添加 debug 视图，完成收尾。场景/HDR/缓存变化时的卸载回退已在 Step 8.1 处理。
 
-- **Clear Bake Cache**：清除后若当前处于 Lightmap/Probe 模式 → `unload_angle()` → 自动回退 IBL 模式 → 刷新角度列表（空）
-- **场景重载 / HDR 重载**：重新调用 `bake_data_manager_.scan()` 刷新角度列表。若当前角度不在新列表中 → 卸载 → 回退 IBL 模式
 - **Debug 渲染模式**：新增 `DEBUG_MODE_LIGHTMAP_ONLY`（passthrough，仅显示 lightmap 采样值）。在 Lightmap/Probe 模式下可用，IBL 模式下显示黑色
 - **Bake 完成后角度列表刷新**：确认 `scan()` 在 bake 完成时被调用
 - **Validation 全面检查**：所有模式切换路径无 validation 报错
 
 **验证**：
-- Clear Bake Cache → 自动回退 IBL，UI 角度列表清空
-- 加载新场景 → 旧 bake 数据正确处理（角度列表更新或清空）
 - Debug 模式 `LIGHTMAP_ONLY` 正确显示 lightmap UV 空间颜色
 - 全流程无 validation 报错

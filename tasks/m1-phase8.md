@@ -74,6 +74,18 @@
 - [x] `app/application.cpp`：Bake 完成后自动切换 LightmapProbe + 加载角度
 - [x] `app/debug_ui.cpp`：Lightmap/Probe 模式下 Start Bake 灰显
 
+## Step 8.1：Bake 数据生命周期修复
+
+- [ ] `app/application.cpp`：`switch_scene()` — LP 模式时先 unload bake + 回退 IBL
+- [ ] `app/application.cpp`：`switch_environment()` — 同上
+- [ ] `app/application.cpp`：`clear_bake_cache` / `clear_all_cache` — 同上
+- [ ] `app/application.cpp`：加载 bake 角度前确保 lightmap UV 就绪（提取 `start_bake_session()` 前半段为可复用函数）
+- [ ] `app/src/renderer_bake.cpp`：`compute_lightmap_keys()` 使用 post-xatlas 数据（含 UV hash）
+- [ ] `app/application.cpp`：`switch_scene()` / `switch_environment()` 中 `refresh_lightmap_keys()` 与 `trigger_bake_scan()` 调用顺序修正
+- [ ] `app/renderer.h`：移除 `RenderInput::indirect_lighting_mode` + 对应填充代码
+- [ ] `shaders/forward.frag`：修正注释（stored irradiance × surface albedo → stored irradiance, multiplied by surface albedo）
+- [ ] `framework/src/bake_data_manager.cpp`：`scan()` 中 `std::stoul` + `catch(...)` → `std::from_chars`
+
 ## Step 8.5：Lightmap/Probe 独立开关 + UI 重排
 
 - [ ] `framework/scene_data.h`：`RenderFeatures::lightmap_probe` → `use_lightmap` + `use_probe`
@@ -96,9 +108,7 @@
 - [ ] `app/application.cpp`：累积偏移超阈值 → 在已 bake 角度列表中找下一个 → `switch_bake_angle()`
 - [ ] IBL 模式保持自由旋转不变
 
-## Step 11：边缘情况 + Debug 渲染模式 + 收尾
+## Step 11：Debug 渲染模式 + 收尾
 
-- [ ] Clear Bake Cache → unload_angle + 回退 IBL + 刷新角度列表
-- [ ] 场景/HDR 重载 → 重新 scan + 当前角度失效处理
 - [ ] 新增 `DEBUG_MODE_LIGHTMAP_ONLY` passthrough 渲染模式
 - [ ] 全流程 validation 检查（所有模式切换路径）

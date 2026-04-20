@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段八 — 间接光照集成（实现中）
-- **进度**：Step 8 全部完成（模式切换 toggle + 角度选择 UI + 自动切换 + Start Bake 灰显）
+- **进度**：Step 8 全部完成 → Phase 8 审查完成 → Step 8.1 规划完成
 
 ### 下一个任务
 
-Step 9：AO/SO 按模式自动预设。
+Step 8.1：Bake 数据生命周期修复（场景/HDR/缓存变化时卸载回退、加载 bake 前 ensure UV、key 含 UV hash、清理死数据）。
 
 ---
 
