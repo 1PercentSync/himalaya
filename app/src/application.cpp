@@ -119,18 +119,7 @@ namespace himalaya::app {
                 error_message_ = "Failed to load scene: " + config_.scene_path;
             }
 
-            // Lightmap UV generation + GPU buffer rebuild.
-            // xatlas cache hits are near-instant; misses block but have no
-            // bake data to load anyway (first bake will populate the cache).
-            if (scene_ok) {
-                context_.begin_immediate();
-                scene_loader_.apply_lightmap_uvs(
-                    std::max(1u, std::thread::hardware_concurrency()));
-                context_.end_immediate();
-            }
-
             // Build RT data (acceleration structures + emissive lights) if supported.
-            // Must be after apply_lightmap_uvs() — VB/IB handles may have changed.
             if (scene_ok && context_.rt_supported) {
                 context_.begin_immediate();
                 renderer_.build_scene_rt(scene_loader_.meshes(),
@@ -222,15 +211,7 @@ namespace himalaya::app {
                 error_message_.clear();
             }
 
-            // Lightmap UV generation + GPU buffer rebuild
-            if (ok) {
-                context_.begin_immediate();
-                scene_loader_.apply_lightmap_uvs(
-                    std::max(1u, std::thread::hardware_concurrency()));
-                context_.end_immediate();
-            }
-
-            // Build RT data after UV application (VB/IB handles may have changed)
+            // Build RT data if supported.
             if (ok && context_.rt_supported) {
                 context_.begin_immediate();
                 renderer_.build_scene_rt(scene_loader_.meshes(),

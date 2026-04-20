@@ -1,150 +1,23 @@
 /**
  * @file lightmap_uv.cpp
- * @brief Lightmap UV generation via xatlas with binary disk cache.
+ * @brief Lightmap UV generation via xatlas.
  */
 
 #include <himalaya/framework/lightmap_uv.h>
-#include <himalaya/framework/cache.h>
 
 #include <himalaya/xatlas/xatlas.h>
 
 #include <spdlog/spdlog.h>
 
 #include <cassert>
-#include <fstream>
 
 namespace himalaya::framework {
-    /// Cache file header (12 bytes): array counts + flags.
-    /// Validation relies on file size consistency (like IBL alias table cache).
-    /// Old 8-byte headers are rejected by size validation and re-generated.
-    struct CacheHeader {
-        uint32_t vertex_count;
-        uint32_t index_count;
-        uint32_t flags;  ///< bit 0: is_fallback (xatlas failure or 0x0 atlas).
-    };
-
-    static_assert(sizeof(CacheHeader) == 12);
-
-    // --- Cache read/write helpers ---
-
-    /** @brief Cache category for the current build configuration (debug/release isolation). */
-#ifdef NDEBUG
-    static constexpr std::string_view kCacheCategory = "lightmap_uv_release";
-#else
-    static constexpr std::string_view kCacheCategory = "lightmap_uv_debug";
-#endif
-
-    /**
-     * Attempts to load a LightmapUVResult from disk cache.
-     * Returns nullopt on cache miss or any read/validation failure.
-     */
-    static std::optional<LightmapUVResult> read_cache(const std::string &mesh_hash) {
-        const auto path = cache_path(kCacheCategory, mesh_hash, ".bin");
-        std::ifstream ifs(path, std::ios::binary);
-        if (!ifs) {
-            return std::nullopt;
-        }
-
-        CacheHeader header{};
-        ifs.read(reinterpret_cast<char *>(&header), sizeof(header));
-        if (!ifs) {
-            return std::nullopt;
-        }
-
-        // Validate file size: header + uvs + indices + remap
-        const auto expected_size = sizeof(CacheHeader)
-                                   + header.vertex_count * sizeof(glm::vec2)
-                                   + header.index_count * sizeof(uint32_t)
-                                   + header.vertex_count * sizeof(uint32_t);
-        ifs.seekg(0, std::ios::end);
-        if (static_cast<uint64_t>(ifs.tellg()) != expected_size) {
-            return std::nullopt;
-        }
-        ifs.seekg(sizeof(CacheHeader));
-
-        LightmapUVResult result;
-        result.lightmap_uvs.resize(header.vertex_count);
-        result.new_indices.resize(header.index_count);
-        result.vertex_remap.resize(header.vertex_count);
-
-        ifs.read(reinterpret_cast<char *>(result.lightmap_uvs.data()),
-                 static_cast<std::streamsize>(header.vertex_count * sizeof(glm::vec2)));
-        ifs.read(reinterpret_cast<char *>(result.new_indices.data()),
-                 static_cast<std::streamsize>(header.index_count * sizeof(uint32_t)));
-        ifs.read(reinterpret_cast<char *>(result.vertex_remap.data()),
-                 static_cast<std::streamsize>(header.vertex_count * sizeof(uint32_t)));
-
-        if (!ifs) {
-            return std::nullopt;
-        }
-
-        result.is_fallback = (header.flags & 1u) != 0;
-        return result;
-    }
-
-    /**
-     * Writes a LightmapUVResult to disk cache (best-effort, failure is non-fatal).
-     */
-    static void write_cache(const std::string &mesh_hash, const LightmapUVResult &result) {
-        const auto path = cache_path(kCacheCategory, mesh_hash, ".bin");
-        auto tmp_path = path;
-        tmp_path += ".tmp";
-
-        std::ofstream ofs(tmp_path, std::ios::binary | std::ios::trunc);
-        if (!ofs) {
-            spdlog::warn("lightmap_uv: failed to write cache {}", path.string());
-            return;
-        }
-
-        CacheHeader header{};
-        header.vertex_count = static_cast<uint32_t>(result.lightmap_uvs.size());
-        header.index_count = static_cast<uint32_t>(result.new_indices.size());
-        header.flags = result.is_fallback ? 1u : 0u;
-
-        ofs.write(reinterpret_cast<const char *>(&header), sizeof(header));
-        ofs.write(reinterpret_cast<const char *>(result.lightmap_uvs.data()),
-                  static_cast<std::streamsize>(result.lightmap_uvs.size() * sizeof(glm::vec2)));
-        ofs.write(reinterpret_cast<const char *>(result.new_indices.data()),
-                  static_cast<std::streamsize>(result.new_indices.size() * sizeof(uint32_t)));
-        ofs.write(reinterpret_cast<const char *>(result.vertex_remap.data()),
-                  static_cast<std::streamsize>(result.vertex_remap.size() * sizeof(uint32_t)));
-        ofs.close();
-        if (!ofs.good()) {
-            std::error_code ec;
-            std::filesystem::remove(tmp_path, ec);
-            return;
-        }
-
-        // Atomic rename (write-to-temp + rename, same as ktx2.cpp)
-        std::error_code ec;
-        std::filesystem::rename(tmp_path, path, ec);
-        if (ec) {
-            spdlog::warn("lightmap_uv: rename failed: {}", ec.message());
-            std::filesystem::remove(tmp_path, ec);
-        }
-    }
-
-    // --- Public API ---
-
-    /** @brief Fixed xatlas pack resolution matching the UI slider minimum (64).
-     *  Guarantees UV island padding >= 2 texels at any bake resolution >= 64.
-     *  Not tied to BakeConfig::min_resolution so that UV cache stays valid
-     *  regardless of runtime parameter changes. */
-    constexpr uint32_t kPackResolution = 64;
-
     LightmapUVResult generate_lightmap_uv(const std::span<const Vertex> vertices,
                                           const std::span<const uint32_t> indices,
-                                          const std::string &mesh_hash) {
+                                          const uint32_t pack_resolution) {
         assert(!vertices.empty() && !indices.empty());
+        assert(pack_resolution > 0 && (pack_resolution % 4) == 0);
 
-        // Try cache first
-        if (auto cached = read_cache(mesh_hash)) {
-            cached->cache_hit = true;
-            spdlog::info("lightmap_uv: cache hit for mesh {:.8}", mesh_hash);
-            return std::move(*cached);
-        }
-
-        // --- Run xatlas ---
         xatlas::Atlas *atlas = xatlas::Create();
 
         xatlas::MeshDecl decl;
@@ -160,7 +33,6 @@ namespace himalaya::framework {
             spdlog::error("lightmap_uv: xatlas AddMesh failed: {}", xatlas::StringForEnum(error));
             xatlas::Destroy(atlas);
 
-            // Degenerate fallback: identity remap, zero UVs
             LightmapUVResult fallback;
             fallback.is_fallback = true;
             fallback.lightmap_uvs.resize(vertices.size(), glm::vec2(0.0f));
@@ -169,19 +41,13 @@ namespace himalaya::framework {
             for (uint32_t i = 0; i < vertices.size(); ++i) {
                 fallback.vertex_remap[i] = i;
             }
-
-            // Mesh-inherent errors (bad geometry): cache to avoid repeated attempts.
-            // API error (null atlas / misuse): don't cache, preserve retry opportunity.
-            if (error != xatlas::AddMeshError::Error) {
-                write_cache(mesh_hash, fallback);
-            }
             return fallback;
         }
 
         xatlas::ChartOptions chart_options;
         xatlas::PackOptions pack_options;
         pack_options.padding = 2;
-        pack_options.resolution = kPackResolution;
+        pack_options.resolution = pack_resolution;
 
         if constexpr (kDefaultLightmapUVQuality == LightmapUVQuality::Production) {
             chart_options.maxIterations = 4;
@@ -193,18 +59,16 @@ namespace himalaya::framework {
 
         xatlas::Generate(atlas, chart_options, pack_options);
 
-        // Extract results from meshes[0] (single mesh input)
         const xatlas::Mesh &out = atlas->meshes[0];
 
         LightmapUVResult result;
 
-        // Degenerate atlas (all triangles have zero area or no valid charts)
         if (atlas->width == 0 || atlas->height == 0) {
-            spdlog::warn("lightmap_uv: xatlas produced 0x0 atlas for mesh {:.8}", mesh_hash);
+            spdlog::warn("lightmap_uv: xatlas produced 0x0 atlas (pack_resolution={})",
+                         pack_resolution);
             result.is_fallback = true;
         }
 
-        // Normalize UVs from [0, atlas_size] to [0, 1]
         const float inv_w = (atlas->width > 0) ? 1.0f / static_cast<float>(atlas->width) : 0.0f;
         const float inv_h = (atlas->height > 0) ? 1.0f / static_cast<float>(atlas->height) : 0.0f;
 
@@ -225,9 +89,6 @@ namespace himalaya::framework {
                      vertices.size(), out.vertexCount, out.indexCount);
 
         xatlas::Destroy(atlas);
-
-        // Write cache (best-effort)
-        write_cache(mesh_hash, result);
 
         return result;
     }

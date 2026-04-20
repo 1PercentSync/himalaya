@@ -91,24 +91,6 @@ namespace himalaya::app {
         /** @brief Returns per-mesh CPU index data (parallel to meshes()). Available until destroy(). */
         [[nodiscard]] std::span<const std::vector<uint32_t>> cpu_indices() const;
 
-        /**
-         * @brief Returns pre-xatlas CPU vertex data (parallel to meshes()).
-         *
-         * Snapshot taken at load time, before apply_lightmap_uvs() modifies
-         * cpu_vertices_. Used by compute_lightmap_keys() to ensure cache keys
-         * are stable regardless of UV application state.
-         */
-        [[nodiscard]] std::span<const std::vector<framework::Vertex>> original_cpu_vertices() const;
-
-        /**
-         * @brief Returns pre-xatlas CPU index data (parallel to meshes()).
-         *
-         * Snapshot taken at load time, before apply_lightmap_uvs() modifies
-         * cpu_indices_. Used by compute_lightmap_keys() to ensure cache keys
-         * are stable regardless of UV application state.
-         */
-        [[nodiscard]] std::span<const std::vector<uint32_t>> original_cpu_indices() const;
-
         /** @brief Returns GPU material data array. Available until destroy(). */
         [[nodiscard]] std::span<const framework::GPUMaterialData> gpu_materials() const;
 
@@ -123,21 +105,6 @@ namespace himalaya::app {
          * ShadowConfig.max_distance and camera position.
          */
         [[nodiscard]] const framework::AABB &scene_bounds() const;
-
-        /**
-         * @brief Generates xatlas lightmap UVs and rebuilds all GPU vertex/index buffers.
-         *
-         * Phase 1 (parallel CPU): runs xatlas for each pending mesh using a
-         * thread pool with atomic work-stealing. Disk cache is checked first;
-         * cache hits skip xatlas entirely.
-         *
-         * Phase 2 (sequential GPU): remaps vertices with uv1, destroys old
-         * VB/IB, creates and uploads new ones. Must be called within a
-         * begin_immediate() / end_immediate() scope.
-         *
-         * @param thread_count Number of worker threads for parallel xatlas.
-         */
-        void apply_lightmap_uvs(uint32_t thread_count);
 
         /**
          * @brief Content hash of the scene file (XXH3_128, hex).
@@ -189,12 +156,6 @@ namespace himalaya::app {
         /** @brief CPU index data per mesh (parallel to meshes_). Retained for EmissiveLightBuilder. */
         std::vector<std::vector<uint32_t>> cpu_indices_;
 
-        /** @brief Snapshot of cpu_vertices_ at load time, before apply_lightmap_uvs(). */
-        std::vector<std::vector<framework::Vertex>> original_cpu_vertices_;
-
-        /** @brief Snapshot of cpu_indices_ at load time, before apply_lightmap_uvs(). */
-        std::vector<std::vector<uint32_t>> original_cpu_indices_;
-
         /** @brief GPU material data array. Retained for EmissiveLightBuilder emissive_factor lookup. */
         std::vector<framework::GPUMaterialData> gpu_materials_;
 
@@ -220,18 +181,6 @@ namespace himalaya::app {
 
         /** @brief Sampler handles created from glTF sampler definitions. */
         std::vector<rhi::SamplerHandle> samplers_;
-
-        /** @brief Prim indices that need xatlas UV generation (parallel arrays below). */
-        std::vector<uint32_t> uv_pending_prims_;
-
-        /** @brief Pre-computed mesh hashes for pending prims (parallel to uv_pending_prims_). */
-        std::vector<std::string> uv_pending_hashes_;
-
-        /** @brief Original vertices before xatlas (parallel to uv_pending_prims_). */
-        std::vector<std::vector<framework::Vertex>> uv_original_vertices_;
-
-        /** @brief Original indices before xatlas (parallel to uv_pending_prims_). */
-        std::vector<std::vector<uint32_t>> uv_original_indices_;
 
         // ---- Private loading stages ----
 
