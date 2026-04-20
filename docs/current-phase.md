@@ -34,6 +34,8 @@ Step 8: 模式切换 + 角度选择 UI
     ↓
 Step 8.1: Bake 数据生命周期修复
     ↓
+Step 8.2: Lightmap UV 同步加载 + 流程简化
+    ↓
 Step 8.5: Lightmap/Probe 独立开关 + UI 重排
     ↓
 Step 9: AO/SO 按模式自动预设
@@ -55,7 +57,8 @@ Step 11: 边缘情况 + Debug 渲染模式 + 收尾
 | 6 | BakeDataManager 加载与卸载 | 手动调用 load_angle() 后日志输出加载数量 + bindless 索引，unload_angle() 释放无泄漏 |
 | 7 | Forward shader 间接光照集成 | 切换到 Lightmap/Probe 模式后场景可见烘焙间接光照 + probe 反射，IBL 模式无回归 |
 | 8 | 模式切换 + 角度选择 UI | 模式 toggle 可用，角度点击切换正确加载/卸载，bake 完成后自动启用 |
-| 8.1 | Bake 数据生命周期修复 | 场景/HDR/缓存变化时正确卸载+回退，加载 bake 前 UV 就绪，key 含 UV hash |
+| 8.1 | Bake 数据生命周期修复 | 场景/HDR/缓存变化时正确卸载+回退，key 含 UV hash，死数据清理 |
+| 8.2 | Lightmap UV 同步加载 + 流程简化 | 场景加载后 UV 始终就绪，异步 UV 控件移除，bake/角度加载路径简化 |
 | 8.5 | Lightmap/Probe 独立开关 + UI 重排 | LP 模式下可独立开关 lightmap/probe，Rendering 区移到 Camera 前 |
 | 9 | AO/SO 按模式自动预设 | 切换模式时 AO 参数自动切换，两模式各自记忆参数 |
 | 10 | IBL 旋转跳变 | Lightmap/Probe 模式下拖拽 IBL 旋转超过阈值跳到下一个已 bake 角度 |
@@ -303,6 +306,35 @@ Phase 8 审查发现的生命周期和数据一致性问题。必须在 Step 8.5
 - 重启渲染器 → 加载场景 → 点击已有 bake 角度 → lightmap UV 自动 apply → 采样正确（非全零）
 - 清除 UV 缓存但保留 bake 缓存 → 加载 bake 角度时 xatlas 重新生成 → key 不匹配 → 旧 bake 数据不被错误使用
 - 编译通过，`RenderInput` 中无 `indirect_lighting_mode` 字段
+
+---
+
+### Step 8.2：Lightmap UV 同步加载 + 流程简化
+
+UV 数据是 bake 结果加载的前置依赖（lightmap 采样依赖 xatlas UV），因此 UV 生成/加载应在场景加载时同步完成，异步后台生成的复杂度不再必要。
+
+#### 核心变化
+
+- **场景加载流程重排**：`init()` 和 `switch_scene()` 中，场景加载后立即同步完成 xatlas 生成���多线程 `LightmapUVGenerator::start()` + `wait()`）→ `apply_lightmap_uvs()` → 重建 BLAS/TLAS。之后 `refresh_lightmap_keys()` 和 `trigger_bake_scan()` 使用 post-xatlas 数据
+- **`start_bake_session()` 精简**：移除 UV 准备步骤（GPU idle + generator start/wait + apply + BLAS/TLAS rebuild），直接开始 bake
+- **移除 `ensure_lightmap_uvs()`**：场景加载时 UV 始终就绪，不再需要运行时检查
+- **移除异步 UV UI**：DebugUI 中 Background UV 的 Start/Stop/Progress 控件及对应的 `DebugUIContext` / `DebugUIActions` 字段
+- **移除 `uv_generator_` 异步控制**：Application 中 `uv_generator_` 仅在场景加载路径中同步使用，不再作为后台任务暴露
+
+#### 设计要点
+
+- `LightmapUVGenerator` 类本身保留——多线程加速对大场景仍有价值，但使用方式从"后台异步 + UI 控制"简化为"同步调用 + 等待完成"
+- xatlas 缓存命中时（之前 bake 过），同步流程几乎零延迟（仅缓存读取 + remap + GPU 上传）
+- xatlas 缓存未命中时（首次加载），场景加载阶段阻塞完成生成。此时无 bake 数据可加载，不影响用户体验
+- `AppConfig` 中 `bg_uv_thread_count` 保留供同步生成使用，`bg_uv_auto_start` 可移除
+
+**验证**：
+- 场景加载后 `cpu_vertices()` 中 uv1 数据正确（非全零）
+- `refresh_lightmap_keys()` + `trigger_bake_scan()` 使用 post-xatlas 数据，已有 bake 角度正确显示
+- 点击 bake 角度直接加载成功（无需额外 UV 准备）
+- Start Bake 直接开始（无阻塞 UV 准备步骤）
+- DebugUI 中无 Background UV 控件
+- 编译通过，无 validation 报错
 
 ---
 

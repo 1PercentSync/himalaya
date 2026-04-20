@@ -79,12 +79,24 @@
 - [x] `app/application.cpp`：`switch_scene()` — LP 模式时先 unload bake + 回退 IBL
 - [x] `app/application.cpp`：`switch_environment()` — 同上
 - [x] `app/application.cpp`：`clear_bake_cache` / `clear_all_cache` — 同上
-- [ ] `app/application.cpp`：加载 bake 角度前确保 lightmap UV 就绪（提取 `start_bake_session()` 前半段为可复用函数）
+- [ ] 延续到 Step 8.2：lightmap UV 同步加载 + bake 角度加载前 UV 就绪保证
 - [x] `app/src/renderer_bake.cpp`：`compute_lightmap_keys()` 使用 post-xatlas 数据（含 UV hash）
 - [x] `app/application.cpp`：`switch_scene()` / `switch_environment()` 中 `refresh_lightmap_keys()` 与 `trigger_bake_scan()` 调用顺序修正
 - [x] `app/renderer.h`：移除 `RenderInput::indirect_lighting_mode` + 对应填充代码
 - [x] `shaders/forward.frag`：修正注释（stored irradiance × surface albedo → stored irradiance, multiplied by surface albedo）
 - [x] `framework/src/bake_data_manager.cpp`：`scan()` 中 `std::stoul` + `catch(...)` → `std::from_chars`
+
+## Step 8.2：Lightmap UV 同步加载 + 流程简化
+
+- [ ] `app/application.cpp`：场景加载后同步完成 xatlas 生成 + `apply_lightmap_uvs()` + BLAS/TLAS 重建（init / switch_scene）
+- [ ] `app/application.cpp`：`start_bake_session()` 移除 UV 准备步骤（场景加载时已完成）
+- [ ] `app/application.cpp`：移除 `ensure_lightmap_uvs()` （不再需要）
+- [ ] `app/application.h`：移除 `uv_generator_` 成员 + 相关异步控制逻辑
+- [ ] `app/debug_ui.h` + `app/debug_ui.cpp`：移除 Background UV Start/Stop/Progress 控件
+- [ ] `app/debug_ui.h`：`DebugUIContext` 移除 `bg_uv_*` 字段
+- [ ] `app/debug_ui.h`：`DebugUIActions` 移除 `bg_uv_*` 字段
+- [ ] `app/application.h`：`AppConfig` 移除 `bg_uv_thread_count` / `bg_uv_auto_start`（或保留 thread_count 供同步生成用）
+- [ ] `app/application.cpp`：`refresh_lightmap_keys()` 调整——场景加载时 UV 已 apply，直接用 post-xatlas 数据
 
 ## Step 8.5：Lightmap/Probe 独立开关 + UI 重排
 
