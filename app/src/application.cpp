@@ -132,7 +132,7 @@ namespace himalaya::app {
             }
         }
 
-        // Compute lightmap keys (post-xatlas data) and scan bake cache.
+        // Compute lightmap keys and scan bake cache.
         refresh_lightmap_keys();
         trigger_bake_scan();
 

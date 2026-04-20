@@ -188,8 +188,6 @@ namespace himalaya::app {
         bake_lightmap_keys_.clear();
         bake_instance_indices_.clear();
         const auto scene_hash = scene_loader.scene_hash();
-        // Use current (post-xatlas) data so keys include lightmap UV topology.
-        // Must be called after apply_lightmap_uvs().
         const auto cpu_vertices = scene_loader.cpu_vertices();
         const auto cpu_indices = scene_loader.cpu_indices();
 
@@ -197,10 +195,24 @@ namespace himalaya::app {
             [&](uint32_t scene_idx, const framework::MeshInstance &inst, const framework::Mesh &/*mesh*/) {
                 const auto &verts = cpu_vertices[inst.mesh_id];
                 const auto &idxs = cpu_indices[inst.mesh_id];
-                const auto vertices_hash = framework::content_hash(verts.data(), verts.size() * sizeof(framework::Vertex));
-                const auto indices_hash = framework::content_hash(idxs.data(), idxs.size() * sizeof(uint32_t));
+
+                // Hash geometry topology only (positions + indices), not full Vertex.
+                // Key is based on pure inputs — xatlas UV is an output, not an input.
+                const auto pos_bytes = verts.size() * sizeof(glm::vec3);
+                const auto idx_bytes = idxs.size() * sizeof(uint32_t);
+                std::vector<uint8_t> geo_buf(pos_bytes + idx_bytes);
+                {
+                    auto *dst = geo_buf.data();
+                    for (const auto &v : verts) {
+                        std::memcpy(dst, &v.position, sizeof(glm::vec3));
+                        dst += sizeof(glm::vec3);
+                    }
+                    std::memcpy(dst, idxs.data(), idx_bytes);
+                }
+                const auto geometry_hash = framework::content_hash(geo_buf.data(), geo_buf.size());
+
                 const auto transform_hash = framework::content_hash(&inst.transform, sizeof(glm::mat4));
-                const std::string key_input = scene_hash + vertices_hash + indices_hash
+                const std::string key_input = scene_hash + geometry_hash
                                               + transform_hash + hdr_hash + scene_textures_hash;
                 bake_lightmap_keys_.push_back(
                     framework::content_hash(key_input.data(), key_input.size()));
