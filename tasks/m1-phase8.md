@@ -107,7 +107,7 @@
 - [x] `app/debug_ui.cpp`：Baking 期间灰显场景加载 / HDR 加载按钮（已有守卫，无需修改）
 - [x] `app/debug_ui.cpp`：Baking 期间灰显 IBL/LP radio button + Baked Angle List
 - [x] `app/application.cpp`：`update_drag_input()` Baking 期间阻止 IBL 旋转拖拽
-- [ ] `app/application.cpp`：`switch_scene()` 中 `scene_loader_.destroy()` 后无条件清理 RT 数据（BLAS/TLAS/emissive SSBOs）
+- [x] `app/application.cpp`：`switch_scene()` 中 `scene_loader_.destroy()` 后无条件清理 RT 数据（BLAS/TLAS/emissive SSBOs）
 
 ## Step 8.5：Lightmap/Probe 独立开关 + UI 重排
 
