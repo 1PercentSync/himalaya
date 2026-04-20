@@ -120,7 +120,21 @@ namespace himalaya::app {
                 error_message_ = "Failed to load scene: " + config_.scene_path;
             }
 
-            // Build RT data (acceleration structures + emissive lights) if supported
+            // Synchronous lightmap UV generation + application.
+            // xatlas cache hits are near-instant; misses block but have no
+            // bake data to load anyway (first bake will populate the cache).
+            if (scene_ok) {
+                uv_generator_.start(scene_loader_.prepare_uv_requests(),
+                                    config_.bg_uv_thread_count);
+                uv_generator_.wait();
+
+                context_.begin_immediate();
+                scene_loader_.apply_lightmap_uvs();
+                context_.end_immediate();
+            }
+
+            // Build RT data (acceleration structures + emissive lights) if supported.
+            // Must be after apply_lightmap_uvs() — VB/IB handles may have changed.
             if (scene_ok && context_.rt_supported) {
                 context_.begin_immediate();
                 renderer_.build_scene_rt(scene_loader_.meshes(),
@@ -131,17 +145,9 @@ namespace himalaya::app {
                                          scene_loader_.cpu_indices());
                 context_.end_immediate();
             }
-
-            // Auto-start background UV generation if configured
-            if (scene_ok && config_.bg_uv_auto_start) {
-                auto requests = scene_loader_.prepare_uv_requests();
-                uv_generator_.start(std::move(requests), config_.bg_uv_thread_count);
-            }
         }
 
-        // Compute lightmap keys and scan bake cache for available angles.
-        // switch_scene() / switch_environment() call these on runtime changes,
-        // but init() loads scene/HDR directly — must be called here as well.
+        // Compute lightmap keys (post-xatlas data) and scan bake cache.
         refresh_lightmap_keys();
         trigger_bake_scan();
 
@@ -193,7 +199,6 @@ namespace himalaya::app {
     // ---- Runtime scene/environment switching ----
 
     void Application::switch_scene(const std::string &path) {
-        uv_generator_.cancel();
         vkQueueWaitIdle(context_.graphics_queue);
 
         // Unload bake data before destroying scene (indices reference old instances)
@@ -220,7 +225,18 @@ namespace himalaya::app {
                 error_message_.clear();
             }
 
-            // Build RT data (acceleration structures + emissive lights) if supported
+            // Synchronous lightmap UV generation + application
+            if (ok) {
+                uv_generator_.start(scene_loader_.prepare_uv_requests(),
+                                    config_.bg_uv_thread_count);
+                uv_generator_.wait();
+
+                context_.begin_immediate();
+                scene_loader_.apply_lightmap_uvs();
+                context_.end_immediate();
+            }
+
+            // Build RT data after UV application (VB/IB handles may have changed)
             if (ok && context_.rt_supported) {
                 context_.begin_immediate();
                 renderer_.build_scene_rt(scene_loader_.meshes(),
@@ -230,12 +246,6 @@ namespace himalaya::app {
                                          scene_loader_.cpu_vertices(),
                                          scene_loader_.cpu_indices());
                 context_.end_immediate();
-            }
-
-            // Auto-start background UV generation if configured
-            if (ok && config_.bg_uv_auto_start) {
-                auto requests = scene_loader_.prepare_uv_requests();
-                uv_generator_.start(std::move(requests), config_.bg_uv_thread_count);
             }
         }
 
@@ -286,33 +296,9 @@ namespace himalaya::app {
     }
 
     void Application::start_bake_session() {
-        // Wait for in-flight GPU work before destroying old VB/IB.
-        // apply_lightmap_uvs() calls destroy_buffer() which frees Vulkan
-        // handles immediately — in-flight frames may still reference them
-        // via BLAS. Same pattern as switch_scene() / recreate_swapchain().
+        // Lightmap UVs are already applied during scene load (init / switch_scene).
+        // BLAS/TLAS are also current. Just start the bake.
         vkQueueWaitIdle(context_.graphics_queue);
-
-        // Ensure all xatlas UV caches are populated
-        if (!uv_generator_.running()) {
-            auto requests = scene_loader_.prepare_uv_requests();
-            uv_generator_.start(std::move(requests), config_.bg_uv_thread_count);
-        }
-        uv_generator_.wait();
-
-        // Rebuild all VB/IB with lightmap UVs (cache hits after generator wait)
-        context_.begin_immediate();
-        scene_loader_.apply_lightmap_uvs();
-        context_.end_immediate();
-
-        // Rebuild BLAS/TLAS with new VB/IB handles
-        context_.begin_immediate();
-        renderer_.build_scene_rt(scene_loader_.meshes(),
-                                 scene_loader_.mesh_instances(),
-                                 scene_loader_.material_instances(),
-                                 scene_loader_.gpu_materials(),
-                                 scene_loader_.cpu_vertices(),
-                                 scene_loader_.cpu_indices());
-        context_.end_immediate();
 
         // Start the bake
         context_.begin_immediate();
