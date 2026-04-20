@@ -196,6 +196,13 @@ namespace himalaya::app {
         uv_generator_.cancel();
         vkQueueWaitIdle(context_.graphics_queue);
 
+        // Unload bake data before destroying scene (indices reference old instances)
+        if (features_.lightmap_probe) {
+            renderer_.unload_bake_angle();
+            indirect_lighting_mode_ = framework::IndirectLightingMode::IBL;
+            features_.lightmap_probe = false;
+        }
+
         renderer_.abort_denoise();
         scene_loader_.destroy();
 
@@ -244,6 +251,13 @@ namespace himalaya::app {
 
     void Application::switch_environment(const std::string &path) {
         vkQueueWaitIdle(context_.graphics_queue);
+
+        // Unload bake data (baked with old HDR, keys will change)
+        if (features_.lightmap_probe) {
+            renderer_.unload_bake_angle();
+            indirect_lighting_mode_ = framework::IndirectLightingMode::IBL;
+            features_.lightmap_probe = false;
+        }
 
         const bool ok = renderer_.reload_environment(path);
 
@@ -757,6 +771,11 @@ namespace himalaya::app {
             render_mode_ = renderer_.bake_pre_mode();
         }
         if (actions.clear_bake_cache_requested) {
+            if (features_.lightmap_probe) {
+                renderer_.unload_bake_angle();
+                indirect_lighting_mode_ = framework::IndirectLightingMode::IBL;
+                features_.lightmap_probe = false;
+            }
             framework::clear_cache("bake");
             trigger_bake_scan();
         }
@@ -765,6 +784,11 @@ namespace himalaya::app {
             framework::clear_cache("lightmap_uv_release");
         }
         if (actions.clear_all_cache_requested) {
+            if (features_.lightmap_probe) {
+                renderer_.unload_bake_angle();
+                indirect_lighting_mode_ = framework::IndirectLightingMode::IBL;
+                features_.lightmap_probe = false;
+            }
             framework::clear_all_cache();
             trigger_bake_scan();
         }
