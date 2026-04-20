@@ -785,21 +785,24 @@ namespace himalaya::app {
 
             // Indirect lighting mode toggle
             {
+                const bool baking = ctx.render_mode == framework::RenderMode::Baking;
                 const bool is_ibl = ctx.indirect_lighting_mode == framework::IndirectLightingMode::IBL;
                 const bool is_lp = !is_ibl;
 
+                if (baking) { ImGui::BeginDisabled(); }
                 if (ImGui::RadioButton("IBL", is_ibl)) {
                     ctx.indirect_lighting_mode = framework::IndirectLightingMode::IBL;
                 }
                 ImGui::SameLine();
 
-                const bool can_select_lp = ctx.has_bake_data;
+                const bool can_select_lp = ctx.has_bake_data && !baking;
                 if (!can_select_lp) { ImGui::BeginDisabled(); }
                 if (ImGui::RadioButton("Lightmap/Probe", is_lp)) {
                     ctx.indirect_lighting_mode = framework::IndirectLightingMode::LightmapProbe;
                 }
                 if (!can_select_lp) { ImGui::EndDisabled(); }
-                if (!can_select_lp && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
+                if (baking) { ImGui::EndDisabled(); }
+                if (!ctx.has_bake_data && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
                     ImGui::SetTooltip("No baked lighting data available");
                 }
             }
@@ -1054,6 +1057,9 @@ namespace himalaya::app {
             if (!ctx.available_angles.empty()) {
                 ImGui::Separator();
                 ImGui::Text("Baked Angles");
+
+                const bool baking = ctx.render_mode == framework::RenderMode::Baking;
+                if (baking) { ImGui::BeginDisabled(); }
                 for (const auto& [rot, lm, probes] : ctx.available_angles) {
                     const bool is_loaded = ctx.bake_data_loaded
                         && rot == ctx.loaded_bake_rotation;
@@ -1068,6 +1074,7 @@ namespace himalaya::app {
                         actions.new_angle_rotation = rot;
                     }
                 }
+                if (baking) { ImGui::EndDisabled(); }
             }
         }
 

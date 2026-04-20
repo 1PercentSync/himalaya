@@ -986,8 +986,10 @@ namespace himalaya::app {
                 fallback_light_pitch_ = std::clamp(fallback_light_pitch_, -kMaxPitch, kMaxPitch);
             } else if (!alt_held) {
                 // Left drag without Alt: IBL rotation (horizontal only)
-                // Blocked in Lightmap/Probe mode (Step 10 will add snap-to-angle)
-                if (indirect_lighting_mode_ != framework::IndirectLightingMode::LightmapProbe) {
+                // Blocked during baking (rotation locked to bake_rotation_int_)
+                // and in Lightmap/Probe mode (Step 10 will add snap-to-angle)
+                if (render_mode_ != framework::RenderMode::Baking
+                    && indirect_lighting_mode_ != framework::IndirectLightingMode::LightmapProbe) {
                     ibl_yaw_ += dx * kSensitivity;
                 }
             }
