@@ -781,18 +781,15 @@ namespace himalaya::app {
     }
 
     void SceneLoader::rebuild_mesh_buffers(const uint32_t mesh_id,
-                                             std::vector<framework::Vertex> new_vertices,
-                                             std::vector<uint32_t> new_indices) {
+                                             const std::span<const framework::Vertex> new_vertices,
+                                             const std::span<const uint32_t> new_indices) {
         assert(mesh_id < meshes_.size());
-
-        cpu_vertices_[mesh_id] = std::move(new_vertices);
-        cpu_indices_[mesh_id] = std::move(new_indices);
 
         resource_manager_->destroy_buffer(buffers_[mesh_id * 2]);
         resource_manager_->destroy_buffer(buffers_[mesh_id * 2 + 1]);
 
-        const auto vb_size = cpu_vertices_[mesh_id].size() * sizeof(framework::Vertex);
-        const auto ib_size = cpu_indices_[mesh_id].size() * sizeof(uint32_t);
+        const auto vb_size = new_vertices.size() * sizeof(framework::Vertex);
+        const auto ib_size = new_indices.size() * sizeof(uint32_t);
 
         const auto label = "Prim " + std::to_string(mesh_id);
         auto vb_usage = rhi::BufferUsage::VertexBuffer | rhi::BufferUsage::TransferDst;
@@ -815,15 +812,15 @@ namespace himalaya::app {
             .memory = rhi::MemoryUsage::GpuOnly,
         }, (label + " IB").c_str());
 
-        resource_manager_->upload_buffer(vb, cpu_vertices_[mesh_id].data(), vb_size);
-        resource_manager_->upload_buffer(ib, cpu_indices_[mesh_id].data(), ib_size);
+        resource_manager_->upload_buffer(vb, new_vertices.data(), vb_size);
+        resource_manager_->upload_buffer(ib, new_indices.data(), ib_size);
 
         buffers_[mesh_id * 2] = vb;
         buffers_[mesh_id * 2 + 1] = ib;
         meshes_[mesh_id].vertex_buffer = vb;
         meshes_[mesh_id].index_buffer = ib;
-        meshes_[mesh_id].vertex_count = static_cast<uint32_t>(cpu_vertices_[mesh_id].size());
-        meshes_[mesh_id].index_count = static_cast<uint32_t>(cpu_indices_[mesh_id].size());
+        meshes_[mesh_id].vertex_count = static_cast<uint32_t>(new_vertices.size());
+        meshes_[mesh_id].index_count = static_cast<uint32_t>(new_indices.size());
     }
 
 } // namespace himalaya::app

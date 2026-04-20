@@ -1099,9 +1099,6 @@ namespace himalaya::app {
                 }
                 if (baking) { ImGui::EndDisabled(); }
             }
-            if (ImGui::Button("Clear Lightmap UV Cache")) {
-                actions.clear_uv_cache_requested = true;
-            }
             ImGui::Spacing();
             {
                 const bool baking = ctx.render_mode == framework::RenderMode::Baking;

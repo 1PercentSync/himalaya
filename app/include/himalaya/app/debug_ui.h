@@ -339,9 +339,6 @@ namespace himalaya::app {
         /** @brief True if the user clicked the Clear Bake Cache button. */
         bool clear_bake_cache_requested = false;
 
-        /** @brief True if the user clicked the Clear Lightmap UV Cache button. */
-        bool clear_uv_cache_requested = false;
-
         /** @brief True if the user clicked the Clear All Cache button. */
         bool clear_all_cache_requested = false;
 

@@ -116,10 +116,11 @@ namespace himalaya::app {
 
         const auto rot = format_rotation(rotation_int);
 
-        // Check all lightmap KTX2 files
+        // Check all lightmap KTX2 + UV bin files
         for (const auto &key : lightmap_keys) {
-            const auto path = framework::cache_path("bake", key + "_rot" + rot, ".ktx2");
-            if (!std::filesystem::exists(path)) {
+            const auto ktx2_path = framework::cache_path("bake", key + "_rot" + rot, ".ktx2");
+            const auto uv_path = framework::cache_path("bake", key + "_rot" + rot + "_uv", ".bin");
+            if (!std::filesystem::exists(ktx2_path) || !std::filesystem::exists(uv_path)) {
                 return false;
             }
         }
@@ -264,9 +265,11 @@ namespace himalaya::app {
         const auto uv_data = framework::BakeDataManager::read_angle_uv_data(
             rotation_int, bake_lightmap_keys_);
 
-        // Per-mesh dedup: only rebuild each mesh once
+        // Per-mesh dedup: only rebuild each mesh once, single immediate scope
         std::unordered_set<uint32_t> rebuilt_meshes;
         const auto cpu_vertices = scene_loader.cpu_vertices();
+
+        ctx_->begin_immediate();
         for (size_t i = 0; i < uv_data.size(); ++i) {
             if (!uv_data[i]) { continue; }
             const auto &inst = mesh_instances[bake_instance_indices_[i]];
@@ -281,23 +284,20 @@ namespace himalaya::app {
                 new_vertices[v].uv1 = uv.lightmap_uvs[v];
             }
 
-            ctx_->begin_immediate();
             scene_loader.rebuild_mesh_buffers(
-                inst.mesh_id, std::move(new_vertices), uv.new_indices);
-            ctx_->end_immediate();
+                inst.mesh_id, new_vertices, uv.new_indices);
         }
 
         // Rebuild BLAS/TLAS if any mesh was modified
         if (!rebuilt_meshes.empty() && ctx_->rt_supported) {
-            ctx_->begin_immediate();
             build_scene_rt(scene_loader.meshes(),
                            mesh_instances,
                            scene_loader.material_instances(),
                            scene_loader.gpu_materials(),
                            scene_loader.cpu_vertices(),
                            scene_loader.cpu_indices());
-            ctx_->end_immediate();
         }
+        ctx_->end_immediate();
 
         // Load lightmap KTX2s + probes
         ctx_->begin_immediate();
@@ -431,7 +431,7 @@ namespace himalaya::app {
                     new_vertices[v].uv1 = task.result.lightmap_uvs[v];
                 }
                 scene_loader.rebuild_mesh_buffers(
-                    task.mesh_id, std::move(new_vertices), task.result.new_indices);
+                    task.mesh_id, new_vertices, task.result.new_indices);
             }
 
             // Store xatlas results for UV cache writing in lightmap_bake_finalize()

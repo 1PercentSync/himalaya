@@ -388,13 +388,11 @@ namespace himalaya::app {
          * Called by Application after scene/HDR load (for baked angle scanning)
          * and internally by start_bake().
          *
-         * @param mesh_instances     All scene instances.
-         * @param meshes             All loaded meshes (vertex/index counts).
-         * @param materials          All material instances (alpha mode filtering).
-         * @param cpu_vertices       Per-mesh CPU vertex data (hash input).
-         * @param cpu_indices        Per-mesh CPU index data (hash input).
-         * @param scene_hash         Content hash of the scene file.
-         * @param hdr_hash           Content hash of the HDR environment file.
+         * @param mesh_instances      All scene instances.
+         * @param meshes              All loaded meshes (vertex/index counts).
+         * @param materials           All material instances (alpha mode filtering).
+         * @param scene_loader        Scene loader (provides scene_hash, cpu_vertices, cpu_indices).
+         * @param hdr_hash            Content hash of the HDR environment file.
          * @param scene_textures_hash Composite hash of all scene texture source bytes.
          */
         void compute_lightmap_keys(

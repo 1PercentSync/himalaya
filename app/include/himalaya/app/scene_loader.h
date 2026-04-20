@@ -125,21 +125,22 @@ namespace himalaya::app {
         [[nodiscard]] const std::string &scene_textures_hash() const;
 
         /**
-         * @brief Rebuilds VB/IB for a mesh after xatlas UV application.
+         * @brief Rebuilds GPU VB/IB for a mesh after xatlas UV application.
          *
-         * Replaces cpu_vertices_[mesh_id] and cpu_indices_[mesh_id] with the
-         * remapped data, destroys old GPU buffers, creates and uploads new ones.
-         * Updates meshes_[mesh_id] handles and counts.
+         * Destroys old GPU buffers, creates and uploads new ones from the
+         * provided data. Updates meshes_[mesh_id] handles and counts.
+         * Does NOT modify cpu_vertices_/cpu_indices_ (CPU data stays as
+         * original scene data for stable cache keys and remap sources).
          *
          * Must be called within a begin_immediate() / end_immediate() scope.
          *
-         * @param mesh_id      Index into meshes_ / cpu_vertices_ / cpu_indices_.
+         * @param mesh_id      Index into meshes_.
          * @param new_vertices Remapped vertex array (with uv1 filled).
          * @param new_indices  Remapped index array from xatlas.
          */
         void rebuild_mesh_buffers(uint32_t mesh_id,
-                                  std::vector<framework::Vertex> new_vertices,
-                                  std::vector<uint32_t> new_indices);
+                                  std::span<const framework::Vertex> new_vertices,
+                                  std::span<const uint32_t> new_indices);
 
     private:
         // ---- Subsystem references (set during load) ----

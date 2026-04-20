@@ -713,10 +713,6 @@ namespace himalaya::app {
             framework::clear_cache("bake");
             trigger_bake_scan();
         }
-        if (actions.clear_uv_cache_requested) {
-            framework::clear_cache("lightmap_uv_debug");
-            framework::clear_cache("lightmap_uv_release");
-        }
         if (actions.clear_all_cache_requested) {
             if (features_.lightmap_probe) {
                 renderer_.unload_bake_angle();
