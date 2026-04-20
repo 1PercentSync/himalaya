@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段八 — 间接光照集成（实现中）
-- **进度**：Step 8.1 ~ 8.4 全部完成，Step 8.45a + 8.45b 完成
+- **进度**：Step 8.1 ~ 8.4 全部完成，Step 8.45a + 8.45b + 8.45c 完成
 
 ### 下一个任务
 
-Step 8.45c：烘焙启动集成 xatlas（`start_bake()` 新增 xatlas 阶段）。
+Step 8.45d：`lightmap_bake_finalize()` 新增 UV 数据写入。
 
 ---
 
