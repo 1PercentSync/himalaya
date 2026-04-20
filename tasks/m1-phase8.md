@@ -130,7 +130,7 @@
 - [x] 8.45c. `start_bake()` 新增 xatlas 阶段：per-mesh 分组取 max resolution → 并行 xatlas → 顺序 VB/IB 重建 → BLAS/TLAS 重建
 - [x] 8.45d. `lightmap_bake_finalize()` 新增 UV 数据写入（`<key>_rot<NNN>_uv.bin`，atomic_write_file）
 - [x] 8.45e. `bake_data_manager.cpp`：`read_angle_uv_data()` + `scan()` UV bin 校验；`switch_bake_angle()` 读 UV → per-mesh 去重 → VB/IB 重建 → BLAS/TLAS 重建
-- [ ] 8.45f. 死代码清理：确认所有已移除的声明/实现无残留引用
+- [x] 8.45f. 死代码清理：确认所有已移除的声明/实现无残留引用
 
 ## Step 8.5：Lightmap/Probe 独立开关 + UI 重排
 
