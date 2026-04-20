@@ -88,15 +88,16 @@
 
 ## Step 8.2：Lightmap UV 同步加载 + 流程简化
 
-- [ ] `app/application.cpp`：场景加载后同步完成 xatlas 生成 + `apply_lightmap_uvs()` + BLAS/TLAS 重建（init / switch_scene）
-- [ ] `app/application.cpp`：`start_bake_session()` 移除 UV 准备步骤（场景加载时已完成）
-- [ ] `app/application.cpp`：移除 `ensure_lightmap_uvs()` （不再需要）
-- [ ] `app/application.h`：移除 `uv_generator_` 成员 + 相关异步控制逻辑
-- [ ] `app/debug_ui.h` + `app/debug_ui.cpp`：移除 Background UV Start/Stop/Progress 控件
-- [ ] `app/debug_ui.h`：`DebugUIContext` 移除 `bg_uv_*` 字段
-- [ ] `app/debug_ui.h`：`DebugUIActions` 移除 `bg_uv_*` 字段
-- [ ] `app/application.h`：`AppConfig` 移除 `bg_uv_thread_count` / `bg_uv_auto_start`（或保留 thread_count 供同步生成用）
-- [ ] `app/application.cpp`：`refresh_lightmap_keys()` 调整——场景加载时 UV 已 apply，直接用 post-xatlas 数据
+- [x] `app/application.cpp`：场景加载后同步完成 xatlas 生成 + `apply_lightmap_uvs()` + BLAS/TLAS 重建（init / switch_scene）
+- [x] `app/application.cpp`：`start_bake_session()` 移除 UV 准备步骤（场景加载时已完成）
+- [x] `app/application.cpp`：移除 `ensure_lightmap_uvs()` （不再需要，从未合入）
+- [x] `app/application.h`：`uv_generator_` 保留为成员（同步使用），移除异步控制逻辑
+- [x] `app/debug_ui.h` + `app/debug_ui.cpp`：移除 Background UV Start/Stop/Progress 控件
+- [x] `app/debug_ui.h`：`DebugUIContext` 移除 `bg_uv_*` 字段
+- [x] `app/debug_ui.h`：`DebugUIActions` 移除 `bg_uv_*` 字段
+- [x] `app/config.h` + `config.cpp`：移除 `bg_uv_thread_count` / `bg_uv_auto_start`，线程数改为运行时 `hardware_concurrency()`
+- [x] `app/application.h`：移除 `resolve_thread_count()`
+- [x] `app/application.cpp`：`refresh_lightmap_keys()` 已在 8.1c 中改用 post-xatlas 数据
 
 ## Step 8.5：Lightmap/Probe 独立开关 + UI 重排
 
