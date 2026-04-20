@@ -244,8 +244,8 @@ namespace himalaya::app {
         camera_controller_.set_focus_target(&scene_loader_.scene_bounds());
 
         config_.scene_path = path;
-        trigger_bake_scan();
         refresh_lightmap_keys();
+        trigger_bake_scan();
         save_config(config_);
     }
 
@@ -269,8 +269,8 @@ namespace himalaya::app {
 
         config_.env_path = path;
         env_content_hash_ = path.empty() ? std::string{} : framework::content_hash(path);
-        trigger_bake_scan();
         refresh_lightmap_keys();
+        trigger_bake_scan();
 
         // Restore persisted HDR sun coordinates for the new environment
         if (const auto it = config_.hdr_sun_coords.find(path);

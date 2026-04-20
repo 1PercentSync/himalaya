@@ -188,9 +188,10 @@ namespace himalaya::app {
         bake_lightmap_keys_.clear();
         bake_instance_indices_.clear();
         const auto scene_hash = scene_loader.scene_hash();
-        // Use original (pre-xatlas) data so keys are stable regardless of UV application.
-        const auto cpu_vertices = scene_loader.original_cpu_vertices();
-        const auto cpu_indices = scene_loader.original_cpu_indices();
+        // Use current (post-xatlas) data so keys include lightmap UV topology.
+        // Must be called after apply_lightmap_uvs().
+        const auto cpu_vertices = scene_loader.cpu_vertices();
+        const auto cpu_indices = scene_loader.cpu_indices();
 
         for_each_bakeable_instance(mesh_instances, meshes, materials,
             [&](uint32_t scene_idx, const framework::MeshInstance &inst, const framework::Mesh &/*mesh*/) {
@@ -302,9 +303,7 @@ namespace himalaya::app {
         }
 
         // bake_lightmap_keys_ already populated by Application::refresh_lightmap_keys()
-        // using original (pre-UV) vertex/index data. Keys are based on original geometry
-        // because xatlas output is a deterministic function of the input mesh —
-        // the original data hash uniquely identifies the bake result.
+        // using post-xatlas vertex/index data (includes lightmap UV topology in hash).
 
         // Build parallel arrays: instance indices + lightmap resolutions
         bake_instance_indices_.clear();
