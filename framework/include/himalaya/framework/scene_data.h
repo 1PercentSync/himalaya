@@ -335,7 +335,7 @@ namespace himalaya::framework {
      */
     struct BakeConfig {
         /** @brief Global lightmap density (texels per world-space meter). */
-        float texels_per_meter = 128.0f;
+        float texels_per_meter = 256.0f;
 
         /** @brief Minimum lightmap resolution per instance (aligned to 4). */
         uint32_t min_resolution = 64;
