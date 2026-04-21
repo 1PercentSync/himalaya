@@ -41,8 +41,9 @@
 
 - [ ] `framework/include/himalaya/framework/bake_data_manager.h`：新增 `ProbeGrid3D` 结构（grid_origin, cell_size, grid_dims, cell_offsets, probe_indices）
 - [ ] `framework/src/bake_data_manager.cpp`：`load_angle()` 加载 probe 后构建 grid（遍历 positions → cell 坐标 → 前缀和 → flat array）
-- [ ] `framework/src/bake_data_manager.cpp`：上传 grid_meta_buffer + grid_data_buffer 到 GPU
-- [ ] `shaders/common/bindings.glsl` 或 `rhi/descriptors.cpp`：grid buffer binding 配置
+- [ ] `framework/src/bake_data_manager.cpp`：上传单个 ProbeGridBuffer SSBO（header + cell_offsets + probe_indices）
+- [ ] `rhi/descriptors.cpp`：Set 0 新增 binding 10（RT 和非 RT 两条路径）+ `write_set0_probe_grid_buffer()`
+- [ ] `shaders/common/bindings.glsl`：新增 `layout(set = 0, binding = 10) readonly buffer ProbeGridBuffer`
 - [ ] 新增 `shaders/common/probe_grid.glsl`：grid 查询函数（world pos → center cell → 5×5×5 邻域遍历）
 - [ ] `framework/src/bake_data_manager.cpp`：`unload_angle()` 销毁 grid buffer
 
@@ -61,7 +62,6 @@
 - [ ] `app/src/renderer.cpp`：填充新 GlobalUBO 字段
 - [ ] `app/src/debug_ui.cpp`：Rendering 区新增 4 个 slider（LP 模式下可见）
 - [ ] `app/src/debug_ui.cpp`：Bake 面板新增 `probe_relocation_offset` slider
-- [ ] `app/src/application.cpp`：`AppConfig` 新增字段 + JSON 持久化
 
 ## Step 7：AABB 计算
 

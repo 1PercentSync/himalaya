@@ -152,9 +152,12 @@ Bake 后检测到部分面全黑的 probe，移动后重新 bake 一次。
 
 #### 4b. GPU Buffer 上传
 
-- `grid_meta_buffer`：`vec4 grid_origin_and_cell_size`(16B) + `uvec4 grid_dims_and_pad`(16B) = 32 bytes
-- `grid_data_buffer`：`uint[] cell_offsets` + `uint[] probe_indices`（连续存放，cell_offsets_count 从 grid_dims 计算）
-- Set 0 新增 binding 或通过 GlobalUBO 传递 grid_meta + buffer device address
+- 单个 SSBO，Set 0 binding 10（`ProbeGridBuffer`，非 RT-only，`PARTIALLY_BOUND`，`VERTEX | FRAGMENT` stage），布局：
+  - Header (32B)：`vec4 grid_origin_and_cell_size`(16B) + `uvec4 grid_dims_and_pad`(16B)
+  - `uint cell_offsets[cell_count + 1]`（CSR 前缀和，`cell_count = dims.x * dims.y * dims.z`）
+  - `uint probe_indices[]`（flat probe index 数组）
+- `rhi/descriptors.cpp`：`create_layouts()` 中 Set 0 新增 binding 10（RT 和非 RT 两条路径均需更新）
+- `rhi/descriptors.h`：新增 `write_set0_probe_grid_buffer()` 方法
 
 #### 4c. Shader 端查询
 
@@ -240,10 +243,6 @@ Bake-time 参数（bake 面板中，下次 bake 生效）：
 - Rendering 区（LP 模式下可见）：`normal_bias`、`roughness_single`、`roughness_full`、`blend_curve` 四个 slider
 - Bake 面板：`probe_relocation_offset` slider
 
-#### 6d. 配置持久化
-
-- `AppConfig` 新增对应字段，JSON 保存/加载
-
 **验证**：slider 拖动实时影响 probe 选取和 blend 效果
 
 ---
@@ -265,6 +264,7 @@ Bake-time 参数（bake 面板中，下次 bake 生效）：
   - 每条命中射线按主轴方向（direction 分量绝对值最大的轴）分入 6 组（±X/±Y/±Z）
   - 每组取命中点在该轴上投影坐标的中位数
   - 6 个中位数构成 AABB 的 ±X/±Y/±Z 边界
+- Miss 的射线排除不参与分组。某方向分组全部 miss 时（如朝天空的方向无几何体），该方向 AABB 边界用 `ray_max_distance`（场景 AABB 对角线），使 PCC 在该方向几乎无校正效果（正确行为：开放方向上环境确实在远处）
 - 70 条射线 × 2000 probe ≈ 1.6MB readback，CPU 中位数计算瞬时完成
 
 #### 7c. 集成调用时机
