@@ -53,7 +53,7 @@ Step 10: 收尾
 
 ### Step 1：Probe Relocation — Pre-bake
 
-两层测试失败的候选 probe 不再直接剔除，而是移动到更好的位置重试一次。
+两层测试失败的候选 probe 不再直接剔除，而是移动到更好的位置重试**严格一次**（不循环）。
 
 #### 1a. probe_filter.comp 扩展输出
 
@@ -83,7 +83,7 @@ Step 10: 收尾
 
 ### Step 2：Probe Relocation — Post-bake
 
-Bake 后检测到部分面全黑的 probe，移动后重新 bake 一次。
+Bake 后检测到部分面全黑的 probe，移动后重新 bake **严格一次**（不循环）。在现有 probe bake 循环内部（`probe_bake_finalize()` 流程中）处理，不需要新增 `BakeState` 枚举值。
 
 #### 2a. 黑面方向分析
 
@@ -95,15 +95,35 @@ Bake 后检测到部分面全黑的 probe，移动后重新 bake 一次。
 #### 2b. 移动 + 重新 bake
 
 - 新位置 = 当前位置 + 移动方向 × `probe_relocation_offset`（复用 pre-bake 的参数）
-- 在新位置重新执行完整的 probe bake（6 faces × target SPP）
+- 在新位置重新执行完整的 probe bake（6 faces × target SPP）：在 `probe_bake_finalize()` 中检测到需要 relocate 时，更新 `bake_probe_positions_` 中该 probe 的位置，重置 accumulation（sample_count = 0），当前 probe 重新进入累积循环。不需要改变 `bake_current_probe_` 或 `BakeState`
 - 重新 bake 后再次执行黑面检测
 - 仍有黑面 → 最终剔除，已通过 → 接受新位置
-- 更新 `bake_probe_positions_` 中该 probe 的位置为新位置
+- 已 relocate 但最终被 reject 的 probe 的 KTX2 文件残留在磁盘上，不影响正确性（manifest 的 probe_count 决定加载哪些），Clear Bake Cache 时统一清除
 
 #### 2c. 进度统计
 
 - `RenderProgress` 扩展：`probes_relocated` 计数（区别于 `probes_rejected`）
 - DebugUI 显示 relocated vs rejected 统计
+
+#### 2d. Phase 8.5 后的完整 probe bake 流程
+
+```
+BakingProbes 阶段内部：
+  for each probe candidate:
+    accumulate SPP → finalize:
+      per-face luminance check:
+        all 6 faces OK → accept（write KTX2 + prefilter）
+        all 6 faces black → reject
+        partial black + not yet relocated → relocate:
+          update position → reset accumulation → re-enter accumulate loop
+        partial black + already relocated → reject
+  ↓
+  AABB compute dispatch（Step 7，所有 accepted probes 的最终位置）
+  ↓
+  write manifest v2（Step 8，positions + AABBs）
+  ↓
+  BakeState → Complete
+```
 
 **验证**：post-bake reject 率相比 Phase 8 显著下降，relocated probe 的 cubemap 无全黑面
 
@@ -235,13 +255,15 @@ Bake-time 参数（bake 面板中，下次 bake 生效）：
 
 #### 6b. GPU 传递
 
-- Runtime 参数通过 GlobalUBO 新增字段传入 shader
-- `framework/scene_data.h`：`GlobalUniformData` 新增 4 个 float + `probe_count` uint
+- Runtime 4 个 float 通过 GlobalUBO 新增字段传入 shader（`probe_count` 已在 Step 3 引入）
+- `framework/scene_data.h`：`GlobalUniformData` 新增 `normal_bias` / `roughness_single` / `roughness_full` / `blend_curve` 四个 float，补齐 std140 padding 到 960B
 
 #### 6c. ImGui 面板
 
 - Rendering 区（LP 模式下可见）：`normal_bias`、`roughness_single`、`roughness_full`、`blend_curve` 四个 slider
 - Bake 面板：`probe_relocation_offset` slider
+
+**注意**：所有新参数（runtime 和 bake-time）均不做 JSON 持久化，每次启动使用默认值。与现有 AO/shadow 参数模式一致。`probe_relocation_offset` 影响 bake 结果，持久化后用户可能忘记曾修改过。
 
 **验证**：slider 拖动实时影响 probe 选取和 blend 效果
 
@@ -253,10 +275,12 @@ Bake-time 参数（bake 面板中，下次 bake 生效）：
 
 #### 7a. AABB 估算 shader
 
-- 新增 `shaders/bake/probe_aabb.comp`：对每个 probe 发射 Fibonacci 球面射线（复用 `probe_ray_count`，原名 `filter_ray_count`）+ 6 条轴对齐射线
+- 新增 `shaders/bake/probe_aabb.comp`：使用 `rayQueryEXT`（与 `probe_filter.comp` 相同），需要 TLAS（Set 0 binding 4）。Pipeline 创建复用 `probe_filter.comp` 的 descriptor layout 模式
+- 对每个 probe 发射 Fibonacci 球面射线（复用 `probe_ray_count`，原名 `filter_ray_count`）+ 6 条轴对齐射线
 - 重命名：`BakeConfig::filter_ray_count` → `probe_ray_count`，同步更新代码、文档、ImGui label（该参数同时服务于 placement filter 和 AABB 估算）
 - 每条射线记录命中点世界坐标
-- Push constants：probe positions buffer address、probe count、ray count（Fibonacci）、ray max distance
+- Push constants：probe positions buffer address、result buffer address、probe count、ray count（Fibonacci）、ray max distance
+- 输出 buffer 布局（per-probe × `(ray_count + 6)` 条射线，scalar block layout）：`vec3 hit_pos`(12B) + `uint hit`(4B，1 = hit / 0 = miss) = 16B per ray。miss 的射线 `hit = 0`，CPU 侧排除不参与分组
 
 #### 7b. CPU 侧 AABB 构建
 
