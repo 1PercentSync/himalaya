@@ -18,9 +18,10 @@
 - [ ] `app/src/renderer_bake.cpp`：per-face luminance 检查改为记录黑面列表（不立即 reject）
 - [ ] `app/src/renderer_bake.cpp`：计算移动方向（黑面反方向归一化合成，全黑直接剔除）
 - [ ] `app/src/renderer_bake.cpp`：移动到新位置，重新执行完整 probe bake（6 faces × target SPP）
+- [ ] `app/src/renderer_bake.cpp`：新增 per-probe `relocated` 标记（防止二次 relocate）
 - [ ] `app/src/renderer_bake.cpp`：re-bake 后再次黑面检测，仍失败则最终剔除
 - [ ] `app/src/renderer_bake.cpp`：更新 `bake_probe_positions_` 中 relocated probe 的位置
-- [ ] `framework/include/himalaya/framework/render_progress.h`：新增 `probes_relocated` 计数
+- [ ] `framework/include/himalaya/framework/render_progress.h`：`BakeProgress` 新增 `probes_relocated` 计数
 - [ ] `app/src/debug_ui.cpp`：显示 relocated vs rejected 统计
 
 ## Step 3：GPUInstanceData 清理 + probe_count 引入
@@ -69,7 +70,8 @@
 - [ ] 新增 `shaders/bake/probe_aabb.comp`：Fibonacci 球面射线（复用 `probe_ray_count`）+ 6 轴射线，输出 per-probe per-ray 命中点
 - [ ] `app/src/renderer_bake.cpp`（或 `framework/src/probe_placement.cpp`）：dispatch probe_aabb.comp + readback
 - [ ] CPU 侧：per-probe 按主轴分组射线命中点，取中位数构建 AABB
-- [ ] 调用时机集成：probe bake 全部完成后、manifest 写入前执行 AABB 计算
+- [ ] `app/src/renderer_bake.cpp`：probe bake 完成后、`write_probe_manifest()` 调用前插入 AABB compute dispatch
+- [ ] `app/src/renderer_bake.cpp`：`write_probe_manifest()` 签名扩展以接收 AABB 数据
 
 ## Step 8：Manifest 格式扩展 + AABB 写入
 
@@ -85,7 +87,7 @@
 
 ## Step 10：收尾
 
-- [ ] 新增 `DEBUG_MODE_PROBE_INDEX = 12` debug 渲染模式（probe index 颜色编码可视化）
+- [ ] 新增 `DEBUG_MODE_PROBE_INDEX = 12` debug 渲染模式：`bindings.glsl` 新增 `#define`，`debug_ui.cpp` 新增选项，`forward.frag` passthrough 分支新增 case 12（index-to-color 映射）
 - [ ] 清理 Phase 8.5 预留注释（bindings.glsl、scene_data.h）
 - [ ] 全模式切换路径 validation 验证
 - [ ] Grid buffer 生命周期验证（load 创建、unload 销毁、probe_count == 0 不创建）

@@ -593,13 +593,14 @@ struct ProbeManifestEntry {
     glm::vec3 aabb_max;                         // PCC AABB 最大角
 };  // 36 bytes per probe
 
-// 3D Grid 空间索引 — GPU buffer 布局
-// grid_meta_buffer (32 bytes):
-//   vec4 grid_origin_and_cell_size;            // xyz = grid AABB min, w = cell_size
-//   uvec4 grid_dims_and_pad;                   // xyz = grid dimensions, w = padding
-// grid_data_buffer (variable size):
-//   uint cell_offsets[dims.x * dims.y * dims.z + 1];  // CSR 前缀和
-//   uint probe_indices[];                              // flat probe index 数组
+// 3D Grid 空间索引 — 单个 SSBO（Set 0, Binding 10, ProbeGridBuffer, 非 RT-only, PARTIALLY_BOUND）
+// 布局：header (32B) + cell_offsets + probe_indices，连续存放
+//   Header:
+//     vec4 grid_origin_and_cell_size;            // xyz = grid AABB min（含 2 cell 扩展），w = cell_size
+//     uvec4 grid_dims_and_pad;                   // xyz = grid dimensions（含扩展），w = padding
+//   Data:
+//     uint cell_offsets[dims.x * dims.y * dims.z + 1];  // CSR 前缀和
+//     uint probe_indices[];                              // flat probe index 数组
 
 // GlobalUBO Phase 8.5 新增字段
 //   uint32_t probe_count;                      // ProbeBuffer 中 probe 数组长度

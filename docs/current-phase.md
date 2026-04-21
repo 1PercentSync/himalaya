@@ -60,7 +60,7 @@ Step 10: 收尾
 - 当前输出 `uint result`（0/1/2）改为扩展结构：`uint result` + `vec3 nearest_hit_pos` + `vec3 nearest_hit_normal`
 - 对于 result = 0（通过）的候选，hit 数据不使用
 - 对于 result = 1 或 2（失败）的候选，记录所有射线中 `t_hit` 最小的命中：`hit_pos = origin + dir * t_hit`，几何法线通过 GeometryInfo buffer reference 读取三角形顶点重建面法线（数据路径与 closesthit 相同）
-- Rule 1 的 early return 改为：记录当前命中信息后再写 result 并 return
+- 在射线循环中维护 running minimum `t_hit` 和对应的 `hit_pos`/`hit_normal`。Rule 1 触发时不再立即 return——先更新最近命中记录，再写 result 并 return。这样即使 Rule 1 在第一条射线就触发，也有该射线的命中数据可用于 relocation
 - ResultBuffer 从 `uint[]` 改为结构化 buffer（每候选 32 bytes，使用 `GL_EXT_scalar_block_layout`（shader 已启用）避免 vec3 的 16B 对齐：`uint result`(4B) + `float hit_pos[3]`(12B) + `float hit_normal[3]`(12B) + `uint _pad`(4B) = 32B）
 - `probe_placement.cpp`：result buffer 大小从 `total * 4` 改为 `total * 32`，readback 解析改为结构化读取
 
@@ -95,14 +95,14 @@ Bake 后检测到部分面全黑的 probe，移动后重新 bake **严格一次*
 #### 2b. 移动 + 重新 bake
 
 - 新位置 = 当前位置 + 移动方向 × `probe_relocation_offset`（复用 pre-bake 的参数）
-- 在新位置重新执行完整的 probe bake（6 faces × target SPP）：在 `probe_bake_finalize()` 中检测到需要 relocate 时，更新 `bake_probe_positions_` 中该 probe 的位置，重置 accumulation（sample_count = 0），当前 probe 重新进入累积循环。不需要改变 `bake_current_probe_` 或 `BakeState`
+- 在新位置重新执行完整的 probe bake（6 faces × target SPP）：在 `probe_bake_finalize()` 中检测到需要 relocate 时，更新 `bake_probe_positions_` 中该 probe 的位置，设置 per-probe `relocated` 标记（防止二次 relocate），销毁当前累积 images，重新调用 `begin_probe_bake_instance(bake_current_probe_)` 重置累积状态（不递增 `bake_current_probe_`），当前 probe 重新进入累积循环
 - 重新 bake 后再次执行黑面检测
 - 仍有黑面 → 最终剔除，已通过 → 接受新位置
 - 已 relocate 但最终被 reject 的 probe 的 KTX2 文件残留在磁盘上，不影响正确性（manifest 的 probe_count 决定加载哪些），Clear Bake Cache 时统一清除
 
 #### 2c. 进度统计
 
-- `RenderProgress` 扩展：`probes_relocated` 计数（区别于 `probes_rejected`）
+- `BakeProgress` 扩展：`probes_relocated` 计数（区别于 `probes_rejected`）
 - DebugUI 显示 relocated vs rejected 统计
 
 #### 2d. Phase 8.5 后的完整 probe bake 流程
@@ -147,7 +147,7 @@ BakingProbes 阶段内部：
 
 #### 3c. GlobalUBO 新增 probe_count
 
-- `framework/scene_data.h`：`GlobalUniformData` 新增 `uint32_t probe_count`（默认 0），更新 `static_assert` 偏移。注意 std140 对齐——当前结构大小 928B，Phase 8.5 最终新增 5 字段（1 uint + 4 float = 20B），总 948B 需 padding 到 960B（16 的倍数）。`probe_count` 在 Step 3 引入，其余 4 个 float 在 Step 6 引入，padding 在最后一次扩展时补齐
+- `framework/scene_data.h`：`GlobalUniformData` 新增 `uint32_t probe_count`（offset 928，默认 0）+ 3 个 `uint32_t _phase85_pad`（12B padding 到 944B，16 的倍数）。更新 `static_assert(sizeof == 944)` 和 `offsetof(probe_count) == 928`。Step 6 引入 4 个 float 时替换 padding 字段并扩展到 960B
 - `shaders/common/bindings.glsl`：`GlobalUBO` 对应更新
 - `app/renderer.cpp`：`fill_common_gpu_data()` 中调用 `bake_data_manager_.loaded_probe_count()` 填入
 
@@ -184,9 +184,9 @@ BakingProbes 阶段内部：
 - `shaders/common/probe_grid.glsl`（新文件）：
   ```
   ivec3 center_cell = clamp(ivec3((frag_world_pos - grid_origin) / cell_size), ivec3(0), ivec3(grid_dims - 1))
-  for dx in [-2, +2]:
-    for dy in [-2, +2]:
-      for dz in [-2, +2]:
+  for dx = -2 to +2:      // 5 values: -2, -1, 0, +1, +2
+    for dy = -2 to +2:
+      for dz = -2 to +2:
         cell = clamp(center_cell + ivec3(dx,dy,dz), ivec3(0), ivec3(grid_dims - 1))
         flat_index = cell.x + cell.y * dims.x + cell.z * dims.x * dims.y
         for i in [cell_offsets[flat_index], cell_offsets[flat_index + 1]):
@@ -215,6 +215,7 @@ BakingProbes 阶段内部：
 - 评分：`score = pow(normal_dot, normal_bias) / max(dist_sq, epsilon)`
 - 维护 top-2（score 最高的两个 probe index + score）
 - 无候选通过半球过滤 → fallback 到距离最近的 probe（忽略法线）
+- 5×5×5 邻域内一个 probe 都没有（极端情况）→ 走 IBL 分支
 - 只有 1 个候选通过 → `w0 = 1.0, w1 = 0.0`（不做 blend，避免 score 归一化除零）
 - `probe_count == 0`（或 FEATURE_PROBE off）→ 走 IBL 分支（与当前行为一致）
 
@@ -326,12 +327,13 @@ Bake-time 参数（bake 面板中，下次 bake 生效）：
 
 - `shaders/common/probe_grid.glsl` 内新增：
   ```glsl
-  vec3 parallax_correct(vec3 R, vec3 frag_pos, vec3 probe_pos, vec3 aabb_min, vec3 aabb_max) {
+  // Returns corrected direction. out_t < 0 means fragment outside AABB — caller should use original R.
+  vec3 parallax_correct(vec3 R, vec3 frag_pos, vec3 probe_pos, vec3 aabb_min, vec3 aabb_max, out float out_t) {
       vec3 first_plane = (aabb_max - frag_pos) / R;
       vec3 second_plane = (aabb_min - frag_pos) / R;
       vec3 furthest_plane = max(first_plane, second_plane);
-      float t = min(min(furthest_plane.x, furthest_plane.y), furthest_plane.z);
-      vec3 intersection = frag_pos + R * t;
+      out_t = min(min(furthest_plane.x, furthest_plane.y), furthest_plane.z);
+      vec3 intersection = frag_pos + R * out_t;
       return normalize(intersection - probe_pos);
   }
   ```
@@ -341,7 +343,7 @@ Bake-time 参数（bake 面板中，下次 bake 生效）：
 
 - Step 5 的 cubemap 采样前插入 `parallax_correct()` 调用
 - 仅当 `aabb_min != aabb_max`（AABB 有效）时执行校正，否则用原始 R
-- `parallax_correct()` 中 `R` 分量为 0 时 GLSL 产生 `inf`，后续 `min()` 自然选有限值，无需特殊处理。`t < 0`（fragment 在 AABB 外部）时校正结果无意义，但 Phase 8.5 的 per-pixel 选取保证 fragment 附近有 probe（probe 在 AABB 内），实际不会触发此情况
+- `parallax_correct()` 中 `R` 分量为 0 时 GLSL 产生 `inf`，后续 `min()` 自然选有限值，无需特殊处理。`t < 0` 时 fragment 在 AABB 外部（blend 的 top-2 probe 的 AABB 不一定包含当前 fragment），此时跳过校正用原始 R。调用方检查：`t > 0.0` 时用校正后方向，否则用原始 R
 
 **验证**：
 - 光滑地板反射墙壁位置正确（贴合房间几何）
