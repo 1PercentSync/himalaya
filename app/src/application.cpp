@@ -187,8 +187,10 @@ namespace himalaya::app {
         vkQueueWaitIdle(context_.graphics_queue);
 
         // Unload bake data before destroying scene (indices reference old instances)
-        if (features_.lightmap_probe) {
+        if (renderer_.bake_data_loaded()) {
             renderer_.unload_bake_angle();
+        }
+        if (features_.lightmap_probe) {
             indirect_lighting_mode_ = framework::IndirectLightingMode::IBL;
             features_.lightmap_probe = false;
         }
@@ -238,8 +240,10 @@ namespace himalaya::app {
         vkQueueWaitIdle(context_.graphics_queue);
 
         // Unload bake data (baked with old HDR, keys will change)
-        if (features_.lightmap_probe) {
+        if (renderer_.bake_data_loaded()) {
             renderer_.unload_bake_angle();
+        }
+        if (features_.lightmap_probe) {
             indirect_lighting_mode_ = framework::IndirectLightingMode::IBL;
             features_.lightmap_probe = false;
         }
@@ -272,6 +276,10 @@ namespace himalaya::app {
 
     void Application::start_bake_session(const framework::BakeMode mode) {
         vkQueueWaitIdle(context_.graphics_queue);
+
+        if (renderer_.bake_data_loaded()) {
+            renderer_.unload_bake_angle();
+        }
 
         context_.begin_immediate();
         renderer_.start_bake(bake_config_,
@@ -706,8 +714,10 @@ namespace himalaya::app {
             render_mode_ = renderer_.bake_pre_mode();
         }
         if (actions.clear_bake_cache_requested) {
-            if (features_.lightmap_probe) {
+            if (renderer_.bake_data_loaded()) {
                 renderer_.unload_bake_angle();
+            }
+            if (features_.lightmap_probe) {
                 indirect_lighting_mode_ = framework::IndirectLightingMode::IBL;
                 features_.lightmap_probe = false;
             }
@@ -715,8 +725,10 @@ namespace himalaya::app {
             trigger_bake_scan();
         }
         if (actions.clear_all_cache_requested) {
-            if (features_.lightmap_probe) {
+            if (renderer_.bake_data_loaded()) {
                 renderer_.unload_bake_angle();
+            }
+            if (features_.lightmap_probe) {
                 indirect_lighting_mode_ = framework::IndirectLightingMode::IBL;
                 features_.lightmap_probe = false;
             }
@@ -742,10 +754,9 @@ namespace himalaya::app {
             const bool was_lp = features_.lightmap_probe;
 
             if (want_lp && !was_lp) {
-                // IBL → LightmapProbe: load bake data at current IBL angle
+                // IBL → LightmapProbe: load bake data if needed
                 if (renderer_.has_bake_data()) {
                     const auto angles = renderer_.available_bake_angles();
-                    // Find the angle matching current ibl_yaw_ (snapped to integer degrees)
                     float normalized = std::fmod(glm::degrees(ibl_yaw_), 360.0f);
                     if (normalized < 0.0f) { normalized += 360.0f; }
                     const auto current_rot = static_cast<uint32_t>(std::round(normalized)) % 360;
@@ -757,15 +768,20 @@ namespace himalaya::app {
                             break;
                         }
                     }
-                    renderer_.switch_bake_angle(target_rotation,
-                                                scene_render_data_.mesh_instances,
-                                                scene_loader_);
+
+                    // Skip load if already loaded at the correct angle
+                    const bool already_loaded = renderer_.bake_data_loaded()
+                        && renderer_.bake_data_manager_loaded_rotation() == target_rotation;
+                    if (!already_loaded) {
+                        renderer_.switch_bake_angle(target_rotation,
+                                                    scene_render_data_.mesh_instances,
+                                                    scene_loader_);
+                    }
                     ibl_yaw_ = glm::radians(static_cast<float>(target_rotation));
                 }
                 features_.lightmap_probe = true;
             } else if (!want_lp && was_lp) {
-                // LightmapProbe → IBL: unload bake data
-                renderer_.unload_bake_angle();
+                // LightmapProbe → IBL: keep bake data loaded (fast switch back)
                 features_.lightmap_probe = false;
             }
         }
