@@ -14,6 +14,8 @@
 #include <string>
 #include <vector>
 
+#include <glm/vec3.hpp>
+
 namespace himalaya::rhi {
     class ResourceManager;
     class DescriptorManager;
@@ -212,6 +214,9 @@ namespace himalaya::framework {
         /** @brief ProbeBuffer SSBO (Set 0, Binding 9). Invalid when not loaded. */
         rhi::BufferHandle probe_buffer_{};
 
+        /** @brief ProbeGridBuffer SSBO (Set 0, Binding 10). Invalid when not loaded or probe_count == 0. */
+        rhi::BufferHandle probe_grid_buffer_{};
+
         /** @brief Per-instance lightmap bindless indices (parallel to mesh_instances, UINT32_MAX = none). */
         std::vector<uint32_t> lightmap_indices_;
 
@@ -220,6 +225,31 @@ namespace himalaya::framework {
 
         /** @brief Probe grid spacing from manifest (0 when not loaded). */
         float probe_spacing_ = 0.0f;
+
+        /**
+         * @brief CPU-side 3D spatial grid for probe lookup.
+         *
+         * Built from loaded probe positions in load_angle(). Grid origin is
+         * the probe AABB min corner minus 2 × cell_size (padding for 5×5×5
+         * neighbor queries). Cell offsets use CSR (compressed sparse row) format:
+         * cell_offsets[i] to cell_offsets[i+1] index into probe_indices.
+         */
+        struct ProbeGrid3D {
+            glm::vec3 grid_origin{0.0f};  ///< World-space origin (AABB min - 2 × cell_size).
+            float cell_size = 0.0f;       ///< Cell size in meters (= probe_spacing from manifest).
+            glm::uvec3 grid_dims{0};      ///< Number of cells per axis.
+            std::vector<uint32_t> cell_offsets;  ///< CSR prefix-sum (dims.x * y * z + 1 elements).
+            std::vector<uint32_t> probe_indices; ///< Flat probe index array indexed by cell_offsets.
+        };
+
+        /** @brief 3D spatial grid (empty when not loaded or probe_count == 0). */
+        ProbeGrid3D grid_;
+
+        /**
+         * @brief Builds the 3D grid from loaded probe positions and uploads the GPU buffer.
+         * @param positions Loaded probe world-space positions.
+         */
+        void build_and_upload_grid(std::span<const glm::vec3> positions);
     };
 
 } // namespace himalaya::framework

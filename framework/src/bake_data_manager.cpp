@@ -10,12 +10,16 @@
 #include <himalaya/rhi/descriptors.h>
 #include <himalaya/rhi/resources.h>
 
+#include <glm/glm.hpp>
 #include <spdlog/spdlog.h>
 
 #include <charconv>
+#include <cmath>
 #include <cstdio>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <limits>
 #include <set>
 
 namespace himalaya::framework {
@@ -350,6 +354,11 @@ namespace himalaya::framework {
             descriptor_manager_->write_set0_probe_buffer(probe_buffer_, buf_size);
         }
 
+        // Build 3D spatial grid and upload ProbeGridBuffer SSBO (Set 0, Binding 10)
+        if (loaded_probes > 0 && probe_spacing_ > 0.0f) {
+            build_and_upload_grid(probe_positions);
+        }
+
         loaded_probe_count_ = loaded_probes;
         is_loaded_ = true;
         loaded_rotation_ = rotation_int;
@@ -389,6 +398,13 @@ namespace himalaya::framework {
             probe_buffer_ = {};
         }
 
+        // Destroy ProbeGridBuffer SSBO
+        if (probe_grid_buffer_.valid()) {
+            resource_manager_->destroy_buffer(probe_grid_buffer_);
+            probe_grid_buffer_ = {};
+        }
+        grid_ = {};
+
         // Clear per-instance indices
         lightmap_indices_.clear();
 
@@ -398,6 +414,109 @@ namespace himalaya::framework {
         loaded_rotation_ = 0;
 
         spdlog::info("BakeDataManager: unloaded angle data");
+    }
+
+    // ---- Grid construction ----
+
+    void BakeDataManager::build_and_upload_grid(const std::span<const glm::vec3> positions) {
+        const auto probe_count = static_cast<uint32_t>(positions.size());
+        grid_ = {};
+        grid_.cell_size = probe_spacing_;
+
+        // Compute probe AABB
+        glm::vec3 aabb_min(std::numeric_limits<float>::max());
+        glm::vec3 aabb_max(std::numeric_limits<float>::lowest());
+        for (const auto &p : positions) {
+            aabb_min = glm::min(aabb_min, p);
+            aabb_max = glm::max(aabb_max, p);
+        }
+
+        // Expand origin by 2 cells on each side so edge probes' 5×5×5 queries don't go out of bounds
+        grid_.grid_origin = aabb_min - glm::vec3(2.0f * grid_.cell_size);
+        const glm::vec3 range = aabb_max - aabb_min;
+        grid_.grid_dims = glm::uvec3(
+            static_cast<uint32_t>(std::ceil(range.x / grid_.cell_size)) + 4,
+            static_cast<uint32_t>(std::ceil(range.y / grid_.cell_size)) + 4,
+            static_cast<uint32_t>(std::ceil(range.z / grid_.cell_size)) + 4
+        );
+
+        const uint32_t cell_count = grid_.grid_dims.x * grid_.grid_dims.y * grid_.grid_dims.z;
+
+        // Count probes per cell
+        std::vector<uint32_t> cell_counts(cell_count, 0);
+        for (uint32_t pi = 0; pi < probe_count; ++pi) {
+            const glm::vec3 rel = (positions[pi] - grid_.grid_origin) / grid_.cell_size;
+            const auto cx = std::min(static_cast<uint32_t>(rel.x), grid_.grid_dims.x - 1);
+            const auto cy = std::min(static_cast<uint32_t>(rel.y), grid_.grid_dims.y - 1);
+            const auto cz = std::min(static_cast<uint32_t>(rel.z), grid_.grid_dims.z - 1);
+            const uint32_t flat = cx + cy * grid_.grid_dims.x
+                                  + cz * grid_.grid_dims.x * grid_.grid_dims.y;
+            ++cell_counts[flat];
+        }
+
+        // Build prefix sum (CSR offsets)
+        grid_.cell_offsets.resize(cell_count + 1);
+        grid_.cell_offsets[0] = 0;
+        for (uint32_t i = 0; i < cell_count; ++i) {
+            grid_.cell_offsets[i + 1] = grid_.cell_offsets[i] + cell_counts[i];
+        }
+
+        // Fill probe indices (second pass, using running write cursors)
+        grid_.probe_indices.resize(grid_.cell_offsets[cell_count]);
+        std::vector<uint32_t> write_cursor(cell_count, 0);
+        for (uint32_t pi = 0; pi < probe_count; ++pi) {
+            const glm::vec3 rel = (positions[pi] - grid_.grid_origin) / grid_.cell_size;
+            const auto cx = std::min(static_cast<uint32_t>(rel.x), grid_.grid_dims.x - 1);
+            const auto cy = std::min(static_cast<uint32_t>(rel.y), grid_.grid_dims.y - 1);
+            const auto cz = std::min(static_cast<uint32_t>(rel.z), grid_.grid_dims.z - 1);
+            const uint32_t flat = cx + cy * grid_.grid_dims.x
+                                  + cz * grid_.grid_dims.x * grid_.grid_dims.y;
+            grid_.probe_indices[grid_.cell_offsets[flat] + write_cursor[flat]] = pi;
+            ++write_cursor[flat];
+        }
+
+        // Upload GPU buffer: header (32B) + cell_offsets (cell_count+1 uints) + probe_indices
+        const uint32_t offsets_count = cell_count + 1;
+        const auto indices_count = static_cast<uint32_t>(grid_.probe_indices.size());
+        constexpr uint64_t kHeaderSize = 32;
+        const uint64_t buf_size = kHeaderSize
+                                  + static_cast<uint64_t>(offsets_count) * sizeof(uint32_t)
+                                  + static_cast<uint64_t>(indices_count) * sizeof(uint32_t);
+
+        std::vector<uint8_t> gpu_data(buf_size);
+        auto *ptr = gpu_data.data();
+
+        // Header: vec4 grid_origin_and_cell_size (16B) + uvec4 grid_dims_and_pad (16B)
+        float header_f[4] = {grid_.grid_origin.x, grid_.grid_origin.y,
+                             grid_.grid_origin.z, grid_.cell_size};
+        uint32_t header_u[4] = {grid_.grid_dims.x, grid_.grid_dims.y,
+                                grid_.grid_dims.z, 0};
+        std::memcpy(ptr, header_f, 16);
+        std::memcpy(ptr + 16, header_u, 16);
+        ptr += kHeaderSize;
+
+        // cell_offsets
+        std::memcpy(ptr, grid_.cell_offsets.data(),
+                    offsets_count * sizeof(uint32_t));
+        ptr += offsets_count * sizeof(uint32_t);
+
+        // probe_indices
+        if (indices_count > 0) {
+            std::memcpy(ptr, grid_.probe_indices.data(),
+                        indices_count * sizeof(uint32_t));
+        }
+
+        probe_grid_buffer_ = resource_manager_->create_buffer({
+            .size = buf_size,
+            .usage = rhi::BufferUsage::StorageBuffer | rhi::BufferUsage::TransferDst,
+            .memory = rhi::MemoryUsage::GpuOnly,
+        }, "ProbeGridBuffer SSBO");
+        resource_manager_->upload_buffer(probe_grid_buffer_, gpu_data.data(), buf_size);
+        descriptor_manager_->write_set0_probe_grid_buffer(probe_grid_buffer_, buf_size);
+
+        spdlog::info("BakeDataManager: built probe grid {}x{}x{} ({} cells, {} probes, {:.1f} KB)",
+                     grid_.grid_dims.x, grid_.grid_dims.y, grid_.grid_dims.z,
+                     cell_count, probe_count, static_cast<double>(buf_size) / 1024.0);
     }
 
     // ---- Accessors ----
