@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Phase 8.5 Step 1：Probe Relocation — Pre-bake
+Phase 8.5 Step 1：GPUInstanceData 清理 + probe_count 引入
 
 ---
 
