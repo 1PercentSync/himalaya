@@ -23,21 +23,7 @@
 - [ ] `framework/include/himalaya/framework/render_progress.h`：新增 `probes_relocated` 计数
 - [ ] `app/src/debug_ui.cpp`：显示 relocated vs rejected 统计
 
-## Step 3：AABB 计算
-
-- [ ] 新增 `shaders/bake/probe_aabb.comp`：Fibonacci 球面射线 + 6 轴射线，输出 per-probe per-ray 命中点
-- [ ] `framework/src/probe_placement.cpp`（或 `renderer_bake.cpp`）：dispatch probe_aabb.comp + readback
-- [ ] CPU 侧：per-probe 按主轴分组射线命中点，取中位数构建 AABB
-- [ ] `framework/include/himalaya/framework/probe_placement.h`：`ProbeGrid` 新增 `std::vector<AABB> aabbs`
-- [ ] 调用时机集成：probe bake 全部完成后、manifest 写入前执行 AABB 计算
-
-## Step 4：Manifest 格式扩展 + AABB 写入
-
-- [ ] `app/src/renderer_bake.cpp`：`write_probe_manifest()` 写入 v2 格式（version + probe_count + per-probe position/aabb_min/aabb_max）
-- [ ] `framework/src/bake_data_manager.cpp`：`load_angle()` 读取 manifest v2，填入 GPUProbeData aabb_min/aabb_max
-- [ ] `framework/src/bake_data_manager.cpp`：`scan()` 版本检测——v1 manifest 不通过完整性校验
-
-## Step 5：GPUInstanceData 清理 + probe_count 引入
+## Step 3：GPUInstanceData 清理 + probe_count 引入
 
 - [ ] `framework/scene_data.h`：`GPUInstanceData::probe_index` → `_padding2`
 - [ ] `shaders/common/bindings.glsl`：`GPUInstanceData` 对应更新
@@ -49,7 +35,7 @@
 - [ ] `shaders/common/bindings.glsl`：`GlobalUBO` 新增 `probe_count`
 - [ ] `app/src/renderer.cpp`：`fill_common_gpu_data()` 填入 probe count
 
-## Step 6：3D Grid 空间索引
+## Step 4：3D Grid 空间索引
 
 - [ ] `framework/include/himalaya/framework/bake_data_manager.h`：新增 `ProbeGrid3D` 结构（grid_origin, cell_size, grid_dims, cell_offsets, probe_indices）
 - [ ] `framework/src/bake_data_manager.cpp`：`load_angle()` 加载 probe 后构建 grid（遍历 positions → cell 坐标 → 前缀和 → flat array）
@@ -58,7 +44,7 @@
 - [ ] 新增 `shaders/common/probe_grid.glsl`：grid 查询函数（world pos → center cell → 5×5×5 邻域遍历）
 - [ ] `framework/src/bake_data_manager.cpp`：`unload_angle()` 销毁 grid buffer
 
-## Step 7：Per-pixel Probe 选取 + Blend
+## Step 5：Per-pixel Probe 选取 + Blend
 
 - [ ] `shaders/forward.frag`：移除 `has_probe` / `inst.probe_index` 逻辑
 - [ ] `shaders/forward.frag`：引入 probe_grid.glsl，5×5×5 邻域遍历 + 法线半球过滤 + 评分 + top-2 维护
@@ -66,13 +52,7 @@
 - [ ] `shaders/forward.frag`：roughness 平滑过渡（roughness_single/full/blend_curve）
 - [ ] `shaders/forward.frag`：top-2 cubemap 采样 + 加权混合
 
-## Step 8：PCC 视差校正
-
-- [ ] `shaders/common/probe_grid.glsl`：新增 `parallax_correct()` 函数（ray-AABB intersection 校正反射向量）
-- [ ] `shaders/forward.frag`：cubemap 采样前调用 parallax_correct()（aabb 有效时）
-- [ ] `shaders/forward.frag`：AABB 无效时 fallback 用原始 R
-
-## Step 9：Runtime 参数 + ImGui 面板
+## Step 6：Runtime 参数 + ImGui 面板
 
 - [ ] `framework/scene_data.h`：`GlobalUniformData` 新增 `normal_bias` / `roughness_single` / `roughness_full` / `blend_curve`
 - [ ] `shaders/common/bindings.glsl`：`GlobalUBO` 对应更新
@@ -80,6 +60,24 @@
 - [ ] `app/src/debug_ui.cpp`：Rendering 区新增 4 个 slider（LP 模式下可见）
 - [ ] `app/src/debug_ui.cpp`：Bake 面板新增 `probe_relocation_offset` slider
 - [ ] `app/src/application.cpp`：`AppConfig` 新增字段 + JSON 持久化
+
+## Step 7：AABB 计算
+
+- [ ] 新增 `shaders/bake/probe_aabb.comp`：Fibonacci 球面射线 + 6 轴射线，输出 per-probe per-ray 命中点
+- [ ] `app/src/renderer_bake.cpp`（或 `framework/src/probe_placement.cpp`）：dispatch probe_aabb.comp + readback
+- [ ] CPU 侧：per-probe 按主轴分组射线命中点，取中位数构建 AABB
+- [ ] 调用时机集成：probe bake 全部完成后、manifest 写入前执行 AABB 计算
+
+## Step 8：Manifest 格式扩展 + AABB 写入
+
+- [ ] `app/src/renderer_bake.cpp`：`write_probe_manifest()` 写入 v2 格式（version + probe_count + per-probe position/aabb_min/aabb_max）
+- [ ] `framework/src/bake_data_manager.cpp`：`load_angle()` 读取 manifest v2，填入 GPUProbeData aabb_min/aabb_max
+
+## Step 9：PCC 视差校正
+
+- [ ] `shaders/common/probe_grid.glsl`：新增 `parallax_correct()` 函数（ray-AABB intersection 校正反射向量）
+- [ ] `shaders/forward.frag`：cubemap 采样前调用 parallax_correct()（aabb 有效时）
+- [ ] `shaders/forward.frag`：AABB 无效时 fallback 用原始 R
 
 ## Step 10：收尾
 
