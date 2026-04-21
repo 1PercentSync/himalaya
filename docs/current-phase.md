@@ -287,8 +287,8 @@ Primary directional light（index 0）的 CSM shadow 计算从 direct light loop
 当前 HdrSun 模式使用手动色温 + 手动 intensity，与 HDR 实际太阳不匹配。
 
 改进：
-- `IBL` 新增 `sample_hdr_pixel(path, x, y)` 静态方法——按需 `stbi_loadf` 读取指定像素 RGB，返回后释放。HDR 加载路径可传入已有的 `rgb_data` 指针避免二次加载（重载版本接受 `const float* existing_data, int w, int h`）
-- 调用时机：HDR 加载时（复用 `load_equirect` 的 `rgb_data`）+ sun coords ImGui 变更时（独立 `stbi_loadf`）
+- `IBL` 新增 `sample_hdr_pixel(path, x, y)` 静态方法——`stbi_loadf` 读取整个 HDR，取指定像素 RGB 后释放
+- 调用时机：HDR 加载后 + sun coords ImGui 变更时（非逐帧，stbi_loadf 开销可接受）
 - 颜色分解：`color = rgb / max(r,g,b)`，`intensity = max(r,g,b)`
 - ImGui 新增 `Auto from HDR` checkbox（默认勾选）：勾选时颜色和强度由 HDR 采样决定，色温和 intensity slider 灰显；不勾选时回退到现有手动行为
 - `hdr_sun_auto_` 不做 JSON 持久化，每次启动默认 `true`（与现有 AO/shadow 参数模式一致）
