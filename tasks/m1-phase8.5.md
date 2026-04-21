@@ -36,11 +36,11 @@
 
 ## Step 4：Per-pixel Probe 选取 + Blend
 
-- [ ] `shaders/forward.frag`：移除 `has_probe` / `inst.probe_index` 逻辑
-- [ ] `shaders/forward.frag`：引入 probe_grid.glsl，内联 5×5×5 遍历 + 法线半球过滤 + 评分 + 就地 top-2 维护（无数组）
-- [ ] `shaders/forward.frag`：无候选 fallback 到最近 probe；5×5×5 全空走 IBL
-- [ ] `shaders/forward.frag`：roughness 平滑过渡（roughness_single/full/blend_curve）
-- [ ] `shaders/forward.frag`：top-2 cubemap 采样 + 加权混合
+- [x] `shaders/forward.frag`：移除 `has_probe` / `inst.probe_index` 逻辑
+- [x] `shaders/forward.frag`：引入 probe_grid.glsl，内联 5×5×5 遍历 + 法线半球过滤 + 评分 + 就地 top-2 维护（无数组）
+- [x] `shaders/forward.frag`：无候选 fallback 到最近 probe；5×5×5 全空走 IBL
+- [x] `shaders/forward.frag`：roughness 平滑过渡（roughness_single/full/blend_curve）
+- [x] `shaders/forward.frag`：top-2 cubemap 采样 + 加权混合
 
 ## Step 5：Runtime 参数 + ImGui 面板
 

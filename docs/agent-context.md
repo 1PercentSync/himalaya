@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段八点五 — 间接光照质量提升（规划中）
-- **进度**：Step 3 全部完成，待用户编译验证
+- **进度**：Step 4 全部完成，待用户编译验证
 
 ### 下一个任务
 
-Phase 8.5 Step 4：Per-pixel Probe 选取 + Blend
+Phase 8.5 Step 5：Runtime 参数 + ImGui 面板
 
 ---
 
