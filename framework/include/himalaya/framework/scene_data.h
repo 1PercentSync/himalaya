@@ -447,6 +447,13 @@ namespace himalaya::framework {
         uint32_t _phase5_pad[2]{}; ///< offset 856 — pad to 864 (vec4 alignment)
         // ---- Phase 6 fields ----
         glm::mat4 inv_view{}; ///< offset 864 — inverse view matrix (PT raygen primary ray computation)
+        // ---- Phase 8.5 fields ----
+        uint32_t probe_count = 0; ///< offset 928 — number of loaded probes in ProbeBuffer
+        float normal_bias = 1.0f; ///< offset 932 — probe selection normal-vs-distance weight
+        float roughness_single = 0.15f; ///< offset 936 — below this roughness, use top-1 probe only
+        float roughness_full = 0.5f; ///< offset 940 — above this roughness, full top-2 blend
+        float blend_curve = 1.0f; ///< offset 944 — blend transition curve exponent
+        uint32_t _phase85_pad[3]{}; ///< offset 948 — pad to 960 (16-byte alignment)
     };
 
     /**
@@ -572,7 +579,7 @@ namespace himalaya::framework {
     // Size assertions catch additions/removals; offset assertions catch
     // C++ vs std140 alignment divergences (e.g. vec2 requires 8-byte
     // alignment in std140 but glm::vec2 has natural alignment of 4).
-    static_assert(sizeof(GlobalUniformData) == 928, "GlobalUniformData must be 928 bytes (std140)");
+    static_assert(sizeof(GlobalUniformData) == 960, "GlobalUniformData must be 960 bytes (std140)");
     static_assert(offsetof(GlobalUniformData, view) == 0);
     static_assert(offsetof(GlobalUniformData, camera_position_and_exposure) == 256);
     static_assert(offsetof(GlobalUniformData, screen_size) == 272);
@@ -597,6 +604,11 @@ namespace himalaya::framework {
     static_assert(offsetof(GlobalUniformData, frame_index) == 848);
     static_assert(offsetof(GlobalUniformData, ao_so_mode) == 852);
     static_assert(offsetof(GlobalUniformData, inv_view) == 864);
+    static_assert(offsetof(GlobalUniformData, probe_count) == 928);
+    static_assert(offsetof(GlobalUniformData, normal_bias) == 932);
+    static_assert(offsetof(GlobalUniformData, roughness_single) == 936);
+    static_assert(offsetof(GlobalUniformData, roughness_full) == 940);
+    static_assert(offsetof(GlobalUniformData, blend_curve) == 944);
     static_assert(sizeof(GPUGeometryInfo) == 24, "GPUGeometryInfo must be 24 bytes (std430)");
     static_assert(offsetof(GPUGeometryInfo, vertex_buffer_address) == 0);
     static_assert(offsetof(GPUGeometryInfo, index_buffer_address) == 8);

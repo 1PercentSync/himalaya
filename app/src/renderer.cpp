@@ -80,6 +80,9 @@ namespace himalaya::app {
         // --- Phase 6 matrices ---
         ubo_data.inv_view = glm::inverse(input.camera.view);
 
+        // --- Phase 8.5 probe fields ---
+        ubo_data.probe_count = bake_data_manager_.loaded_probe_count();
+
         // --- Shadow fields ---
         ubo_data.shadow_normal_offset = input.shadow_config.normal_offset;
         ubo_data.shadow_texel_size = 1.0f / static_cast<float>(shadow_pass_.resolution());

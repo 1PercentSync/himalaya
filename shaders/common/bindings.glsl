@@ -137,6 +137,13 @@ layout (set = 0, binding = 0) uniform GlobalUBO {
     // 8 bytes implicit pad (vec4 alignment)
     // ---- Phase 6 fields ----
     mat4 inv_view;                          // offset 864 — inverse view matrix (PT raygen primary ray)
+    // ---- Phase 8.5 fields ----
+    uint probe_count;                       // offset 928 — number of loaded probes in ProbeBuffer
+    float normal_bias;                      // offset 932 — probe selection normal-vs-distance weight
+    float roughness_single;                 // offset 936 — below this, use top-1 probe only
+    float roughness_full;                   // offset 940 — above this, full top-2 blend
+    float blend_curve;                      // offset 944 — blend transition curve exponent
+    // 12 bytes implicit pad (16-byte alignment to 960)
 } global;
 
 layout (set = 0, binding = 1) readonly buffer LightBuffer {
