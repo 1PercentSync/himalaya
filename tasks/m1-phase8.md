@@ -180,11 +180,11 @@ lightmap 和 probe 贡献是否生效。IBL 模式下隐藏，不影响模式切
 - [x] `app/include/himalaya/app/application.h`：`start_bake_session()` 新增 `BakeMode` 参数
 - [x] `app/src/application.cpp`：分发 `bake_start_mode` 到 `start_bake_session(mode)`
 
-## Step 9：AO/SO 按模式自动预设
+## ~~Step 9：AO/SO 按模式自动预设~~（已跳过）
 
-- [ ] `app/application.h`：per-mode AOConfig 存储（`ao_config_ibl_` + `ao_config_lightmap_probe_`）
-- [ ] `app/application.cpp`：模式切换时保存旧 → 加载新 AOConfig
-- [ ] `ao_config_lightmap_probe_` 默认值调优（实测确定 radius / intensity）
+> 跳过原因：Step 8.6 的 lightmap baker initial ray bias (0.1m) 使 lightmap 不再烘焙近距离
+> 遮蔽（< 10cm），运行时 GTAO/SO 覆盖的正好是 lightmap 跳过的范围。两者互补而非重叠，
+> 不再需要 per-mode AO/SO 参数预设。用户如有需要可手动调整 slider。
 
 ## Step 10：Lightmap/Probe 模式 IBL 旋转跳变
 
