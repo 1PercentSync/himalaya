@@ -35,6 +35,15 @@ namespace himalaya::app {
         std::unordered_map<std::string, std::pair<int, int>> hdr_sun_coords;
 
         /**
+         * @brief Per-HDR auto sun intensity multiplier.
+         *
+         * Key is the HDR absolute file path. Multiplied with the max RGB
+         * component of the sampled HDR pixel to produce directional light
+         * intensity. Calibrated by user via PT reference comparison.
+         */
+        std::unordered_map<std::string, float> hdr_sun_auto_multipliers;
+
+        /**
          * @brief Persisted spdlog log level name (e.g. "warn", "info").
          *
          * Empty string means no user override — Application falls back to

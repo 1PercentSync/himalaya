@@ -158,8 +158,11 @@ namespace himalaya::app {
         /** @brief Cached auto-sampled sun color (normalized). Updated by update_hdr_sun_sample(). */
         glm::vec3 hdr_sun_auto_color_{1.0f};
 
-        /** @brief Cached auto-sampled sun intensity (max RGB component). Updated by update_hdr_sun_sample(). */
+        /** @brief Cached auto-sampled sun intensity (max_comp × multiplier). Updated by update_hdr_sun_sample(). */
         float hdr_sun_auto_intensity_ = 3.0f;
+
+        /** @brief User-tunable multiplier for auto sun intensity (calibrated via PT comparison, persisted per-HDR). */
+        float hdr_sun_auto_multiplier_ = 0.2f;
 
         /** @brief Constructed HDR Sun DirectionalLight (rebuilt each frame from coords + IBL yaw). */
         framework::DirectionalLight hdr_sun_light_{};

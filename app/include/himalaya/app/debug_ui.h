@@ -123,6 +123,9 @@ namespace himalaya::app {
         /** @brief Auto-derive color and intensity from HDR pixel. */
         bool &hdr_sun_auto;
 
+        /** @brief Multiplier for auto sun intensity (calibrated via PT comparison). */
+        float &hdr_sun_auto_multiplier;
+
         /** @brief Original equirect image width (for UI max bounds). */
         uint32_t equirect_width;
 
@@ -318,6 +321,9 @@ namespace himalaya::app {
 
         /** @brief True if HDR sun coordinates were modified (triggers config save). */
         bool hdr_sun_coords_changed = false;
+
+        /** @brief True if HDR sun auto multiplier was modified (triggers config save + resample). */
+        bool hdr_sun_multiplier_changed = false;
 
         /** @brief True if the log level was changed via the combo box. */
         bool log_level_changed = false;

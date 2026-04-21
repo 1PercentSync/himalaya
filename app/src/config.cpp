@@ -97,6 +97,13 @@ namespace himalaya::app {
                     }
                 }
             }
+            if (json.contains("hdr_sun_auto_multipliers") && json["hdr_sun_auto_multipliers"].is_object()) {
+                for (auto& [key, val] : json["hdr_sun_auto_multipliers"].items()) {
+                    if (val.is_number()) {
+                        config.hdr_sun_auto_multipliers[key] = val.get<float>();
+                    }
+                }
+            }
 
             spdlog::info("Loaded config from {}", path.string());
         } catch (const std::exception& e) {
@@ -137,6 +144,11 @@ namespace himalaya::app {
                     coords[hdr_path] = {xy.first, xy.second};
                 }
                 j["hdr_sun_coords"] = coords;
+                nlohmann::json multipliers = nlohmann::json::object();
+                for (const auto& [hdr_path, mult] : config.hdr_sun_auto_multipliers) {
+                    multipliers[hdr_path] = mult;
+                }
+                j["hdr_sun_auto_multipliers"] = multipliers;
                 file << j.dump(2);
             }
 

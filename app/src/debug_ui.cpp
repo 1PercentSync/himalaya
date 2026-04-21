@@ -642,6 +642,14 @@ namespace himalaya::app {
                     actions.hdr_sun_coords_changed = true;
                 }
                 ImGui::Checkbox("Auto from HDR", &ctx.hdr_sun_auto);
+                if (ctx.hdr_sun_auto) {
+                    if (ImGui::SliderFloat("Intensity Mult##hdrsun_mult",
+                                           &ctx.hdr_sun_auto_multiplier,
+                                           0.0001f, 1.0f, "%.4f",
+                                           ImGuiSliderFlags_Logarithmic)) {
+                        actions.hdr_sun_multiplier_changed = true;
+                    }
+                }
                 ImGui::BeginDisabled(ctx.hdr_sun_auto);
                 ImGui::SliderFloat("Intensity##hdrsun", &ctx.hdr_sun_intensity, 0.0f, 20.0f, "%.1f");
                 ImGui::SliderFloat("Color Temp (K)##hdrsun", &ctx.hdr_sun_color_temp,
