@@ -8,12 +8,12 @@
 
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
-- **Phase**：阶段八 — 间接光照集成（实现中）
-- **进度**：Phase 8 全部完成（Step 1-8.7 + 11 完成，Step 9/10 已跳过）
+- **Phase**：阶段八点五 — 间接光照质量提升（规划中）
+- **进度**：Phase 8.5 方案已确定，文档待写入
 
 ### 下一个任务
 
-Phase 8 结束。下一阶段待定。
+Phase 8.5 文档写入 `docs/current-phase.md`，然后开始实现。
 
 ---
 
@@ -24,11 +24,11 @@ CLAUDE.md 已自动加载，以下为额外必读：
 | 文档 | 说明 |
 |------|------|
 | `docs/milestone-1/milestone-1.md` | M1 范围、预期效果、已知局限性 |
-| `docs/current-phase.md` | 当前阶段实现步骤（阶段八） |
+| `docs/current-phase.md` | 当前阶段实现步骤（阶段八点五） |
 | `docs/milestone-1/m1-rt-decisions.md` | M1 RT 架构决策（阶段六~八） |
 | `docs/milestone-1/m1-interfaces.md` | M1 接口与目标结构：反映当前 Phase 结束时的目标状态，Phase 开始前更新至设计目标，实现完成后应与代码一致 |
 | `docs/milestone-1/m1-development-order.md` | M1 开发阶段顺序（含阶段六~十） |
-| `tasks/m1-phase8.md` | 阶段八任务清单（复选框进度跟踪） |
+| `tasks/m1-phase8.5.md` | 阶段八点五任务清单（复选框进度跟踪） |
 
 ## 按需文档
 
@@ -76,6 +76,8 @@ CLAUDE.md 已自动加载，以下为额外必读：
 | `docs/archive/path-tracing-reference.md` | 实时路径追踪技术综述参考资料 |
 | `docs/archive/m1-phase7-plan.md` | M1 阶段七实现步骤（已完成） |
 | `tasks/archive/m1-phase7.md` | M1 阶段七任务清单（已完成） |
+| `docs/archive/m1-phase8-plan.md` | M1 阶段八实现步骤（已完成） |
+| `tasks/archive/m1-phase8.md` | M1 阶段八任务清单（已完成） |
 
 ---
 

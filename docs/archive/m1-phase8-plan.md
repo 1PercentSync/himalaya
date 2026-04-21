@@ -1,0 +1,625 @@
+# 当前阶段：M1 阶段八 — 间接光照集成
+
+> 目标：将 Phase 7 烘焙器产出的 Lightmap 和 Reflection Probe 数据集成到光栅化渲染管线中，
+> 使室内场景有间接光照（Lightmap），光滑表面反射周围环境（Probe）。
+> 提供 IBL / Lightmap+Probe 两种间接光照模式切换，高完成度的 UI/UX。
+>
+> Phase 8.5（质量提升）范围：视差校正 Parallax Corrected Cubemap、多 probe 混合 + roughness 阈值、
+> GPU per-pixel probe 网格查找、IBL 旋转拖拽距离-角度映射细化、lightmap 接缝处理（视情况）。
+>
+> RT 架构决策见 `milestone-1/m1-rt-decisions.md`，关键接口见 `milestone-1/m1-interfaces.md`。
+
+---
+
+## 实现步骤
+
+### 依赖关系
+
+```
+Step 1: indirect_intensity 重命名（纯重构）
+    ↓
+Step 2: IndirectLightingMode enum + FEATURE_LIGHTMAP_PROBE
+    ↓
+Step 3: GPUInstanceData 扩展 + instance_index vert→frag 重构
+    ↓
+Step 4: GPUProbeData + ProbeBuffer SSBO（Set 0 binding 9）
+    ↓
+Step 5: BakeDataManager — 扫描与校验
+    ↓
+Step 6: BakeDataManager — 加载与卸载
+    ↓
+Step 7: Forward shader 间接光照集成（lightmap + probe 采样）
+    ↓
+Step 8: 模式切换 + 角度选择 UI
+    ↓
+Step 8.1: Bake 数据生命周期修复
+    ↓
+Step 8.2: Lightmap UV 同步加载 + 流程简化
+    ↓
+Step 8.3: Baking 守卫 + 文档修正 + RT 残留清理
+    ↓
+Step 8.4: LightmapUVGenerator 内联重构
+    ↓
+Step 8.45: xatlas 重构 — UV 生成移入烘焙管线
+    ↓
+Step 8.5: Lightmap/Probe 独立开关 + UI 重排
+    ↓
+Step 8.6: Lightmap Dilation（chart 接缝黑块修复）
+    ↓
+Step 8.7: 独立 Bake Lightmap / Probe / All
+    ↓
+Step 9: (已跳过)
+    ↓
+Step 10: (已跳过)
+    ↓
+Step 11: 边缘情况 + Debug 渲染模式 + 收尾
+```
+
+### 总览
+
+| Step | 主题 | 验证标准 |
+|------|------|----------|
+| 1 | `indirect_intensity` 重命名 | grep 确认全代码库无 `ibl_intensity` 残留，渲染行为不变 |
+| 2 | IndirectLightingMode enum + feature flag | 编译通过，feature_flags bit 3 默认 0，渲染不变 |
+| 3 | GPUInstanceData 扩展 + instance_index 重构 | 三对 shader 改用 instance_index，渲染无回归（光栅化 + PT + Bake 三种模式） |
+| 4 | GPUProbeData + ProbeBuffer SSBO | Set 0 binding 9 创建成功，无 validation 报错 |
+| 5 | BakeDataManager 扫描与校验 | 已有 bake 数据时 UI 正确显示可用角度列表，无 bake 数据时列表为空 |
+| 6 | BakeDataManager 加载与卸载 | 手动调用 load_angle() 后日志输出加载数量 + bindless 索引，unload_angle() 释放无泄漏 |
+| 7 | Forward shader 间接光照集成 | 切换到 Lightmap/Probe 模式后场景可见烘焙间接光照 + probe 反射，IBL 模式无回归 |
+| 8 | 模式切换 + 角度选择 UI | 模式 toggle 可用，角度点击切换正确加载/卸载，bake 完成后自动启用 |
+| 8.1 | Bake 数据生命周期修复 | 场景/HDR/缓存变化时正确卸载+回退，key 含 UV hash，死数据清理 |
+| 8.2 | Lightmap UV 同步加载 + 流程简化 | 场景加载后 UV 始终就绪，异步 UV 控件移除，bake/角度加载路径简化 |
+| 8.3 | Baking 守卫 + 文档修正 + RT 残留清理 | Baking 期间场景/HDR/IBL 旋转/模式切换全部禁止，文档同步，场景加载失败清理 RT |
+| 8.4 | LightmapUVGenerator 内联重构 | Generator 类删除，apply_lightmap_uvs() 内部并行 xatlas，调用方一行完成 |
+| 8.45 | xatlas 重构 — UV 生成移入烘焙管线 | 场景加载不运行 xatlas，烘焙时 xatlas+bake 一体化，bake cache 含 UV 数据，加载 bake 数据时恢复 UV |
+| 8.5 | Lightmap/Probe 独立开关 + UI 重排 | LP 模式下可独立开关 lightmap/probe，Rendering 区移到 Camera 前 |
+| 8.6 | Lightmap Dilation | chart 边缘不再出现黑块，bilinear 采样 + BC6H block 边界安全 |
+| 8.7 | 独立 Bake Lightmap / Probe / All | 三按钮分别 bake，已有完整数据时可单独更新 lightmap 或 probe |
+| ~~9~~ | ~~AO/SO 按模式自动预设~~ | 已跳过：ray bias 使 lightmap 与 GTAO 互补而非重叠 |
+| ~~10~~ | ~~IBL 旋转跳变~~ | 已跳过：拦截已在 Step 8.3 完成，角度切换太重不适合拖拽 |
+| 11 | 边缘情况 + debug 模式 | cache 清除回退 IBL，场景/HDR 重载触发重扫描，debug 视图正确 |
+
+---
+
+### Step 1：`indirect_intensity` 重命名
+
+将 `ibl_intensity` 重命名为 `indirect_intensity`，纯代码重构，零行为变化。
+
+- `framework/scene_data.h`：`GlobalUniformData::ibl_intensity` → `indirect_intensity`，更新 `static_assert` 偏移
+- `shaders/common/bindings.glsl`：`GlobalUBO.ibl_intensity` → `indirect_intensity`
+- `shaders/forward.frag`：4 处 `global.ibl_intensity` → `global.indirect_intensity`
+- `app/renderer.h`：`RenderInput::ibl_intensity` → `indirect_intensity`
+- `app/application.h`：`ibl_intensity_` → `indirect_intensity_`
+- `app/application.cpp`：所有 `ibl_intensity` → `indirect_intensity`（RenderInput 填充等）
+- `app/renderer.cpp`：`ubo_data.ibl_intensity` → `ubo_data.indirect_intensity`
+- `app/renderer_pt.cpp`：`input.ibl_intensity` → `input.indirect_intensity`，`prev_ibl_intensity_` → `prev_indirect_intensity_`
+- `app/debug_ui.h`：`DebugUIContext::ibl_intensity` → `indirect_intensity`
+- `app/debug_ui.cpp`：slider label 暂时保持 `"IBL Intensity"`（Step 8 UI 阶段根据模式动态切换）
+
+**验证**：`grep -r "ibl_intensity" --include="*.h" --include="*.cpp" --include="*.glsl" --include="*.frag" --include="*.vert"` 返回零结果（归档文档除外），渲染画面不变
+
+---
+
+### Step 2：IndirectLightingMode enum + FEATURE_LIGHTMAP_PROBE
+
+引入间接光照模式枚举和 shader feature flag，但不改变任何渲染行为。
+
+- `framework/scene_data.h`：新增 `enum class IndirectLightingMode : uint8_t { IBL, LightmapProbe }`
+- `shaders/common/bindings.glsl`：新增 `#define FEATURE_LIGHTMAP_PROBE (1u << 3)`
+- `framework/scene_data.h`：`RenderFeatures` 新增 `bool lightmap_probe = false`
+- `app/application.h`：新增 `IndirectLightingMode indirect_lighting_mode_ = IndirectLightingMode::IBL`
+- `app/renderer.h`：`RenderInput` 新增 `IndirectLightingMode indirect_lighting_mode` 字段
+- `app/application.cpp`：RenderInput 填充新字段
+- `app/renderer.cpp`：`fill_common_gpu_data()` 中根据 `RenderFeatures::lightmap_probe` 设置 `feature_flags` bit 3
+
+**验证**：编译通过，`feature_flags` bit 3 默认为 0，渲染行为不变
+
+---
+
+### Step 3：GPUInstanceData 扩展 + instance_index Vert→Frag 重构
+
+扩展 per-instance 数据结构，并将三对 shader 从传递 `frag_material_index` 改为传递 `frag_instance_index`。
+
+#### 3a. GPUInstanceData 扩展
+
+- `framework/scene_data.h`：`GPUInstanceData` 的 `_padding[3]` 改为 `lightmap_index`（uint32）+ `probe_index`（uint32）+ `_padding`（uint32），struct 保持 128 bytes。更新 `static_assert` 偏移校验
+- `shaders/common/bindings.glsl`：`GPUInstanceData` 对应更新（`_padding[3]` → 具名字段）
+- `app/renderer.cpp` 或 `app/renderer_rasterization.cpp`：InstanceBuffer 填充时将 `lightmap_index` 和 `probe_index` 写为 `UINT32_MAX`（哨兵值）
+
+#### 3b. instance_index 重构（forward）
+
+- `shaders/forward.vert`：移除 `frag_material_index`（location 4），新增 `frag_instance_index`（location 4, flat uint = `gl_InstanceIndex`），新增 `frag_uv1`（location 5, vec2 = `in_uv1`）
+- `shaders/forward.frag`：移除 `frag_material_index`（location 4），新增 `frag_instance_index`（location 4, flat uint），新增 `frag_uv1`（location 5, vec2）。通过 `instances[frag_instance_index]` 读取 `material_index`
+
+#### 3c. instance_index 重构（depth_prepass）
+
+- `shaders/depth_prepass.vert`：`frag_material_index` → `frag_instance_index`（location 3, flat uint = `gl_InstanceIndex`）
+- `shaders/depth_prepass.frag`：通过 `instances[frag_instance_index].material_index` 读取
+- `shaders/depth_prepass_masked.frag`：同上
+
+#### 3d. instance_index 重构（shadow）
+
+- `shaders/shadow.vert`：`frag_material_index` → `frag_instance_index`（location 1, flat uint = `gl_InstanceIndex`）
+- `shaders/shadow_masked.frag`：通过 `instances[frag_instance_index].material_index` 读取
+
+**设计要点**：
+- **invariant gl_Position 不受影响**：forward.vert 新增 `frag_uv1`（location 5）不影响 `invariant gl_Position` 保证——invariant 只约束 gl_Position 的计算路径（两个 shader 中完全相同），与其他 output varying 无关。depth_prepass.vert 不新增 `frag_uv1`
+- **shadow.vert 不声明 `in_uv1`**：shadow pass 不使用 lightmap UV（只需 position + uv0 做 alpha mask），无需声明 `layout(location = 4) in vec2 in_uv1`。与重构前行为一致——shadow.vert 只声明它实际使用的顶点属性
+
+**验证**：光栅化渲染无回归（含 alpha mask 物体），PT 参考视图无回归，Bake 模式无回归。无 validation 报错
+
+---
+
+### Step 4：GPUProbeData + ProbeBuffer SSBO
+
+新增 probe 数据结构和 Set 0 binding 9。
+
+- `framework/scene_data.h`：新增 `GPUProbeData` 结构体（`glm::vec3 position` + pad + `glm::vec3 aabb_min` + pad + `glm::vec3 aabb_max` + `uint32_t cubemap_index`，48 bytes std430）
+- `shaders/common/bindings.glsl`：新增 `GPUProbeData` struct 定义 + `layout(set = 0, binding = 9) readonly buffer ProbeBuffer { GPUProbeData probes[]; }`（不受 `HIMALAYA_RT` 守卫，`PARTIALLY_BOUND`）
+- `rhi/descriptors.h`：（若需要）更新注释说明 binding 9
+- `rhi/descriptors.cpp`：`create_layouts()` 中 Set 0 layout 新增 binding 9（`STORAGE_BUFFER`，`PARTIALLY_BOUND`，`VERTEX | FRAGMENT` stage，不受 `rt_supported` 条件守卫）
+- `rhi/descriptors.h`：新增 `write_set0_probe_buffer()` 方法
+- `rhi/descriptors.cpp`：实现 `write_set0_probe_buffer()`
+
+**验证**：编译通过，Set 0 layout 创建成功，无 validation 报错。Binding 9 未写入时 shader 不访问（`PARTIALLY_BOUND` 保护）
+
+---
+
+### Step 5：BakeDataManager — 扫描与校验
+
+Framework 层新建 `BakeDataManager` 类，迁移已有的 bake 角度扫描与完整性校验逻辑。
+
+- 新增 `framework/bake_data_manager.h`：类声明，`init()` / `destroy()` / `scan()` / `available_angles()` / `has_bake_data()`
+- 新增 `framework/bake_data_manager.cpp`：
+  - `scan(lightmap_keys, probe_set_key)`：扫描 `cache_root()/bake/` 目录，从 manifest 文件名提取角度，逐角度校验（lightmap KTX2 完整 + probe KTX2 完整），构建 `available_angles_` 列表
+  - 校验逻辑从 `debug_ui.cpp:1076-1162` 迁移
+- `framework/CMakeLists.txt`：添加 `bake_data_manager.cpp`
+- `app/renderer.h`：Renderer 新增 `BakeDataManager bake_data_manager_` 成员
+- `app/renderer.cpp`（init/destroy）：调用 `bake_data_manager_.init()` / `bake_data_manager_.destroy()`
+- `app/debug_ui.cpp`：移除 `baked_angles_` 本地列表和扫描逻辑，改为从 `DebugUIContext` 中读取 BakeDataManager 提供的可用角度列表
+- `app/debug_ui.h`：`DebugUIContext` 新增 `std::span<const BakeDataManager::AngleInfo> available_angles` 字段，移除 `bake_angles_dirty`
+
+**设计要点**：
+- `scan()` 的调用时机由 Application 驱动：场景+HDR 加载完毕后、bake 完成后（`BakeState::Complete`）、Clear Bake Cache 后。Application 计算 lightmap_keys（通过 `Renderer::compute_lightmap_keys()`）和 probe_set_key（`content_hash(scene_hash + hdr_hash + scene_textures_hash)`，与现有 `bake_cache_key` 计算方式一致），传给 `scan()`
+- `DebugUIContext` 中原有的 `bake_cache_key` 和 `bake_angles_dirty` 不再需要——角度列表由 BakeDataManager 持有，通过 `available_angles()` span 传入 DebugUIContext
+- `BakeDataManager::init()` 接收 `ResourceManager*` 和 `DescriptorManager*`（存储引用，后续 load/unload 使用）+ 两个 `SamplerHandle`（lightmap 用 linear clamp，probe 用 default linear repeat）。不接收 `Context*`——immediate scope 由调用方（Renderer）管理
+
+**验证**：有已 bake 数据时 UI 角度列表显示正确（与重构前一致），无已 bake 数据时列表为空
+
+---
+
+### Step 6：BakeDataManager — 加载与卸载
+
+BakeDataManager 实现角度加载（KTX2 → GPU → bindless）和卸载。
+
+#### 6a. Lightmap 加载
+
+- `bake_data_manager.h`：`load_angle(rotation_int, lightmap_keys, bakeable_indices, probe_set_key, mesh_instances)` / `unload_angle()`（签名包含 `bakeable_indices` 用于将 bakeable 索引映射回全 instance 索引，`probe_set_key` 用于 probe 文件路径构建）
+- `bake_data_manager.cpp`：
+  - 遍历 lightmap_keys，构建文件路径 `cache_path("bake", key + "_rot" + NNN, ".ktx2")`
+  - 使用已有 KTX2 加载工具读取 BC6H 数据 → 创建 GPU image → 注册 `register_texture(image, linear_clamp_sampler)`
+  - 存储 per-instance `lightmap_indices_`（parallel to mesh_instances，无 lightmap 的 instance 填 `UINT32_MAX`）
+
+#### 6b. Probe 加载 + 分配
+
+- `bake_data_manager.cpp`：
+  - 读取 manifest 文件（二进制格式：`uint32_t probe_count` + `glm::vec3[probe_count] positions`，与 `renderer_bake.cpp::write_probe_manifest()` 写入格式一致）
+  - 逐 probe 加载 KTX2 cubemap（文件路径 `cache_path("bake", probe_set_key + "_rot" + NNN + "_probe" + MMM, ".ktx2")`）→ 创建 GPU cubemap image → 注册 `register_cubemap(image, default_sampler)`
+  - 填充 `GPUProbeData` 数组（position 从 manifest 读取、aabb_min/max 填零（Phase 8.5 使用）、cubemap_index 从 `register_cubemap` 返回）→ 创建 ProbeBuffer SSBO（BakeDataManager 内部通过 ResourceManager 创建 GPU_ONLY buffer + immediate scope 上传）→ 通过 `DescriptorManager::write_set0_probe_buffer(buffer, size)` 写入 Set 0 binding 9
+  - CPU probe-to-instance 分配：每个 instance 的 `MeshInstance::world_bounds` AABB 中心（`(min + max) * 0.5f`）→ 找最近 probe（欧氏距离）→ 存储 `probe_indices_`
+
+#### 6c. 卸载
+
+- `bake_data_manager.cpp`：`unload_angle()` 注销 bindless（`unregister_texture` / `unregister_cubemap`）、销毁 GPU image、销毁 ProbeBuffer SSBO、清空 `lightmap_indices_` / `probe_indices_`
+
+#### 6d. Renderer 集成
+
+- `app/renderer.h`：新增 `switch_bake_angle(uint32_t rotation_int, std::span<const MeshInstance> mesh_instances)` 方法（额外接收 `mesh_instances` 供 `load_angle` 做 probe-to-instance 分配）
+- `app/renderer_bake.cpp`：`switch_bake_angle()` 实现——`vkQueueWaitIdle` → `bake_data_manager_.unload_angle()` → `ctx_->begin_immediate()` → `bake_data_manager_.load_angle()` → `ctx_->end_immediate()`（immediate scope 由 Renderer 管理，BakeDataManager 内部不持有 Context 引用）
+- `app/renderer_rasterization.cpp`：`build_draw_groups()` 新增 optional `lightmap_indices` / `probe_indices` 参数，camera draw groups 调用点从 `bake_data_manager_` 查询填充（shadow 调用点保持默认 UINT32_MAX）
+
+**设计要点**：
+- Lightmap 纹理注册到 Set 1 binding 0（`textures[]`），使用 linear clamp sampler（Renderer 已有 `linear_clamp_sampler_`，BakeDataManager 通过 init 参数接收）
+- Probe cubemap 注册到 Set 1 binding 1（`cubemaps[]`），使用 default sampler（linear repeat）
+- BakeDataManager 不依赖 Renderer 具体实现——通过 init 接收 `ResourceManager*`、`DescriptorManager*`、`SamplerHandle` 引用
+
+**验证**：手动触发 `load_angle()` 后日志输出加载的 lightmap 数量 + probe 数量 + bindless 索引。`unload_angle()` 后无资源泄漏。无 validation 报错
+
+---
+
+### Step 7：Forward Shader 间接光照集成
+
+在 `forward.frag` 中实现 Lightmap/Probe 采样，替代 IBL 间接光照。
+
+- `shaders/forward.frag`：重构间接光照计算部分：
+  - BRDF LUT 查找提到条件分支之前（两种模式共用）
+  - 读取 `GPUInstanceData inst = instances[frag_instance_index]`
+  - `bool use_lightmap = (feature_flags & FEATURE_LIGHTMAP_PROBE) != 0u && inst.lightmap_index != 0xFFFFFFFFu`
+  - **Lightmap 分支**（`use_lightmap == true`）：
+    - Diffuse：`texture(textures[nonuniformEXT(inst.lightmap_index)], frag_uv1).rgb * diffuse_color`（lightmap 存储入射辐照度，需乘表面漫反射色）
+    - Specular：若 `inst.probe_index != 0xFFFFFFFFu`，从 ProbeBuffer 读 probe data，`textureLod(cubemaps[nonuniformEXT(probe.cubemap_index)], R, roughness * float(textureQueryLevels(cubemaps[nonuniformEXT(probe.cubemap_index)]) - 1))`；否则回退 IBL specular（使用 `ibl_rotation_sin/cos` 旋转 R）
+  - **IBL 分支**（`use_lightmap == false`）：保持现有 IBL 采样逻辑（含 IBL rotation）
+  - AO/SO 应用于两种模式的 indirect 结果（与决策一致）
+  - `indirect_intensity` 乘数应用于两种模式的 indirect 结果
+- `shaders/forward.frag`：更新 debug render mode `DEBUG_MODE_IBL_ONLY` → `DEBUG_MODE_INDIRECT_ONLY`（显示当前激活的间接光照）
+- `shaders/common/bindings.glsl`：`#define DEBUG_MODE_IBL_ONLY 3` → `#define DEBUG_MODE_INDIRECT_ONLY 3`
+- `app/debug_ui.cpp`：Debug View 标签 `"IBL Only"` → `"Indirect Only"`（与 shader 端重命名同步）
+
+**设计要点**：
+- Lightmap 分支中不做 IBL rotation（probe cubemap 已在世界空间正确方向）
+- IBL 回退分支中使用 `ibl_rotation_sin/cos`（Application 在 Lightmap/Probe 模式下设置为已 bake 角度的旋转值）
+- Probe specular 不需要 IBL rotation（probe 在 bake 时已包含正确的环境光方向）
+- `textureQueryLevels()` 返回 probe cubemap 的 mip 级数，用于 roughness-based LOD
+- 分支在 per-instance 级别不发散（同一 draw call 的所有 fragment 走同一分支）
+
+**验证**：
+- IBL 模式：渲染完全不变（feature flag 为 0，走 IBL 分支）
+- 手动设置 feature flag + 加载 bake 数据后：Lightmap/Probe 模式下场景可见间接光照 + probe 反射
+- 切换模式对比效果合理
+
+---
+
+### Step 8：模式切换 + 角度选择 UI
+
+实现完整的 UI 交互流程：模式切换、角度选择、Bake 后自动启用。
+
+- `app/debug_ui.h`：`DebugUIContext` 新增 `IndirectLightingMode& indirect_lighting_mode` 引用、`bool has_bake_data`（可用角度非空）、`uint32_t loaded_bake_rotation`（当前加载的角度，UI 高亮用）
+- `app/debug_ui.h`：`DebugUIActions` 新增 `bool angle_switch_requested = false` + `uint32_t new_angle_rotation = 0`（角度列表点击时设置）
+- `app/debug_ui.cpp`：
+  - 模式 toggle：`has_bake_data == false` 时 Lightmap/Probe 选项灰显
+  - 已 bake 角度列表：每项可点击（当前加载角度高亮），点击设置 `actions.angle_switch_requested = true` + `actions.new_angle_rotation = rot`
+  - `"IBL Intensity"` slider label 根据 `indirect_lighting_mode` 动态显示：IBL 模式 → `"IBL Intensity"`，Lightmap/Probe 模式 → `"Indirect Intensity"`
+  - Bake 期间模式 toggle 灰显
+- `app/application.cpp`：
+  - 检测 `actions.angle_switch_requested` → 调用 `renderer_.switch_bake_angle(actions.new_angle_rotation)`
+  - 检测模式切换 → IBL → LightmapProbe：调用 `switch_bake_angle()` 加载首个可用角度（或上次选中角度）；LightmapProbe → IBL：调用 `renderer_.unload_bake_angle()` 释放资源
+  - Bake 完成后（`BakeState::Complete` 检测）：调用 `bake_data_manager_.scan()` 刷新角度列表，自动切换到 LightmapProbe 模式 + 加载刚 bake 的角度
+- `app/application.cpp`：`IndirectLightingMode` 与 `RenderFeatures::lightmap_probe` 同步（模式为 LightmapProbe 时 flag = true）
+- `app/application.cpp`：**IBL 旋转同步**——Lightmap/Probe 模式激活或角度切换时，将 `ibl_rotation_deg_` 设置为当前已加载角度的度数（确保 IBL 回退分支使用正确的旋转值，且 `ibl_rotation_sin/cos` 写入 GlobalUBO 后与 bake 数据一致）
+- `app/debug_ui.cpp`：Lightmap/Probe 模式下 Start Bake 按钮灰显（Bake 操作仅在 IBL 模式下可触发）
+
+**验证**：
+- 无 bake 数据时 Lightmap/Probe 选项灰显不可选
+- 有 bake 数据时可切换模式，画面正确切换（IBL ↔ Lightmap/Probe）
+- 角度列表点击切换正确加载新数据
+- Bake 完成后自动启用 Lightmap/Probe 模式 + 加载对应角度
+- Clear Bake Cache 后自动回退 IBL 模式
+
+---
+
+### Step 8.1：Bake 数据生命周期修复
+
+Phase 8 审查发现的生命周期和数据一致性问题。必须在 Step 8.5 之前修复，否则后续开发/测试中切换场景或 HDR 会触发越界访问。
+
+#### 8.1a. 场景/HDR/缓存变化时卸载 bake 数据并回退 IBL
+
+- `app/application.cpp`：`switch_scene()`、`switch_environment()`、`clear_bake_cache`、`clear_all_cache` 四个触发点，在变化前：若当前处于 LightmapProbe 模式 → `renderer_.unload_bake_angle()` → `indirect_lighting_mode_ = IBL` → `features_.lightmap_probe = false`
+- 从 Step 11 提前：Step 11 中 "Clear Bake Cache" 和 "场景重载 / HDR 重载" 的卸载+回退逻辑移至此处
+
+#### 8.1b. 加载已有 bake 数据前确保 lightmap UV 就绪
+
+- `app/application.cpp`：在 `switch_bake_angle()` 调用前，复用 `start_bake_session()` 的 UV 准备流程（确保后台生成器完成 → `apply_lightmap_uvs()` → 重建 BLAS/TLAS）。若 UV 已 apply 则为幂等 no-op
+- 提取 `start_bake_session()` 的前半段为可复用函数（如 `ensure_lightmap_uvs()`），`start_bake_session()` 和 bake 角度加载路径共用
+
+#### 8.1c. Lightmap cache key 加入 UV hash
+
+- `app/src/renderer_bake.cpp`：`compute_lightmap_keys()` 改为使用 post-xatlas 的 `cpu_vertices_` / `cpu_indices_`（含 uv1），而非 `original_cpu_vertices_`
+- `compute_lightmap_keys()` 必须在 `apply_lightmap_uvs()` 之后调用
+- `switch_scene()` 和 `switch_environment()` 中修正 `refresh_lightmap_keys()` 与 `trigger_bake_scan()` 的调用顺序（先 refresh 再 scan，与 `init()` 一致）
+
+#### 8.1d. 清理死数据 + 小修
+
+- `app/renderer.h`：移除 `RenderInput::indirect_lighting_mode` 字段
+- `app/application.cpp`：移除对应的 RenderInput 填充
+- `shaders/forward.frag`：修正注释 `"stored irradiance × surface albedo"` → `"stored irradiance, multiplied by surface albedo"`
+- `framework/src/bake_data_manager.cpp`：`scan()` 中 `std::stoul` + `catch(...)` → `std::from_chars`
+
+**验证**：
+- 场景切换时若处于 LP 模式 → 自动卸载 bake 数据 + 回退 IBL，无 validation 报错
+- HDR 切换时同上
+- Clear Bake Cache / Clear All Cache 时同上
+- 重启渲染器 → 加载场景 → 点击已有 bake 角度 → lightmap UV 自动 apply → 采样正确（非全零）
+- 清除 UV 缓存但保留 bake 缓存 → 加载 bake 角度时 xatlas 重新生成 → key 不匹配 → 旧 bake 数据不被错误使用
+- 编译通过，`RenderInput` 中无 `indirect_lighting_mode` 字段
+
+---
+
+### Step 8.2：Lightmap UV 同步加载 + 流程简化
+
+UV 数据是 bake 结果加载的前置依赖（lightmap 采样依赖 xatlas UV），因此 UV 生成/加载应在场景加载时同步完成，异步后台生成的复杂度不再必要。
+
+#### 核心变化
+
+- **场景加载流程重排**：`init()` 和 `switch_scene()` 中，场景加载后立即同步完成 xatlas 生成���多线程 `LightmapUVGenerator::start()` + `wait()`）→ `apply_lightmap_uvs()` → 重建 BLAS/TLAS。之后 `refresh_lightmap_keys()` 和 `trigger_bake_scan()` 使用 post-xatlas 数据
+- **`start_bake_session()` 精简**：移除 UV 准备步骤（GPU idle + generator start/wait + apply + BLAS/TLAS rebuild），直接开始 bake
+- **移除 `ensure_lightmap_uvs()`**：场景加载时 UV 始终就绪，不再需要运行时检查
+- **移除异步 UV UI**：DebugUI 中 Background UV 的 Start/Stop/Progress 控件及对应的 `DebugUIContext` / `DebugUIActions` 字段
+- **移除 `uv_generator_` 异步控制**：Application 中 `uv_generator_` 仅在场景加载路径中同步使用，不再作为后台任务暴露
+
+#### 设计要点
+
+- `LightmapUVGenerator` 类本身保留——多线程加速对大场景仍有价值，但使用方式从"后台异步 + UI 控制"简化为"同步调用 + 等待完成"
+- xatlas 缓存命中时（之前 bake 过），同步流程几乎零延迟（仅缓存读取 + remap + GPU 上传）
+- xatlas 缓存未命中时（首次加载），场景加载阶段阻塞完成生成。此时无 bake 数据可加载，不影响用户体验
+- `AppConfig` 移除 `bg_uv_thread_count` / `bg_uv_auto_start`，线程数改为运行时 `std::max(1u, hardware_concurrency())`，移除 `resolve_thread_count()`
+
+**验证**：
+- 场景加载后 `cpu_vertices()` 中 uv1 数据正确（非全零）
+- `refresh_lightmap_keys()` + `trigger_bake_scan()` 使用 post-xatlas 数据，已有 bake 角度正确显示
+- 点击 bake 角度直接加载成功（无需额外 UV 准备）
+- Start Bake 直接开始（无阻塞 UV 准备步骤）
+- DebugUI 中无 Background UV 控件
+- 编译通过，无 validation 报错
+
+---
+
+### Step 8.3：Baking 守卫 + 文档修正 + RT 残留清理
+
+Step 8.2 审查发现的 Baking 期间缺少 UI 守卫、文档与代码不同步、场景加载失败后 RT 数据残留等问题。
+
+#### 8.3a. 文档修正（8.2 遗留）
+
+- `app/application.h`：`uv_generator_` 注释 `"Background lightmap UV generator"` → `"Synchronous lightmap UV generator"`
+- `app/application.h`：`start_bake_session()` Doxygen 更新——移除已删除的 UV 准备描述（"Ensures all xatlas UV caches are populated..."），改为反映当前行为（UV 在场景加载时已就绪，直接开始 bake）
+- `framework/include/himalaya/framework/lightmap_uv_generator.h`：`@file` 和类文档中 `"Background"` → `"Parallel"`（保留多线程加速的事实描述，去除异步后台任务的含义）
+
+#### 8.3b. Baking 期间 UI 守卫
+
+Baking 期间以下操作会导致场景数据交叉引用、IBL 旋转与 bake 文件名不一致、或 descriptor set 冲突，必须禁止：
+
+- `app/debug_ui.cpp`：Baking 期间灰显场景加载按钮（Load Scene）和 HDR 加载按钮（Load HDR）
+- `app/debug_ui.cpp`：Baking 期间灰显 IBL/LP radio button 和 Baked Angle List（Selectable 项）
+- `app/application.cpp`：`update_drag_input()` 中 Baking 模式阻止 IBL 旋转拖拽（与 LP 模式相同的守卫逻辑）
+
+**设计要点**：
+- 灰显判定统一使用 `ctx.render_mode == RenderMode::Baking`（DebugUI 已有此模式检测用于 Start/Cancel 按钮）
+- 用户需要先 Cancel Bake，然后才能切换场景/HDR/模式/旋转
+
+#### 8.3c. 场景加载失败后清理 RT 数据
+
+- `app/application.cpp`：`switch_scene()` 中 `scene_loader_.destroy()` 之后、新场景加载之前，无条件调用 RT 清理（销毁 BLAS/TLAS/emissive SSBOs），避免旧加速结构引用已释放的 VB/IB device address
+
+**设计要点**：
+- `renderer_.build_scene_rt()` 注释已说明 "auto-destroys previous resources"，但该方法仅在成功路径调用；失败路径需要一个独立的清理入口
+- 新增 `Renderer::destroy_scene_rt()` 公开方法（或复用 `build_scene_rt()` 内部的清理逻辑），`switch_scene()` 在 `scene_loader_.destroy()` 后无条件调用
+
+**验证**：
+- Baking 期间 Load Scene / Load HDR 按钮灰显不可点
+- Baking 期间 IBL/LP radio 和角度列表灰显不可点
+- Baking 期间左键拖拽不旋转 IBL
+- 场景加载失败后切换到 PT 模式无 validation 报错（TLAS 已清理）
+- 文档注释与 8.2 简化后的行为一致
+- 编译通过，无 validation 报错
+
+---
+
+### Step 8.4：LightmapUVGenerator 内联重构
+
+Step 8.2 将 UV 生成从异步后台任务简化为同步调用（`start()` + `wait()`），使 `LightmapUVGenerator` 类不再有独立存在的必要。当前流程存在冗余：Generator 多线程将 xatlas 结果写入磁盘缓存 → `apply_lightmap_uvs()` 单线程再从磁盘读取。重构后消除中间磁盘往返，将多线程 xatlas 生成内联到 `apply_lightmap_uvs()` 中。
+
+#### 核心变化
+
+- **删除 `LightmapUVGenerator` 类**：`lightmap_uv_generator.h` / `.cpp` 整文件删除，`framework/CMakeLists.txt` 移除源文件条目
+- **`SceneLoader::apply_lightmap_uvs(uint32_t thread_count)`**：签名增加 `thread_count` 参数，内部分两阶段：
+  - **Phase 1（并行 CPU）**：对所有 pending mesh 用 `std::jthread` + atomic work-stealing 并行调用 `generate_lightmap_uv()`，结果收集到 `std::vector<LightmapUVResult>`。复用 Generator 原有的并行模式
+  - **Phase 2（顺序 GPU）**：逐 mesh remap 顶点 + 创建/上传 VB/IB（必须在 immediate scope 内单线程执行）
+- **删除 `SceneLoader::prepare_uv_requests()`**：不再需要拷贝数据构造 Request
+- **删除 `Application::uv_generator_` 成员**：移除头文件 include
+- **`Application::init()` / `switch_scene()`**：原三行（`prepare` + `start` + `wait`）合并为一行 `apply_lightmap_uvs(thread_count)`
+
+#### 设计要点
+
+- `generate_lightmap_uv()` 函数本身不变——磁盘缓存仍有跨会话价值（首次生成写缓存，后续启动 cache hit 跳过 xatlas）
+- Phase 1 的并行安全由 `generate_lightmap_uv()` 内部保证（每个 mesh 独立文件，atomic write-to-temp + rename）
+- `uv_pending_prims_` / `uv_pending_hashes_` / `uv_original_vertices_` / `uv_original_indices_` 等 SceneLoader 内部状态不变
+- `scene_loader.h` 移除 `lightmap_uv_generator.h` include（不再依赖 Generator 的 Request 类型）
+
+**验证**：
+- 场景加载后 `cpu_vertices()` 中 uv1 数据正确（与重构前一致）
+- xatlas 缓存命中时几乎零延迟，缓存未命中时多线程并行生成
+- `LightmapUVGenerator` 类无残留引用
+- 编译通过，无 validation 报错
+
+---
+
+### Step 8.45：xatlas 重构 — UV 生成移入烘��管线
+
+将 xatlas lightmap UV 生成从场景加载时预处理重构为烘焙管线的一部分。烘焙视为黑盒：输入 = glTF 场景 + HDR 环境，输出 = lightmap + UV 拓扑。每个烘焙角度独立存储 UV 数据和 lightmap 结果，角度之间互不依赖。
+
+#### 设计决策
+
+| 决策 | 结论 |
+|------|------|
+| xatlas 粒度 | Per-mesh（非 per-instance），取同一 mesh 所有 instance 中最大 bake resolution 作为 pack resolution |
+| glTF TEXCOORD_1 | 统一覆盖，全部走 xatlas（忽略 glTF 自带 UV1） |
+| xatlas 质量 | 保持 Debug/Release 编译期区分（Fast / Production） |
+| 独立 xatlas 缓存 | 删除 `lightmap_uv_debug/release` 目录，UV 作为 bake 输出的一部分存储 |
+| Cache key | `hash(scene_hash + geometry_hash + transform_hash + hdr_hash + scene_textures_hash)`——纯输入，不含 bake config |
+| 多角度一致性 | 每个角度独立存储自己的 UV + lightmap，无需跨角度校验 |
+| BC6H 兼容性 | bake resolution 经 `align4()` 对齐后作为 xatlas pack resolution，保证输出尺寸为 4 的倍数 |
+
+#### 8.45a. 场景加载精简——移除 xatlas
+
+从场��加载路径中移除所有 xatlas 相关逻辑。场景加载后 UV1 全部为 `{0,0}`。
+
+- `app/src/scene_loader.cpp`：`load_meshes()` 移除 TEXCOORD_1 读取、mesh_hash 计算、`uv_pending_*` 记录逻辑。所有 primitive 的 UV1 保持默认值
+- `app/include/himalaya/app/scene_loader.h`：移除 `apply_lightmap_uvs()` 方法声明、`original_cpu_vertices()` / `original_cpu_indices()` 访问器、`uv_pending_prims_` / `uv_pending_hashes_` / `uv_original_vertices_` / `uv_original_indices_` / `original_cpu_vertices_` / `original_cpu_indices_` 成员
+- `app/src/scene_loader.cpp`：删除 `apply_lightmap_uvs()` 实现、`destroy()` 中对应的 clear 调用
+- `app/src/application.cpp`：`init()` / `switch_scene()` 中移除 `apply_lightmap_uvs()` 调用（场景加载后直接构建 BLAS）
+- `framework/src/lightmap_uv.cpp`：移除 `read_cache()` / `write_cache()` / `CacheHeader` / `kCacheCategory`（独立 xatlas 缓存不再需要）
+**设计要点**：
+- `generate_lightmap_uv()` 函数保留但签名变更：新增 `uint32_t pack_resolution` 参数（替代内部固定 `kPackResolution = 64`），移除 `mesh_hash` 参数（不再有独立缓存）
+- `LightmapUVQuality` 枚举和 `kDefaultLightmapUVQuality` 常量保留（干净的 Debug/Release 质量抽象）
+- `cpu_vertices_` / `cpu_indices_` 保留（烘焙时 xatlas 输入 + 面积计算 + vertex remap 使用）
+
+#### 8.45b. Cache key 重构
+
+Cache key 改为基于纯输入（不含 xatlas 中间产物），在 `apply_lightmap_uvs()` 之前即可计算。
+
+- `app/src/renderer_bake.cpp`：`compute_lightmap_keys()` 改用原始 geometry hash（`hash(positions + indices)`），不再依赖 post-xatlas 顶点数据。移除 `scene_loader.cpu_vertices()` / `cpu_indices()` 的使用，改用 `scene_loader.original_cpu_vertices()` 或直接从 `cpu_vertices_` 中提取 positions
+- `app/src/application.cpp`：`refresh_lightmap_keys()` 不再依赖 `apply_lightmap_uvs()` 完成，可在场景加载后立即调用
+
+**设计要点**：
+- per-instance key = `hash(scene_hash + geometry_positions_indices_hash + transform_hash + hdr_hash + scene_textures_hash)`
+- `geometry_positions_indices_hash` 从 `cpu_vertices_` 提取 positions + 从 `cpu_indices_` 提取 indices（与原 `load_meshes()` 中的 mesh_hash 计算方式一致，但此处由 `compute_lightmap_keys()` 执行）
+
+#### 8.45c. 烘焙启动——集成 xatlas
+
+`start_bake()` 在烘焙开始时运行 xatlas、重建 VB/IB 和 BLAS。
+
+- `app/src/renderer_bake.cpp`：`start_bake()` 新增 xatlas 阶段（在现有分辨率计算之后、`begin_bake_instance()` 之前）：
+  1. Per-mesh 分组：遍历 bakeable instances，按 `mesh_id` 分组取 max resolution
+  2. 并行 xatlas 生成：对每个 unique mesh 调用 `generate_lightmap_uv(vertices, indices, pack_resolution)`（`std::jthread` + atomic work-stealing，复用 Step 8.4 的并行模式）
+  3. 顺序 VB/IB 重建：对每个受影响的 mesh，用 vertex_remap 重建顶点（写入 UV1），销毁旧 VB/IB，创建并上传新 VB/IB，更新 `Mesh` 和 `cpu_vertices_` / `cpu_indices_`
+  4. 重建 BLAS/TLAS（buffer 地址已变）
+- `app/include/himalaya/app/renderer.h`：`start_bake()` 签名可能需要额外参数（`SceneLoader&`，用于直接访问和修改 VB/IB）
+- `framework/include/himalaya/framework/lightmap_uv.h`：`generate_lightmap_uv()` 签名改为 `(vertices, indices, pack_resolution)` → 返回 `LightmapUVResult`
+
+**设计要点**：
+- xatlas 对非 bakeable instance（Blend 材质、退化几何）的 mesh 不运行，这些 mesh 的 UV1 保持 `{0,0}`
+- `LightmapUVResult` 结构体保留 `lightmap_uvs`、`new_indices`、`vertex_remap`、`is_fallback`，移除 `cache_hit`（不再有独立缓存）
+
+#### 8.45d. 烘焙结果写入——UV 数据随 lightmap 存储
+
+每个 instance 的烘焙结果同时写入 lightmap KTX2 和 UV 数据文件。
+
+- `app/src/renderer_bake.cpp`：`lightmap_bake_finalize()` 末尾新增 UV 数据写入：
+  - 文件路径：`cache_path("bake", lightmap_key + "_rot" + NNN + "_uv", ".bin")`
+  - 文件格式：二进制——`uint32_t vertex_count` + `uint32_t index_count` + `uint32_t flags`（bit 0: is_fallback）+ `vec2[vertex_count] lightmap_uvs` + `uint32_t[index_count] new_indices` + `uint32_t[vertex_count] vertex_remap`（复用 `CacheHeader` 格式）
+  - 使用 `atomic_write_file()` 保证原子性
+
+**设计要点**：
+- UV 数据 per-instance 存储（虽然 UV 是 per-mesh 的，多 instance 共享同一 mesh 时存在冗余，但 UV 数据体积远小于 KTX2，简化实现优先）
+- 同一 mesh 的所有 instance 写入相同的 UV 数据（因为 xatlas 是 per-mesh 运行的）
+
+#### 8.45e. 加载烘焙数据——恢复 UV + VB/IB + BLAS
+
+`BakeDataManager::load_angle()` 扩展为同时加载 UV 数据并重建 GPU 资源。
+
+- `framework/include/himalaya/framework/bake_data_manager.h`：`load_angle()` 签名扩展，新增参数：`SceneLoader&`（或等效的 VB/IB 重建接口）、`cpu_vertices` / `cpu_indices` span（用于 vertex remap）
+- `framework/src/bake_data_manager.cpp`：`load_angle()` 新增 UV 恢复阶段（在 KTX2 加载之前）：
+  1. 对每个 bakeable instance 读取 `<key>_rot<NNN>_uv.bin`
+  2. Per-mesh 去重（按 `mesh_id`，只取第一个读到的 UV 结果）
+  3. 对每个受影响的 mesh：用 vertex_remap 重建顶点（从原始 `cpu_vertices` 复制 + 写入 UV1），销毁旧 VB/IB，创建并上传新 VB/IB
+  4. 重建 BLAS/TLAS
+  5. 继续原有的 KTX2 加载 + bindless 注册流程
+
+**设计要点**：
+- `unload_angle()` 不回退 VB/IB��UV1 留在原处，不采样时无影响，下次 `load_angle` 会覆盖）
+- `scan()` 校验逻辑新增 UV bin 文件存在性检查（lightmap KTX2 + UV bin + probe KTX2 全部存在才算 complete）
+
+#### 8.45f. 死代码清理
+
+- 删除 `framework/src/lightmap_uv.cpp` 中的 `CacheHeader` / `read_cache()` / `write_cache()` / `kCacheCategory` / `kPackResolution`（已在 8.45a 完成）
+- 删除 `app/include/himalaya/app/scene_loader.h` 中的 `apply_lightmap_uvs()`、`original_cpu_vertices()` / `original_cpu_indices()` 访问器、`uv_pending_*` / `original_cpu_*` 成员
+- 删除 `app/src/scene_loader.cpp` 中的 `apply_lightmap_uvs()` 实现
+- `app/src/scene_loader.cpp`：`destroy()` 中移除 `original_cpu_*` / `uv_pending_*` 的 clear
+
+**验证**：
+- 场景加载后 UV1 全部为 `{0,0}`，BLAS 构建成功，光栅化 + PT 渲染正常
+- 启动烘焙 → xatlas 运行 → VB/IB 重建 → BLAS 重建 → PosNormalMapPass UV 空间光栅化正确 → lightmap 烘焙正确
+- 烘焙完成后 bake cache 中同时存在 KTX2 和 UV bin 文件
+- 重启渲染器 → 加载场景 → scan 发现已有 bake 角度 → load_angle 读取 UV + 重建 VB/IB/BLAS + 加载 lightmap → 前向渲染采样正确
+- 切换角度 → unload + load 新角度 UV + lightmap → 正确切换
+- 无 validation 报错，无资源泄漏
+
+---
+
+### Step 8.5：Lightmap/Probe 独立开关 + UI 重排
+
+将 `FEATURE_LIGHTMAP_PROBE` 拆为两个独立 feature flag bit，LP 模式下可单独控制 lightmap（diffuse）和 probe（specular）的使用。同时将 Rendering 区移到 Camera 前面。
+
+- `framework/scene_data.h`：`RenderFeatures::lightmap_probe` → `use_lightmap` + `use_probe`（两个 bool，默认 true）
+- `shaders/common/bindings.glsl`：`FEATURE_LIGHTMAP_PROBE (1u << 3)` → `FEATURE_LIGHTMAP (1u << 3)` + `FEATURE_PROBE (1u << 4)`
+- `shaders/forward.frag`：分别检查两个 bit——lightmap off 时 diffuse 走 IBL，probe off 时 specular 走 IBL
+- `app/renderer.cpp`：`fill_common_gpu_data()` 分别设置 bit 3/4
+- `app/application.cpp`：模式切换时同步两个 flag（替代原 `features_.lightmap_probe`）
+- `app/debug_ui.cpp`：LP 模式下显示 Lightmap / Probe 两个 checkbox（IBL 模式下隐藏）
+- `app/debug_ui.cpp`：Rendering 区代码块移到 Camera 区之前
+
+**验证**：
+- LP 模式下可独立开关 lightmap 和 probe，四种组合均正确渲染
+- lightmap off → diffuse 回退 IBL irradiance，probe off → specular 回退 IBL prefiltered
+- IBL 模式下两个 checkbox 不可见
+- Rendering 区在 UI 面板中位于 Camera 区之前
+
+---
+
+### Step 8.6：Lightmap Dilation（chart 接缝黑块修复）
+
+Lightmap chart 边缘的未覆盖 texel 保持清零（黑色），导致 bilinear 采样泄漏黑色 + BC6H 4×4 block 跨 chart 边界时压缩失真。在 OIDN 去噪之后、BC6H 压缩之前插入 CPU dilation pass，将覆盖区域向外扩展。
+
+- `app/src/renderer_bake.cpp`：新增 `dilate_lightmap(float* target, const float* coverage_source, uint32_t width, uint32_t height)` static 函数
+  - 从 `coverage_source` alpha 通道提取 coverage mask（baker 写入 alpha=1.0 为覆盖）
+  - 4 次全图迭代，每次精确扩展 1 texel（独立 `newly_covered` buffer 保证对称性）
+  - 4 邻居平均（上下左右），新填充 texel 下次迭代可作为源
+  - 注释说明 4 次 = xatlas padding (2) 填满 + 余量 (2) 应对偶发内部空洞
+  - 注释注明可迁移至 GPU compute shader（`bake/dilation.comp`）
+- `app/src/renderer_bake.cpp`：`lightmap_bake_finalize()` 约 line 919，OIDN 之后 `vmaFlushAllocation` 之前调用 `dilate_lightmap(upload_ptr, beauty_ptr, w, h)`
+- 仅 lightmap 路径，probe cubemap 不需要（全覆盖，无 chart 边界）
+
+**验证**：
+- LP 模式下 chart 边缘不再出现黑色条纹或方块
+- 对比 dilation 前后：边缘过渡平滑，无可见接缝
+- BC6H 压缩后 block 边界无暗斑
+
+---
+
+### Step 8.7：独立 Bake Lightmap / Probe / All
+
+将单一 "Start Bake" 按钮拆为三个独立按钮，支持单独更新 lightmap 或 probe 数据。
+scan() 校验不变（lightmap + probe 都完整才算有效角度），此设计仅用于在已有完整数据时快速重烘某一部分。
+
+新增 `BakeMode` enum 控制 `start_bake()` 跳过哪个阶段，`BakeState` enum 不变。
+
+- `framework/scene_data.h`：新增 `BakeMode` enum（`All`, `Lightmap`, `Probe`）
+- `app/debug_ui.h`：`DebugUIActions::bake_start_requested` → `bake_start_mode`（`std::optional<BakeMode>`，无请求时 nullopt）
+- `app/debug_ui.cpp`：3 个按钮 + enable 条件
+  - "Bake All"：`can_start_base`（RT + scene + HDR + 非 baking + 非 LP 模式）
+  - "Bake Lightmap" / "Bake Probe"：`can_start_base && current_angle_complete`
+  - `current_angle_complete` = `available_angles` 中存在当前旋转角（整数度）
+- `app/renderer.h`：`start_bake()` 签名新增 `BakeMode mode` 参数；新增 `bake_mode_` 成员
+- `app/renderer_bake.cpp`：`start_bake()` 根据 mode 控制流程
+  - `BakeMode::Lightmap`：正常运行 xatlas + lightmap 循环，最后一个 instance 完成后直接 `bake_state_ = Complete`（跳过 probe）
+  - `BakeMode::Probe`：跳过 instance 枚举 / xatlas / VB-IB 重建 / lightmap 循环，直接 `bake_state_ = BakingProbes` + `probe_placement_pending_ = true`
+  - `BakeMode::All`：当前行为不变（lightmaps → probes）
+- `app/application.h`：`start_bake_session()` 新增 `BakeMode` 参数
+- `app/application.cpp`：分发 `bake_start_mode` 到 `start_bake_session(mode)`
+
+**验证**：
+- 无已有数据：只有 "Bake All" 可点击，Lightmap/Probe 灰显
+- 已有完整数据：三个按钮均可点击
+- "Bake Lightmap"：只运行 lightmap 阶段，完成后自动切回，旧 probe 数据保留可加载
+- "Bake Probe"：只运行 probe 阶段，完成后自动切回，旧 lightmap 数据保留可加载
+- "Bake All"：行为与改动前完全一致
+
+---
+
+### ~~Step 9：AO/SO 按模式自动预设~~（已跳过）
+
+> 跳过原因：Step 8.6 新增的 lightmap baker initial ray bias (0.1m) 使 lightmap 不再烘焙
+> 近距离遮蔽（< 10cm），运行时 GTAO/SO 覆盖的正是 lightmap 跳过的范围。两者互补
+> 而非重叠，不再需要 per-mode AO/SO 参数预设。用户如有需要可手动调整 slider。
+
+---
+
+### ~~Step 10：Lightmap/Probe 模式 IBL 旋转跳变~~（已跳过）
+
+> 跳过原因：IBL 旋转拦截已在 Step 8.3 完成（LP 模式下阻止拖拽）。
+> `switch_bake_angle()` 是秒级重操作（GPU idle → unload → VB/IB 重建 → BLAS/TLAS →
+> KTX2 加载），不适合绑定到拖拽手势。当前 UX 通过 Baked Angles 列表按钮显式切换，
+> 符合重量级操作需要明确确认的原则。
+
+---
+
+### Step 11：Debug 渲染模式 + 收尾
+
+添加 debug 视图，完成收尾。场景/HDR/缓存变化时的卸载回退已在 Step 8.1 处理。
+
+- **Debug 渲染模式**：新增 `DEBUG_MODE_LIGHTMAP_ONLY`（passthrough，仅显示 lightmap 采样值）。在 Lightmap/Probe 模式下可用，IBL 模式下显示黑色
+- **Bake 完成后角度列表刷新**：确认 `scan()` 在 bake 完成时被调用
+- **Validation 全面检查**：所有模式切换路径无 validation 报错
+
+**验证**：
+- Debug 模式 `LIGHTMAP_ONLY` 正确显示 lightmap UV 空间颜色
+- 全流程无 validation 报错
