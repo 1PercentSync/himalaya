@@ -47,6 +47,10 @@
 - [x] `app/src/renderer.cpp`：`fill_common_gpu_data()` 改为从 Application 层参数读取 blend 值（不再使用默认值）
 - [x] `app/src/debug_ui.cpp`：Rendering 区新增 4 个 slider（LP 模式下可见）
 
+## Step 5.1：LP 模式正确性修复
+
+- [x] `app/src/renderer_bake.cpp`：probe 累积 cubemap 生成 mip chain + prefilter 前 `generate_mips()`（修复 prefilter 油感）
+
 ## Step 6：Probe Relocation — Pre-bake
 
 - [ ] `shaders/bake/probe_filter.comp`：ResultBuffer 从 `uint[]` 改为结构化 buffer（32B/候选，scalar layout）

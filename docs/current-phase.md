@@ -225,6 +225,34 @@ Runtime 参数（不影响 bake，ImGui 实时可调）：
 
 ---
 
+### Step 5.1：LP 模式正确性修复
+
+#### Probe prefilter mip chain
+
+Probe cubemap 在 prefilter 前缺少 mip chain，导致 `prefilter.comp` 的 PDF-based mip selection 失效，亮像素能量未被预平均，表面出现"油"感。
+
+#### 问题分析
+
+`prefilter.comp` 对每个采样方向计算 `sa_sample`（采样立体角）与 `sa_texel`（纹素立体角）的比值，选择合适的 mip level 读取。当采样足迹大于纹素时（高 roughness 的宽 GGX lobe），应从高 mip（预平均）读取，抑制亮点能量。
+
+IBL 路径在 prefilter 前调用 `generate_mips()` 生成完整 mip chain，机制正常。Probe 路径的累积 cubemap 只有 mip 0，所有 `textureLod` 被硬件钳位到 mip 0，预平均失效。
+
+#### 修复
+
+- `renderer_bake.cpp`：累积 cubemap 创建时 `mip_levels` 从 1 改为 `floor(log2(res)) + 1`
+- `renderer_bake.cpp`：probe finalize 中，upload denoised 后、`prefilter_cubemap()` 前插入 `generate_mips()` + BLIT→COMPUTE 可见性 barrier
+- Mip chain 仅存在于 GPU 临时内存，不持久化到 KTX2 缓存
+
+#### 已知遗留问题：LP 模式直接光双算
+
+Lightmap/probe 烘焙了完整辐射（直接+间接），运行时直接光仍然叠加，存在双算。Specular 双算因 prefilter mip 修复后减轻但未消除，diffuse 双算在视觉上不明显。
+
+根本解决需要烘焙管线架构改动：从 HDR 采样获取方向光精确亮度 → 烘焙时排除直接光 → lightmap/probe 只存间接光 → 运行时直接光由实时管线提供。此改动超出 Phase 8.5 范围，记录为 M2 待办。
+
+**验证**：直射光照射区域的 probe 反射不再过度明亮
+
+---
+
 ### Step 6：Probe Relocation — Pre-bake
 
 两层测试失败的候选 probe 不再直接剔除，而是移动到更好的位置重试**严格一次**（不循环）。
