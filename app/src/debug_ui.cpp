@@ -641,9 +641,12 @@ namespace himalaya::app {
                         ctx.equirect_height > 0 ? static_cast<int>(ctx.equirect_height) - 1 : 0);
                     actions.hdr_sun_coords_changed = true;
                 }
+                ImGui::Checkbox("Auto from HDR", &ctx.hdr_sun_auto);
+                ImGui::BeginDisabled(ctx.hdr_sun_auto);
                 ImGui::SliderFloat("Intensity##hdrsun", &ctx.hdr_sun_intensity, 0.0f, 20.0f, "%.1f");
                 ImGui::SliderFloat("Color Temp (K)##hdrsun", &ctx.hdr_sun_color_temp,
                                    2000.0f, 12000.0f, "%.0f");
+                ImGui::EndDisabled();
                 ImGui::Checkbox("Cast Shadows##hdrsun", &ctx.hdr_sun_cast_shadows);
             }
         }
