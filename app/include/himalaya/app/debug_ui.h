@@ -206,6 +206,9 @@ namespace himalaya::app {
         /** @brief Contact shadow parameters (mutable for slider controls). */
         framework::ContactShadowConfig& contact_shadow_config;
 
+        /** @brief Runtime probe blend parameters (mutable for slider controls). */
+        framework::ProbeBlendConfig& probe_blend_config;
+
         // --- MSAA (display + action) ---
 
         /** @brief Current MSAA sample count (display only; changes via DebugUIActions). */

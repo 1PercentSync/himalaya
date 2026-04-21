@@ -212,6 +212,9 @@ namespace himalaya::app {
         /** @brief Bake configuration parameters. */
         framework::BakeConfig bake_config_{};
 
+        /** @brief Runtime probe blend parameters. */
+        framework::ProbeBlendConfig probe_blend_config_{};
+
         /** @brief Cached content hash of current HDR file (computed once on load). */
         std::string env_content_hash_;
 

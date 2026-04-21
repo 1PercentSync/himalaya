@@ -590,6 +590,7 @@ namespace himalaya::app {
             .shadow_config = shadow_config_,
             .ao_config = ao_config_,
             .contact_shadow_config = contact_shadow_config_,
+            .probe_blend_config = probe_blend_config_,
             .current_sample_count = renderer_.current_sample_count(),
             .shadow_resolution = renderer_.shadow_resolution(),
             .supported_sample_counts = context_.msaa_sample_counts,
@@ -848,6 +849,7 @@ namespace himalaya::app {
             .contact_shadow_config = contact_shadow_config_,
             .pt_config = pt_config_,
             .bake_config = bake_config_,
+            .probe_blend_config = probe_blend_config_,
             .scene_bounds = scene_loader_.scene_bounds(),
         };
 

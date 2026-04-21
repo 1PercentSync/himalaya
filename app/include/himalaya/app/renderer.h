@@ -131,6 +131,9 @@ namespace himalaya::app {
         /** @brief Bake configuration parameters. */
         const framework::BakeConfig &bake_config;
 
+        /** @brief Runtime probe blend parameters (normal_bias, roughness thresholds, curve). */
+        const framework::ProbeBlendConfig &probe_blend_config;
+
         /** @brief Scene world-space AABB for shadow Z range extension. */
         const framework::AABB &scene_bounds;
     };

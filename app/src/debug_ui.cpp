@@ -453,6 +453,15 @@ namespace himalaya::app {
                     ImGui::Checkbox("Use Lightmap", &ctx.features.use_lightmap);
                     ImGui::SameLine();
                     ImGui::Checkbox("Use Probe", &ctx.features.use_probe);
+
+                    slider_float_deferred("Normal Bias", &ctx.probe_blend_config.normal_bias,
+                                          0.0f, 4.0f, "%.2f");
+                    slider_float_deferred("Roughness Single", &ctx.probe_blend_config.roughness_single,
+                                          0.0f, 1.0f, "%.2f");
+                    slider_float_deferred("Roughness Full", &ctx.probe_blend_config.roughness_full,
+                                          0.0f, 1.0f, "%.2f");
+                    slider_float_deferred("Blend Curve", &ctx.probe_blend_config.blend_curve,
+                                          0.1f, 4.0f, "%.2f");
                 }
             }
 

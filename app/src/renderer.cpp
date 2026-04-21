@@ -82,6 +82,10 @@ namespace himalaya::app {
 
         // --- Phase 8.5 probe fields ---
         ubo_data.probe_count = bake_data_manager_.loaded_probe_count();
+        ubo_data.normal_bias = input.probe_blend_config.normal_bias;
+        ubo_data.roughness_single = input.probe_blend_config.roughness_single;
+        ubo_data.roughness_full = input.probe_blend_config.roughness_full;
+        ubo_data.blend_curve = input.probe_blend_config.blend_curve;
 
         // --- Shadow fields ---
         ubo_data.shadow_normal_offset = input.shadow_config.normal_offset;

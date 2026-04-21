@@ -392,6 +392,27 @@ namespace himalaya::framework {
         bool denoise = true;
     };
 
+    /**
+     * @brief Runtime probe blend parameters (not bake-related).
+     *
+     * Controls per-pixel probe selection scoring and top-2 blend
+     * behaviour. Application holds the instance, DebugUI modifies
+     * fields directly, Renderer uploads to GlobalUBO each frame.
+     */
+    struct ProbeBlendConfig {
+        /** @brief Normal-vs-distance weight exponent in probe scoring. */
+        float normal_bias = 1.0f;
+
+        /** @brief Below this roughness, use top-1 probe only (no blend). */
+        float roughness_single = 0.15f;
+
+        /** @brief Above this roughness, full top-2 blend. */
+        float roughness_full = 0.5f;
+
+        /** @brief Blend transition curve exponent (1 = linear). */
+        float blend_curve = 1.0f;
+    };
+
     // ---- GPU Data Structures ----
     // Must match shader layouts in shaders/common/bindings.glsl exactly.
 
