@@ -69,8 +69,11 @@ namespace himalaya::app {
         if (input.features.contact_shadows) {
             ubo_data.feature_flags |= 1u << 2; // FEATURE_CONTACT_SHADOWS
         }
-        if (input.features.lightmap_probe) {
-            ubo_data.feature_flags |= 1u << 3; // FEATURE_LIGHTMAP_PROBE
+        if (input.features.lightmap_probe && input.features.use_lightmap) {
+            ubo_data.feature_flags |= 1u << 3; // FEATURE_LIGHTMAP
+        }
+        if (input.features.lightmap_probe && input.features.use_probe) {
+            ubo_data.feature_flags |= 1u << 4; // FEATURE_PROBE
         }
 
         // --- Phase 5 matrices ---

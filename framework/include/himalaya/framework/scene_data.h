@@ -168,8 +168,14 @@ namespace himalaya::framework {
         /** @brief Enable contact shadows (ContactShadowsPass + forward shadow attenuation). */
         bool contact_shadows;
 
-        /** @brief Enable lightmap/probe indirect lighting (FEATURE_LIGHTMAP_PROBE bit in feature_flags). */
+        /** @brief Enable lightmap/probe indirect lighting (master switch for LP mode). */
         bool lightmap_probe = false;
+
+        /** @brief Use baked lightmaps for diffuse indirect (debug sub-toggle within LP mode). */
+        bool use_lightmap = true;
+
+        /** @brief Use baked probes for specular indirect (debug sub-toggle within LP mode). */
+        bool use_probe = true;
     };
 
     /**

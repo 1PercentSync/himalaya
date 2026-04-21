@@ -244,40 +244,34 @@ void main() {
 
     // Per-instance bake data
     GPUInstanceData inst = instances[frag_instance_index];
-    bool use_lightmap = (global.feature_flags & FEATURE_LIGHTMAP_PROBE) != 0u
+    bool has_lightmap = (global.feature_flags & FEATURE_LIGHTMAP) != 0u
                         && inst.lightmap_index != 0xFFFFFFFFu;
+    bool has_probe    = (global.feature_flags & FEATURE_PROBE) != 0u
+                        && inst.probe_index != 0xFFFFFFFFu;
 
     vec3 indirect_diffuse;
     vec3 indirect_specular;
 
-    if (use_lightmap) {
-        // Lightmap diffuse: stored irradiance, multiplied by surface albedo
+    // ---- Diffuse indirect ----
+    if (has_lightmap) {
         indirect_diffuse = texture(textures[nonuniformEXT(inst.lightmap_index)], frag_uv1).rgb
                            * diffuse_color;
-
-        // Probe specular: roughness-based mip from baked cubemap
-        if (inst.probe_index != 0xFFFFFFFFu) {
-            GPUProbeData probe = probes[inst.probe_index];
-            float probe_mip = roughness * float(textureQueryLevels(cubemaps[nonuniformEXT(probe.cubemap_index)]) - 1);
-            vec3 probe_prefiltered = textureLod(cubemaps[nonuniformEXT(probe.cubemap_index)], R, probe_mip).rgb;
-            indirect_specular = probe_prefiltered * (F0 * brdf_lut.x + brdf_lut.y);
-        } else {
-            // No probe assigned — fall back to IBL specular (rotated to bake angle)
-            vec3 fallback_R = rotate_y(R, global.ibl_rotation_sin, global.ibl_rotation_cos);
-            float fallback_mip = roughness * float(global.prefiltered_mip_count - 1u);
-            vec3 fallback_prefiltered = textureLod(cubemaps[nonuniformEXT(global.prefiltered_cubemap_index)], fallback_R, fallback_mip).rgb;
-            indirect_specular = fallback_prefiltered * (F0 * brdf_lut.x + brdf_lut.y);
-        }
     } else {
-        // IBL: existing environment lighting (with rotation)
         vec3 rotated_N = rotate_y(N, global.ibl_rotation_sin, global.ibl_rotation_cos);
+        vec3 irradiance = texture(cubemaps[nonuniformEXT(global.irradiance_cubemap_index)], rotated_N).rgb;
+        indirect_diffuse = irradiance * diffuse_color;
+    }
+
+    // ---- Specular indirect ----
+    if (has_probe) {
+        GPUProbeData probe = probes[inst.probe_index];
+        float probe_mip = roughness * float(textureQueryLevels(cubemaps[nonuniformEXT(probe.cubemap_index)]) - 1);
+        vec3 probe_prefiltered = textureLod(cubemaps[nonuniformEXT(probe.cubemap_index)], R, probe_mip).rgb;
+        indirect_specular = probe_prefiltered * (F0 * brdf_lut.x + brdf_lut.y);
+    } else {
         vec3 rotated_R = rotate_y(R, global.ibl_rotation_sin, global.ibl_rotation_cos);
-
-        vec3 irradiance  = texture(cubemaps[nonuniformEXT(global.irradiance_cubemap_index)], rotated_N).rgb;
-        float mip        = roughness * float(global.prefiltered_mip_count - 1u);
+        float mip = roughness * float(global.prefiltered_mip_count - 1u);
         vec3 prefiltered = textureLod(cubemaps[nonuniformEXT(global.prefiltered_cubemap_index)], rotated_R, mip).rgb;
-
-        indirect_diffuse  = irradiance * diffuse_color;
         indirect_specular = prefiltered * (F0 * brdf_lut.x + brdf_lut.y);
     }
 

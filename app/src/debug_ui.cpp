@@ -805,6 +805,13 @@ namespace himalaya::app {
                 if (!ctx.has_bake_data && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
                     ImGui::SetTooltip("No baked lighting data available");
                 }
+
+                // LP mode sub-toggles (only visible when in LP mode)
+                if (is_lp && !baking) {
+                    ImGui::Checkbox("Use Lightmap", &ctx.features.use_lightmap);
+                    ImGui::SameLine();
+                    ImGui::Checkbox("Use Probe", &ctx.features.use_probe);
+                }
             }
 
             const char *intensity_label = ctx.indirect_lighting_mode == framework::IndirectLightingMode::IBL
