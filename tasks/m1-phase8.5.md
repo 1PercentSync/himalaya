@@ -54,11 +54,13 @@
 - [ ] `shaders/forward.frag`：LP 模式 diffuse 合成改为 `max(direct, indirect)` 替代相加
 - [ ] `shaders/forward.frag`：LP 模式 specular 合成改为 `probe × SO × max(shadow, floor)`，不叠加 direct_specular
 - [ ] `shaders/forward.frag`：四个 debug mode 全部跟随 LP 合成公式
-- [ ] `framework/include/himalaya/framework/ibl.h`：声明 `sample_hdr_pixel` 静态方���
-- [ ] `framework/src/ibl.cpp`：实现 `sample_hdr_pixel`（stbi_loadf 读像素后释放���
-- [ ] `app/include/himalaya/app/application.h`：新增 `hdr_sun_auto_` 成员
+- [ ] `framework/include/himalaya/framework/ibl.h`：声明 `sample_hdr_pixel` 静态方法（两个重载：路径版 + existing_data 版）
+- [ ] `framework/src/ibl.cpp`：实现 `sample_hdr_pixel`（路径版 stbi_loadf 后释放；existing_data 版直接索引）
+- [ ] `framework/src/ibl.cpp`：`init()` 中 HDR 加载路径复用 `rgb_data` 调用 existing_data 版采样
+- [ ] `app/include/himalaya/app/application.h`：新增 `hdr_sun_auto_`（默认 true，不持久化）
 - [ ] `app/src/application.cpp`：Auto 模式下调用 `sample_hdr_pixel` → 分解 color/intensity → 填入 `hdr_sun_light_`
-- [ ] `app/src/debug_ui.cpp`：HdrSun 区新增 `Auto from HDR` checkbox + 灰显逻��
+- [ ] `app/src/application.cpp`：切换到 HdrSun 模式时触发采样更新
+- [ ] `app/src/debug_ui.cpp`：HdrSun 区新增 `Auto from HDR` checkbox + 灰显逻辑
 
 ## Step 6：Probe Relocation — Pre-bake
 

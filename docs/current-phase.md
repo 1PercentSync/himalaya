@@ -265,21 +265,34 @@ Probe cubemap 已含太阳反射，用 CSM shadow 控制太阳可见性，SO 控
 
 **非 LP 模式**（IBL 模式）：公式不变。
 
-**四个 debug mode**（FULL_PBR / DIFFUSE_ONLY / SPECULAR_ONLY / INDIRECT_ONLY）全部跟随 LP 合成公式，反映最终贡献。
+**四个 debug mode** 全部跟随 LP 合成公式，反映最终贡献。LP 模式下各 mode 的完整表达式：
+
+| Mode | LP 公式 |
+|------|---------|
+| FULL_PBR | `lp_diffuse + lp_specular + emissive` |
+| DIFFUSE_ONLY | `max(direct_diffuse, indirect_intensity × indirect_diffuse × diffuse_ao)` |
+| SPECULAR_ONLY | `indirect_intensity × indirect_specular × specular_ao × max(primary_shadow × contact_shadow, kSpecularShadowFloor)` |
+| INDIRECT_ONLY | `indirect_intensity × (indirect_diffuse × diffuse_ao + indirect_specular × specular_ao × max(primary_shadow × contact_shadow, kSpecularShadowFloor))` |
 
 ##### Shadow 提取
 
-Primary directional light（index 0）的 CSM shadow 计算从 direct light loop 中提取到 loop 前，loop 内对 `i == 0` 复用 + specular 合成共用，避免重复计算。
+Primary directional light（index 0）的 CSM shadow 计算从 direct light loop 中提取到 loop 前，存入 `primary_shadow` 变量。loop 内 `i == 0` 时直接使用该变量（`radiance *= primary_shadow`），不重复调用 `blend_cascade_shadow()`。Specular 合成同样读取该变量。
+
+- `primary_shadow` 初始化为 `1.0`（无遮挡）
+- 仅在 `directional_light_count > 0 && FEATURE_SHADOWS 开启 && directional_lights[0].cast_shadows > 0.5` 时调用 `blend_cascade_shadow()` 覆盖
+- `directional_light_count == 0`、`FEATURE_SHADOWS` 关闭、或 `cast_shadows` 关闭时，`primary_shadow` 保持 `1.0` → specular 不受 shadow 衰减
 
 ##### HDR 太阳颜色/亮度采样
 
 当前 HdrSun 模式使用手动色温 + 手动 intensity，与 HDR 实际太阳不匹配。
 
 改进：
-- `IBL` 新增 `sample_hdr_pixel(path, x, y)` 静态方法——按需 `stbi_loadf` 读取指定像素 RGB，返回后释放
-- 调用时机：HDR 加载时 + sun coords ImGui 变更时（非逐帧）
+- `IBL` 新增 `sample_hdr_pixel(path, x, y)` 静态方法——按需 `stbi_loadf` 读取指定像素 RGB，返回后释放。HDR 加载路径可传入已有的 `rgb_data` 指针避免二次加载（重载版本接受 `const float* existing_data, int w, int h`）
+- 调用时机：HDR 加载时（复用 `load_equirect` 的 `rgb_data`）+ sun coords ImGui 变更时（独立 `stbi_loadf`）
 - 颜色分解：`color = rgb / max(r,g,b)`，`intensity = max(r,g,b)`
 - ImGui 新增 `Auto from HDR` checkbox（默认勾选）：勾选时颜色和强度由 HDR 采样决定，色温和 intensity slider 灰显；不勾选时回退到现有手动行为
+- `hdr_sun_auto_` 不做 JSON 持久化，每次启动默认 `true`（与现有 AO/shadow 参数模式一致）
+- `LightSourceMode` 切换到 HdrSun 时：若 `hdr_sun_auto_` 为 true 且尚未采样（或 HDR/coords 已变更），触发一次采样更新
 
 **验证**：
 - 阳光区域不过曝（对比修复前后）
