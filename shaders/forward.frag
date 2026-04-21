@@ -19,6 +19,7 @@
 #include "common/brdf.glsl"
 #include "common/shadow.glsl"
 #include "common/transform.glsl"
+#include "common/probe_grid.glsl"
 
 layout(location = 0) in vec3 frag_world_pos;
 layout(location = 1) in vec3 frag_normal;
@@ -256,7 +257,6 @@ void main() {
     GPUInstanceData inst = instances[frag_instance_index];
     bool has_lightmap = (global.feature_flags & FEATURE_LIGHTMAP) != 0u
                         && inst.lightmap_index != 0xFFFFFFFFu;
-    bool has_probe    = (global.feature_flags & FEATURE_PROBE) != 0u;
 
     vec3 indirect_diffuse;
     vec3 indirect_specular;
@@ -271,15 +271,129 @@ void main() {
         indirect_diffuse = irradiance * diffuse_color;
     }
 
-    // ---- Specular indirect ----
-    // Step 4 will replace this with per-pixel grid query + top-2 blend.
-    // For now, use probe[0] as a placeholder when probes are available.
-    if (has_probe && global.probe_count > 0u) {
-        GPUProbeData probe = probes[0];
-        float probe_mip = roughness * float(textureQueryLevels(cubemaps[nonuniformEXT(probe.cubemap_index)]) - 1);
-        vec3 probe_prefiltered = textureLod(cubemaps[nonuniformEXT(probe.cubemap_index)], R, probe_mip).rgb;
-        indirect_specular = probe_prefiltered * (F0 * brdf_lut.x + brdf_lut.y);
-    } else {
+    // ---- Specular indirect (per-pixel probe selection + top-2 blend) ----
+    bool use_probe = (global.feature_flags & FEATURE_PROBE) != 0u
+                     && global.probe_count > 0u;
+
+    if (use_probe) {
+        vec3 grid_origin = grid_origin_and_cell_size.xyz;
+        float cell_size  = grid_origin_and_cell_size.w;
+        uvec3 dims       = grid_dims_and_pad.xyz;
+        uint cell_count  = dims.x * dims.y * dims.z;
+        uint probe_base  = cell_count + 1;
+
+        ivec3 center = clamp(
+            ivec3(floor((frag_world_pos - grid_origin) / cell_size)),
+            ivec3(0), ivec3(dims) - 1
+        );
+
+        // Top-2 probe tracking (score-based)
+        uint  top_idx0 = 0u, top_idx1 = 0u;
+        float top_score0 = -1.0, top_score1 = -1.0;
+
+        // Nearest probe fallback (distance-based, ignores normal)
+        uint  nearest_idx = 0u;
+        float nearest_dist_sq = 1e30;
+
+        bool any_found = false;
+        bool any_passed_hemisphere = false;
+
+        for (int dz = -2; dz <= 2; ++dz) {
+            for (int dy = -2; dy <= 2; ++dy) {
+                for (int dx = -2; dx <= 2; ++dx) {
+                    ivec3 cell = clamp(center + ivec3(dx, dy, dz),
+                                       ivec3(0), ivec3(dims) - 1);
+                    uint flat = grid_flat_index(cell, dims);
+                    uint begin_off = grid_cell_offset(flat);
+                    uint end_off   = grid_cell_offset(flat + 1);
+
+                    for (uint i = begin_off; i < end_off; ++i) {
+                        uint pi = grid_probe_index(probe_base, i);
+                        vec3 diff = probes[pi].position - frag_world_pos;
+                        float dist_sq = dot(diff, diff);
+                        any_found = true;
+
+                        // Track nearest (for fallback)
+                        if (dist_sq < nearest_dist_sq) {
+                            nearest_dist_sq = dist_sq;
+                            nearest_idx = pi;
+                        }
+
+                        // Normal hemisphere filter
+                        float normal_dot = dot(normalize(diff), N);
+                        if (normal_dot <= 0.0) { continue; }
+                        any_passed_hemisphere = true;
+
+                        float score = pow(normal_dot, global.normal_bias)
+                                      / max(dist_sq, 1e-6);
+
+                        // Maintain top-2
+                        if (score > top_score0) {
+                            top_score1 = top_score0;
+                            top_idx1   = top_idx0;
+                            top_score0 = score;
+                            top_idx0   = pi;
+                        } else if (score > top_score1) {
+                            top_score1 = score;
+                            top_idx1   = pi;
+                        }
+                    }
+                }
+            }
+        }
+
+        if (!any_found) {
+            // No probes in 5x5x5 neighborhood — fall through to IBL
+            use_probe = false;
+        } else {
+            // Resolve final probe indices and weights
+            uint  p0, p1;
+            float w0, w1;
+
+            if (!any_passed_hemisphere) {
+                // Fallback: nearest probe, no blend
+                p0 = nearest_idx;
+                p1 = nearest_idx;
+                w0 = 1.0;
+                w1 = 0.0;
+            } else if (top_score1 < 0.0) {
+                // Only one candidate passed — no blend
+                p0 = top_idx0;
+                p1 = top_idx0;
+                w0 = 1.0;
+                w1 = 0.0;
+            } else {
+                // Two candidates — compute blend weights
+                p0 = top_idx0;
+                p1 = top_idx1;
+                float total = top_score0 + top_score1;
+                w0 = top_score0 / total;
+                w1 = top_score1 / total;
+
+                // Roughness-based blend curve
+                float t = clamp(
+                    (roughness - global.roughness_single)
+                    / max(global.roughness_full - global.roughness_single, 1e-6),
+                    0.0, 1.0
+                );
+                float blend_factor = pow(t, global.blend_curve);
+                w1 *= blend_factor;
+                w0 = 1.0 - w1;
+            }
+
+            // Cubemap sampling (roughness-based mip)
+            uint cm0 = probes[p0].cubemap_index;
+            uint cm1 = probes[p1].cubemap_index;
+            float mip0 = roughness * float(textureQueryLevels(cubemaps[nonuniformEXT(cm0)]) - 1);
+            float mip1 = roughness * float(textureQueryLevels(cubemaps[nonuniformEXT(cm1)]) - 1);
+            vec3 color0 = textureLod(cubemaps[nonuniformEXT(cm0)], R, mip0).rgb;
+            vec3 color1 = textureLod(cubemaps[nonuniformEXT(cm1)], R, mip1).rgb;
+            vec3 blended = color0 * w0 + color1 * w1;
+            indirect_specular = blended * (F0 * brdf_lut.x + brdf_lut.y);
+        }
+    }
+
+    if (!use_probe) {
         vec3 rotated_R = rotate_y(R, global.ibl_rotation_sin, global.ibl_rotation_cos);
         float mip = roughness * float(global.prefiltered_mip_count - 1u);
         vec3 prefiltered = textureLod(cubemaps[nonuniformEXT(global.prefiltered_cubemap_index)], rotated_R, mip).rgb;
