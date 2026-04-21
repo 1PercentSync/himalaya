@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 8.5：Lightmap/Probe 独立开关 + UI 重排。
+Step 8.5a：Baker Firefly Clamp（lightmap/probe baker 添加 max_clamp 支持）。
 
 ---
 

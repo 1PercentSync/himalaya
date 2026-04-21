@@ -132,7 +132,26 @@
 - [x] 8.45e. `bake_data_manager.cpp`：`read_angle_uv_data()` + `scan()` UV bin 校验；`switch_bake_angle()` 读 UV → per-mesh 去重 → VB/IB 重建 → BLAS/TLAS 重建
 - [x] 8.45f. 死代码清理：确认所有已移除的声明/实现无残留引用
 
-## Step 8.5：Lightmap/Probe 独立开关 + UI 重排
+## Step 8.5：Baker 质量改进 + Lightmap/Probe 独立开关 + UI 重排
+
+### 8.5a. Baker Firefly Clamp
+
+- [ ] `passes/lightmap_baker_pass.h`：新增 `set_max_clamp(float)` 接口
+- [ ] `passes/lightmap_baker_pass.cpp`：`max_clamp_` 字段 + push constants 填充
+- [ ] `passes/probe_baker_pass.h`：新增 `set_max_clamp(float)` 接口
+- [ ] `passes/probe_baker_pass.cpp`：`max_clamp_` 字段 + push constants 填充
+- [ ] `framework/scene_data.h`：`BakeConfig` 新增 `float baker_clamp = 100.0f`
+- [ ] `app/renderer_bake.cpp`：`begin_bake_instance()` / `begin_probe_bake_instance()` 传入 locked_config clamp
+- [ ] `app/debug_ui.cpp`：Bake 面板新增 Baker Clamp slider（0 = disabled，范围 0~1000）
+
+### 8.5b. Baker Denoise 开关
+
+- [ ] `framework/scene_data.h`：`BakeConfig` 新增 `bool denoise = true`
+- [ ] `app/renderer_bake.cpp`：`lightmap_bake_finalize()` 根据开关跳过 OIDN（直接用 noisy 数据）
+- [ ] `app/renderer_bake.cpp`：`probe_bake_finalize()` 根据开关跳过 per-face OIDN
+- [ ] `app/debug_ui.cpp`：Bake 面板新增 Denoise checkbox（baking 期间锁定）
+
+### 8.5c. Lightmap/Probe 独立开关 + UI 重排
 
 - [ ] `framework/scene_data.h`：`RenderFeatures::lightmap_probe` → `use_lightmap` + `use_probe`
 - [ ] `shaders/common/bindings.glsl`：`FEATURE_LIGHTMAP_PROBE` → `FEATURE_LIGHTMAP (1u << 3)` + `FEATURE_PROBE (1u << 4)`
