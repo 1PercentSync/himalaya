@@ -243,13 +243,49 @@ IBL 路径在 prefilter 前调用 `generate_mips()` 生成完整 mip chain，机
 - `renderer_bake.cpp`：probe finalize 中，upload denoised 后、`prefilter_cubemap()` 前插入 `generate_mips()` + BLIT→COMPUTE 可见性 barrier
 - Mip chain 仅存在于 GPU 临时内存，不持久化到 KTX2 缓存
 
-#### 已知遗留问题：LP 模式直接光双算
+#### LP 模式直接光双算修复
 
-Lightmap/probe 烘焙了完整辐射（直接+间接），运行时直接光仍然叠加，存在双算。Specular 双算因 prefilter mip 修复后减轻但未消除，diffuse 双算在视觉上不明显。
+Lightmap/probe 烘焙了完整辐射（直接+间接），运行时直接光仍然叠加，存在双算。临时修复方案通过调整运行时合成公式消除双算，根本修复（烘焙时排除太阳直射）推迟到程序化天空阶段。
 
-根本解决需要烘焙管线架构改动：从 HDR 采样获取方向光精确亮度 → 烘焙时排除直接光 → lightmap/probe 只存间接光 → 运行时直接光由实时管线提供。此改动超出 Phase 8.5 范围，记录为 M2 待办。
+##### 问题根源
 
-**验证**：直射光照射区域的 probe 反射不再过度明亮
+Baker 的 `directional_lights = 0u`（不做方向光 NEE），但 env sampling 包含完整 HDR（含太阳）。Lightmap texel 的首段 ray miss 命中 HDR 太阳区域时，太阳直射被烘入 lightmap。Probe cubemap 同理。运行时方向光再次叠加同一太阳贡献，导致双算。
+
+##### 合成公式（LP 模式：`FEATURE_LIGHTMAP` 开启时）
+
+**Diffuse**：`max(direct_diffuse, indirect_intensity × indirect_diffuse × diffuse_ao)`
+
+max 取代相加——阳光区方向光主导（高精度 CSM 阴影），阴影区 lightmap 主导（烘焙的间接光）。
+
+**Specular**——不叠加 `direct_specular`：
+
+`indirect_intensity × indirect_specular × specular_ao × max(primary_shadow × contact_shadow, kSpecularShadowFloor)`
+
+Probe cubemap 已含太阳反射，用 CSM shadow 控制太阳可见性，SO 控制局部几何遮蔽。`kSpecularShadowFloor = 0.1`（shader const）保留阴影区的天空/场景反射。
+
+**非 LP 模式**（IBL 模式）：公式不变。
+
+**四个 debug mode**（FULL_PBR / DIFFUSE_ONLY / SPECULAR_ONLY / INDIRECT_ONLY）全部跟随 LP 合成公式，反映最终贡献。
+
+##### Shadow 提取
+
+Primary directional light（index 0）的 CSM shadow 计算从 direct light loop 中提取到 loop 前，loop 内对 `i == 0` 复用 + specular 合成共用，避免重复计算。
+
+##### HDR 太阳颜色/亮度采样
+
+当前 HdrSun 模式使用手动色温 + 手动 intensity，与 HDR 实际太阳不匹配。
+
+改进：
+- `IBL` 新增 `sample_hdr_pixel(path, x, y)` 静态方法——按需 `stbi_loadf` 读取指定像素 RGB，返回后释放
+- 调用时机：HDR 加载时 + sun coords ImGui 变更时（非逐帧）
+- 颜色分解：`color = rgb / max(r,g,b)`，`intensity = max(r,g,b)`
+- ImGui 新增 `Auto from HDR` checkbox（默认勾选）：勾选时颜色和强度由 HDR 采样决定，色温和 intensity slider 灰显；不勾选时回退到现有手动行为
+
+**验证**：
+- 阳光区域不过曝（对比修复前后）
+- 阴影区 probe 反射消失但保留微弱环境反射
+- HdrSun Auto 模式下方向光颜色与 HDR 太阳一致
+- debug mode 输出与 FULL_PBR 的对应分量一致
 
 ---
 
