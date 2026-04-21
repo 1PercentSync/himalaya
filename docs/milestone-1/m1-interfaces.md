@@ -587,11 +587,11 @@ struct GPUProbeData {
 // Probe Manifest 二进制格式（磁盘持久化，Phase 8.5 分两步演进，无 version 字段，不做向后兼容）
 //
 // Step 2.5 格式（per-pixel 阶段）：
-//   uint32 probe_count + float grid_spacing + vec3[probe_count] positions
+//   uint32 probe_count + float probe_spacing + vec3[probe_count] positions
 //   header 8B + 12B per probe
 //
 // Step 8 最终格式（PCC 阶段）：
-//   uint32 probe_count + float grid_spacing + ProbeManifestEntry[probe_count]
+//   uint32 probe_count + float probe_spacing + ProbeManifestEntry[probe_count]
 //   header 8B + 36B per probe
 struct ProbeManifestEntry {
     glm::vec3 position;                         // probe 世界空间位置

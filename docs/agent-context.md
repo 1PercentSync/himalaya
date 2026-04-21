@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Phase 8.5 Step 2：Manifest grid_spacing
+Phase 8.5 Step 2：Manifest probe_spacing
 
 ---
 

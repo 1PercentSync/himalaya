@@ -1225,7 +1225,7 @@ score = pow(normal_dot, normal_bias) / max(dist_sq, epsilon)
 
 2000+ probe 场景下暴力遍历不可行（每 fragment 2000 次迭代，peak ALU ~15%）。
 
-**方案**：世界空间 3D uniform grid。加载 bake 数据时构建（cell_size = grid_spacing），每个 cell 存 probe index 列表（CSR 前缀和 + flat array）。Fragment shader 查询以自身 cell 为中心的 5×5×5 = 125 个邻域 cell，实际遍历 probe 降至 20-50 个。
+**方案**：世界空间 3D uniform grid。加载 bake 数据时构建（cell_size = probe_spacing），每个 cell 存 probe index 列表（CSR 前缀和 + flat array）。Fragment shader 查询以自身 cell 为中心的 5×5×5 = 125 个邻域 cell，实际遍历 probe 降至 20-50 个。
 
 5×5×5 邻域覆盖 ±2.5 个 grid spacing（默认 ±2.5m）。由于 `1/dist_sq` 衰减，2.5m 外的 probe 评分是 1m 处的 1/6.25，结果与暴力遍历实质一致。
 
@@ -1264,7 +1264,7 @@ blend_factor = pow(t, blend_curve)
 
 **计算时机**：所有 relocation（pre-bake + post-bake）完成后统一计算。新增一次 compute dispatch + readback，成本可忽略。
 
-**存储**：Manifest 最终格式（`probe_count + grid_spacing` header + per-probe `position + aabb_min + aabb_max`）。加载时直接填入 `GPUProbeData::aabb_min/aabb_max`。
+**存储**：Manifest 最终格式（`probe_count + probe_spacing` header + per-probe `position + aabb_min + aabb_max`）。加载时直接填入 `GPUProbeData::aabb_min/aabb_max`。
 
 ### GPUInstanceData 清理
 
@@ -1292,11 +1292,11 @@ Per-pixel probe 查找替代 per-instance 分配后：
 
 Phase 8.5 分两步扩展 manifest 格式，不做向后兼容——格式变更后旧 bake 数据由用户手动清除重新 bake。无 version 字段（不需要区分格式版本）。
 
-**Step 2.5（per-pixel 基础设施阶段）**：header 新增 `grid_spacing`，per-probe 仍只有 position。
+**Step 2.5（per-pixel 基础设施阶段）**：header 新增 `probe_spacing`，per-probe 仍只有 position。
 
 ```
 uint32_t probe_count    // offset 0
-float    grid_spacing   // offset 4
+float    probe_spacing   // offset 4
 vec3[N]  positions      // offset 8, 12B per probe
 ```
 
@@ -1304,7 +1304,7 @@ vec3[N]  positions      // offset 8, 12B per probe
 
 ```
 uint32_t probe_count    // offset 0
-float    grid_spacing   // offset 4
+float    probe_spacing   // offset 4
 per-probe (36B):
   vec3 position         // 12B
   vec3 aabb_min         // 12B
