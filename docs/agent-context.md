@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 9：AO/SO 按模式自动预设。
+Step 8.7：独立 Bake Lightmap / Probe / All — 三按钮 + BakeMode enum + start_bake() 条件跳过。
 
 ---
 

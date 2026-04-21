@@ -46,6 +46,8 @@ Step 8.5: Lightmap/Probe 独立开关 + UI 重排
     ↓
 Step 8.6: Lightmap Dilation（chart 接缝黑块修复）
     ↓
+Step 8.7: 独立 Bake Lightmap / Probe / All
+    ↓
 Step 9: AO/SO 按模式自动预设
     ↓
 Step 10: Lightmap/Probe 模式 IBL 旋转跳变
@@ -72,6 +74,7 @@ Step 11: 边缘情况 + Debug 渲染模式 + 收尾
 | 8.45 | xatlas 重构 — UV 生成移入烘焙管线 | 场景加载不运行 xatlas，烘焙时 xatlas+bake 一体化，bake cache 含 UV 数据，加载 bake 数据时恢复 UV |
 | 8.5 | Lightmap/Probe 独立开关 + UI 重排 | LP 模式下可独立开关 lightmap/probe，Rendering 区移到 Camera 前 |
 | 8.6 | Lightmap Dilation | chart 边缘不再出现黑块，bilinear 采样 + BC6H block 边界安全 |
+| 8.7 | 独立 Bake Lightmap / Probe / All | 三按钮分别 bake，已有完整数据时可单独更新 lightmap 或 probe |
 | 9 | AO/SO 按模式自动预设 | 切换模式时 AO 参数自动切换，两模式各自记忆参数 |
 | 10 | IBL 旋转跳变 | Lightmap/Probe 模式下拖拽 IBL 旋转超过阈值跳到下一个已 bake 角度 |
 | 11 | 边缘情况 + debug 模式 | cache 清除回退 IBL，场景/HDR 重载触发重扫描，debug 视图正确 |
@@ -559,6 +562,36 @@ Lightmap chart 边缘的未覆盖 texel 保持清零（黑色），导致 biline
 - LP 模式下 chart 边缘不再出现黑色条纹或方块
 - 对比 dilation 前后：边缘过渡平滑，无可见接缝
 - BC6H 压缩后 block 边界无暗斑
+
+---
+
+### Step 8.7：独立 Bake Lightmap / Probe / All
+
+将单一 "Start Bake" 按钮拆为三个独立按钮，支持单独更新 lightmap 或 probe 数据。
+scan() 校验不变（lightmap + probe 都完整才算有效角度），此设计仅用于在已有完整数据时快速重烘某一部分。
+
+新增 `BakeMode` enum 控制 `start_bake()` 跳过哪个阶段，`BakeState` enum 不变。
+
+- `framework/scene_data.h`：新增 `BakeMode` enum（`All`, `Lightmap`, `Probe`）
+- `app/debug_ui.h`：`DebugUIActions::bake_start_requested` → `bake_start_mode`（`std::optional<BakeMode>`，无请求时 nullopt）
+- `app/debug_ui.cpp`：3 个按钮 + enable 条件
+  - "Bake All"：`can_start_base`（RT + scene + HDR + 非 baking + 非 LP 模式）
+  - "Bake Lightmap" / "Bake Probe"：`can_start_base && current_angle_complete`
+  - `current_angle_complete` = `available_angles` 中存在当前旋转角（整数度）
+- `app/renderer.h`：`start_bake()` 签名新增 `BakeMode mode` 参数；新增 `bake_mode_` 成员
+- `app/renderer_bake.cpp`：`start_bake()` 根据 mode 控制流程
+  - `BakeMode::Lightmap`：正常运行 xatlas + lightmap 循环，最后一个 instance 完成后直接 `bake_state_ = Complete`（跳过 probe）
+  - `BakeMode::Probe`：跳过 instance 枚举 / xatlas / VB-IB 重建 / lightmap 循环，直接 `bake_state_ = BakingProbes` + `probe_placement_pending_ = true`
+  - `BakeMode::All`：当前行为不变（lightmaps → probes）
+- `app/application.h`：`start_bake_session()` 新增 `BakeMode` 参数
+- `app/application.cpp`：分发 `bake_start_mode` 到 `start_bake_session(mode)`
+
+**验证**：
+- 无已有数据：只有 "Bake All" 可点击，Lightmap/Probe 灰显
+- 已有完整数据：三个按钮均可点击
+- "Bake Lightmap"：只运行 lightmap 阶段，完成后自动切回，旧 probe 数据保留可加载
+- "Bake Probe"：只运行 probe 阶段，完成后自动切回，旧 lightmap 数据保留可加载
+- "Bake All"：行为与改动前完全一致
 
 ---
 

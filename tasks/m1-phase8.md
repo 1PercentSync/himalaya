@@ -170,6 +170,16 @@ lightmap 和 probe 贡献是否生效。IBL 模式下隐藏，不影响模式切
 - [x] `app/src/renderer_bake.cpp`：新增 `dilate_lightmap()` static 函数 — CPU 朴素 4 次全图迭代
 - [x] `app/src/renderer_bake.cpp`：`lightmap_bake_finalize()` 中 OIDN 之后、upload flush 之前调用 dilation
 
+## Step 8.7：独立 Bake Lightmap / Probe / All
+
+- [ ] `framework/scene_data.h`：新增 `BakeMode` enum（`All`, `Lightmap`, `Probe`）
+- [ ] `app/include/himalaya/app/debug_ui.h`：`DebugUIActions::bake_start_requested` → `bake_start_mode`（`std::optional<BakeMode>`）
+- [ ] `app/src/debug_ui.cpp`：3 按钮替换 1 按钮 + enable 逻辑（Lightmap/Probe 仅当前角度已有完整数据时可用）
+- [ ] `app/include/himalaya/app/renderer.h`：`start_bake()` 签名新增 `BakeMode` 参数 + `bake_mode_` 成员
+- [ ] `app/src/renderer_bake.cpp`：Lightmap 模式完成后直接 Complete（跳过 probe）；Probe 模式跳过 xatlas/lightmap 直接进 BakingProbes
+- [ ] `app/include/himalaya/app/application.h`：`start_bake_session()` 新增 `BakeMode` 参数
+- [ ] `app/src/application.cpp`：分发 `bake_start_mode` 到 `start_bake_session(mode)`
+
 ## Step 9：AO/SO 按模式自动预设
 
 - [ ] `app/application.h`：per-mode AOConfig 存储（`ao_config_ibl_` + `ao_config_lightmap_probe_`）
