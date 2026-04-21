@@ -17,11 +17,6 @@
 #include <GLFW/glfw3.h>
 
 namespace himalaya::app {
-    /**
-     * @brief Maximum directional lights the LightBuffer can hold.
-     */
-    constexpr uint32_t kMaxDirectionalLights = 1;
-
     // ---- GPU data fill ----
 
     void Renderer::fill_common_gpu_data(const RenderInput &input) const {

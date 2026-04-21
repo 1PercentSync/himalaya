@@ -16,9 +16,6 @@
 #include <spdlog/spdlog.h>
 
 namespace himalaya::app {
-    /** @brief Maximum directional lights the LightBuffer can hold. */
-    constexpr uint32_t kMaxDirectionalLights = 1;
-
     /** @brief Maximum instances the InstanceBuffer can hold. */
     constexpr uint32_t kMaxInstances = 65536;
 

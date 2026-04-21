@@ -58,6 +58,9 @@ namespace himalaya::framework {
 }
 
 namespace himalaya::app {
+    /** @brief Maximum directional lights the LightBuffer can hold. */
+    inline constexpr uint32_t kMaxDirectionalLights = 1;
+
     class SceneLoader;
 
     /**

@@ -21,11 +21,6 @@
 
 namespace himalaya::app {
     /**
-     * @brief Maximum directional lights the LightBuffer can hold.
-     */
-    constexpr uint32_t kMaxDirectionalLights = 1;
-
-    /**
      * @brief Maximum instances the InstanceBuffer can hold.
      *
      * 65536 × 128 bytes = 8 MB per frame.
