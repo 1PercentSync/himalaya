@@ -165,6 +165,14 @@ namespace himalaya::framework {
          */
         [[nodiscard]] uint32_t loaded_probe_count() const;
 
+        /**
+         * @brief Returns the probe grid spacing read from the manifest.
+         *
+         * Returns 0 when no angle is loaded. Used by Step 3 to construct
+         * the 3D spatial grid.
+         */
+        [[nodiscard]] float probe_spacing() const;
+
     private:
         /** @brief GPU resource pool. */
         rhi::ResourceManager* resource_manager_ = nullptr;
@@ -209,6 +217,9 @@ namespace himalaya::framework {
 
         /** @brief Number of probes loaded in the current angle (0 when not loaded). */
         uint32_t loaded_probe_count_ = 0;
+
+        /** @brief Probe grid spacing from manifest (0 when not loaded). */
+        float probe_spacing_ = 0.0f;
     };
 
 } // namespace himalaya::framework

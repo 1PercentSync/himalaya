@@ -164,24 +164,29 @@ namespace himalaya::app {
     }
 
     /**
-     * @brief Writes the probe manifest file (accepted probe count + positions).
+     * @brief Writes the probe manifest file (header + per-probe positions).
      *
-     * Binary format: uint32_t probe_count, then probe_count × glm::vec3 positions.
+     * Binary format: uint32_t probe_count (offset 0) + float probe_spacing (offset 4)
+     * + probe_count × glm::vec3 positions (offset 8). Header 8B + 12B per probe.
      * Uses atomic write (write-to-temp + rename) for crash safety.
      */
     static void write_probe_manifest(const std::string &probe_set_key,
                                      uint32_t rotation_int,
+                                     float probe_spacing,
                                      std::span<const glm::vec3> accepted_positions) {
         const auto rot = format_rotation(rotation_int);
         const auto manifest_path = framework::cache_path(
             "bake", probe_set_key + "_rot" + rot + "_manifest", ".bin");
         const auto count = static_cast<uint32_t>(accepted_positions.size());
-        const size_t data_size = sizeof(uint32_t)
+        constexpr size_t kHeaderSize = sizeof(uint32_t) + sizeof(float);
+        const size_t data_size = kHeaderSize
             + accepted_positions.size() * sizeof(glm::vec3);
         std::vector<uint8_t> manifest_data(data_size);
         std::memcpy(manifest_data.data(), &count, sizeof(uint32_t));
+        std::memcpy(manifest_data.data() + sizeof(uint32_t),
+                    &probe_spacing, sizeof(float));
         if (!accepted_positions.empty()) {
-            std::memcpy(manifest_data.data() + sizeof(uint32_t),
+            std::memcpy(manifest_data.data() + kHeaderSize,
                         accepted_positions.data(),
                         accepted_positions.size() * sizeof(glm::vec3));
         }
@@ -1330,6 +1335,7 @@ namespace himalaya::app {
                     ctx_->end_immediate();
                 } else {
                     write_probe_manifest(bake_probe_set_key_, bake_rotation_int_,
+                                         bake_locked_config_.probe_spacing,
                                          bake_probe_accepted_positions_);
                     spdlog::info("All {} probes baked ({} accepted)",
                                  bake_probe_total_, bake_probe_accepted_count_);
@@ -1572,6 +1578,7 @@ namespace himalaya::app {
             ctx_->end_immediate();
         } else {
             write_probe_manifest(bake_probe_set_key_, bake_rotation_int_,
+                                 bake_locked_config_.probe_spacing,
                                  bake_probe_accepted_positions_);
             spdlog::info("All {} probes baked ({} accepted)",
                          bake_probe_total_, bake_probe_accepted_count_);
@@ -1861,7 +1868,8 @@ namespace himalaya::app {
                     // If no valid geometry was built (all instances degenerate/transparent),
                     // skip placement entirely and write an empty manifest.
                     if (scene_as_builder_.tlas_handle().as == VK_NULL_HANDLE) {
-                        write_probe_manifest(bake_probe_set_key_, bake_rotation_int_, {});
+                        write_probe_manifest(bake_probe_set_key_, bake_rotation_int_,
+                                             bake_locked_config_.probe_spacing, {});
                         spdlog::info("No valid TLAS, skipping probe baking");
                         bake_state_ = framework::BakeState::Complete;
                         bake_probe_placement_pending_ = false;

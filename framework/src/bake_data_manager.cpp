@@ -186,7 +186,7 @@ namespace himalaya::framework {
             }
             if (lm_count < expected_lm || !uv_complete) { continue; }
 
-            // Read probe count from manifest header (uint32_t at offset 0).
+            // Read probe count from manifest header (uint32_t count + float probe_spacing).
             uint32_t manifest_probe_count = 0;
             {
                 const auto manifest_path = cache_path(
@@ -195,6 +195,8 @@ namespace himalaya::framework {
                 if (mf) {
                     mf.read(reinterpret_cast<char*>(&manifest_probe_count),
                             sizeof(uint32_t));
+                    float spacing = 0.0f;
+                    mf.read(reinterpret_cast<char*>(&spacing), sizeof(float));
                 }
             }
 
@@ -276,9 +278,10 @@ namespace himalaya::framework {
 
         // --- Probe loading ---
         uint32_t manifest_probe_count = 0;
+        float manifest_probe_spacing = 0.0f;
         std::vector<glm::vec3> probe_positions;
 
-        // Read manifest file (binary: uint32_t count + vec3[count] positions)
+        // Read manifest file (binary: uint32_t count + float probe_spacing + vec3[count] positions)
         {
             const auto manifest_path = cache_path(
                 "bake", probe_set_key + rot_suffix + "_manifest", ".bin");
@@ -286,6 +289,8 @@ namespace himalaya::framework {
             if (mf) {
                 mf.read(reinterpret_cast<char*>(&manifest_probe_count),
                         sizeof(uint32_t));
+                mf.read(reinterpret_cast<char*>(&manifest_probe_spacing),
+                        sizeof(float));
                 if (manifest_probe_count > 0) {
                     probe_positions.resize(manifest_probe_count);
                     mf.read(reinterpret_cast<char*>(probe_positions.data()),
@@ -294,6 +299,7 @@ namespace himalaya::framework {
                 }
             }
         }
+        probe_spacing_ = manifest_probe_spacing;
 
         // Load probe cubemaps and build GPUProbeData array
         std::vector<GPUProbeData> gpu_probes;
@@ -387,6 +393,7 @@ namespace himalaya::framework {
         lightmap_indices_.clear();
 
         loaded_probe_count_ = 0;
+        probe_spacing_ = 0.0f;
         is_loaded_ = false;
         loaded_rotation_ = 0;
 
@@ -409,6 +416,10 @@ namespace himalaya::framework {
 
     uint32_t BakeDataManager::loaded_probe_count() const {
         return loaded_probe_count_;
+    }
+
+    float BakeDataManager::probe_spacing() const {
+        return probe_spacing_;
     }
 
 } // namespace himalaya::framework
