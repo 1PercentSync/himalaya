@@ -67,11 +67,20 @@ Step 10: 收尾
 - `bake_data_manager.h`：`load_angle()` 签名移除 `mesh_instances` 参数（不再需要做 probe-to-instance 分配），调用方同步更新
 - `renderer_rasterization.cpp`：`build_draw_groups()` 移除 `probe_indices` 参数和相关填充逻辑
 
-#### 1c. GlobalUBO 新增 probe_count
+#### 1c. GlobalUBO 扩展
 
-- `framework/scene_data.h`：`GlobalUniformData` 新增 `uint32_t probe_count`（offset 928，默认 0）+ 3 个 `uint32_t _phase85_pad`（12B padding 到 944B，16 的倍数）。更新 `static_assert(sizeof == 944)` 和 `offsetof(probe_count) == 928`。Step 5 引入 4 个 float 时替换 padding 字段并扩展到 960B
-- `shaders/common/bindings.glsl`：`GlobalUBO` 对应更新
-- `app/renderer.cpp`：`fill_common_gpu_data()` 中调用 `bake_data_manager_.loaded_probe_count()` 填入
+一次性新增所有 Phase 8.5 字段（避免 Step 4 shader 引用尚不存在的字段）：
+
+- `framework/scene_data.h`：`GlobalUniformData` 新增 5 个字段（offset 928 起）：
+  - `uint32_t probe_count`（默认 0）
+  - `float normal_bias`（默认 1.0）
+  - `float roughness_single`（默认 0.15）
+  - `float roughness_full`（默认 0.5）
+  - `float blend_curve`（默认 1.0）
+  - + 3 个 `uint32_t _phase85_pad`（12B padding 到 960B，16 的倍数）
+  - 更新 `static_assert(sizeof == 960)` 和各字段 `offsetof` 校验
+- `shaders/common/bindings.glsl`：`GlobalUBO` 对应更新（5 个新字段）
+- `app/renderer.cpp`：`fill_common_gpu_data()` 填入 `probe_count`（从 `bake_data_manager_.loaded_probe_count()`）和 4 个 blend 参数（Step 5 引入 ImGui slider 前使用默认值）
 
 **验证**：编译通过，渲染无回归，`probe_index` 无残留引用
 
@@ -201,8 +210,7 @@ Bake-time 参数（bake 面板中，下次 bake 生效）：
 
 #### 5b. GPU 传递
 
-- Runtime 4 个 float 通过 GlobalUBO 新增字段传入 shader（`probe_count` 已在 Step 1 引入）
-- `framework/scene_data.h`：`GlobalUniformData` 新增 `normal_bias` / `roughness_single` / `roughness_full` / `blend_curve` 四个 float，替换 Step 1 的 `_phase85_pad`，补齐 std140 padding 到 960B
+- GlobalUBO 字段已在 Step 1c 引入（`probe_count` + 4 个 blend float），此处只需确保 `fill_common_gpu_data()` 从 Application 层参数读取最新值（Step 1 中使用默认值，Step 5 后由 ImGui slider 控制）
 
 #### 5c. ImGui 面板
 

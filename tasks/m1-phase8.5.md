@@ -14,9 +14,9 @@
 - [ ] `framework/include/himalaya/framework/bake_data_manager.h`：新增 `loaded_probe_count()` 访问器
 - [ ] `framework/include/himalaya/framework/bake_data_manager.h`：`load_angle()` 签名移除 `mesh_instances` 参数 + 调用方同步
 - [ ] `app/src/renderer_rasterization.cpp`：移除 `probe_indices` 参数和填充逻辑
-- [ ] `framework/scene_data.h`：`GlobalUniformData` 新增 `uint32_t probe_count`(offset 928) + 3 × `_phase85_pad` + `static_assert` 更新(944B)
-- [ ] `shaders/common/bindings.glsl`：`GlobalUBO` 新增 `probe_count`
-- [ ] `app/src/renderer.cpp`：`fill_common_gpu_data()` 填入 probe count
+- [ ] `framework/scene_data.h`：`GlobalUniformData` 新增 `probe_count` + `normal_bias` + `roughness_single` + `roughness_full` + `blend_curve` + padding 到 960B + `static_assert` 更新
+- [ ] `shaders/common/bindings.glsl`：`GlobalUBO` 新增 5 个字段
+- [ ] `app/src/renderer.cpp`：`fill_common_gpu_data()` 填入 probe count + 4 个 blend 参数（默认值）
 
 ## Step 2：Manifest grid_spacing
 
@@ -44,9 +44,7 @@
 
 ## Step 5：Runtime 参数 + ImGui 面板
 
-- [ ] `framework/scene_data.h`：`GlobalUniformData` 新增 `normal_bias` / `roughness_single` / `roughness_full` / `blend_curve`，替换 `_phase85_pad`，补齐到 960B
-- [ ] `shaders/common/bindings.glsl`：`GlobalUBO` 对应更新
-- [ ] `app/src/renderer.cpp`：填充新 GlobalUBO 字段
+- [ ] `app/src/renderer.cpp`：`fill_common_gpu_data()` 改为从 Application 层参数读取 blend 值（不再使用默认值）
 - [ ] `app/src/debug_ui.cpp`：Rendering 区新增 4 个 slider（LP 模式下可见）
 - [ ] `app/src/debug_ui.cpp`：Bake 面板新增 `probe_relocation_offset` slider
 - [ ] `framework/scene_data.h`：`BakeConfig` 新增 `probe_relocation_offset`（默认 0.1f）
