@@ -26,13 +26,13 @@
 
 ## Step 3：3D Grid 空间索引
 
-- [ ] `framework/include/himalaya/framework/bake_data_manager.h`：新增 `ProbeGrid3D` 结构（grid_origin, cell_size, grid_dims, cell_offsets, probe_indices）
-- [ ] `framework/src/bake_data_manager.cpp`：`load_angle()` 加载 probe 后构建 grid（遍历 positions → cell 坐标 → 前缀和 → flat array）
-- [ ] `framework/src/bake_data_manager.cpp`：上传单个 ProbeGridBuffer SSBO（header + cell_offsets + probe_indices）
-- [ ] `rhi/descriptors.cpp`：Set 0 新增 binding 10（RT 和非 RT 两条路径）+ `write_set0_probe_grid_buffer()`
-- [ ] `shaders/common/bindings.glsl`：新增 `layout(set = 0, binding = 10) readonly buffer ProbeGridBuffer`
-- [ ] 新增 `shaders/common/probe_grid.glsl`：grid 查询函数（world pos → center cell → 5×5×5 邻域遍历）
-- [ ] `framework/src/bake_data_manager.cpp`：`unload_angle()` 销毁 grid buffer
+- [x] `framework/include/himalaya/framework/bake_data_manager.h`：新增 `ProbeGrid3D` 结构（grid_origin, cell_size, grid_dims, cell_offsets, probe_indices）
+- [x] `framework/src/bake_data_manager.cpp`：`load_angle()` 加载 probe 后构建 grid（遍历 positions → cell 坐标 → 前缀和 → flat array）
+- [x] `framework/src/bake_data_manager.cpp`：上传单个 ProbeGridBuffer SSBO（header + cell_offsets + probe_indices）
+- [x] `rhi/descriptors.cpp`：Set 0 新增 binding 10（RT 和非 RT 两条路径）+ `write_set0_probe_grid_buffer()`
+- [x] `shaders/common/bindings.glsl`：新增 `layout(set = 0, binding = 10) readonly buffer ProbeGridBuffer`
+- [x] 新增 `shaders/common/probe_grid.glsl`：grid 查询函数（world pos → center cell → 5×5×5 邻域遍历）
+- [x] `framework/src/bake_data_manager.cpp`：`unload_angle()` 销毁 grid buffer
 
 ## Step 4：Per-pixel Probe 选取 + Blend
 
