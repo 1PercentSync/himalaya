@@ -211,6 +211,14 @@ void main() {
         contact_shadow = texture(rt_contact_shadow_mask, screen_uv).r;
     }
 
+    // ---- Primary light shadow (extracted for reuse in direct loop + LP specular) ----
+    float primary_shadow = 1.0;
+    if (global.directional_light_count > 0u
+        && (global.feature_flags & FEATURE_SHADOWS) != 0u
+        && directional_lights[0].color_and_shadow.w > 0.5) {
+        primary_shadow = blend_cascade_shadow(frag_world_pos, N, view_depth);
+    }
+
     // ---- Direct lighting: Cook-Torrance + Lambert (split for debug modes) ----
     vec3 direct_diffuse = vec3(0.0);
     vec3 direct_specular = vec3(0.0);
@@ -220,7 +228,7 @@ void main() {
         vec3 light_color = directional_lights[i].color_and_shadow.xyz;
 
         float NdotL = max(dot(N, L), 0.0);
-        if (NdotL <= 0.0) continue;
+        if (NdotL <= 0.0) { continue; }
 
         vec3 H = normalize(V + L);
         float NdotH = max(dot(N, H), 0.0);
@@ -233,8 +241,10 @@ void main() {
         vec3 radiance = light_color * intensity * NdotL;
 
         // Shadow attenuation (guarded by feature flag and per-light cast_shadows)
-        if ((global.feature_flags & FEATURE_SHADOWS) != 0u
-            && directional_lights[i].color_and_shadow.w > 0.5) {
+        if (i == 0u) {
+            radiance *= primary_shadow;
+        } else if ((global.feature_flags & FEATURE_SHADOWS) != 0u
+                   && directional_lights[i].color_and_shadow.w > 0.5) {
             radiance *= blend_cascade_shadow(frag_world_pos, N, view_depth);
         }
 
@@ -436,21 +446,41 @@ void main() {
                     * mat.emissive_factor.rgb;
 
     // ---- Combine based on debug render mode ----
+    // LP mode: bake data contains full HDR radiance (including sun), so direct light
+    // is blended via max (diffuse) and shadow-modulated (specular) to avoid double-counting.
+    bool lp_mode = (global.feature_flags & FEATURE_LIGHTMAP) != 0u;
+
+    const float kSpecularShadowFloor = 0.1;
+    float lp_shadow = max(primary_shadow * contact_shadow, kSpecularShadowFloor);
+
+    vec3 lp_diffuse = max(direct_diffuse, global.indirect_intensity * indirect_diffuse * diffuse_ao);
+    vec3 lp_specular = global.indirect_intensity * indirect_specular * specular_ao * lp_shadow;
+    vec3 std_diffuse = direct_diffuse + global.indirect_intensity * indirect_diffuse * diffuse_ao;
+    vec3 std_specular = direct_specular + global.indirect_intensity * indirect_specular * specular_ao;
+
+    vec3 final_diffuse = lp_mode ? lp_diffuse : std_diffuse;
+    vec3 final_specular = lp_mode ? lp_specular : std_specular;
+
     vec3 color;
     switch (global.debug_render_mode) {
         case DEBUG_MODE_DIFFUSE_ONLY:
-            color = direct_diffuse + global.indirect_intensity * indirect_diffuse * diffuse_ao;
+            color = final_diffuse;
             break;
         case DEBUG_MODE_SPECULAR_ONLY:
-            color = direct_specular + global.indirect_intensity * indirect_specular * specular_ao;
+            color = final_specular;
             break;
         case DEBUG_MODE_INDIRECT_ONLY:
-            color = global.indirect_intensity * (indirect_diffuse * diffuse_ao + indirect_specular * specular_ao);
+            if (lp_mode) {
+                color = global.indirect_intensity
+                      * (indirect_diffuse * diffuse_ao
+                         + indirect_specular * specular_ao * lp_shadow);
+            } else {
+                color = global.indirect_intensity
+                      * (indirect_diffuse * diffuse_ao + indirect_specular * specular_ao);
+            }
             break;
         default: // DEBUG_MODE_FULL_PBR
-            color = (direct_diffuse + direct_specular)
-                  + global.indirect_intensity * (indirect_diffuse * diffuse_ao + indirect_specular * specular_ao)
-                  + emissive;
+            color = final_diffuse + final_specular + emissive;
             break;
     }
 
