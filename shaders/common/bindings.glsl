@@ -170,6 +170,13 @@ layout (set = 0, binding = 9) readonly buffer ProbeBuffer {
     GPUProbeData probes[];
 };
 
+/** 3D spatial grid for probe lookup (header + CSR cell_offsets + flat probe_indices). */
+layout (set = 0, binding = 10) readonly buffer ProbeGridBuffer {
+    vec4  grid_origin_and_cell_size;    // xyz = grid origin, w = cell size
+    uvec4 grid_dims_and_pad;            // xyz = grid dimensions, w = padding
+    uint  grid_data[];                  // [0..cell_count] = cell_offsets (CSR), then probe_indices
+};
+
 // ---- Set 0: RT-only bindings (guarded by HIMALAYA_RT) ----
 
 #ifdef HIMALAYA_RT
