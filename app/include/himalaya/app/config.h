@@ -64,7 +64,7 @@ namespace himalaya::app {
         bool bake_allow_tearing = false;
 
         /** @brief Number of SPP batched per frame during baking. */
-        uint32_t bake_spp_per_frame = 16;
+        uint32_t bake_spp_per_frame = 256;
 
         /** @brief Minimum average luminance for a probe to be accepted during baking. */
         float bake_probe_min_luminance = 1e-4f;

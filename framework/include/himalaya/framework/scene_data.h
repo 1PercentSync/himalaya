@@ -322,7 +322,7 @@ namespace himalaya::framework {
      */
     struct BakeConfig {
         /** @brief Global lightmap density (texels per world-space meter). */
-        float texels_per_meter = 40.0f;
+        float texels_per_meter = 128.0f;
 
         /** @brief Minimum lightmap resolution per instance (aligned to 4). */
         uint32_t min_resolution = 64;
@@ -363,7 +363,7 @@ namespace himalaya::framework {
 
         /** @brief Number of SPP batched per frame during baking.
          *  Higher values improve GPU utilization but reduce UI responsiveness. */
-        uint32_t spp_per_frame = 512;
+        uint32_t spp_per_frame = 256;
 
         /** @brief Probes with average luminance below this threshold are rejected.
          *  Rejected probes do not produce KTX2 files or manifest entries. */
