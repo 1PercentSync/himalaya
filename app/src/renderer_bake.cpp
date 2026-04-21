@@ -1448,13 +1448,13 @@ namespace himalaya::app {
                 resource_manager_->get_image(bake_probe_accumulation_).image,
                 VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &upload_region);
 
-            // Transition accumulation TRANSFER_DST → SHADER_READ_ONLY (prefilter sampling)
+            // Transition accumulation mip 0 TRANSFER_DST → SHADER_READ_ONLY (for generate_mips)
             VkImageMemoryBarrier2 to_read{};
             to_read.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
             to_read.srcStageMask = VK_PIPELINE_STAGE_2_COPY_BIT;
             to_read.srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
-            to_read.dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
-            to_read.dstAccessMask = VK_ACCESS_2_SHADER_SAMPLED_READ_BIT;
+            to_read.dstStageMask = VK_PIPELINE_STAGE_2_BLIT_BIT;
+            to_read.dstAccessMask = VK_ACCESS_2_TRANSFER_READ_BIT;
             to_read.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
             to_read.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
             to_read.image = resource_manager_->get_image(bake_probe_accumulation_).image;
@@ -1466,7 +1466,31 @@ namespace himalaya::app {
             dep_read.pImageMemoryBarriers = &to_read;
             cmd.pipeline_barrier(dep_read);
 
-            // Prefilter: accumulation (SHADER_READ_ONLY) → prefilter_target (mip chain)
+            // Generate mip chain for accumulation cubemap (matches IBL prefilter source flow)
+            resource_manager_->generate_mips(bake_probe_accumulation_);
+
+            // generate_mips leaves all mips in SHADER_READ_ONLY with FRAGMENT visibility;
+            // prefilter_cubemap runs as COMPUTE — add compute visibility barrier
+            const auto &accum_img = resource_manager_->get_image(bake_probe_accumulation_);
+            VkImageMemoryBarrier2 mips_to_compute{};
+            mips_to_compute.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+            mips_to_compute.srcStageMask = VK_PIPELINE_STAGE_2_BLIT_BIT;
+            mips_to_compute.srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
+            mips_to_compute.dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+            mips_to_compute.dstAccessMask = VK_ACCESS_2_SHADER_SAMPLED_READ_BIT;
+            mips_to_compute.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            mips_to_compute.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            mips_to_compute.image = accum_img.image;
+            mips_to_compute.subresourceRange = {
+                VK_IMAGE_ASPECT_COLOR_BIT, 0, accum_img.desc.mip_levels, 0, kFaceCount};
+
+            VkDependencyInfo dep_compute{};
+            dep_compute.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+            dep_compute.imageMemoryBarrierCount = 1;
+            dep_compute.pImageMemoryBarriers = &mips_to_compute;
+            cmd.pipeline_barrier(dep_compute);
+
+            // Prefilter: accumulation (SHADER_READ_ONLY, full mip chain) → prefilter_target
             framework::prefilter_cubemap(*ctx_, *resource_manager_, shader_compiler_,
                                          bake_probe_accumulation_, prefilter_target,
                                          mip_count, compress_deferred);
@@ -1621,9 +1645,10 @@ namespace himalaya::app {
         const auto &pos = bake_probe_positions_[probe_index];
 
         // Create per-probe cubemap images (array_layers=6 → auto CUBE_COMPATIBLE + CUBE view)
+        const uint32_t accum_mip_count = static_cast<uint32_t>(std::floor(std::log2(res))) + 1;
         bake_probe_accumulation_ = resource_manager_->create_image({
             .width = res, .height = res, .depth = 1,
-            .mip_levels = 1, .array_layers = 6, .sample_count = 1,
+            .mip_levels = accum_mip_count, .array_layers = 6, .sample_count = 1,
             .format = rhi::Format::R32G32B32A32Sfloat,
             .usage = rhi::ImageUsage::Storage | rhi::ImageUsage::TransferSrc |
                      rhi::ImageUsage::TransferDst | rhi::ImageUsage::Sampled,
