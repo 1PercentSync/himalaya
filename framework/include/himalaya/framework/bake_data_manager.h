@@ -21,8 +21,6 @@ namespace himalaya::rhi {
 
 namespace himalaya::framework {
 
-    struct MeshInstance;
-
     /**
      * @brief Manages baked lighting data lifecycle.
      *
@@ -104,19 +102,19 @@ namespace himalaya::framework {
          * GPU is idle before calling (vkQueueWaitIdle). If data is already
          * loaded, unloads the previous angle first.
          *
-         * @param rotation_int     Bake angle in integer degrees (0-359).
-         * @param lightmap_keys    Per-bakeable-instance lightmap cache key hashes.
-         * @param bakeable_indices Mapping from bakeable index to full instance index
-         *                         (parallel to lightmap_keys).
-         * @param probe_set_key    Probe set cache key hash.
-         * @param mesh_instances   All scene mesh instances (for probe-to-instance
-         *                         assignment via AABB center distance).
+         * @param rotation_int        Bake angle in integer degrees (0-359).
+         * @param lightmap_keys       Per-bakeable-instance lightmap cache key hashes.
+         * @param bakeable_indices    Mapping from bakeable index to full instance index
+         *                            (parallel to lightmap_keys).
+         * @param probe_set_key       Probe set cache key hash.
+         * @param total_instance_count Total number of mesh instances (for lightmap
+         *                            index array sizing).
          */
         void load_angle(uint32_t rotation_int,
                         std::span<const std::string> lightmap_keys,
                         std::span<const uint32_t> bakeable_indices,
                         const std::string& probe_set_key,
-                        std::span<const MeshInstance> mesh_instances);
+                        uint32_t total_instance_count);
 
         /**
          * @brief Unloads the current angle: unregisters bindless descriptors,
@@ -161,12 +159,11 @@ namespace himalaya::framework {
         [[nodiscard]] std::span<const uint32_t> lightmap_indices() const;
 
         /**
-         * @brief Returns per-instance probe buffer indices.
+         * @brief Returns the number of probes loaded in the current angle.
          *
-         * Parallel to mesh_instances (UINT32_MAX = no probe for that instance).
-         * Empty when no angle is loaded.
+         * Returns 0 when no angle is loaded.
          */
-        [[nodiscard]] std::span<const uint32_t> probe_indices() const;
+        [[nodiscard]] uint32_t loaded_probe_count() const;
 
     private:
         /** @brief GPU resource pool. */
@@ -210,8 +207,8 @@ namespace himalaya::framework {
         /** @brief Per-instance lightmap bindless indices (parallel to mesh_instances, UINT32_MAX = none). */
         std::vector<uint32_t> lightmap_indices_;
 
-        /** @brief Per-instance probe buffer indices (parallel to mesh_instances, UINT32_MAX = none). */
-        std::vector<uint32_t> probe_indices_;
+        /** @brief Number of probes loaded in the current angle (0 when not loaded). */
+        uint32_t loaded_probe_count_ = 0;
     };
 
 } // namespace himalaya::framework

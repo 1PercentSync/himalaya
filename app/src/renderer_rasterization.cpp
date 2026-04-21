@@ -50,8 +50,8 @@ namespace himalaya::app {
     /**
      * Builds MeshDrawGroup lists from pre-sorted instance indices.
      *
-     * lightmap_indices / probe_indices are optional (empty = all UINT32_MAX via
-     * GPUInstanceData default member initializers). When non-empty, they are
+     * lightmap_indices is optional (empty = all UINT32_MAX via
+     * GPUInstanceData default member initializers). When non-empty, it is
      * parallel to mesh_instances and indexed by sorted_indices[i].
      */
     static void build_draw_groups(
@@ -63,8 +63,7 @@ namespace himalaya::app {
         std::vector<framework::MeshDrawGroup> &out_opaque,
         std::vector<framework::MeshDrawGroup> &out_mask,
         const bool compute_normal_matrix,
-        const std::span<const uint32_t> lightmap_indices = {},
-        const std::span<const uint32_t> probe_indices = {}) {
+        const std::span<const uint32_t> lightmap_indices = {}) {
         out_opaque.clear();
         out_mask.clear();
 
@@ -112,9 +111,6 @@ namespace himalaya::app {
                 if (!lightmap_indices.empty()) {
                     data.lightmap_index = lightmap_indices[idx];
                 }
-                if (!probe_indices.empty()) {
-                    data.probe_index = probe_indices[idx];
-                }
                 gpu_instances[instance_offset++] = data;
             }
 
@@ -154,8 +150,7 @@ namespace himalaya::app {
             build_draw_groups(input.mesh_instances, input.materials,
                               sorted_opaque_indices_, gpu_instances, instance_offset,
                               opaque_draw_groups_, mask_draw_groups_, true,
-                              bake_data_manager_.lightmap_indices(),
-                              bake_data_manager_.probe_indices());
+                              bake_data_manager_.lightmap_indices());
         }
 
         // --- Shadow setup (recompute for frustum culling — cheap matrix math) ---

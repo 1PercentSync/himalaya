@@ -357,7 +357,7 @@ namespace himalaya::app {
                                       bake_lightmap_keys_,
                                       bake_instance_indices_,
                                       bake_probe_set_key_,
-                                      mesh_instances);
+                                      static_cast<uint32_t>(mesh_instances.size()));
         ctx_->end_immediate();
     }
 

@@ -16,7 +16,6 @@
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
-#include <limits>
 #include <set>
 
 namespace himalaya::framework {
@@ -236,15 +235,12 @@ namespace himalaya::framework {
                                      const std::span<const std::string> lightmap_keys,
                                      const std::span<const uint32_t> bakeable_indices,
                                      const std::string& probe_set_key,
-                                     const std::span<const MeshInstance> mesh_instances) {
+                                     const uint32_t total_instance_count) {
         // Clean up any previously loaded data
         unload_angle();
 
-        const auto total_instances = static_cast<uint32_t>(mesh_instances.size());
-
-        // Initialize per-instance indices with sentinel values
-        lightmap_indices_.assign(total_instances, UINT32_MAX);
-        probe_indices_.assign(total_instances, UINT32_MAX);
+        // Initialize per-instance lightmap indices with sentinel values
+        lightmap_indices_.assign(total_instance_count, UINT32_MAX);
 
         // Build rotation suffix string (e.g. "_rot045")
         char rot_str[4];
@@ -348,26 +344,7 @@ namespace himalaya::framework {
             descriptor_manager_->write_set0_probe_buffer(probe_buffer_, buf_size);
         }
 
-        // --- CPU probe-to-instance assignment (nearest by AABB center) ---
-        if (loaded_probes > 0) {
-            for (size_t i = 0; i < mesh_instances.size(); ++i) {
-                const auto& bounds = mesh_instances[i].world_bounds;
-                const auto center = (bounds.min + bounds.max) * 0.5f;
-
-                float min_dist_sq = std::numeric_limits<float>::max();
-                uint32_t nearest = UINT32_MAX;
-                for (uint32_t pi = 0; pi < loaded_probes; ++pi) {
-                    const auto diff = center - gpu_probes[pi].position;
-                    const float dist_sq = glm::dot(diff, diff);
-                    if (dist_sq < min_dist_sq) {
-                        min_dist_sq = dist_sq;
-                        nearest = pi;
-                    }
-                }
-                probe_indices_[i] = nearest;
-            }
-        }
-
+        loaded_probe_count_ = loaded_probes;
         is_loaded_ = true;
         loaded_rotation_ = rotation_int;
 
@@ -408,8 +385,8 @@ namespace himalaya::framework {
 
         // Clear per-instance indices
         lightmap_indices_.clear();
-        probe_indices_.clear();
 
+        loaded_probe_count_ = 0;
         is_loaded_ = false;
         loaded_rotation_ = 0;
 
@@ -430,8 +407,8 @@ namespace himalaya::framework {
         return lightmap_indices_;
     }
 
-    std::span<const uint32_t> BakeDataManager::probe_indices() const {
-        return probe_indices_;
+    uint32_t BakeDataManager::loaded_probe_count() const {
+        return loaded_probe_count_;
     }
 
 } // namespace himalaya::framework
