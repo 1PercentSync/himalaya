@@ -373,6 +373,10 @@ namespace himalaya::framework {
          *  Applied in the shared trace_path() bounce loop. Prevents extreme outliers
          *  from corrupting low-resolution lightmaps and confusing OIDN. */
         float baker_clamp = 100.0f;
+
+        /** @brief Enable OIDN denoising in bake finalize (lightmap + probe).
+         *  When false, raw noisy accumulation is compressed directly to BC6H. */
+        bool denoise = true;
     };
 
     // ---- GPU Data Structures ----

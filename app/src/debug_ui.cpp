@@ -923,6 +923,14 @@ namespace himalaya::app {
                         "corrupting low-resolution lightmaps.");
                 }
 
+                ImGui::Checkbox("Baker Denoise", &ctx.bake_config.denoise);
+                if (ImGui::IsItemHovered()) {
+                    ImGui::SetTooltip(
+                        "Apply OIDN denoising during bake finalize.\n"
+                        "Disable to inspect raw noisy output or when\n"
+                        "using very high SPP that converges without denoising.");
+                }
+
                 {
                     const bool can_tear = ctx.swapchain.immediate_supported;
                     if (!can_tear) { ImGui::BeginDisabled(); }

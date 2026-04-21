@@ -899,14 +899,18 @@ namespace himalaya::app {
         vmaInvalidateAllocation(ctx_->allocator,
             resource_manager_->get_buffer(rb_normal).allocation, 0, VK_WHOLE_SIZE);
 
-        // === CPU: OIDN denoise ===
+        // === CPU: OIDN denoise (or passthrough) ===
         const auto *beauty_ptr = resource_manager_->get_buffer(rb_beauty).allocation_info.pMappedData;
         const auto *albedo_ptr = resource_manager_->get_buffer(rb_albedo).allocation_info.pMappedData;
         const auto *normal_ptr = resource_manager_->get_buffer(rb_normal).allocation_info.pMappedData;
         auto *upload_ptr = resource_manager_->get_buffer(upload_buf).allocation_info.pMappedData;
 
-        if (!bake_denoiser_.denoise(beauty_ptr, albedo_ptr, normal_ptr, upload_ptr, w, h)) {
-            spdlog::error("Bake finalize: OIDN denoise failed, using noisy result");
+        if (bake_locked_config_.denoise) {
+            if (!bake_denoiser_.denoise(beauty_ptr, albedo_ptr, normal_ptr, upload_ptr, w, h)) {
+                spdlog::error("Bake finalize: OIDN denoise failed, using noisy result");
+                std::memcpy(upload_ptr, beauty_ptr, beauty_size);
+            }
+        } else {
             std::memcpy(upload_ptr, beauty_ptr, beauty_size);
         }
 
@@ -1283,9 +1287,13 @@ namespace himalaya::app {
             const auto *face_normal = normal_ptr + face * aux_face_bytes;
             auto *face_output = upload_ptr + face * beauty_face_bytes;
 
-            if (!bake_denoiser_.denoise(face_beauty, face_albedo, face_normal,
-                                        face_output, res, res)) {
-                spdlog::error("Probe finalize: OIDN denoise failed for face {}, using noisy", face);
+            if (bake_locked_config_.denoise) {
+                if (!bake_denoiser_.denoise(face_beauty, face_albedo, face_normal,
+                                            face_output, res, res)) {
+                    spdlog::error("Probe finalize: OIDN denoise failed for face {}, using noisy", face);
+                    std::memcpy(face_output, face_beauty, beauty_face_bytes);
+                }
+            } else {
                 std::memcpy(face_output, face_beauty, beauty_face_bytes);
             }
         }
