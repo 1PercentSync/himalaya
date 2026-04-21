@@ -20,9 +20,9 @@
 
 ## Step 2：Manifest probe_spacing
 
-- [ ] `app/src/renderer_bake.cpp`：`write_probe_manifest()` 在 `probe_count` 后写入 `probe_spacing`
-- [ ] `framework/src/bake_data_manager.cpp`：`load_angle()` 读取 manifest `probe_spacing`，存储为成员变量
-- [ ] `framework/src/bake_data_manager.cpp`：`scan()` 同步更新解析逻辑（positions 从 offset 8 开始）
+- [x] `app/src/renderer_bake.cpp`：`write_probe_manifest()` 在 `probe_count` 后写入 `probe_spacing`
+- [x] `framework/src/bake_data_manager.cpp`：`load_angle()` 读取 manifest `probe_spacing`，存储为成员变量
+- [x] `framework/src/bake_data_manager.cpp`：`scan()` 同步更新解析逻辑（positions 从 offset 8 开始）
 
 ## Step 3：3D Grid 空间索引
 
