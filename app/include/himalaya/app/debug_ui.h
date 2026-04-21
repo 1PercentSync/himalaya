@@ -120,6 +120,9 @@ namespace himalaya::app {
         /** @brief Whether the HDR Sun light casts shadows. */
         bool &hdr_sun_cast_shadows;
 
+        /** @brief Auto-derive color and intensity from HDR pixel. */
+        bool &hdr_sun_auto;
+
         /** @brief Original equirect image width (for UI max bounds). */
         uint32_t equirect_width;
 

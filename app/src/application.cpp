@@ -156,6 +156,7 @@ namespace himalaya::app {
             hdr_sun_x_ = it->second.first;
             hdr_sun_y_ = it->second.second;
         }
+        update_hdr_sun_sample();
     }
 
     void Application::auto_position_camera() {
@@ -271,7 +272,19 @@ namespace himalaya::app {
             hdr_sun_y_ = 0;
         }
 
+        update_hdr_sun_sample();
         save_config(config_);
+    }
+
+    void Application::update_hdr_sun_sample() {
+        if (!hdr_sun_auto_ || config_.env_path.empty()) {
+            return;
+        }
+        const auto sampled = framework::IBL::sample_hdr_pixel(
+            config_.env_path, hdr_sun_x_, hdr_sun_y_);
+        const float max_comp = std::max({sampled.r, sampled.g, sampled.b, 1e-6f});
+        hdr_sun_auto_color_ = sampled / max_comp;
+        hdr_sun_auto_intensity_ = max_comp;
     }
 
     void Application::start_bake_session(const framework::BakeMode mode) {
@@ -478,9 +491,9 @@ namespace himalaya::app {
                 s * sun_dir.x + c * sun_dir.z,
             };
             hdr_sun_light_ = {
-                .direction = -rotated_sun, // light travels toward scene
-                .color = framework::color_temperature_to_rgb(hdr_sun_color_temp_),
-                .intensity = hdr_sun_intensity_,
+                .direction = -rotated_sun,
+                .color = hdr_sun_auto_ ? hdr_sun_auto_color_ : framework::color_temperature_to_rgb(hdr_sun_color_temp_),
+                .intensity = hdr_sun_auto_ ? hdr_sun_auto_intensity_ : hdr_sun_intensity_,
                 .cast_shadows = hdr_sun_cast_shadows_,
             };
         }
@@ -564,6 +577,7 @@ namespace himalaya::app {
             .hdr_sun_intensity = hdr_sun_intensity_,
             .hdr_sun_color_temp = hdr_sun_color_temp_,
             .hdr_sun_cast_shadows = hdr_sun_cast_shadows_,
+            .hdr_sun_auto = hdr_sun_auto_,
             .equirect_width = renderer_.ibl().equirect_width(),
             .equirect_height = renderer_.ibl().equirect_height(),
             .render_mode = render_mode_,
@@ -679,6 +693,7 @@ namespace himalaya::app {
 
         if (actions.hdr_sun_coords_changed && !config_.env_path.empty()) {
             config_.hdr_sun_coords[config_.env_path] = {hdr_sun_x_, hdr_sun_y_};
+            update_hdr_sun_sample();
             save_config(config_);
         }
 

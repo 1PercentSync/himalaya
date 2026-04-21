@@ -152,6 +152,15 @@ namespace himalaya::app {
         /** @brief Whether the HDR Sun light casts shadows. */
         bool hdr_sun_cast_shadows_ = true;
 
+        /** @brief Auto-derive HDR sun color and intensity from HDR pixel sampling. */
+        bool hdr_sun_auto_ = true;
+
+        /** @brief Cached auto-sampled sun color (normalized). Updated by update_hdr_sun_sample(). */
+        glm::vec3 hdr_sun_auto_color_{1.0f};
+
+        /** @brief Cached auto-sampled sun intensity (max RGB component). Updated by update_hdr_sun_sample(). */
+        float hdr_sun_auto_intensity_ = 3.0f;
+
         /** @brief Constructed HDR Sun DirectionalLight (rebuilt each frame from coords + IBL yaw). */
         framework::DirectionalLight hdr_sun_light_{};
 
@@ -335,6 +344,9 @@ namespace himalaya::app {
          * @param path Absolute path to the new .hdr file.
          */
         void switch_environment(const std::string &path);
+
+        /** @brief Re-sample HDR pixel at sun coords and update cached color/intensity. */
+        void update_hdr_sun_sample();
 
         /** @brief Persistent config (updated on scene/environment switch). */
         AppConfig config_{};
