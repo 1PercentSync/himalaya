@@ -385,6 +385,94 @@ namespace himalaya::app {
             }
         }
 
+        // Rendering section
+        ImGui::Separator();
+        if (ImGui::CollapsingHeader("Rendering", ImGuiTreeNodeFlags_DefaultOpen)) {
+            // MSAA combo box (1x/2x/4x/8x filtered by GPU support)
+            constexpr uint32_t kSampleCounts[] = {1, 2, 4, 8};
+            constexpr const char *kSampleLabels[] = {"1x", "2x", "4x", "8x"};
+            static_assert(IM_ARRAYSIZE(kSampleCounts) == IM_ARRAYSIZE(kSampleLabels));
+
+            int current_idx = 0;
+            for (int i = 0; i < IM_ARRAYSIZE(kSampleCounts); ++i) {
+                if (kSampleCounts[i] == ctx.current_sample_count) {
+                    current_idx = i;
+                    break;
+                }
+            }
+
+            if (ImGui::BeginCombo("MSAA", kSampleLabels[current_idx])) {
+                for (int i = 0; i < IM_ARRAYSIZE(kSampleCounts); ++i) {
+                    if (!(ctx.supported_sample_counts & kSampleCounts[i])) continue;
+                    const bool is_selected = (i == current_idx);
+                    if (ImGui::Selectable(kSampleLabels[i], is_selected)) {
+                        if (kSampleCounts[i] != ctx.current_sample_count) {
+                            actions.msaa_changed = true;
+                            actions.new_sample_count = kSampleCounts[i];
+                        }
+                    }
+                    if (is_selected) ImGui::SetItemDefaultFocus();
+                }
+                ImGui::EndCombo();
+            }
+
+            {
+                const bool baking = ctx.render_mode == framework::RenderMode::Baking;
+                if (baking) { ImGui::BeginDisabled(); }
+                if (ImGui::Button("Reload Shaders")) {
+                    actions.reload_shaders = true;
+                }
+                if (baking) { ImGui::EndDisabled(); }
+            }
+
+            // Indirect lighting mode toggle
+            {
+                const bool baking = ctx.render_mode == framework::RenderMode::Baking;
+                const bool is_ibl = ctx.indirect_lighting_mode == framework::IndirectLightingMode::IBL;
+                const bool is_lp = !is_ibl;
+
+                if (baking) { ImGui::BeginDisabled(); }
+                if (ImGui::RadioButton("IBL", is_ibl)) {
+                    ctx.indirect_lighting_mode = framework::IndirectLightingMode::IBL;
+                }
+                ImGui::SameLine();
+
+                const bool can_select_lp = ctx.has_bake_data && !baking;
+                if (!can_select_lp) { ImGui::BeginDisabled(); }
+                if (ImGui::RadioButton("Lightmap/Probe", is_lp)) {
+                    ctx.indirect_lighting_mode = framework::IndirectLightingMode::LightmapProbe;
+                }
+                if (!can_select_lp) { ImGui::EndDisabled(); }
+                if (baking) { ImGui::EndDisabled(); }
+                if (!ctx.has_bake_data && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
+                    ImGui::SetTooltip("No baked lighting data available");
+                }
+
+                // LP mode sub-toggles (only visible when in LP mode)
+                if (is_lp && !baking) {
+                    ImGui::Checkbox("Use Lightmap", &ctx.features.use_lightmap);
+                    ImGui::SameLine();
+                    ImGui::Checkbox("Use Probe", &ctx.features.use_probe);
+                }
+            }
+
+            const char *intensity_label = ctx.indirect_lighting_mode == framework::IndirectLightingMode::IBL
+                ? "IBL Intensity" : "Indirect Intensity";
+            slider_float_deferred(intensity_label, &ctx.indirect_intensity, 0.0f, 5.0f, "%.2f");
+            slider_float_deferred("EV", &ctx.ev, -4.0f, 4.0f, "%.1f");
+
+            // Debug render mode
+            constexpr const char *kModeLabels[] = {
+                "Full PBR", "Diffuse Only", "Specular Only", "Indirect Only",
+                "Normal", "Metallic", "Roughness", "AO", "Shadow Cascades", "SSAO",
+                "Contact Shadows",
+            };
+            auto mode = static_cast<int>(ctx.debug_render_mode);
+            if (ImGui::Combo("Debug View", &mode, kModeLabels, IM_ARRAYSIZE(kModeLabels))) {
+                ctx.debug_render_mode = static_cast<uint32_t>(mode);
+            }
+        }
+
         // Camera section
         ImGui::Separator();
         if (ImGui::CollapsingHeader("Camera")) {
@@ -740,94 +828,6 @@ namespace himalaya::app {
                                    0.1f, 5.0f, "%.2f m");
                 ImGui::SliderFloat("Min Thickness (m)", &ctx.contact_shadow_config.base_thickness,
                                    0.001f, 0.1f, "%.3f m");
-            }
-        }
-
-        // Rendering section
-        ImGui::Separator();
-        if (ImGui::CollapsingHeader("Rendering", ImGuiTreeNodeFlags_DefaultOpen)) {
-            // MSAA combo box (1x/2x/4x/8x filtered by GPU support)
-            constexpr uint32_t kSampleCounts[] = {1, 2, 4, 8};
-            constexpr const char *kSampleLabels[] = {"1x", "2x", "4x", "8x"};
-            static_assert(IM_ARRAYSIZE(kSampleCounts) == IM_ARRAYSIZE(kSampleLabels));
-
-            int current_idx = 0;
-            for (int i = 0; i < IM_ARRAYSIZE(kSampleCounts); ++i) {
-                if (kSampleCounts[i] == ctx.current_sample_count) {
-                    current_idx = i;
-                    break;
-                }
-            }
-
-            if (ImGui::BeginCombo("MSAA", kSampleLabels[current_idx])) {
-                for (int i = 0; i < IM_ARRAYSIZE(kSampleCounts); ++i) {
-                    if (!(ctx.supported_sample_counts & kSampleCounts[i])) continue;
-                    const bool is_selected = (i == current_idx);
-                    if (ImGui::Selectable(kSampleLabels[i], is_selected)) {
-                        if (kSampleCounts[i] != ctx.current_sample_count) {
-                            actions.msaa_changed = true;
-                            actions.new_sample_count = kSampleCounts[i];
-                        }
-                    }
-                    if (is_selected) ImGui::SetItemDefaultFocus();
-                }
-                ImGui::EndCombo();
-            }
-
-            {
-                const bool baking = ctx.render_mode == framework::RenderMode::Baking;
-                if (baking) { ImGui::BeginDisabled(); }
-                if (ImGui::Button("Reload Shaders")) {
-                    actions.reload_shaders = true;
-                }
-                if (baking) { ImGui::EndDisabled(); }
-            }
-
-            // Indirect lighting mode toggle
-            {
-                const bool baking = ctx.render_mode == framework::RenderMode::Baking;
-                const bool is_ibl = ctx.indirect_lighting_mode == framework::IndirectLightingMode::IBL;
-                const bool is_lp = !is_ibl;
-
-                if (baking) { ImGui::BeginDisabled(); }
-                if (ImGui::RadioButton("IBL", is_ibl)) {
-                    ctx.indirect_lighting_mode = framework::IndirectLightingMode::IBL;
-                }
-                ImGui::SameLine();
-
-                const bool can_select_lp = ctx.has_bake_data && !baking;
-                if (!can_select_lp) { ImGui::BeginDisabled(); }
-                if (ImGui::RadioButton("Lightmap/Probe", is_lp)) {
-                    ctx.indirect_lighting_mode = framework::IndirectLightingMode::LightmapProbe;
-                }
-                if (!can_select_lp) { ImGui::EndDisabled(); }
-                if (baking) { ImGui::EndDisabled(); }
-                if (!ctx.has_bake_data && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
-                    ImGui::SetTooltip("No baked lighting data available");
-                }
-
-                // LP mode sub-toggles (only visible when in LP mode)
-                if (is_lp && !baking) {
-                    ImGui::Checkbox("Use Lightmap", &ctx.features.use_lightmap);
-                    ImGui::SameLine();
-                    ImGui::Checkbox("Use Probe", &ctx.features.use_probe);
-                }
-            }
-
-            const char *intensity_label = ctx.indirect_lighting_mode == framework::IndirectLightingMode::IBL
-                ? "IBL Intensity" : "Indirect Intensity";
-            slider_float_deferred(intensity_label, &ctx.indirect_intensity, 0.0f, 5.0f, "%.2f");
-            slider_float_deferred("EV", &ctx.ev, -4.0f, 4.0f, "%.1f");
-
-            // Debug render mode
-            constexpr const char *kModeLabels[] = {
-                "Full PBR", "Diffuse Only", "Specular Only", "Indirect Only",
-                "Normal", "Metallic", "Roughness", "AO", "Shadow Cascades", "SSAO",
-                "Contact Shadows",
-            };
-            auto mode = static_cast<int>(ctx.debug_render_mode);
-            if (ImGui::Combo("Debug View", &mode, kModeLabels, IM_ARRAYSIZE(kModeLabels))) {
-                ctx.debug_render_mode = static_cast<uint32_t>(mode);
             }
         }
 
