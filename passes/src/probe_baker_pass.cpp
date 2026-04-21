@@ -284,7 +284,7 @@ namespace himalaya::passes {
                                     .sample_count = start_sample + s,
                                     .frame_seed = start_seed + s,
                                     .blue_noise_index = blue_noise_index_,
-                                    .max_clamp = 0.0f,
+                                    .max_clamp = max_clamp_,
                                     .env_sampling = env_sampling_ ? 1u : 0u,
                                     .directional_lights = 0u,
                                     .emissive_light_count = emissive_light_count_,
@@ -407,5 +407,9 @@ namespace himalaya::passes {
 
     void ProbeBakerPass::set_emissive_light_count(const uint32_t v) {
         emissive_light_count_ = v;
+    }
+
+    void ProbeBakerPass::set_max_clamp(const float v) {
+        max_clamp_ = v;
     }
 } // namespace himalaya::passes

@@ -137,6 +137,9 @@ namespace himalaya::passes {
         /** @brief Sets the number of emissive triangles for NEE (0 = skip). */
         void set_emissive_light_count(uint32_t v);
 
+        /** @brief Sets firefly clamp threshold (0 = disabled). */
+        void set_max_clamp(float v);
+
     private:
         /** @brief Create (or recreate) the RT pipeline. */
         void create_pipeline();
@@ -180,6 +183,7 @@ namespace himalaya::passes {
         bool env_sampling_ = true;
         uint32_t emissive_light_count_ = 0;
         uint32_t lod_max_level_ = 0;
+        float max_clamp_ = 0.0f;
 
         // ---- Accumulation state ----
 

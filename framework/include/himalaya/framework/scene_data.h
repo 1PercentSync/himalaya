@@ -368,6 +368,11 @@ namespace himalaya::framework {
         /** @brief Probes with average luminance below this threshold are rejected.
          *  Rejected probes do not produce KTX2 files or manifest entries. */
         float probe_min_luminance = 1e-4f;
+
+        /** @brief Per-sample radiance clamp for firefly suppression (0 = disabled).
+         *  Applied in the shared trace_path() bounce loop. Prevents extreme outliers
+         *  from corrupting low-resolution lightmaps and confusing OIDN. */
+        float baker_clamp = 100.0f;
     };
 
     // ---- GPU Data Structures ----

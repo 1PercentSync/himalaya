@@ -773,6 +773,7 @@ namespace himalaya::app {
             bake_locked_config_.env_sampling && ibl_.alias_table_buffer().valid());
         lightmap_baker_pass_.set_emissive_light_count(
             bake_locked_config_.emissive_nee ? emissive_light_builder_.emissive_count() : 0u);
+        lightmap_baker_pass_.set_max_clamp(bake_locked_config_.baker_clamp);
 
         lightmap_finalize_pending_ = false;
         bake_instance_start_time_ = std::chrono::steady_clock::now();
@@ -1631,6 +1632,7 @@ namespace himalaya::app {
             bake_locked_config_.env_sampling && ibl_.alias_table_buffer().valid());
         probe_baker_pass_.set_emissive_light_count(
             bake_locked_config_.emissive_nee ? emissive_light_builder_.emissive_count() : 0u);
+        probe_baker_pass_.set_max_clamp(bake_locked_config_.baker_clamp);
 
         bake_probe_finalize_pending_ = false;
         bake_instance_start_time_ = std::chrono::steady_clock::now();

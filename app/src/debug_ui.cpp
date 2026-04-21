@@ -914,6 +914,15 @@ namespace himalaya::app {
                 ImGui::Checkbox("Baker Env Sampling", &ctx.bake_config.env_sampling);
                 ImGui::Checkbox("Baker Emissive NEE", &ctx.bake_config.emissive_nee);
 
+                slider_float_deferred("Baker Clamp", &ctx.bake_config.baker_clamp,
+                                      0.0f, 1000.0f, "%.1f");
+                if (ImGui::IsItemHovered()) {
+                    ImGui::SetTooltip(
+                        "Per-sample radiance clamp for firefly suppression.\n"
+                        "0 = disabled. Prevents extreme outliers from\n"
+                        "corrupting low-resolution lightmaps.");
+                }
+
                 {
                     const bool can_tear = ctx.swapchain.immediate_supported;
                     if (!can_tear) { ImGui::BeginDisabled(); }
