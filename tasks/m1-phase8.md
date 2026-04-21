@@ -167,8 +167,8 @@ lightmap 和 probe 贡献是否生效。IBL 模式下隐藏，不影响模式切
 
 ## Step 8.6：Lightmap Dilation（chart 接缝黑块修复）
 
-- [ ] `app/src/renderer_bake.cpp`：新增 `dilate_lightmap()` static 函数 — CPU 朴素 8 次全图迭代
-- [ ] `app/src/renderer_bake.cpp`：`lightmap_bake_finalize()` 中 OIDN 之后、upload flush 之前调用 dilation
+- [x] `app/src/renderer_bake.cpp`：新增 `dilate_lightmap()` static 函数 — CPU 朴素 4 次全图迭代
+- [x] `app/src/renderer_bake.cpp`：`lightmap_bake_finalize()` 中 OIDN 之后、upload flush 之前调用 dilation
 
 ## Step 9：AO/SO 按模式自动预设
 

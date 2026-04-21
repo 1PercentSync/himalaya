@@ -544,13 +544,13 @@ Cache key 改为基于纯输入（不含 xatlas 中间产物），在 `apply_lig
 
 ### Step 8.6：Lightmap Dilation（chart 接缝黑块修复）
 
-Lightmap chart 边缘的未覆盖 texel 保持清零（黑色），导致 bilinear 采样泄漏黑色 + BC6H 4×4 block 跨 chart 边界时压缩失真。在 OIDN 去噪之后、BC6H 压缩之前插入 CPU dilation pass，将覆盖区域向外扩展 8 texel。
+Lightmap chart 边缘的未覆盖 texel 保持清零（黑色），导致 bilinear 采样泄漏黑色 + BC6H 4×4 block 跨 chart 边界时压缩失真。在 OIDN 去噪之后、BC6H 压缩之前插入 CPU dilation pass，将覆盖区域向外扩展。
 
 - `app/src/renderer_bake.cpp`：新增 `dilate_lightmap(float* target, const float* coverage_source, uint32_t width, uint32_t height)` static 函数
   - 从 `coverage_source` alpha 通道提取 coverage mask（baker 写入 alpha=1.0 为覆盖）
-  - 8 次全图迭代，每次精确扩展 1 texel（独立 `newly_covered` buffer 保证对称性）
+  - 4 次全图迭代，每次精确扩展 1 texel（独立 `newly_covered` buffer 保证对称性）
   - 4 邻居平均（上下左右），新填充 texel 下次迭代可作为源
-  - 注释说明 8 次 = BC6H block 4 + xatlas padding 2 + bilinear kernel 1 + margin 1
+  - 注释说明 4 次 = xatlas padding (2) 填满 + 余量 (2) 应对偶发内部空洞
   - 注释注明可迁移至 GPU compute shader（`bake/dilation.comp`）
 - `app/src/renderer_bake.cpp`：`lightmap_bake_finalize()` 约 line 919，OIDN 之后 `vmaFlushAllocation` 之前调用 `dilate_lightmap(upload_ptr, beauty_ptr, w, h)`
 - 仅 lightmap 路径，probe cubemap 不需要（全覆盖，无 chart 边界）

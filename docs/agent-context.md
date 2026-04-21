@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段八 — 间接光照集成（实现中）
-- **进度**：Step 8.5 全部完成
+- **进度**：Step 8.6 完成
 
 ### 下一个任务
 
-Step 8.6：Lightmap Dilation（chart 接缝黑块修复）— CPU 朴素全图 8 次迭代 flood-fill，插入 OIDN 之后 BC6H 之前。
+Step 9：AO/SO 按模式自动预设。
 
 ---
 
