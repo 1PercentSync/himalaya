@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段八点五 — 间接光照质量提升（规划中）
-- **进度**：Step 5.1 进行中（probe prefilter mip chain 修复已完成，LP 模式直接光双算待后续处理）
+- **进度**：Step 5.1 进行中（forward.frag LP 合成公式完成，HDR 太阳采样待实现）
 
 ### 下一个任务
 
-Phase 8.5 Step 5.1：LP 模式正确性修复（继续）或 Step 6
+Phase 8.5 Step 5.1：HDR 太阳颜色/亮度采样（`sample_hdr_pixel` + Auto from HDR UI）
 
 ---
 

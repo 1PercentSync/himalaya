@@ -50,10 +50,10 @@
 ## Step 5.1：LP 模式正确性修复
 
 - [x] `app/src/renderer_bake.cpp`：probe 累积 cubemap 生成 mip chain + prefilter 前 `generate_mips()`（修复 prefilter 油感）
-- [ ] `shaders/forward.frag`：primary light CSM shadow 提取到 direct light loop 前
-- [ ] `shaders/forward.frag`：LP 模式 diffuse 合成改为 `max(direct, indirect)` 替代相加
-- [ ] `shaders/forward.frag`：LP 模式 specular 合成改为 `probe × SO × max(shadow, floor)`，不叠加 direct_specular
-- [ ] `shaders/forward.frag`：四个 debug mode 全部跟随 LP 合成公式
+- [x] `shaders/forward.frag`：primary light CSM shadow 提取到 direct light loop 前
+- [x] `shaders/forward.frag`：LP 模式 diffuse 合成改为 `max(direct, indirect)` 替代相加
+- [x] `shaders/forward.frag`：LP 模式 specular 合成改为 `probe × SO × max(shadow, floor)`，不叠加 direct_specular
+- [x] `shaders/forward.frag`：四个 debug mode 全部跟随 LP 合成公式
 - [ ] `framework/include/himalaya/framework/ibl.h`：声明 `sample_hdr_pixel` 静态方法（两个重载：路径版 + existing_data 版）
 - [ ] `framework/src/ibl.cpp`：实现 `sample_hdr_pixel`（路径版 stbi_loadf 后释放；existing_data 版直接索引）
 - [ ] `framework/src/ibl.cpp`：`init()` 中 HDR 加载路径复用 `rgb_data` 调用 existing_data 版采样
