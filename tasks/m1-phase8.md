@@ -146,10 +146,10 @@
 
 ### 8.5b. Baker Denoise 开关
 
-- [ ] `framework/scene_data.h`：`BakeConfig` 新增 `bool denoise = true`
-- [ ] `app/renderer_bake.cpp`：`lightmap_bake_finalize()` 根据开关跳过 OIDN（直接用 noisy 数据）
-- [ ] `app/renderer_bake.cpp`：`probe_bake_finalize()` 根据开关跳过 per-face OIDN
-- [ ] `app/debug_ui.cpp`：Bake 面板新增 Denoise checkbox（baking 期间锁定）
+- [x] `framework/scene_data.h`：`BakeConfig` 新增 `bool denoise = true`
+- [x] `app/renderer_bake.cpp`：`lightmap_bake_finalize()` 根据开关跳过 OIDN（直接用 noisy 数据）
+- [x] `app/renderer_bake.cpp`：`probe_bake_finalize()` 根据开关跳过 per-face OIDN
+- [x] `app/debug_ui.cpp`：Bake 面板新增 Denoise checkbox（baking 期间锁定）
 
 ### 8.5c. Lightmap/Probe 独立开关 + UI 重排
 
