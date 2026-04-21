@@ -303,9 +303,9 @@ void main() {
                 for (int dx = -2; dx <= 2; ++dx) {
                     ivec3 cell = clamp(center + ivec3(dx, dy, dz),
                                        ivec3(0), ivec3(dims) - 1);
-                    uint flat = grid_flat_index(cell, dims);
-                    uint begin_off = grid_cell_offset(flat);
-                    uint end_off   = grid_cell_offset(flat + 1);
+                    uint cell_flat = grid_flat_index(cell, dims);
+                    uint begin_off = grid_cell_offset(cell_flat);
+                    uint end_off   = grid_cell_offset(cell_flat + 1);
 
                     for (uint i = begin_off; i < end_off; ++i) {
                         uint pi = grid_probe_index(probe_base, i);
