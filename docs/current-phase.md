@@ -253,7 +253,8 @@ Bake-time 参数（bake 面板中，下次 bake 生效）：
 
 #### 7a. AABB 估算 shader
 
-- 新增 `shaders/bake/probe_aabb.comp`：对每个 probe 发射 Fibonacci 球面射线（复用现有采样函数）+ 6 条轴对齐射线
+- 新增 `shaders/bake/probe_aabb.comp`：对每个 probe 发射 Fibonacci 球面射线（复用 `probe_ray_count`，原名 `filter_ray_count`）+ 6 条轴对齐射线
+- 重命名：`BakeConfig::filter_ray_count` → `probe_ray_count`，同步更新代码、文档、ImGui label（该参数同时服务于 placement filter 和 AABB 估算）
 - 每条射线记录命中点世界坐标
 - Push constants：probe positions buffer address、probe count、ray count（Fibonacci）、ray max distance
 

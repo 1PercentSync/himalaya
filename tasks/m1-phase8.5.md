@@ -65,7 +65,8 @@
 
 ## Step 7：AABB 计算
 
-- [ ] 新增 `shaders/bake/probe_aabb.comp`：Fibonacci 球面射线 + 6 轴射线，输出 per-probe per-ray 命中点
+- [ ] 重命名 `BakeConfig::filter_ray_count` → `probe_ray_count`（代码 + 文档 + ImGui label 全部同步）
+- [ ] 新增 `shaders/bake/probe_aabb.comp`：Fibonacci 球面射线（复用 `probe_ray_count`）+ 6 轴射线，输出 per-probe per-ray 命中点
 - [ ] `app/src/renderer_bake.cpp`（或 `framework/src/probe_placement.cpp`）：dispatch probe_aabb.comp + readback
 - [ ] CPU 侧：per-probe 按主轴分组射线命中点，取中位数构建 AABB
 - [ ] 调用时机集成：probe bake 全部完成后、manifest 写入前执行 AABB 计算
