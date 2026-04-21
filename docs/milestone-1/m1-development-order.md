@@ -175,7 +175,7 @@
 
 - Probe relocation — pre-bake（两层测试失败 → 移动到最近 hit 点 + 法线偏移 → 重试）
 - Probe relocation — post-bake（部分面全黑 → 反向移动 → 重新 bake → 仍失败则剔除）
-- PCC AABB 计算（Fibonacci + 6 轴射线按主轴分组取中位数，manifest v2 存储）
+- PCC AABB 计算（Fibonacci + 6 轴射线按主轴分组取中位数，manifest 存储）
 - Per-pixel probe 选取（5×5×5 世界空间 3D grid 空间加速，法线半球硬过滤，`pow(normal_dot, normal_bias) / dist_sq` 评分）
 - Top-2 probe blend（roughness 平滑过渡：`roughness_single` → `roughness_full`，`blend_curve` 控制曲线形状）
 - PCC 视差校正（Parallax Corrected Cubemap，AABB proxy 反射向量修正）

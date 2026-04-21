@@ -1144,7 +1144,7 @@ layout(set = 0, binding = 9) readonly buffer ProbeBuffer {
 };
 ```
 
-`PARTIALLY_BOUND`，无 probe 数据时不写入。`aabb_min/max` 在 Phase 8 填零，Phase 8.5 由 manifest v2 填入实际 AABB 数据（Fibonacci + 6 轴射线中位数估算）。
+`PARTIALLY_BOUND`，无 probe 数据时不写入。`aabb_min/max` Phase 8 填零，Phase 8.5 由 manifest 填入实际 AABB 数据（Fibonacci + 6 轴射线中位数估算）。
 
 ### Probe Mip Count
 
@@ -1264,7 +1264,7 @@ blend_factor = pow(t, blend_curve)
 
 **计算时机**：所有 relocation（pre-bake + post-bake）完成后统一计算。新增一次 compute dispatch + readback，成本可忽略。
 
-**存储**：Manifest v2 格式（`version=2` + per-probe `position + aabb_min + aabb_max`）。加载时直接填入 `GPUProbeData::aabb_min/aabb_max`。
+**存储**：Manifest 最终格式（`probe_count + grid_spacing` header + per-probe `position + aabb_min + aabb_max`）。加载时直接填入 `GPUProbeData::aabb_min/aabb_max`。
 
 ### GPUInstanceData 清理
 
@@ -1288,9 +1288,28 @@ Per-pixel probe 查找替代 per-instance 分配后：
 | `roughness_full` | float | 高于此值完整 blend |
 | `blend_curve` | float | 过渡曲线形状 |
 
-### Manifest 格式变更
+### Manifest 格式演进
 
-Manifest 从 v1（无 version 字段，`probe_count + positions`）升级为 v2（`version=2 + probe_count + per-probe position/aabb_min/aabb_max`）。不做向后兼容——v1 格式直接无法被 Phase 8.5 代码读取，旧 bake 数据由用户手动清除后重新 bake。
+Phase 8.5 分两步扩展 manifest 格式，不做向后兼容——格式变更后旧 bake 数据由用户手动清除重新 bake。无 version 字段（不需要区分格式版本）。
+
+**Step 2.5（per-pixel 基础设施阶段）**：header 新增 `grid_spacing`，per-probe 仍只有 position。
+
+```
+uint32_t probe_count    // offset 0
+float    grid_spacing   // offset 4
+vec3[N]  positions      // offset 8, 12B per probe
+```
+
+**Step 8（PCC 阶段）**：per-probe 扩展为 position + aabb_min + aabb_max。
+
+```
+uint32_t probe_count    // offset 0
+float    grid_spacing   // offset 4
+per-probe (36B):
+  vec3 position         // 12B
+  vec3 aabb_min         // 12B
+  vec3 aabb_max         // 12B
+```
 
 ### 新增参数分类
 

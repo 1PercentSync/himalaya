@@ -584,9 +584,15 @@ struct GPUProbeData {
 
 // --- 阶段八点五引入 ---
 
-// Probe Manifest v2 二进制格式（磁盘持久化）
-// v1: uint32 probe_count + vec3[probe_count] positions
-// v2: uint32 version(=2) + uint32 probe_count + float grid_spacing + uint32 _pad + ProbeManifestEntry[probe_count]
+// Probe Manifest 二进制格式（磁盘持久化，Phase 8.5 分两步演进，无 version 字段，不做向后兼容）
+//
+// Step 2.5 格式（per-pixel 阶段）：
+//   uint32 probe_count + float grid_spacing + vec3[probe_count] positions
+//   header 8B + 12B per probe
+//
+// Step 8 最终格式（PCC 阶段）：
+//   uint32 probe_count + float grid_spacing + ProbeManifestEntry[probe_count]
+//   header 8B + 36B per probe
 struct ProbeManifestEntry {
     glm::vec3 position;                         // probe 世界空间位置
     glm::vec3 aabb_min;                         // PCC AABB 最小角

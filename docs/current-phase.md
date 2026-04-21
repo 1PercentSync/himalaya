@@ -121,7 +121,7 @@ BakingProbes 阶段内部：
   ↓
   AABB compute dispatch（Step 7，所有 accepted probes 的最终位置）
   ↓
-  write manifest v2（Step 8，positions + AABBs）
+  write manifest（Step 8，positions + AABBs + grid_spacing）
   ↓
   BakeState → Complete
 ```
@@ -305,17 +305,27 @@ Bake-time 参数（bake 面板中，下次 bake 生效）：
 
 ### Step 8：Manifest 格式扩展 + AABB 写入
 
-#### 8a. Manifest 格式 v2
+扩展 Step 2.5 引入的 manifest 格式，per-probe 数据从只有 position 扩展为 position + AABB。
 
-- 当前格式：`uint32_t probe_count` + `vec3[probe_count] positions`
-- 新格式：`uint32_t version`(= 2) + `uint32_t probe_count` + `float grid_spacing` + `uint32_t _pad` + per-probe stride: `vec3 position` + `vec3 aabb_min` + `vec3 aabb_max`（header 16B + 36 bytes per probe）
-- `grid_spacing` 写入 manifest 使 `load_angle()` 无需外部传入 bake config 即可构建 3D grid（自包含）
-- `renderer_bake.cpp`：`write_probe_manifest()` 写入 v2 格式
+#### 8a. Manifest 格式（最终版）
+
+```
+uint32_t probe_count        // offset 0
+float    grid_spacing       // offset 4（Step 2.5 已引入）
+per-probe (36B):
+  vec3 position             // 12B
+  vec3 aabb_min             // 12B（新增）
+  vec3 aabb_max             // 12B（新增）
+```
+
+header 8B + 36B per probe。相对 Step 2.5 的格式（header 8B + 12B per probe），per-probe 从 12B 扩展到 36B。旧 bake 数据由用户手动清除后重新 bake。
+
+- `renderer_bake.cpp`：`write_probe_manifest()` 写入最终格式（position + AABB）
 
 #### 8b. BakeDataManager 读取 AABB
 
-- `bake_data_manager.cpp`：`load_angle()` 读取 manifest v2，将 `aabb_min`/`aabb_max` 填入 `GPUProbeData`（替代当前的填零）
-- `bake_data_manager.cpp`：`scan()` 也需同步更新 v2 解析逻辑（当前直接从 offset 0 读 `uint32_t` 作为 `probe_count`，v2 的 offset 0 是 `version`）
+- `bake_data_manager.cpp`：`load_angle()` 读取 per-probe AABB，填入 `GPUProbeData::aabb_min`/`aabb_max`（替代当前的填零）
+- `bake_data_manager.cpp`：`scan()` 同步更新解析逻辑（per-probe stride 从 12B 变为 36B）
 
 **验证**：bake 后 manifest 文件含 AABB 数据，load_angle 后 GPUProbeData 的 aabb_min/max 非零
 
