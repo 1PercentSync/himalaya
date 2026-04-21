@@ -256,8 +256,7 @@ void main() {
     GPUInstanceData inst = instances[frag_instance_index];
     bool has_lightmap = (global.feature_flags & FEATURE_LIGHTMAP) != 0u
                         && inst.lightmap_index != 0xFFFFFFFFu;
-    bool has_probe    = (global.feature_flags & FEATURE_PROBE) != 0u
-                        && inst.probe_index != 0xFFFFFFFFu;
+    bool has_probe    = (global.feature_flags & FEATURE_PROBE) != 0u;
 
     vec3 indirect_diffuse;
     vec3 indirect_specular;
@@ -273,8 +272,10 @@ void main() {
     }
 
     // ---- Specular indirect ----
-    if (has_probe) {
-        GPUProbeData probe = probes[inst.probe_index];
+    // Step 4 will replace this with per-pixel grid query + top-2 blend.
+    // For now, use probe[0] as a placeholder when probes are available.
+    if (has_probe && global.probe_count > 0u) {
+        GPUProbeData probe = probes[0];
         float probe_mip = roughness * float(textureQueryLevels(cubemaps[nonuniformEXT(probe.cubemap_index)]) - 1);
         vec3 probe_prefiltered = textureLod(cubemaps[nonuniformEXT(probe.cubemap_index)], R, probe_mip).rgb;
         indirect_specular = probe_prefiltered * (F0 * brdf_lut.x + brdf_lut.y);

@@ -30,7 +30,7 @@ struct GPUInstanceData {
     mat3 normal_matrix;             // 48 bytes — transpose(inverse(mat3(model))), precomputed
     uint material_index;            //  4 bytes — index into MaterialBuffer SSBO
     uint lightmap_index;            //  4 bytes — bindless index into textures[] (0xFFFFFFFF = no lightmap)
-    uint probe_index;               //  4 bytes — index into ProbeBuffer SSBO (0xFFFFFFFF = no probe)
+    uint _padding2;                 //  4 bytes — was probe_index, now unused
     uint _padding;                  //  4 bytes — align to 128 (multiple of 16)
 };
 
