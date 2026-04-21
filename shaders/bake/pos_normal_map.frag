@@ -48,5 +48,10 @@ void main() {
     if (mat.base_color_tex != 0xFFFFFFFFu) {
         base_color *= texture(textures[nonuniformEXT(mat.base_color_tex)], frag_uv0);
     }
+
+    if (mat.alpha_mode == 1u && base_color.a < mat.alpha_cutoff) {
+        discard;
+    }
+
     out_albedo = vec4(base_color.rgb, 1.0);
 }
