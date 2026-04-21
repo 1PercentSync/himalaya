@@ -341,6 +341,7 @@ namespace himalaya::app {
          * @param scene_textures_hash Composite hash of all scene texture source bytes.
          * @param ibl_rotation_deg   Current IBL rotation angle in degrees.
          * @param pre_bake_mode     RenderMode to restore on cancel/complete.
+         * @param mode              Bake scope: All, Lightmap only, or Probe only.
          */
         void start_bake(const framework::BakeConfig &config,
                         std::span<const framework::MeshInstance> mesh_instances,
@@ -352,7 +353,8 @@ namespace himalaya::app {
                         const std::string &hdr_hash,
                         const std::string &scene_textures_hash,
                         float ibl_rotation_deg,
-                        framework::RenderMode pre_bake_mode);
+                        framework::RenderMode pre_bake_mode,
+                        framework::BakeMode mode = framework::BakeMode::All);
 
         /**
          * @brief Cancels the current bake session: destroys per-instance images,
@@ -894,6 +896,9 @@ namespace himalaya::app {
 
         /** @brief RenderMode recorded before entering Baking, restored on cancel/complete. */
         framework::RenderMode bake_pre_mode_ = framework::RenderMode::Rasterization;
+
+        /** @brief Bake scope for the current session (which phases to execute). */
+        framework::BakeMode bake_mode_ = framework::BakeMode::All;
 
         /** @brief Indices of bakeable instances (non-degenerate, non-Blend). */
         std::vector<uint32_t> bake_instance_indices_;

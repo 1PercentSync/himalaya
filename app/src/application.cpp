@@ -270,7 +270,7 @@ namespace himalaya::app {
         save_config(config_);
     }
 
-    void Application::start_bake_session() {
+    void Application::start_bake_session(const framework::BakeMode mode) {
         vkQueueWaitIdle(context_.graphics_queue);
 
         context_.begin_immediate();
@@ -284,7 +284,8 @@ namespace himalaya::app {
                              env_content_hash_,
                              scene_loader_.scene_textures_hash(),
                              glm::degrees(ibl_yaw_),
-                             render_mode_);
+                             render_mode_,
+                             mode);
         context_.end_immediate();
 
         render_mode_ = framework::RenderMode::Baking;
@@ -695,8 +696,8 @@ namespace himalaya::app {
 
 
         // ---- Bake actions ----
-        if (actions.bake_start_requested) {
-            start_bake_session();
+        if (actions.bake_start_mode) {
+            start_bake_session(*actions.bake_start_mode);
             trigger_bake_scan();
         }
         if (actions.bake_cancel_requested) {

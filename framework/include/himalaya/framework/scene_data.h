@@ -149,6 +149,13 @@ namespace himalaya::framework {
         Complete,         ///< All bake work finished.
     };
 
+    /** @brief Bake scope selection — which phases to execute. */
+    enum class BakeMode : uint8_t {
+        All,       ///< Full bake: lightmaps then probes (default).
+        Lightmap,  ///< Lightmaps only, skip probe phase.
+        Probe,     ///< Probes only, skip xatlas/lightmap phase.
+    };
+
     /**
      * @brief Runtime toggles for optional rendering effects.
      *

@@ -416,10 +416,12 @@ namespace himalaya::app {
         const std::string &hdr_hash,
         const std::string &scene_textures_hash,
         const float ibl_rotation_deg,
-        const framework::RenderMode pre_bake_mode) {
+        const framework::RenderMode pre_bake_mode,
+        const framework::BakeMode mode) {
 
-        // Record pre-bake mode for cancel/complete restoration
+        // Record pre-bake mode and bake scope
         bake_pre_mode_ = pre_bake_mode;
+        bake_mode_ = mode;
 
         // Ensure reference view async denoiser is idle before baking
         abort_denoise();
@@ -441,6 +443,19 @@ namespace himalaya::app {
             const auto &scene_hash = scene_loader.scene_hash();
             const std::string probe_key_input = scene_hash + hdr_hash + scene_textures_hash;
             bake_probe_set_key_ = framework::content_hash(probe_key_input.data(), probe_key_input.size());
+        }
+
+        // Probe-only mode: skip xatlas / lightmap entirely, jump to probe phase.
+        if (mode == framework::BakeMode::Probe) {
+            bake_total_instances_ = 0;
+            bake_start_time_ = std::chrono::steady_clock::now();
+            bake_instance_start_time_ = bake_start_time_;
+            bake_lm_total_texel_samples_ = 0;
+            bake_completed_lm_texel_samples_ = 0;
+            bake_state_ = framework::BakeState::BakingProbes;
+            bake_probe_placement_pending_ = true;
+            spdlog::info("Bake started (probe only): rotation={}°", bake_rotation_int_);
+            return;
         }
 
         // Build parallel arrays: instance indices + lightmap resolutions
@@ -1194,8 +1209,12 @@ namespace himalaya::app {
             ctx_->end_immediate();
         } else {
             spdlog::info("All {} lightmap instances baked", bake_total_instances_);
-            bake_state_ = framework::BakeState::BakingProbes;
-            bake_probe_placement_pending_ = true;
+            if (bake_mode_ == framework::BakeMode::Lightmap) {
+                bake_state_ = framework::BakeState::Complete;
+            } else {
+                bake_state_ = framework::BakeState::BakingProbes;
+                bake_probe_placement_pending_ = true;
+            }
         }
     }
 

@@ -6,6 +6,7 @@
  */
 
 #include <cstdint>
+#include <optional>
 #include <span>
 #include <string>
 #include <vector>
@@ -330,8 +331,8 @@ namespace himalaya::app {
         /** @brief New auto denoise interval (valid only when denoise_interval_changed is true). */
         uint32_t new_denoise_interval = 0;
 
-        /** @brief True if the user clicked the Start Bake button. */
-        bool bake_start_requested = false;
+        /** @brief Bake start request: set to the desired BakeMode when a bake button is clicked. */
+        std::optional<framework::BakeMode> bake_start_mode;
 
         /** @brief True if the user clicked the Cancel Bake button. */
         bool bake_cancel_requested = false;

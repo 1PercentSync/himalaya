@@ -344,8 +344,10 @@ namespace himalaya::app {
          *
          * Lightmap UVs are already applied during scene load (init / switch_scene),
          * so this method simply waits for GPU idle and calls start_bake().
+         *
+         * @param mode Bake scope: All (lightmaps + probes), Lightmap only, or Probe only.
          */
-        void start_bake_session();
+        void start_bake_session(framework::BakeMode mode);
 
         /**
          * @brief Recomputes per-instance lightmap cache keys if scene and HDR are loaded.

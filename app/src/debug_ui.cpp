@@ -973,22 +973,49 @@ namespace himalaya::app {
                 const bool baking = ctx.bake_progress.state != framework::BakeState::Idle;
 
                 if (!baking) {
-                    // Start Bake button (disabled in Lightmap/Probe mode — bake only from IBL mode)
                     const bool in_lp_mode = ctx.indirect_lighting_mode
                         == framework::IndirectLightingMode::LightmapProbe;
-                    const bool can_start = ctx.rt_supported && ctx.has_scene && ctx.has_hdr
+                    const bool can_start_base = ctx.rt_supported && ctx.has_scene && ctx.has_hdr
                         && ctx.render_mode != framework::RenderMode::Baking
                         && !in_lp_mode;
-                    if (!can_start) { ImGui::BeginDisabled(); }
-                    if (ImGui::Button("Start Bake")) {
-                        actions.bake_start_requested = true;
+
+                    // Check if current rotation angle has complete bake data
+                    float normalized = std::fmod(ctx.ibl_rotation_deg, 360.0f);
+                    if (normalized < 0.0f) { normalized += 360.0f; }
+                    const auto current_rot = static_cast<uint32_t>(std::round(normalized)) % 360;
+                    bool current_angle_complete = false;
+                    for (const auto &a : ctx.available_angles) {
+                        if (a.rotation == current_rot) {
+                            current_angle_complete = true;
+                            break;
+                        }
                     }
-                    if (!can_start) { ImGui::EndDisabled(); }
+
+                    // "Bake All" — always available when base conditions met
+                    if (!can_start_base) { ImGui::BeginDisabled(); }
+                    if (ImGui::Button("Bake All")) {
+                        actions.bake_start_mode = framework::BakeMode::All;
+                    }
+                    if (!can_start_base) { ImGui::EndDisabled(); }
+
+                    // "Bake Lightmap" / "Bake Probe" — only when current angle already complete
+                    ImGui::SameLine();
+                    const bool can_partial = can_start_base && current_angle_complete;
+                    if (!can_partial) { ImGui::BeginDisabled(); }
+                    if (ImGui::Button("Bake Lightmap")) {
+                        actions.bake_start_mode = framework::BakeMode::Lightmap;
+                    }
+                    ImGui::SameLine();
+                    if (ImGui::Button("Bake Probe")) {
+                        actions.bake_start_mode = framework::BakeMode::Probe;
+                    }
+                    if (!can_partial) { ImGui::EndDisabled(); }
+
                     if (in_lp_mode && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
                         ImGui::SetTooltip("Switch to IBL mode to start a new bake");
                     }
 
-                    // Show current IBL rotation angle next to button
+                    // Show current IBL rotation angle
                     ImGui::SameLine();
                     ImGui::Text("(%.0f%s)", static_cast<double>(ctx.ibl_rotation_deg), "\xC2\xB0");
                     if (ImGui::IsItemHovered()) {
