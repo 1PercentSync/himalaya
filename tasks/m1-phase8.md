@@ -186,11 +186,11 @@ lightmap 和 probe 贡献是否生效。IBL 模式下隐藏，不影响模式切
 > 遮蔽（< 10cm），运行时 GTAO/SO 覆盖的正好是 lightmap 跳过的范围。两者互补而非重叠，
 > 不再需要 per-mode AO/SO 参数预设。用户如有需要可手动调整 slider。
 
-## Step 10：Lightmap/Probe 模式 IBL 旋转跳变
+## ~~Step 10：Lightmap/Probe 模式 IBL 旋转跳变~~（已跳过）
 
-- [ ] `app/application.cpp`：Lightmap/Probe 模式拦截 IBL 旋转拖拽
-- [ ] `app/application.cpp`：累积偏移超阈值 → 在已 bake 角度列表中找下一个 → `switch_bake_angle()`
-- [ ] IBL 模式保持自由旋转不变
+> 跳过原因：IBL 旋转拦截已在 Step 8.3 完成。switch_bake_angle() 是秒级重操作
+> （GPU idle + unload + VB/IB 重建 + BLAS/TLAS + KTX2 加载），不适合绑定到拖拽手势。
+> 当前 UX 通过 UI 按钮显式切换角度，符合重量级操作需要明确确认的原则。
 
 ## Step 11：Debug 渲染模式 + 收尾
 
