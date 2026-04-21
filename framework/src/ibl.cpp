@@ -881,4 +881,21 @@ namespace himalaya::framework {
     uint32_t IBL::alias_table_height() const {
         return alias_table_height_;
     }
+
+    glm::vec3 IBL::sample_hdr_pixel(const std::string &path, const int x, const int y) {
+        int w = 0, h = 0, channels = 0;
+        float *rgb_data = stbi_loadf(path.c_str(), &w, &h, &channels, 3);
+        if (!rgb_data) {
+            spdlog::warn("sample_hdr_pixel: failed to load '{}'", path);
+            return glm::vec3(0.0f);
+        }
+        glm::vec3 result(0.0f);
+        if (x >= 0 && x < w && y >= 0 && y < h) {
+            const auto idx = static_cast<size_t>(y) * static_cast<size_t>(w)
+                             + static_cast<size_t>(x);
+            result = {rgb_data[idx * 3], rgb_data[idx * 3 + 1], rgb_data[idx * 3 + 2]};
+        }
+        stbi_image_free(rgb_data);
+        return result;
+    }
 } // namespace himalaya::framework

@@ -7,6 +7,7 @@
 
 #include <himalaya/rhi/types.h>
 #include <functional>
+#include <glm/vec3.hpp>
 #include <string>
 #include <vector>
 
@@ -108,6 +109,19 @@ namespace himalaya::framework {
 
         /** @brief Alias table height (equirect_height / 2). */
         [[nodiscard]] uint32_t alias_table_height() const;
+
+        /**
+         * @brief Sample an HDR pixel by loading the file on demand.
+         *
+         * Calls stbi_loadf, reads the specified pixel, then frees the data.
+         * Intended for infrequent calls (HDR load, sun coords change).
+         *
+         * @param path  Path to the .hdr file.
+         * @param x     Pixel x coordinate (column).
+         * @param y     Pixel y coordinate (row).
+         * @return RGB radiance at (x, y), or (0,0,0) on failure.
+         */
+        [[nodiscard]] static glm::vec3 sample_hdr_pixel(const std::string &path, int x, int y);
 
     private:
         /** @brief Deferred cleanup function list, executed after end_immediate(). */
