@@ -918,6 +918,11 @@ namespace himalaya::app {
         /** @brief Probe set cache key hash (scene + hdr + scene_textures, no position). */
         std::string bake_probe_set_key_;
 
+        /** @brief Rotation angle whose xatlas UVs are currently applied to mesh VB/IB.
+         *  UINT32_MAX = no UV data loaded. Used to skip VB/IB + BLAS/TLAS rebuild
+         *  when switching to the same angle (only textures need load/unload). */
+        uint32_t loaded_uv_rotation_ = UINT32_MAX;
+
         /** @brief Snapshotted BakeConfig at bake start (locked during bake session). */
         framework::BakeConfig bake_locked_config_{};
 

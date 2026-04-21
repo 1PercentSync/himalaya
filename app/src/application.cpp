@@ -726,10 +726,12 @@ namespace himalaya::app {
 
         // ---- Angle switch (from bake angle list click) ----
         if (actions.angle_switch_requested) {
-            renderer_.switch_bake_angle(actions.new_angle_rotation,
-                                        scene_render_data_.mesh_instances,
-                                        scene_loader_);
             ibl_yaw_ = glm::radians(static_cast<float>(actions.new_angle_rotation));
+            if (features_.lightmap_probe) {
+                renderer_.switch_bake_angle(actions.new_angle_rotation,
+                                            scene_render_data_.mesh_instances,
+                                            scene_loader_);
+            }
         }
 
         // ---- Indirect lighting mode switch ----
@@ -740,13 +742,20 @@ namespace himalaya::app {
             const bool was_lp = features_.lightmap_probe;
 
             if (want_lp && !was_lp) {
-                // IBL → LightmapProbe: load bake data
+                // IBL → LightmapProbe: load bake data at current IBL angle
                 if (renderer_.has_bake_data()) {
                     const auto angles = renderer_.available_bake_angles();
-                    // Use the currently loaded angle if still valid, otherwise first available
+                    // Find the angle matching current ibl_yaw_ (snapped to integer degrees)
+                    float normalized = std::fmod(glm::degrees(ibl_yaw_), 360.0f);
+                    if (normalized < 0.0f) { normalized += 360.0f; }
+                    const auto current_rot = static_cast<uint32_t>(std::round(normalized)) % 360;
+
                     uint32_t target_rotation = angles[0].rotation;
-                    if (renderer_.bake_data_loaded()) {
-                        target_rotation = renderer_.bake_data_manager_loaded_rotation();
+                    for (const auto &a : angles) {
+                        if (a.rotation == current_rot) {
+                            target_rotation = current_rot;
+                            break;
+                        }
                     }
                     renderer_.switch_bake_angle(target_rotation,
                                                 scene_render_data_.mesh_instances,
