@@ -30,6 +30,8 @@
 - [ ] `shaders/forward.frag`：移除 `inst.probe_index` 读取
 - [ ] `framework/src/bake_data_manager.cpp`：移除 CPU probe-to-instance 分配逻辑
 - [ ] `framework/include/himalaya/framework/bake_data_manager.h`：移除 `probe_indices()` 和 `probe_indices_` 成员
+- [ ] `framework/include/himalaya/framework/bake_data_manager.h`：新增 `loaded_probe_count()` 访问器
+- [ ] `framework/include/himalaya/framework/bake_data_manager.h`：`load_angle()` 签名移除 `mesh_instances` 参数 + 调用方同步
 - [ ] `app/src/renderer_rasterization.cpp`：移除 `probe_indices` 参数和填充逻辑
 - [ ] `framework/scene_data.h`：`GlobalUniformData` 新增 `uint32_t probe_count` + `static_assert` 更新
 - [ ] `shaders/common/bindings.glsl`：`GlobalUBO` 新增 `probe_count`
@@ -72,6 +74,7 @@
 
 - [ ] `app/src/renderer_bake.cpp`：`write_probe_manifest()` 写入 v2 格式（version + probe_count + per-probe position/aabb_min/aabb_max）
 - [ ] `framework/src/bake_data_manager.cpp`：`load_angle()` 读取 manifest v2，填入 GPUProbeData aabb_min/aabb_max
+- [ ] `framework/src/bake_data_manager.cpp`：`scan()` 同步更新 v2 解析逻辑（offset 0 = version，offset 4 = probe_count）
 
 ## Step 9：PCC 视差校正
 
@@ -81,6 +84,7 @@
 
 ## Step 10：收尾
 
-- [ ] 新增 `DEBUG_MODE_PROBE_INDEX` debug 渲染模式（probe index 颜色编码可视化）
+- [ ] 新增 `DEBUG_MODE_PROBE_INDEX = 12` debug 渲染模式（probe index 颜色编码可视化）
+- [ ] 清理 Phase 8.5 预留注释（bindings.glsl、scene_data.h）
 - [ ] 全模式切换路径 validation 验证
-- [ ] Grid buffer 生命周期验证（load 创建、unload 销毁、场景切换清理）
+- [ ] Grid buffer 生命周期验证（load 创建、unload 销毁、probe_count == 0 不创建）

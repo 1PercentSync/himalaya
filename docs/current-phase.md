@@ -59,8 +59,10 @@ Step 10: 收尾
 
 - 当前输出 `uint result`（0/1/2）改为扩展结构：`uint result` + `vec3 nearest_hit_pos` + `vec3 nearest_hit_normal`
 - 对于 result = 0（通过）的候选，hit 数据不使用
-- 对于 result = 1 或 2（失败）的候选，记录所有射线中距离最近的命中点位置和几何法线
-- ResultBuffer 从 `uint[]` 改为结构化 buffer（每候选 32 bytes：4B result + 12B position + 12B normal + 4B padding）
+- 对于 result = 1 或 2（失败）的候选，记录所有射线中 `t_hit` 最小的命中：`hit_pos = origin + dir * t_hit`，几何法线通过 GeometryInfo buffer reference 读取三角形顶点重建面法线（数据路径与 closesthit 相同）
+- Rule 1 的 early return 改为：记录当前命中信息后再写 result 并 return
+- ResultBuffer 从 `uint[]` 改为结构化 buffer（每候选 32 bytes，使用 `GL_EXT_scalar_block_layout`（shader 已启用）避免 vec3 的 16B 对齐：`uint result`(4B) + `float hit_pos[3]`(12B) + `float hit_normal[3]`(12B) + `uint _pad`(4B) = 32B）
+- `probe_placement.cpp`：result buffer 大小从 `total * 4` 改为 `total * 32`，readback 解析改为结构化读取
 
 #### 1b. probe_placement.cpp relocation 逻辑
 
@@ -119,13 +121,15 @@ Bake 后检测到部分面全黑的 probe，移动后重新 bake 一次。
 
 - `bake_data_manager.cpp`：`load_angle()` 中移除 CPU probe-to-instance 分配逻辑（`probe_indices_` 赋值循环）
 - `bake_data_manager.h`：移除 `probe_indices()` 访问器和 `probe_indices_` 成员
+- `bake_data_manager.h`：新增 `uint32_t loaded_probe_count() const`（返回当前已加载的 probe 数量，未加载时返回 0）
+- `bake_data_manager.h`：`load_angle()` 签名移除 `mesh_instances` 参数（不再需要做 probe-to-instance 分配），调用方同步更新
 - `renderer_rasterization.cpp`：`build_draw_groups()` 移除 `probe_indices` 参数和相关填充逻辑
 
 #### 3c. GlobalUBO 新增 probe_count
 
-- `framework/scene_data.h`：`GlobalUniformData` 新增 `uint32_t probe_count`（默认 0），更新 `static_assert` 偏移
+- `framework/scene_data.h`：`GlobalUniformData` 新增 `uint32_t probe_count`（默认 0），更新 `static_assert` 偏移。注意 std140 对齐——当前结构大小 928B，Phase 8.5 最终新增 5 字段（1 uint + 4 float = 20B），总 948B 需 padding 到 960B（16 的倍数）。`probe_count` 在 Step 3 引入，其余 4 个 float 在 Step 6 引入，padding 在最后一次扩展时补齐
 - `shaders/common/bindings.glsl`：`GlobalUBO` 对应更新
-- `app/renderer.cpp`：`fill_common_gpu_data()` 中从 `bake_data_manager_` 获取 probe count 填入
+- `app/renderer.cpp`：`fill_common_gpu_data()` 中调用 `bake_data_manager_.loaded_probe_count()` 填入
 
 **验证**：编译通过，渲染无回归，`probe_index` 无残留引用
 
@@ -138,12 +142,13 @@ Bake 后检测到部分面全黑的 probe，移动后重新 bake 一次。
 #### 4a. Grid 数据结构（CPU 侧）
 
 - `bake_data_manager.h`：新增 `ProbeGrid3D` 内部结构
-  - `glm::vec3 grid_origin`（grid AABB 最小角，向外扩展 2 个 cell 以覆盖 5×5×5 查询边界）
+  - `glm::vec3 grid_origin`（所有 probe 位置的 AABB 最小角再减去 2 × cell_size，使边缘 probe 的 5×5×5 查询不越界）
   - `float cell_size`（= bake config 的 grid_spacing）
-  - `glm::uvec3 grid_dims`（各轴 cell 数量）
+  - `glm::uvec3 grid_dims`（各轴 cell 数量，= 原始 probe AABB 范围 / cell_size 向上取整 + 4（两端各扩展 2 个 cell））
   - `std::vector<uint32_t> cell_offsets`（`grid_dims.x * y * z + 1` 个元素，CSR 风格前缀和）
   - `std::vector<uint32_t> probe_indices`（flat 数组，cell_offsets 索引进来）
 - `load_angle()` 加载 probe 后构建：遍历 probe positions → 计算 cell 坐标 → 统计 per-cell count → 前缀和 → 填充 indices
+- `probe_count == 0` 时跳过 grid 构建，不创建 GPU buffer
 
 #### 4b. GPU Buffer 上传
 
@@ -181,12 +186,14 @@ Bake 后检测到部分面全黑的 probe，移动后重新 bake 一次。
 #### 5a. forward.frag specular indirect 重写
 
 - 移除 `inst.probe_index` 读取和 `has_probe` 判断
+- 新的 probe 分支入口条件：`(feature_flags & FEATURE_PROBE) != 0u && global.probe_count > 0u`（`FEATURE_PROBE` flag 保留作为全局开关）
 - 通过 Step 4 的 grid 查询遍历附近 probe
 - 法线半球过滤：`dot(normalize(probe_pos - frag_world_pos), N) > 0.0`
 - 评分：`score = pow(normal_dot, normal_bias) / max(dist_sq, epsilon)`
 - 维护 top-2（score 最高的两个 probe index + score）
 - 无候选通过半球过滤 → fallback 到距离最近的 probe（忽略法线）
-- `probe_count == 0` → 走 IBL 分支（与当前 `has_probe == false` 行为一致）
+- 只有 1 个候选通过 → `w0 = 1.0, w1 = 0.0`（不做 blend，避免 score 归一化除零）
+- `probe_count == 0`（或 FEATURE_PROBE off）→ 走 IBL 分支（与当前行为一致）
 
 #### 5b. Roughness 平滑过渡
 
@@ -280,6 +287,7 @@ Bake-time 参数（bake 面板中，下次 bake 生效）：
 #### 8b. BakeDataManager 读取 AABB
 
 - `bake_data_manager.cpp`：`load_angle()` 读取 manifest v2，将 `aabb_min`/`aabb_max` 填入 `GPUProbeData`（替代当前的填零）
+- `bake_data_manager.cpp`：`scan()` 也需同步更新 v2 解析逻辑（当前直接从 offset 0 读 `uint32_t` 作为 `probe_count`，v2 的 offset 0 是 `version`）
 
 **验证**：bake 后 manifest 文件含 AABB 数据，load_angle 后 GPUProbeData 的 aabb_min/max 非零
 
@@ -308,6 +316,7 @@ Bake-time 参数（bake 面板中，下次 bake 生效）：
 
 - Step 5 的 cubemap 采样前插入 `parallax_correct()` 调用
 - 仅当 `aabb_min != aabb_max`（AABB 有效）时执行校正，否则用原始 R
+- `parallax_correct()` 中 `R` 分量为 0 时 GLSL 产生 `inf`，后续 `min()` 自然选有限值，无需特殊处理。`t < 0`（fragment 在 AABB 外部）时校正结果无意义，但 Phase 8.5 的 per-pixel 选取保证 fragment 附近有 probe（probe 在 AABB 内），实际不会触发此情况
 
 **验证**：
 - 光滑地板反射墙壁位置正确（贴合房间几何）
@@ -320,11 +329,16 @@ Bake-time 参数（bake 面板中，下次 bake 生效）：
 
 #### 10a. Debug 渲染模式
 
-- 新增 `DEBUG_MODE_PROBE_INDEX`：可视化每个 fragment 选中的 top-1 probe index（颜色编码）
-- 有助于验证 per-pixel 选取的空间分布正确性
+- 新增 `DEBUG_MODE_PROBE_INDEX = 12`（passthrough 类型，>= 4）：可视化每个 fragment 选中的 top-1 probe index（颜色编码）
+- `shaders/common/bindings.glsl` 新增 `#define`，`app/debug_ui.cpp` 新增选项
 
-#### 10b. 全面验证
+#### 10b. Phase 8.5 预留注释清理
+
+- `shaders/common/bindings.glsl:154`：移除 "reserved for Phase 8.5"
+- `framework/include/himalaya/framework/scene_data.h:541,547,549`：移除 "Phase 8.5, filled with zeros in Phase 8" 注释，改为描述实际用途
+
+#### 10c. 全面验证
 
 - 所有模式切换路径（IBL ↔ LP、角度切换、bake、场景/HDR 切换）无 validation 报错
 - Probe relocation 统计日志完整
-- Grid buffer 生命周期正确（load 创建、unload 销毁）
+- Grid buffer 生命周期正确（load 创建、unload 销毁、probe_count == 0 时不创建）
