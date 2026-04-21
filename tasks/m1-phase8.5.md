@@ -31,13 +31,13 @@
 - [x] `framework/src/bake_data_manager.cpp`：上传单个 ProbeGridBuffer SSBO（header + cell_offsets + probe_indices）
 - [x] `rhi/descriptors.cpp`：Set 0 新增 binding 10（RT 和非 RT 两条路径）+ `write_set0_probe_grid_buffer()`
 - [x] `shaders/common/bindings.glsl`：新增 `layout(set = 0, binding = 10) readonly buffer ProbeGridBuffer`
-- [x] 新增 `shaders/common/probe_grid.glsl`：grid 查询函数（world pos → center cell → 5×5×5 邻域遍历）
+- [x] 新增 `shaders/common/probe_grid.glsl`：CSR 辅助函数（grid_cell_offset、grid_probe_index、grid_flat_index）
 - [x] `framework/src/bake_data_manager.cpp`：`unload_angle()` 销毁 grid buffer
 
 ## Step 4：Per-pixel Probe 选取 + Blend
 
 - [ ] `shaders/forward.frag`：移除 `has_probe` / `inst.probe_index` 逻辑
-- [ ] `shaders/forward.frag`：引入 probe_grid.glsl，5×5×5 邻域遍历 + 法线半球过滤 + 评分 + top-2 维护
+- [ ] `shaders/forward.frag`：引入 probe_grid.glsl，内联 5×5×5 遍历 + 法线半球过滤 + 评分 + 就地 top-2 维护（无数组）
 - [ ] `shaders/forward.frag`：无候选 fallback 到最近 probe；5×5×5 全空走 IBL
 - [ ] `shaders/forward.frag`：roughness 平滑过渡（roughness_single/full/blend_curve）
 - [ ] `shaders/forward.frag`：top-2 cubemap 采样 + 加权混合
