@@ -65,6 +65,13 @@ void main() {
     // Offset origin to avoid self-intersection
     vec3 ray_origin = offset_ray_origin(world_pos, world_normal);
 
+    // Skip close-contact geometry for the initial ray: advance the origin
+    // along the ray direction, equivalent to raising tMin for the first bounce.
+    // Prevents dark bands at concave corners where short-range hits dominate.
+    // Runtime contact shadows (Phase 5) handle close-range occlusion separately.
+    const float kInitialRayBias = 0.1; // meters — skip geometry within 10cm (handled by runtime AO/contact shadows)
+    ray_origin += ray_direction * kInitialRayBias;
+
     // ---- Path trace (shared bounce loop) ----
     // Ray cone: width=0, spread=0 — offline baking always samples full-resolution textures
     vec3 total_radiance = trace_path(ray_origin, ray_direction, 0.0, 0.0, texel);
