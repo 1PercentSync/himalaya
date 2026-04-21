@@ -1003,23 +1003,24 @@ namespace himalaya::app {
         vmaInvalidateAllocation(ctx_->allocator,
             resource_manager_->get_buffer(rb_normal).allocation, 0, VK_WHOLE_SIZE);
 
-        // === CPU: OIDN denoise (or passthrough) ===
+        // === CPU: Dilate → OIDN denoise (or passthrough) ===
         const auto *beauty_ptr = resource_manager_->get_buffer(rb_beauty).allocation_info.pMappedData;
         const auto *albedo_ptr = resource_manager_->get_buffer(rb_albedo).allocation_info.pMappedData;
         const auto *normal_ptr = resource_manager_->get_buffer(rb_normal).allocation_info.pMappedData;
         auto *upload_ptr = resource_manager_->get_buffer(upload_buf).allocation_info.pMappedData;
 
-        if (bake_locked_config_.denoise) {
-            if (!bake_denoiser_.denoise(beauty_ptr, albedo_ptr, normal_ptr, upload_ptr, w, h)) {
-                spdlog::error("Bake finalize: OIDN denoise failed, using noisy result");
-                std::memcpy(upload_ptr, beauty_ptr, beauty_size);
-            }
-        } else {
-            std::memcpy(upload_ptr, beauty_ptr, beauty_size);
-        }
-
+        // Dilate raw accumulation BEFORE denoising: fills uncovered padding texels
+        // so OIDN's filter kernel never encounters zeros at chart boundaries.
+        std::memcpy(upload_ptr, beauty_ptr, beauty_size);
         dilate_lightmap(static_cast<float *>(upload_ptr),
                         static_cast<const float *>(beauty_ptr), w, h);
+
+        if (bake_locked_config_.denoise) {
+            // Feed dilated data as beauty input to OIDN (in-place: upload_ptr → upload_ptr)
+            if (!bake_denoiser_.denoise(upload_ptr, albedo_ptr, normal_ptr, upload_ptr, w, h)) {
+                spdlog::error("Bake finalize: OIDN denoise failed, using dilated noisy result");
+            }
+        }
 
         // Flush upload buffer so GPU sees CPU writes on non-coherent memory.
         vmaFlushAllocation(ctx_->allocator,
