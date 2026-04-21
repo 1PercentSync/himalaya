@@ -163,7 +163,7 @@ lightmap 和 probe 贡献是否生效。IBL 模式下隐藏，不影响模式切
 - [x] `shaders/forward.frag`：拆分为独立 diffuse/specular 分支（两个 bit 分别判断）
 - [x] `app/renderer.cpp`：`fill_common_gpu_data()` — `lightmap_probe && use_lightmap` → bit 3，`lightmap_probe && use_probe` → bit 4
 - [x] `app/debug_ui.cpp`：LP 模式下显示两个 checkbox（IBL 模式下隐藏）
-- [ ] `app/debug_ui.cpp`：Rendering 区移到 Camera 区之前
+- [x] `app/debug_ui.cpp`：Rendering 区移到 Camera 区之前
 
 ## Step 9：AO/SO 按模式自动预设
 
