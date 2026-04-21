@@ -194,5 +194,5 @@ lightmap 和 probe 贡献是否生效。IBL 模式下隐藏，不影响模式切
 
 ## Step 11：Debug 渲染模式 + 收尾
 
-- [ ] 新增 `DEBUG_MODE_LIGHTMAP_ONLY` passthrough 渲染模式
+- [x] 新增 `DEBUG_MODE_LIGHTMAP_ONLY` passthrough 渲染模式
 - [ ] 全流程 validation 检查（所有模式切换路径）
