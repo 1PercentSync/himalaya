@@ -158,11 +158,11 @@
 lightmap 和 probe 贡献是否生效。IBL 模式下隐藏，不影响模式切换逻辑。
 切换回 LP 模式时不重置子开关（字段保持原值）。
 
-- [ ] `framework/scene_data.h`：`RenderFeatures` 新增 `use_lightmap = true` + `use_probe = true`（保留 `lightmap_probe`）
-- [ ] `shaders/common/bindings.glsl`：`FEATURE_LIGHTMAP_PROBE` → `FEATURE_LIGHTMAP (1u << 3)` + `FEATURE_PROBE (1u << 4)`
-- [ ] `shaders/forward.frag`：拆分为独立 diffuse/specular 分支（两个 bit 分别判断）
-- [ ] `app/renderer.cpp`：`fill_common_gpu_data()` — `lightmap_probe && use_lightmap` → bit 3，`lightmap_probe && use_probe` → bit 4
-- [ ] `app/debug_ui.cpp`：LP 模式下显示两个 checkbox（IBL 模式下隐藏）
+- [x] `framework/scene_data.h`：`RenderFeatures` 新增 `use_lightmap = true` + `use_probe = true`（保留 `lightmap_probe`）
+- [x] `shaders/common/bindings.glsl`：`FEATURE_LIGHTMAP_PROBE` → `FEATURE_LIGHTMAP (1u << 3)` + `FEATURE_PROBE (1u << 4)`
+- [x] `shaders/forward.frag`：拆分为独立 diffuse/specular 分支（两个 bit 分别判断）
+- [x] `app/renderer.cpp`：`fill_common_gpu_data()` — `lightmap_probe && use_lightmap` → bit 3，`lightmap_probe && use_probe` → bit 4
+- [x] `app/debug_ui.cpp`：LP 模式下显示两个 checkbox（IBL 模式下隐藏）
 - [ ] `app/debug_ui.cpp`：Rendering 区移到 Camera 区之前
 
 ## Step 9：AO/SO 按模式自动预设
