@@ -83,7 +83,6 @@
 
 ## Step 10：收尾
 
-- [ ] `framework/src/bake_data_manager.cpp`：`scan()` 中 v1 manifest 不通过校验 + 日志说明
 - [ ] 新增 `DEBUG_MODE_PROBE_INDEX` debug 渲染模式（probe index 颜色编码可视化）
 - [ ] 全模式切换路径 validation 验证
 - [ ] Grid buffer 生命周期验证（load 创建、unload 销毁、场景切换清理）

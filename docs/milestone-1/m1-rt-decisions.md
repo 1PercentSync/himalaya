@@ -1288,9 +1288,9 @@ Per-pixel probe 查找替代 per-instance 分配后：
 | `roughness_full` | float | 高于此值完整 blend |
 | `blend_curve` | float | 过渡曲线形状 |
 
-### Manifest 版本兼容性
+### Manifest 格式变更
 
-v1 manifest（Phase 8，无 version 字段 + 无 AABB）在 `scan()` 完整性校验时不通过。旧 bake 数据需 Clear Bake Cache 后重新 bake。不做向后兼容读取——Phase 8.5 的 probe 系统（per-pixel + PCC）在没有 AABB 数据的情况下降级太多（无视差校正 + 无 grid 空间索引），不值得维护兼容代码路径。
+Manifest 从 v1（无 version 字段，`probe_count + positions`）升级为 v2（`version=2 + probe_count + per-probe position/aabb_min/aabb_max`）。不做向后兼容——v1 格式直接无法被 Phase 8.5 代码读取，旧 bake 数据由用户手动清除后重新 bake。
 
 ### 新增参数分类
 
