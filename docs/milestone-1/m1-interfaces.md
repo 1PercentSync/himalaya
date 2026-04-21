@@ -581,6 +581,36 @@ struct GPUProbeData {
     glm::vec3 aabb_max;                         // offset 32 — 视差校正 AABB 最大角
     uint32_t cubemap_index;                     // offset 44 — bindless cubemaps[] 索引
 };  // total: 48 bytes
+
+// --- 阶段八点五引入 ---
+
+// Probe Manifest v2 二进制格式（磁盘持久化）
+// v1: uint32 probe_count + vec3[probe_count] positions
+// v2: uint32 version(=2) + uint32 probe_count + ProbeManifestEntry[probe_count]
+struct ProbeManifestEntry {
+    glm::vec3 position;                         // probe 世界空间位置
+    glm::vec3 aabb_min;                         // PCC AABB 最小角
+    glm::vec3 aabb_max;                         // PCC AABB 最大角
+};  // 36 bytes per probe
+
+// 3D Grid 空间索引 — GPU buffer 布局
+// grid_meta_buffer (32 bytes):
+//   vec4 grid_origin_and_cell_size;            // xyz = grid AABB min, w = cell_size
+//   uvec4 grid_dims_and_pad;                   // xyz = grid dimensions, w = padding
+// grid_data_buffer (variable size):
+//   uint cell_offsets[dims.x * dims.y * dims.z + 1];  // CSR 前缀和
+//   uint probe_indices[];                              // flat probe index 数组
+
+// GlobalUBO Phase 8.5 新增字段
+//   uint32_t probe_count;                      // ProbeBuffer 中 probe 数组长度
+//   float    normal_bias;                      // 法线-距离权重平衡（默认 1.0）
+//   float    roughness_single;                 // 低于此值只用 top-1 probe（默认 0.15）
+//   float    roughness_full;                   // 高于此值完整 blend（默认 0.5）
+//   float    blend_curve;                      // 过渡曲线形状（默认 1.0）
+
+// GPUInstanceData Phase 8.5 变更
+//   probe_index → _padding2（per-pixel 选取替代 per-instance 分配）
+//   lightmap_index 保留不变
 ```
 
 ---

@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段八点五 — 间接光照质量提升（规划中）
-- **进度**：Phase 8.5 方案已确定，文档待写入
+- **进度**：Phase 8.5 文档已就绪，待开始实现
 
 ### 下一个任务
 
-Phase 8.5 文档写入 `docs/current-phase.md`，然后开始实现。
+Phase 8.5 Step 1：Probe Relocation — Pre-bake
 
 ---
 
@@ -25,7 +25,7 @@ CLAUDE.md 已自动加载，以下为额外必读：
 |------|------|
 | `docs/milestone-1/milestone-1.md` | M1 范围、预期效果、已知局限性 |
 | `docs/current-phase.md` | 当前阶段实现步骤（阶段八点五） |
-| `docs/milestone-1/m1-rt-decisions.md` | M1 RT 架构决策（阶段六~八） |
+| `docs/milestone-1/m1-rt-decisions.md` | M1 RT 架构决策（阶段六~八点五） |
 | `docs/milestone-1/m1-interfaces.md` | M1 接口与目标结构：反映当前 Phase 结束时的目标状态，Phase 开始前更新至设计目标，实现完成后应与代码一致 |
 | `docs/milestone-1/m1-development-order.md` | M1 开发阶段顺序（含阶段六~十） |
 | `tasks/m1-phase8.5.md` | 阶段八点五任务清单（复选框进度跟踪） |
@@ -41,7 +41,7 @@ CLAUDE.md 已自动加载，以下为额外必读：
 | `docs/project/requirements-and-philosophy.md` | 项目定位、技术选型原则、画面质量目标 |
 | `docs/project/architecture.md` | 渲染器长远架构、四层结构、架构约束 |
 | `docs/milestone-1/m1-design-decisions-core.md` | M1 核心设计决策参考（决策结果摘要，日后开发仍需参考） |
-| `docs/milestone-1/m1-rt-decisions.md` | M1 RT 架构决策（阶段六~八：PT 参考视图 + 烘焙器 + 间接光照集成） |
+| `docs/milestone-1/m1-rt-decisions.md` | M1 RT 架构决策（阶段六~八点五：PT 参考视图 + 烘焙器 + 间接光照集成 + 质量提升） |
 | `docs/milestone-1/m1-phase-future-decisions.md` | M1 未来阶段设计构想（阶段九~十非正式规划） |
 | `docs/milestone-1/m1-frame-flow.md` | M1 完整帧流程（pass 执行顺序、资源生命周期） |
 | `docs/milestone-1/m1-development-order.md` | M1 的 10 个开发阶段及依赖关系 |

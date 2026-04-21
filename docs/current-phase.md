@@ -1,0 +1,339 @@
+# 当前阶段：M1 阶段八点五 — 间接光照质量提升
+
+> 目标：提升 Reflection Probe 系统的放置质量、选取精度和反射准确性。
+> 三个核心改进：Probe 放置从"剔除"演进为"移动+重试"、Per-pixel probe 选取 + blend、PCC 视差校正。
+>
+> Phase 8 基础设施（BakeDataManager、ProbeBuffer SSBO、forward shader 间接光照分支）在此阶段重构和扩展。
+> RT 架构决策见 `milestone-1/m1-rt-decisions.md`，关键接口见 `milestone-1/m1-interfaces.md`。
+
+---
+
+## 实现步骤
+
+### 依赖关系
+
+```
+Step 1: Probe relocation — pre-bake（修改 filter shader + placement 逻辑）
+    ↓
+Step 2: Probe relocation — post-bake（修改 bake 循环）
+    ↓
+Step 3: AABB 计算（新 pass，依赖 relocation 完成后的最终位置）
+    ↓
+Step 4: Manifest 格式扩展 + AABB 写入（依赖 Step 3 产出）
+    ↓
+Step 5: GPUInstanceData 清理 + probe_count 引入（基础设施重构）
+    ↓
+Step 6: 3D Grid 空间索引（加载时构建，依赖 Step 4 的 manifest 数据）
+    ↓
+Step 7: Per-pixel probe 选取 + blend（shader 改造，依赖 Step 5/6）
+    ↓
+Step 8: PCC 视差校正（shader 扩展，依赖 Step 7 的 probe 选取机制）
+    ↓
+Step 9: Runtime 参数 + ImGui 面板
+    ↓
+Step 10: 收尾 + 旧 bake 缓存兼容性处理
+```
+
+### 总览
+
+| Step | 主题 | 验证标准 |
+|------|------|----------|
+| 1 | Probe relocation — pre-bake | 原本被 Rule 1/2 剔除的 probe 有机会移动后通过，survivor 数量上升，日志输出 relocated 统计 |
+| 2 | Probe relocation — post-bake | 部分面全黑的 probe 被移动后重新 bake，post-bake reject 率显著下降 |
+| 3 | AABB 计算 | 每个 surviving probe 有合理的 AABB（非零，反映周围几何），日志输出 AABB 尺寸统计 |
+| 4 | Manifest 格式扩展 | manifest 包含 position + AABB，BakeDataManager 正确读取并填入 GPUProbeData |
+| 5 | GPUInstanceData 清理 + probe_count | `probe_index` 字段移除，GlobalUBO 含 `probe_count`，BakeDataManager 无 CPU probe 分配逻辑 |
+| 6 | 3D Grid 空间索引 | Grid buffer 上传 GPU，fragment shader 可通过世界坐标查询 cell 内 probe 列表 |
+| 7 | Per-pixel probe 选取 + blend | 每个 fragment 从 5×5×5 邻域选取 top-2 probe，法线半球过滤 + roughness 平滑过渡 |
+| 8 | PCC 视差校正 | 反射贴合房间墙壁，对比 PCC 开/关效果明显 |
+| 9 | Runtime 参数 + ImGui | `normal_bias`、`roughness_single/full`、`blend_curve` 可调，实时影响画面 |
+| 10 | 收尾 | 旧 manifest 格式的 bake 缓存自动失效，全流程无 validation 报错 |
+
+---
+
+### Step 1：Probe Relocation — Pre-bake
+
+两层测试失败的候选 probe 不再直接剔除，而是移动到更好的位置重试一次。
+
+#### 1a. probe_filter.comp 扩展输出
+
+- 当前输出 `uint result`（0/1/2）改为扩展结构：`uint result` + `vec3 nearest_hit_pos` + `vec3 nearest_hit_normal`
+- 对于 result = 0（通过）的候选，hit 数据不使用
+- 对于 result = 1 或 2（失败）的候选，记录所有射线中距离最近的命中点位置和几何法线
+- ResultBuffer 从 `uint[]` 改为结构化 buffer（每候选 32 bytes：4B result + 12B position + 12B normal + 4B padding）
+
+#### 1b. probe_placement.cpp relocation 逻辑
+
+- Phase 3（收集 survivors）扩展：对 result = 1 或 2 的候选，计算 relocated position = `nearest_hit_pos + nearest_hit_normal * probe_relocation_offset`
+- `probe_relocation_offset` 为 bake-time 可调参数（默认 0.1m）
+- 收集所有 relocated 候选，组成第二批 candidates
+- 对第二批执行同一 filter shader（复用同一 pipeline + dispatch）
+- 第二批通过的加入 survivors，仍失败的最终剔除
+- 日志输出：`relocated N candidates, M passed retry`
+
+#### 1c. BakeConfig 扩展
+
+- `framework/scene_data.h`：`BakeConfig` 新增 `float probe_relocation_offset`（默认 0.1f，单位 meters）
+
+**验证**：survivor 数量比不启用 relocation 时增加，relocated probe 位于几何表面外侧合法位置
+
+---
+
+### Step 2：Probe Relocation — Post-bake
+
+Bake 后检测到部分面全黑的 probe，移动后重新 bake 一次。
+
+#### 2a. 黑面方向分析
+
+- `renderer_bake.cpp`：现有的 per-face luminance 检查扩展——不再立即 reject，而是记录哪些 face 低于阈值
+- Cubemap face 方向映射：face 0-5 对应 +X/-X/+Y/-Y/+Z/-Z
+- 计算移动方向：所有黑面反方向的归一化合成向量
+- 全 6 面都黑 → 直接剔除（无处可移）
+
+#### 2b. 移动 + 重新 bake
+
+- 新位置 = 当前位置 + 移动方向 × `probe_relocation_offset`（复用 pre-bake 的参数）
+- 在新位置重新执行完整的 probe bake（6 faces × target SPP）
+- 重新 bake 后再次执行黑面检测
+- 仍有黑面 → 最终剔除，已通过 → 接受新位置
+- 更新 `bake_probe_positions_` 中该 probe 的位置为新位置
+
+#### 2c. 进度统计
+
+- `RenderProgress` 扩展：`probes_relocated` 计数（区别于 `probes_rejected`）
+- DebugUI 显示 relocated vs rejected 统计
+
+**验证**：post-bake reject 率相比 Phase 8 显著下降，relocated probe 的 cubemap 无全黑面
+
+---
+
+### Step 3：AABB 计算
+
+所有 relocation 完成后，为每个 surviving probe 计算 PCC 用的 AABB。
+
+#### 3a. AABB 估算 shader
+
+- 新增 `shaders/bake/probe_aabb.comp`：对每个 probe 发射 Fibonacci 球面射线（复用现有采样函数）+ 6 条轴对齐射线
+- 每条射线记录命中点世界坐标
+- Push constants：probe positions buffer address、probe count、ray count（Fibonacci）、ray max distance
+
+#### 3b. CPU 侧 AABB 构建
+
+- GPU 输出每个 probe 的所有射线命中点（per-probe × (fibonacci_count + 6) 条射线 → hit position vec3）
+- CPU readback 后对每个 probe：
+  - 每条命中射线按主轴方向（direction 分量绝对值最大的轴）分入 6 组（±X/±Y/±Z）
+  - 每组取命中点在该轴上投影坐标的中位数
+  - 6 个中位数构成 AABB 的 ±X/±Y/±Z 边界
+- 70 条射线 × 2000 probe ≈ 1.6MB readback，CPU 中位数计算瞬时完成
+
+#### 3c. probe_placement 集成
+
+- `generate_probe_grid()` 返回的 `ProbeGrid` 扩展：`std::vector<AABB> aabbs`（parallel to `positions`）
+- AABB 计算作为 `generate_probe_grid()` 的最后阶段
+- 需要在 bake 完成（含 post-bake relocation）后的最终位置上执行
+- 调用时机：在 `renderer_bake.cpp` 中 probe bake 全部完成、写入 manifest 之前
+
+**验证**：每个 probe 的 AABB 非零且合理（不远大于 grid spacing 的数倍），反映周围几何边界
+
+---
+
+### Step 4：Manifest 格式扩展 + AABB 写入
+
+#### 4a. Manifest 格式 v2
+
+- 当前格式（v1）：`uint32_t probe_count` + `vec3[probe_count] positions`
+- 新格式（v2）：`uint32_t version`(= 2) + `uint32_t probe_count` + per-probe stride: `vec3 position` + `vec3 aabb_min` + `vec3 aabb_max`（36 bytes per probe）
+- `renderer_bake.cpp`：`write_probe_manifest()` 写入 v2 格式
+
+#### 4b. BakeDataManager 读取 AABB
+
+- `bake_data_manager.cpp`：`load_angle()` 读取 manifest v2，将 `aabb_min`/`aabb_max` 填入 `GPUProbeData`（替代当前的填零）
+- 版本检测：manifest 无 version 字段（v1）→ 视为不兼容，该角度不通过完整性校验
+
+**验证**：bake 后 manifest 文件含 AABB 数据，load_angle 后 GPUProbeData 的 aabb_min/max 非零
+
+---
+
+### Step 5：GPUInstanceData 清理 + probe_count 引入
+
+#### 5a. GPUInstanceData::probe_index 移除
+
+- `framework/scene_data.h`：`GPUInstanceData` 的 `probe_index` 改为 `_padding2`，struct 保持 128 bytes
+- `shaders/common/bindings.glsl`：`GPUInstanceData` 对应更新
+- `shaders/forward.frag`：移除 `inst.probe_index` 读取
+
+#### 5b. BakeDataManager probe 分配清理
+
+- `bake_data_manager.cpp`：`load_angle()` 中移除 CPU probe-to-instance 分配逻辑（`probe_indices_` 赋值循环）
+- `bake_data_manager.h`：移除 `probe_indices()` 访问器和 `probe_indices_` 成员
+- `renderer_rasterization.cpp`：`build_draw_groups()` 移除 `probe_indices` 参数和相关填充逻辑
+
+#### 5c. GlobalUBO 新增 probe_count
+
+- `framework/scene_data.h`：`GlobalUniformData` 新增 `uint32_t probe_count`（默认 0），更新 `static_assert` 偏移
+- `shaders/common/bindings.glsl`：`GlobalUBO` 对应更新
+- `app/renderer.cpp`：`fill_common_gpu_data()` 中从 `bake_data_manager_` 获取 probe count 填入
+
+**验证**：编译通过，渲染无回归，`probe_index` 无残留引用
+
+---
+
+### Step 6：3D Grid 空间索引
+
+加载 bake 数据时构建世界空间 3D grid，供 fragment shader 快速查找附近 probe。
+
+#### 6a. Grid 数据结构（CPU 侧）
+
+- `bake_data_manager.h`：新增 `ProbeGrid3D` 内部结构
+  - `glm::vec3 grid_origin`（grid AABB 最小角，向外扩展 2 个 cell 以覆盖 5×5×5 查询边界）
+  - `float cell_size`（= bake config 的 grid_spacing）
+  - `glm::uvec3 grid_dims`（各轴 cell 数量）
+  - `std::vector<uint32_t> cell_offsets`（`grid_dims.x * y * z + 1` 个元素，CSR 风格前缀和）
+  - `std::vector<uint32_t> probe_indices`（flat 数组，cell_offsets 索引进来）
+- `load_angle()` 加载 probe 后构建：遍历 probe positions → 计算 cell 坐标 → 统计 per-cell count → 前缀和 → 填充 indices
+
+#### 6b. GPU Buffer 上传
+
+- `grid_meta_buffer`：`vec4 grid_origin_and_cell_size`(16B) + `uvec4 grid_dims_and_pad`(16B) = 32 bytes
+- `grid_data_buffer`：`uint[] cell_offsets` + `uint[] probe_indices`（连续存放，cell_offsets_count 从 grid_dims 计算）
+- Set 0 新增 binding 或通过 GlobalUBO 传递 grid_meta + buffer device address
+
+#### 6c. Shader 端查询
+
+- `shaders/common/probe_grid.glsl`（新文件）：
+  ```
+  ivec3 center_cell = clamp(ivec3((frag_world_pos - grid_origin) / cell_size), ivec3(0), ivec3(grid_dims - 1))
+  for dx in [-2, +2]:
+    for dy in [-2, +2]:
+      for dz in [-2, +2]:
+        cell = clamp(center_cell + ivec3(dx,dy,dz), ivec3(0), ivec3(grid_dims - 1))
+        flat_index = cell.x + cell.y * dims.x + cell.z * dims.x * dims.y
+        for i in [cell_offsets[flat_index], cell_offsets[flat_index + 1]):
+          probe_idx = probe_indices[i]
+          // ... 法线半球过滤 + 评分 + top-2 维护
+  ```
+
+#### 6d. unload 清理
+
+- `unload_angle()`：销毁 grid buffer
+
+**验证**：grid buffer 创建成功，shader 通过 grid 查询能找到正确的 probe
+
+---
+
+### Step 7：Per-pixel Probe 选取 + Blend
+
+替换当前的 per-instance probe 采样，实现 per-pixel 选取和 top-2 blend。
+
+#### 7a. forward.frag specular indirect 重写
+
+- 移除 `inst.probe_index` 读取和 `has_probe` 判断
+- 通过 Step 6 的 grid 查询遍历附近 probe
+- 法线半球过滤：`dot(normalize(probe_pos - frag_world_pos), N) > 0.0`
+- 评分：`score = pow(normal_dot, normal_bias) / max(dist_sq, epsilon)`
+- 维护 top-2（score 最高的两个 probe index + score）
+- 无候选通过半球过滤 → fallback 到距离最近的 probe（忽略法线）
+- `probe_count == 0` → 走 IBL 分支（与当前 `has_probe == false` 行为一致）
+
+#### 7b. Roughness 平滑过渡
+
+- `t = clamp((roughness - roughness_single) / (roughness_full - roughness_single), 0.0, 1.0)`
+- `blend_factor = pow(t, blend_curve)`
+- `w1 *= blend_factor`，`w0 = 1.0 - w1`
+- `roughness < roughness_single` → 只用 top-1
+- `roughness > roughness_full` → 完整 blend
+
+#### 7c. Cubemap 采样
+
+- Top-1 和 top-2 各采样一次 cubemap（`textureLod` with roughness-based mip）
+- 加权混合两个结果
+- 乘以 `F0 * brdf_lut.x + brdf_lut.y`（Split-Sum 重建）
+
+**验证**：
+- 大物体不同位置使用不同 probe，反射有空间变化
+- Probe 边界无硬切突变（blend 平滑过渡）
+- 光滑表面（低 roughness）用单 probe 无重影
+- 粗糙表面 blend 自然
+
+---
+
+### Step 8：PCC 视差校正
+
+在 probe cubemap 采样前校正反射向量。
+
+#### 8a. PCC 函数
+
+- `shaders/common/probe_grid.glsl` 内新增：
+  ```glsl
+  vec3 parallax_correct(vec3 R, vec3 frag_pos, vec3 probe_pos, vec3 aabb_min, vec3 aabb_max) {
+      vec3 first_plane = (aabb_max - frag_pos) / R;
+      vec3 second_plane = (aabb_min - frag_pos) / R;
+      vec3 furthest_plane = max(first_plane, second_plane);
+      float t = min(min(furthest_plane.x, furthest_plane.y), furthest_plane.z);
+      vec3 intersection = frag_pos + R * t;
+      return normalize(intersection - probe_pos);
+  }
+  ```
+- Top-1 和 top-2 分别校正后采样各自的 cubemap
+
+#### 8b. 集成
+
+- Step 7 的 cubemap 采样前插入 `parallax_correct()` 调用
+- 仅当 `aabb_min != aabb_max`（AABB 有效）时执行校正，否则用原始 R（兼容性保护）
+
+**验证**：
+- 光滑地板反射墙壁位置正确（贴合房间几何）
+- 对比 PCC 开/关效果明显
+- 无 AABB 数据时 graceful fallback
+
+---
+
+### Step 9：Runtime 参数 + ImGui 面板
+
+#### 9a. 参数结构
+
+Runtime 参数（不影响 bake，ImGui 实时可调）：
+- `float normal_bias`（默认 1.0，范围 0.0-4.0）— 法线-距离权重平衡
+- `float roughness_single`（默认 0.15，范围 0.0-1.0）— 低于此值只用 top-1 probe
+- `float roughness_full`（默认 0.5，范围 0.0-1.0）— 高于此值完整 blend
+- `float blend_curve`（默认 1.0，范围 0.1-4.0）— 过渡曲线形状
+
+Bake-time 参数（bake 面板中，下次 bake 生效）：
+- `float probe_relocation_offset`（默认 0.1，范围 0.01-0.5，单位 meters）
+
+#### 9b. GPU 传递
+
+- Runtime 参数通过 GlobalUBO 新增字段传入 shader
+- `framework/scene_data.h`：`GlobalUniformData` 新增 4 个 float + `probe_count` uint
+
+#### 9c. ImGui 面板
+
+- Rendering 区（LP 模式下可见）：`normal_bias`、`roughness_single`、`roughness_full`、`blend_curve` 四个 slider
+- Bake 面板：`probe_relocation_offset` slider
+
+#### 9d. 配置持久化
+
+- `AppConfig` 新增对应字段，JSON 保存/加载
+
+**验证**：slider 拖动实时影响 probe 选取和 blend 效果
+
+---
+
+### Step 10：收尾
+
+#### 10a. 旧 bake 缓存兼容性
+
+- Manifest v1（无 version 字段 / 无 AABB 数据）在 `scan()` 完整性校验时不通过 → 该角度不出现在可用列表
+- 用户需 Clear Bake Cache 后重新 bake 获取 v2 manifest
+- 日志说明原因
+
+#### 10b. Debug 渲染模式
+
+- 新增 `DEBUG_MODE_PROBE_INDEX`：可视化每个 fragment 选中的 top-1 probe index（颜色编码）
+- 有助于验证 per-pixel 选取的空间分布正确性
+
+#### 10c. 全面验证
+
+- 所有模式切换路径（IBL ↔ LP、角度切换、bake、场景/HDR 切换）无 validation 报错
+- Probe relocation 统计日志完整
+- Grid buffer 生命周期正确（load 创建、unload 销毁）

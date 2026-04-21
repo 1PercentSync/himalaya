@@ -1144,7 +1144,7 @@ layout(set = 0, binding = 9) readonly buffer ProbeBuffer {
 };
 ```
 
-`PARTIALLY_BOUND`，无 probe 数据时不写入。`aabb_min/max` 预留给 Phase 8.5 视差校正，Phase 8 不使用。
+`PARTIALLY_BOUND`，无 probe 数据时不写入。`aabb_min/max` 在 Phase 8 填零，Phase 8.5 由 manifest v2 填入实际 AABB 数据（Fibonacci + 6 轴射线中位数估算）。
 
 ### Probe Mip Count
 
@@ -1154,7 +1154,7 @@ Probe specular 的 roughness-based LOD 使用 `textureQueryLevels(cubemaps[probe
 
 Phase 8：CPU per-instance 分配。BakeDataManager 加载 probe 位置后，对每个 instance 找最近 probe（世界空间 AABB 中心到 probe 位置的欧氏距离），存储 `probe_index`。
 
-Phase 8.5 演进：GPU per-pixel 网格查找。`probe_index` 字段闲置（可保留作为 grid 空洞 fallback）。
+~~Phase 8.5 演进：GPU per-pixel 网格查找。`probe_index` 字段闲置（可保留作为 grid 空洞 fallback）。~~ → **Phase 8.5 已实现**：per-pixel 选取 + 3D grid 空间索引 + 法线半球过滤 + top-2 blend。`probe_index` 字段移除。详见下方「Phase 8.5 间接光照质量提升决策」章节。
 
 ### 无 Lightmap Instance 处理
 
@@ -1186,3 +1186,116 @@ Baker raygen 发射 cosine-weighted 射线，cosine 因子与 PDF 抵消，light
 ```glsl
 vec3 indirect_diffuse = lightmap_color * diffuse_color;
 ```
+
+---
+
+## Phase 8.5 间接光照质量提升决策
+
+### Probe Relocation（从剔除到移动）
+
+Phase 7 的 probe placement 对双面几何场景效果有限——Rule 1（背面检测）对双面材质完全失效，Rule 2（封闭体检测）是唯一 pre-bake 防线。实测约 1/10 的 probe 在 post-bake 阶段才被亮度阈值检测剔除。
+
+**策略变更**：每个被潜在剔除的 probe 获得一次移动重试机会。
+
+**Pre-bake relocation**：两层测试失败的候选不直接剔除，移动到最近射线命中点 + 命中法线方向偏移（`probe_relocation_offset`，默认 0.1m），在新位置重新执行两层测试。通过则接受新位置，仍失败则剔除。成本：一次额外 filter compute dispatch，可忽略。
+
+**Post-bake relocation**：bake 后 per-face 亮度检测发现部分面（非全部）低于阈值时，计算黑面反方向的归一化合成向量，沿此方向移动 `probe_relocation_offset`，在新位置重新 bake 6 面 cubemap。再次检测仍有黑面则最终剔除。全 6 面黑直接剔除（无方向可移）。成本：被移动 probe 的 bake 时间翻倍，但只影响少量 probe。
+
+**理由**：部分面全黑说明 probe 离合法位置很近（部分面已能正常渲染），移动一小段距离往往能救回来，比直接丢弃浪费一个有价值的位置更好。
+
+移动后 probe 不再严格在 grid 上，这是可接受的代价——per-pixel probe 查找不依赖 grid 结构对齐。
+
+### Per-pixel Probe 选取
+
+**替代 CPU per-instance 分配**：Phase 8 的 `GPUInstanceData::probe_index`（CPU 端对每个 instance 分配最近 probe）改为 fragment shader 中 per-pixel 动态查找。
+
+**法线半球硬过滤**：`dot(normalize(probe_pos - frag_pos), N) > 0.0`。排除法线背面的 probe——它们在表面另一侧，烘出的是不同的光照环境。硬切而非软权重：法线背面的 probe 在物理上就不该被选中（例如地板下方 probe 烘出的是地板背面环境）。
+
+**Fallback**：无候选通过半球过滤时，退回距离最近的 probe（忽略法线）。极端位置的 probe 虽不完美但优于 IBL 全局近似。
+
+**评分公式**：
+
+```
+score = pow(normal_dot, normal_bias) / max(dist_sq, epsilon)
+```
+
+`normal_bias`（runtime 可调，默认 1.0）控制法线对齐度 vs 距离的权重平衡。`= 0` 时纯距离权重，`> 1` 时更强偏好法线对齐的 probe。
+
+### 空间加速：3D Grid 索引
+
+2000+ probe 场景下暴力遍历不可行（每 fragment 2000 次迭代，peak ALU ~15%）。
+
+**方案**：世界空间 3D uniform grid。加载 bake 数据时构建（cell_size = grid_spacing），每个 cell 存 probe index 列表（CSR 前缀和 + flat array）。Fragment shader 查询以自身 cell 为中心的 5×5×5 = 125 个邻域 cell，实际遍历 probe 降至 20-50 个。
+
+5×5×5 邻域覆盖 ±2.5 个 grid spacing（默认 ±2.5m）。由于 `1/dist_sq` 衰减，2.5m 外的 probe 评分是 1m 处的 1/6.25，结果与暴力遍历实质一致。
+
+Relocated probe 自然落入其实际位置对应的 cell，不需要 grid 对齐。
+
+### Top-2 Probe Blend
+
+取评分最高的 2 个 probe，归一化 score 为权重，各采样一次 cubemap 后加权混合。
+
+**Roughness 平滑过渡**：两个 roughness 端点 + 曲线参数：
+
+```
+t = clamp((roughness - roughness_single) / (roughness_full - roughness_single), 0, 1)
+blend_factor = pow(t, blend_curve)
+```
+
+- `roughness < roughness_single`（默认 0.15）：只用 top-1（避免光滑表面重影）
+- `roughness > roughness_full`（默认 0.5）：完整 blend
+- 之间：`blend_curve`（默认 1.0）控制过渡曲线
+
+不在 shader 内硬编码阈值——三个参数全部 runtime 可调，通过 GlobalUBO 传递。
+
+### PCC 视差校正
+
+标准 Parallax Corrected Cubemap：沿反射向量 R 与 probe 的 AABB proxy box 求交，用交点到 probe 位置的向量替代原始 R 采样 cubemap。使 反射贴合实际房间几何而非浮在无穷远。
+
+仅影响 specular（cubemap 采样）。Lightmap 用 UV 采样，不涉及反射向量。
+
+### PCC AABB 估算
+
+每个 probe 的 AABB 理想状态是匹配其所在空间的边界（每个方向上最近的墙壁/地板/天花板）。
+
+**方案**：Fibonacci 球面射线（复用 placement 时的数量，默认 64 条）+ 6 条轴对齐射线，所有射线命中点按主轴方向（direction 分量绝对值最大的轴）分入 6 组，每组取命中坐标在该轴上投影的**中位数**作为 AABB 边界。
+
+选择中位数而非 min/max 的理由：穿过门洞或窗户逃逸的少数射线会命中远处几何，min/max 会被这些离群值拉偏，中位数天然鲁棒。
+
+**计算时机**：所有 relocation（pre-bake + post-bake）完成后统一计算。新增一次 compute dispatch + readback，成本可忽略。
+
+**存储**：Manifest v2 格式（`version=2` + per-probe `position + aabb_min + aabb_max`）。加载时直接填入 `GPUProbeData::aabb_min/aabb_max`。
+
+### GPUInstanceData 清理
+
+Per-pixel probe 查找替代 per-instance 分配后：
+
+- `GPUInstanceData::probe_index` 改为 `_padding2`（struct 保持 128B）
+- BakeDataManager 移除 `probe_indices_` 和 CPU probe-to-instance 分配循环
+- `build_draw_groups()` 移除 `probe_indices` 参数
+
+`lightmap_index` 保留不变——lightmap 是 per-instance 的（每个 instance 有独立 lightmap 纹理），与 probe 的 per-pixel 机制不同。
+
+### GlobalUBO 扩展
+
+新增字段：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `probe_count` | uint32 | ProbeBuffer 中 probe 数组长度 |
+| `normal_bias` | float | 法线-距离权重平衡 |
+| `roughness_single` | float | 低于此值只用 top-1 probe |
+| `roughness_full` | float | 高于此值完整 blend |
+| `blend_curve` | float | 过渡曲线形状 |
+
+### Manifest 版本兼容性
+
+v1 manifest（Phase 8，无 version 字段 + 无 AABB）在 `scan()` 完整性校验时不通过。旧 bake 数据需 Clear Bake Cache 后重新 bake。不做向后兼容读取——Phase 8.5 的 probe 系统（per-pixel + PCC）在没有 AABB 数据的情况下降级太多（无视差校正 + 无 grid 空间索引），不值得维护兼容代码路径。
+
+### 新增参数分类
+
+按 Phase 8 baker 参数分类体系：
+
+**第 2 类——纯 bake 质量参数**：`probe_relocation_offset`。不编入 cache key。
+
+**第 3 类——纯运行时参数**：`normal_bias`、`roughness_single`、`roughness_full`、`blend_curve`。与 bake 完全无关。

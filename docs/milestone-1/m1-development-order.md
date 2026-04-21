@@ -171,13 +171,19 @@
 
 ## 阶段八点五：间接光照质量提升
 
-- Reflection Probe 视差校正（Parallax Corrected Cubemap，AABB proxy 反射向量修正）
-- 多 Probe 混合 + roughness 阈值（per-pixel 混合，光滑表面用单 probe 避免重影）
-- GPU per-pixel probe 网格查找（替代 CPU per-instance 分配，大物体不同位置自动用不同 probe）
-- IBL 旋转拖拽距离-角度映射细化（非线性，反映角度差）
-- Lightmap 接缝处理（视实测情况决定是否需要 texel dilation）
+**Layer 1 probe 放置改进 + Layer 1 空间索引 + Layer 2 Forward 集成 + Layer 3 参数 UI**
 
-**产出：** 反射效果贴合房间墙壁（视差校正），大物体反射连续过渡（多 probe 混合），整体间接光照质量提升。
+- Probe relocation — pre-bake（两层测试失败 → 移动到最近 hit 点 + 法线偏移 → 重试）
+- Probe relocation — post-bake（部分面全黑 → 反向移动 → 重新 bake → 仍失败则剔除）
+- PCC AABB 计算（Fibonacci + 6 轴射线按主轴分组取中位数，manifest v2 存储）
+- Per-pixel probe 选取（5×5×5 世界空间 3D grid 空间加速，法线半球硬过滤，`pow(normal_dot, normal_bias) / dist_sq` 评分）
+- Top-2 probe blend（roughness 平滑过渡：`roughness_single` → `roughness_full`，`blend_curve` 控制曲线形状）
+- PCC 视差校正（Parallax Corrected Cubemap，AABB proxy 反射向量修正）
+- GPUInstanceData 清理（`probe_index` 移除，CPU per-instance 分配逻辑删除）
+
+**产出：** Probe 放置质量提升（relocation 减少无效 probe），反射效果贴合房间墙壁（视差校正），大物体反射有空间变化且连续过渡（per-pixel 选取 + blend），整体间接光照质量显著提升。
+
+> 详细步骤见 `../current-phase.md`
 
 ---
 
