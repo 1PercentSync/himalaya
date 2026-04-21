@@ -136,13 +136,13 @@
 
 ### 8.5a. Baker Firefly Clamp
 
-- [ ] `passes/lightmap_baker_pass.h`：新增 `set_max_clamp(float)` 接口
-- [ ] `passes/lightmap_baker_pass.cpp`：`max_clamp_` 字段 + push constants 填充
-- [ ] `passes/probe_baker_pass.h`：新增 `set_max_clamp(float)` 接口
-- [ ] `passes/probe_baker_pass.cpp`：`max_clamp_` 字段 + push constants 填充
-- [ ] `framework/scene_data.h`：`BakeConfig` 新增 `float baker_clamp = 100.0f`
-- [ ] `app/renderer_bake.cpp`：`begin_bake_instance()` / `begin_probe_bake_instance()` 传入 locked_config clamp
-- [ ] `app/debug_ui.cpp`：Bake 面板新增 Baker Clamp slider（0 = disabled，范围 0~1000）
+- [x] `passes/lightmap_baker_pass.h`：新增 `set_max_clamp(float)` 接口
+- [x] `passes/lightmap_baker_pass.cpp`：`max_clamp_` 字段 + push constants 填充
+- [x] `passes/probe_baker_pass.h`：新增 `set_max_clamp(float)` 接口
+- [x] `passes/probe_baker_pass.cpp`：`max_clamp_` 字段 + push constants 填充
+- [x] `framework/scene_data.h`：`BakeConfig` 新增 `float baker_clamp = 100.0f`
+- [x] `app/renderer_bake.cpp`：`begin_bake_instance()` / `begin_probe_bake_instance()` 传入 locked_config clamp
+- [x] `app/debug_ui.cpp`：Bake 面板新增 Baker Clamp slider（0 = disabled，范围 0~1000）
 
 ### 8.5b. Baker Denoise 开关
 
