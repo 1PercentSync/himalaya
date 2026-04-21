@@ -420,6 +420,8 @@ namespace himalaya::app {
                     });
                 }
             }
+            // jthread destructor at scope exit joins all workers — tasks are
+            // guaranteed complete before reaching the sequential loop below.
 
             // Sequential VB/IB rebuild (must be in immediate scope)
             for (const auto &task : xatlas_tasks) {
@@ -1033,6 +1035,10 @@ namespace himalaya::app {
         }
 
         // === CPU: Write UV data (xatlas result for this instance's mesh) ===
+        // NOTE: xatlas runs per-mesh, so instances sharing a mesh_id produce
+        // identical UV bin content. Each instance still gets its own file keyed
+        // by its unique cache key (includes transform), ensuring correct cache
+        // invalidation when a single instance's transform changes.
         {
             const uint32_t scene_idx = bake_instance_indices_[bake_current_instance_];
             const auto &inst = mesh_instances[scene_idx];

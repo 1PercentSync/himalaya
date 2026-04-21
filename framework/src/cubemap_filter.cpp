@@ -189,6 +189,9 @@ namespace himalaya::framework {
         }
 
         // Transition ALL mip levels GENERAL -> SHADER_READ_ONLY
+        // dstStage = COMPUTE because the immediate consumer is compress_bc6h().
+        // IBL path also calls this but submits a new command buffer afterwards,
+        // so the implicit submission-order guarantee covers fragment shader reads.
         VkImageMemoryBarrier2 to_read{};
         to_read.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
         to_read.srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
