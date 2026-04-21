@@ -9,11 +9,11 @@
 - [x] `framework/scene_data.h`：`GPUInstanceData::probe_index` → `_padding2`
 - [x] `shaders/common/bindings.glsl`：`GPUInstanceData` 对应更新
 - [x] `shaders/forward.frag`：移除 `inst.probe_index` 读取
-- [ ] `framework/src/bake_data_manager.cpp`：移除 CPU probe-to-instance 分配逻辑
-- [ ] `framework/include/himalaya/framework/bake_data_manager.h`：移除 `probe_indices()` 和 `probe_indices_` 成员
-- [ ] `framework/include/himalaya/framework/bake_data_manager.h`：新增 `loaded_probe_count()` 访问器
-- [ ] `framework/include/himalaya/framework/bake_data_manager.h`：`load_angle()` 签名移除 `mesh_instances` 参数 + 调用方同步
-- [ ] `app/src/renderer_rasterization.cpp`：移除 `probe_indices` 参数和填充逻辑
+- [x] `framework/src/bake_data_manager.cpp`：移除 CPU probe-to-instance 分配逻辑
+- [x] `framework/include/himalaya/framework/bake_data_manager.h`：移除 `probe_indices()` 和 `probe_indices_` 成员
+- [x] `framework/include/himalaya/framework/bake_data_manager.h`：新增 `loaded_probe_count()` 访问器
+- [x] `framework/include/himalaya/framework/bake_data_manager.h`：`load_angle()` 签名移除 `mesh_instances` 参数 + 调用方同步
+- [x] `app/src/renderer_rasterization.cpp`：移除 `probe_indices` 参数和填充逻辑
 - [ ] `framework/scene_data.h`：`GlobalUniformData` 新增 `probe_count` + `normal_bias` + `roughness_single` + `roughness_full` + `blend_curve` + padding 到 960B + `static_assert` 更新
 - [ ] `shaders/common/bindings.glsl`：`GlobalUBO` 新增 5 个字段
 - [ ] `app/src/renderer.cpp`：`fill_common_gpu_data()` 填入 probe count + 4 个 blend 参数（默认值）
