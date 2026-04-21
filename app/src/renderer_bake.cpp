@@ -1915,6 +1915,7 @@ namespace himalaya::app {
                         ctx_->end_immediate();
                     } else {
                         write_probe_manifest(bake_probe_set_key_, bake_rotation_int_,
+                                             bake_locked_config_.probe_spacing,
                                              bake_probe_accepted_positions_);
                         spdlog::info("No valid probes after filtering, skipping probe baking");
                         bake_state_ = framework::BakeState::Complete;
