@@ -371,8 +371,14 @@ namespace himalaya::framework {
         is_loaded_ = true;
         loaded_rotation_ = rotation_int;
 
-        spdlog::info("BakeDataManager: loaded angle {} — {} lightmaps, {} probes",
-                     rotation_int, loaded_lm, loaded_probes);
+        const auto expected_lm = static_cast<uint32_t>(lightmap_keys.size());
+        if (loaded_lm < expected_lm || loaded_probes < manifest_probe_count) {
+            spdlog::warn("BakeDataManager: loaded angle {} — {}/{} lightmaps, {}/{} probes (incomplete)",
+                         rotation_int, loaded_lm, expected_lm, loaded_probes, manifest_probe_count);
+        } else {
+            spdlog::info("BakeDataManager: loaded angle {} — {} lightmaps, {} probes",
+                         rotation_int, loaded_lm, loaded_probes);
+        }
     }
 
     void BakeDataManager::unload_angle() {
