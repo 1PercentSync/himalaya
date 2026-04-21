@@ -165,6 +165,11 @@ lightmap 和 probe 贡献是否生效。IBL 模式下隐藏，不影响模式切
 - [x] `app/debug_ui.cpp`：LP 模式下显示两个 checkbox（IBL 模式下隐藏）
 - [x] `app/debug_ui.cpp`：Rendering 区移到 Camera 区之前
 
+## Step 8.6：Lightmap Dilation（chart 接缝黑块修复）
+
+- [ ] `app/src/renderer_bake.cpp`：新增 `dilate_lightmap()` static 函数 — CPU 朴素 8 次全图迭代
+- [ ] `app/src/renderer_bake.cpp`：`lightmap_bake_finalize()` 中 OIDN 之后、upload flush 之前调用 dilation
+
 ## Step 9：AO/SO 按模式自动预设
 
 - [ ] `app/application.h`：per-mode AOConfig 存储（`ao_config_ibl_` + `ao_config_lightmap_probe_`）

@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 9：AO/SO 按模式自动预设。
+Step 8.6：Lightmap Dilation（chart 接缝黑块修复）— CPU 朴素全图 8 次迭代 flood-fill，插入 OIDN 之后 BC6H 之前。
 
 ---
 
