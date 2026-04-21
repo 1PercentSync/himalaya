@@ -34,6 +34,95 @@
 #include <spdlog/spdlog.h>
 
 namespace himalaya::app {
+    // ---- Dilation ----
+
+    /**
+     * Flood-fills uncovered lightmap texels from their covered neighbors.
+     *
+     * Prevents bilinear sampling bleeding (black from uncovered padding texels)
+     * and BC6H 4x4 block compression artifacts at chart boundaries.
+     *
+     * 4 iterations: fills the 2-texel xatlas padding gap completely, plus 2 extra
+     * iterations as margin for rare interior rasterization holes (thin triangles
+     * whose UV projection misses texel centers). Adjust if padding or BC6H block
+     * size changes. Could be migrated to a GPU compute shader (bake/dilation.comp)
+     * if bake latency becomes a concern at higher resolutions.
+     *
+     * @param target           RGBA32F pixel data to dilate in-place (post-OIDN).
+     * @param coverage_source  RGBA32F pixel data for coverage mask (pre-OIDN raw
+     *                         accumulation; alpha > 0 = covered by baker).
+     * @param width            Image width in texels.
+     * @param height           Image height in texels.
+     */
+    static void dilate_lightmap(float *target, const float *coverage_source,
+                                const uint32_t width, const uint32_t height) {
+        const uint32_t texel_count = width * height;
+
+        std::vector<uint8_t> covered(texel_count);
+        for (uint32_t i = 0; i < texel_count; ++i) {
+            covered[i] = (coverage_source[i * 4 + 3] > 0.0f) ? 1 : 0;
+        }
+
+        constexpr uint32_t kIterations = 4;
+        std::vector<uint8_t> newly_covered(texel_count);
+
+        for (uint32_t iter = 0; iter < kIterations; ++iter) {
+            std::memset(newly_covered.data(), 0, texel_count);
+            uint32_t filled = 0;
+
+            for (uint32_t y = 0; y < height; ++y) {
+                for (uint32_t x = 0; x < width; ++x) {
+                    const uint32_t idx = y * width + x;
+                    if (covered[idx]) { continue; }
+
+                    float sum_r = 0.0f, sum_g = 0.0f, sum_b = 0.0f;
+                    uint32_t count = 0;
+
+                    if (x > 0 && covered[idx - 1]) {
+                        sum_r += target[(idx - 1) * 4 + 0];
+                        sum_g += target[(idx - 1) * 4 + 1];
+                        sum_b += target[(idx - 1) * 4 + 2];
+                        ++count;
+                    }
+                    if (x + 1 < width && covered[idx + 1]) {
+                        sum_r += target[(idx + 1) * 4 + 0];
+                        sum_g += target[(idx + 1) * 4 + 1];
+                        sum_b += target[(idx + 1) * 4 + 2];
+                        ++count;
+                    }
+                    if (y > 0 && covered[idx - width]) {
+                        sum_r += target[(idx - width) * 4 + 0];
+                        sum_g += target[(idx - width) * 4 + 1];
+                        sum_b += target[(idx - width) * 4 + 2];
+                        ++count;
+                    }
+                    if (y + 1 < height && covered[idx + width]) {
+                        sum_r += target[(idx + width) * 4 + 0];
+                        sum_g += target[(idx + width) * 4 + 1];
+                        sum_b += target[(idx + width) * 4 + 2];
+                        ++count;
+                    }
+
+                    if (count > 0) {
+                        const float inv = 1.0f / static_cast<float>(count);
+                        target[idx * 4 + 0] = sum_r * inv;
+                        target[idx * 4 + 1] = sum_g * inv;
+                        target[idx * 4 + 2] = sum_b * inv;
+                        target[idx * 4 + 3] = 1.0f;
+                        newly_covered[idx] = 1;
+                        ++filled;
+                    }
+                }
+            }
+
+            for (uint32_t i = 0; i < texel_count; ++i) {
+                covered[i] |= newly_covered[i];
+            }
+
+            if (filled == 0) { break; }
+        }
+    }
+
     // ---- Helpers ----
 
     /**
@@ -913,6 +1002,9 @@ namespace himalaya::app {
         } else {
             std::memcpy(upload_ptr, beauty_ptr, beauty_size);
         }
+
+        dilate_lightmap(static_cast<float *>(upload_ptr),
+                        static_cast<const float *>(beauty_ptr), w, h);
 
         // Flush upload buffer so GPU sees CPU writes on non-coherent memory.
         vmaFlushAllocation(ctx_->allocator,
