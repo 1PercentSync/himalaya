@@ -6,9 +6,9 @@
 
 ## Step 1：GPUInstanceData 清理 + probe_count 引入
 
-- [ ] `framework/scene_data.h`：`GPUInstanceData::probe_index` → `_padding2`
-- [ ] `shaders/common/bindings.glsl`：`GPUInstanceData` 对应更新
-- [ ] `shaders/forward.frag`：移除 `inst.probe_index` 读取
+- [x] `framework/scene_data.h`：`GPUInstanceData::probe_index` → `_padding2`
+- [x] `shaders/common/bindings.glsl`：`GPUInstanceData` 对应更新
+- [x] `shaders/forward.frag`：移除 `inst.probe_index` 读取
 - [ ] `framework/src/bake_data_manager.cpp`：移除 CPU probe-to-instance 分配逻辑
 - [ ] `framework/include/himalaya/framework/bake_data_manager.h`：移除 `probe_indices()` 和 `probe_indices_` 成员
 - [ ] `framework/include/himalaya/framework/bake_data_manager.h`：新增 `loaded_probe_count()` 访问器

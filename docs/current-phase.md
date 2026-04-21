@@ -57,7 +57,7 @@ Step 10: 收尾
 
 - `framework/scene_data.h`：`GPUInstanceData` 的 `probe_index` 改为 `_padding2`，struct 保持 128 bytes
 - `shaders/common/bindings.glsl`：`GPUInstanceData` 对应更新
-- `shaders/forward.frag`：移除 `inst.probe_index` 读取
+- `shaders/forward.frag`：移除 `inst.probe_index` 读取。specular indirect 分支临时改为 `probes[0]`（所有 fragment 共用第一个 probe）+ `global.probe_count > 0u` 守卫防越界。**Step 4 会完全重写此分支为 per-pixel grid 查询 + top-2 blend**
 
 #### 1b. BakeDataManager probe 分配清理
 

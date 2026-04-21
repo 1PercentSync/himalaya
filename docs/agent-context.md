@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
 - **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
 - **Phase**：阶段八点五 — 间接光照质量提升（规划中）
-- **进度**：Phase 8.5 文档已就绪，待开始实现
+- **进度**：Step 1 实现中，1a 已完成（probe_index 移除）
 
 ### 下一个任务
 
-Phase 8.5 Step 1：GPUInstanceData 清理 + probe_count 引入
+Phase 8.5 Step 1b：BakeDataManager probe 分配清理
 
 ---
 
