@@ -425,6 +425,7 @@ namespace himalaya::app {
         // Record pre-bake mode and bake scope
         bake_pre_mode_ = pre_bake_mode;
         bake_mode_ = mode;
+        loaded_uv_rotation_ = UINT32_MAX;
 
         // Ensure reference view async denoiser is idle before baking
         abort_denoise();
