@@ -44,10 +44,8 @@
 
 ## Step 5：Runtime 参数 + ImGui 面板
 
-- [ ] `app/src/renderer.cpp`：`fill_common_gpu_data()` 改为从 Application 层参数读取 blend 值（不再使用默认值）
-- [ ] `app/src/debug_ui.cpp`：Rendering 区新增 4 个 slider（LP 模式下可见）
-- [ ] `app/src/debug_ui.cpp`：Bake 面板新增 `probe_relocation_offset` slider
-- [ ] `framework/scene_data.h`：`BakeConfig` 新增 `probe_relocation_offset`（默认 0.1f）
+- [x] `app/src/renderer.cpp`：`fill_common_gpu_data()` 改为从 Application 层参数读取 blend 值（不再使用默认值）
+- [x] `app/src/debug_ui.cpp`：Rendering 区新增 4 个 slider（LP 模式下可见）
 
 ## Step 6：Probe Relocation — Pre-bake
 
@@ -55,6 +53,7 @@
 - [ ] `shaders/bake/probe_filter.comp`：射线循环维护 running minimum t_hit + hit_pos + hit_normal
 - [ ] `shaders/bake/probe_filter.comp`：Rule 1 改为先记录命中信息再写 result 并 return
 - [ ] `framework/src/probe_placement.cpp`：result buffer 大小 `total * 32`，readback 结构化解析
+- [ ] `framework/scene_data.h`：`BakeConfig` 新增 `probe_relocation_offset`（默认 0.1f）
 - [ ] `framework/src/probe_placement.cpp`：失败候选计算 relocated position（hit_pos + normal × offset）
 - [ ] `framework/src/probe_placement.cpp`：收集 relocated 候选，第二次 dispatch 同一 filter shader
 - [ ] `framework/src/probe_placement.cpp`：合并两批 survivors + 日志统计（relocated N, passed M）
@@ -68,6 +67,7 @@
 - [ ] `app/src/renderer_bake.cpp`：re-bake 后再次黑面检测，仍失败则最终剔除
 - [ ] `framework/include/himalaya/framework/render_progress.h`：`BakeProgress` 新增 `probes_relocated` 计数
 - [ ] `app/src/debug_ui.cpp`：显示 relocated vs rejected 统计
+- [ ] `app/src/debug_ui.cpp`：Bake 面板新增 `probe_relocation_offset` slider
 
 ## Step 8：AABB 计算 + Manifest AABB 扩展
 
