@@ -586,7 +586,7 @@ struct GPUProbeData {
 
 // Probe Manifest v2 二进制格式（磁盘持久化）
 // v1: uint32 probe_count + vec3[probe_count] positions
-// v2: uint32 version(=2) + uint32 probe_count + ProbeManifestEntry[probe_count]
+// v2: uint32 version(=2) + uint32 probe_count + float grid_spacing + uint32 _pad + ProbeManifestEntry[probe_count]
 struct ProbeManifestEntry {
     glm::vec3 position;                         // probe 世界空间位置
     glm::vec3 aabb_min;                         // PCC AABB 最小角

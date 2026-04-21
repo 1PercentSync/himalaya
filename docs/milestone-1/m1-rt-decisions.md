@@ -1154,7 +1154,7 @@ Probe specular 的 roughness-based LOD 使用 `textureQueryLevels(cubemaps[probe
 
 Phase 8：CPU per-instance 分配。BakeDataManager 加载 probe 位置后，对每个 instance 找最近 probe（世界空间 AABB 中心到 probe 位置的欧氏距离），存储 `probe_index`。
 
-~~Phase 8.5 演进：GPU per-pixel 网格查找。`probe_index` 字段闲置（可保留作为 grid 空洞 fallback）。~~ → **Phase 8.5 已实现**：per-pixel 选取 + 3D grid 空间索引 + 法线半球过滤 + top-2 blend。`probe_index` 字段移除。详见下方「Phase 8.5 间接光照质量提升决策」章节。
+~~Phase 8.5 演进：GPU per-pixel 网格查找。`probe_index` 字段闲置（可保留作为 grid 空洞 fallback）。~~ → **Phase 8.5 决策已确定**（待实现）：per-pixel 选取 + 3D grid 空间索引 + 法线半球过滤 + top-2 blend。`probe_index` 字段将移除。详见下方「Phase 8.5 间接光照质量提升决策」章节。
 
 ### 无 Lightmap Instance 处理
 

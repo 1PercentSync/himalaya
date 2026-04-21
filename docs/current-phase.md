@@ -104,6 +104,7 @@ Bake 后检测到部分面全黑的 probe，移动后重新 bake **严格一次*
 
 - `BakeProgress` 扩展：`probes_relocated` 计数（区别于 `probes_rejected`）
 - DebugUI 显示 relocated vs rejected 统计
+- 进度影响：relocated probe 的 re-bake 使 `probe_sample_count` 从 0 重新累积，当前 probe 进度条回退。`bake_probe_total_` 不变（仍是候选数），总进度百分比通过 `(completed + current_fraction) / total` 计算，relocated probe 等同于在同一 slot 烘焙两次——总进度会短暂倒退但最终追上。ETA 受影响但可接受
 
 #### 2d. Phase 8.5 后的完整 probe bake 流程
 
@@ -307,7 +308,8 @@ Bake-time 参数（bake 面板中，下次 bake 生效）：
 #### 8a. Manifest 格式 v2
 
 - 当前格式：`uint32_t probe_count` + `vec3[probe_count] positions`
-- 新格式：`uint32_t version`(= 2) + `uint32_t probe_count` + per-probe stride: `vec3 position` + `vec3 aabb_min` + `vec3 aabb_max`（36 bytes per probe）
+- 新格式：`uint32_t version`(= 2) + `uint32_t probe_count` + `float grid_spacing` + `uint32_t _pad` + per-probe stride: `vec3 position` + `vec3 aabb_min` + `vec3 aabb_max`（header 16B + 36 bytes per probe）
+- `grid_spacing` 写入 manifest 使 `load_angle()` 无需外部传入 bake config 即可构建 3D grid（自包含）
 - `renderer_bake.cpp`：`write_probe_manifest()` 写入 v2 格式
 
 #### 8b. BakeDataManager 读取 AABB
