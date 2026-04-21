@@ -211,9 +211,6 @@ Runtime 参数（不影响 bake，ImGui 实时可调）：
 - `float roughness_full`（默认 0.5，范围 0.0-1.0）— 高于此值完整 blend
 - `float blend_curve`（默认 1.0，范围 0.1-4.0）— 过渡曲线形状
 
-Bake-time 参数（bake 面板中，下次 bake 生效）：
-- `float probe_relocation_offset`（默认 0.1，范围 0.01-0.5，单位 meters）
-
 #### 5b. GPU 传递
 
 - GlobalUBO 字段已在 Step 1c 引入（`probe_count` + 4 个 blend float），此处只需确保 `fill_common_gpu_data()` 从 Application 层参数读取最新值（Step 1 中使用默认值，Step 5 后由 ImGui slider 控制）
@@ -221,9 +218,8 @@ Bake-time 参数（bake 面板中，下次 bake 生效）：
 #### 5c. ImGui 面板
 
 - Rendering 区（LP 模式下可见）：`normal_bias`、`roughness_single`、`roughness_full`、`blend_curve` 四个 slider
-- Bake 面板：`probe_relocation_offset` slider
 
-**注意**：所有新参数（runtime 和 bake-time）均不做 JSON 持久化，每次启动使用默认值。与现有 AO/shadow 参数模式一致。`probe_relocation_offset` 影响 bake 结果，持久化后用户可能忘记曾修改过。
+**注意**：所有新参数均不做 JSON 持久化，每次启动使用默认值。与现有 AO/shadow 参数模式一致。
 
 **验证**：slider 拖动实时影响 probe 选取和 blend 效果
 
@@ -303,6 +299,11 @@ BakingProbes 阶段内部：
   ↓
   BakeState → Complete
 ```
+
+#### 7e. Relocation UI
+
+- Bake 面板：`probe_relocation_offset` slider（范围 0.01-0.5，默认 0.1m）
+- 不做 JSON 持久化，每次启动使用默认值。`probe_relocation_offset` 影响 bake 结果，持久化后用户可能忘记曾修改过
 
 **验证**：post-bake reject 率相比 Phase 8 显著下降，relocated probe 的 cubemap 无全黑面
 
