@@ -173,6 +173,16 @@ void main() {
                 }
                 break;
             }
+            case DEBUG_MODE_LIGHTMAP_ONLY: {
+                GPUInstanceData dbg_inst = instances[frag_instance_index];
+                if ((global.feature_flags & FEATURE_LIGHTMAP) != 0u
+                    && dbg_inst.lightmap_index != 0xFFFFFFFFu) {
+                    vis = texture(textures[nonuniformEXT(dbg_inst.lightmap_index)], frag_uv1).rgb;
+                } else {
+                    vis = vec3(0.0);
+                }
+                break;
+            }
             default: vis = vec3(1.0, 0.0, 1.0); break;
         }
         out_color = vec4(vis, 1.0);

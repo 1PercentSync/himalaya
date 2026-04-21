@@ -86,6 +86,7 @@ struct GPUMaterialData {
 #define DEBUG_MODE_SHADOW_CASCADES   8
 #define DEBUG_MODE_AO_SSAO           9
 #define DEBUG_MODE_CONTACT_SHADOWS  10
+#define DEBUG_MODE_LIGHTMAP_ONLY   11
 
 // ---- Set 0: Global data (updated once per frame) ----
 
