@@ -230,9 +230,6 @@ namespace himalaya::app {
 
         spdlog::info("Loading scene: {}", path);
 
-        // Compute scene file content hash (for bake cache keys)
-        scene_hash_ = framework::content_hash(std::filesystem::path(path));
-
         try {
             if (!std::filesystem::exists(path)) {
                 throw std::runtime_error("Scene file not found: " + path);
@@ -500,15 +497,6 @@ namespace himalaya::app {
             }
         }
 
-        // Compute scene_textures_hash: concatenate all source hashes and hash the result
-        if (!source_hashes.empty()) {
-            std::string concatenated;
-            for (const auto &h : source_hashes) {
-                concatenated += h;
-            }
-            scene_textures_hash_ = framework::content_hash(concatenated.data(), concatenated.size());
-        }
-
         // Phase 2b: Decode only cache-miss images (serial, skips cached textures)
         std::vector<framework::ImageData> decoded_images(tex_count);
         for (int i = 0; i < tex_count; ++i) {
@@ -729,9 +717,6 @@ namespace himalaya::app {
         cpu_indices_.clear();
         gpu_materials_.clear();
         scene_bounds_ = {glm::vec3(0.0f), glm::vec3(0.0f)};
-        scene_hash_.clear();
-        scene_textures_hash_.clear();
-
         resource_manager_ = nullptr;
         descriptor_manager_ = nullptr;
     }
@@ -770,57 +755,6 @@ namespace himalaya::app {
 
     const framework::AABB &SceneLoader::scene_bounds() const {
         return scene_bounds_;
-    }
-
-    const std::string &SceneLoader::scene_hash() const {
-        return scene_hash_;
-    }
-
-    const std::string &SceneLoader::scene_textures_hash() const {
-        return scene_textures_hash_;
-    }
-
-    void SceneLoader::rebuild_mesh_buffers(const uint32_t mesh_id,
-                                             const std::span<const framework::Vertex> new_vertices,
-                                             const std::span<const uint32_t> new_indices) {
-        assert(mesh_id < meshes_.size());
-
-        resource_manager_->destroy_buffer(buffers_[mesh_id * 2]);
-        resource_manager_->destroy_buffer(buffers_[mesh_id * 2 + 1]);
-
-        const auto vb_size = new_vertices.size() * sizeof(framework::Vertex);
-        const auto ib_size = new_indices.size() * sizeof(uint32_t);
-
-        const auto label = "Prim " + std::to_string(mesh_id);
-        auto vb_usage = rhi::BufferUsage::VertexBuffer | rhi::BufferUsage::TransferDst;
-        auto ib_usage = rhi::BufferUsage::IndexBuffer | rhi::BufferUsage::TransferDst;
-        if (rt_supported_) {
-            vb_usage = vb_usage | rhi::BufferUsage::ShaderDeviceAddress
-                                | rhi::BufferUsage::AccelStructBuildInput;
-            ib_usage = ib_usage | rhi::BufferUsage::ShaderDeviceAddress
-                                | rhi::BufferUsage::AccelStructBuildInput;
-        }
-
-        auto vb = resource_manager_->create_buffer({
-            .size = vb_size,
-            .usage = vb_usage,
-            .memory = rhi::MemoryUsage::GpuOnly,
-        }, (label + " VB").c_str());
-        auto ib = resource_manager_->create_buffer({
-            .size = ib_size,
-            .usage = ib_usage,
-            .memory = rhi::MemoryUsage::GpuOnly,
-        }, (label + " IB").c_str());
-
-        resource_manager_->upload_buffer(vb, new_vertices.data(), vb_size);
-        resource_manager_->upload_buffer(ib, new_indices.data(), ib_size);
-
-        buffers_[mesh_id * 2] = vb;
-        buffers_[mesh_id * 2 + 1] = ib;
-        meshes_[mesh_id].vertex_buffer = vb;
-        meshes_[mesh_id].index_buffer = ib;
-        meshes_[mesh_id].vertex_count = static_cast<uint32_t>(new_vertices.size());
-        meshes_[mesh_id].index_count = static_cast<uint32_t>(new_indices.size());
     }
 
 } // namespace himalaya::app
