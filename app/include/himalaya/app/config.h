@@ -12,8 +12,7 @@ namespace himalaya::app {
     /**
      * @brief Persistent application configuration.
      *
-     * Stores user-selected scene and environment paths, and per-HDR
-     * sun pixel coordinates. Serialized as JSON to
+     * Stores user-selected scene and environment paths. Serialized as JSON to
      * `%LOCALAPPDATA%\himalaya\config.json`. All fields are optional —
      * empty/default means no value configured.
      */

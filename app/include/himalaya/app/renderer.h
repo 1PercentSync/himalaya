@@ -39,9 +39,6 @@ namespace himalaya::framework {
 }
 
 namespace himalaya::app {
-    /** @brief Maximum directional lights the LightBuffer can hold. */
-    inline constexpr uint32_t kMaxDirectionalLights = 1;
-
     /**
      * @brief Per-frame semantic data passed from Application to Renderer.
      *
@@ -378,9 +375,6 @@ namespace himalaya::app {
         /** @brief Per-frame GlobalUBO buffers (CpuToGpu, one per frame in flight). */
         std::array<rhi::BufferHandle, rhi::kMaxFramesInFlight> global_ubo_buffers_{};
 
-        /** @brief Per-frame LightBuffer SSBOs (CpuToGpu, one per frame in flight). */
-        std::array<rhi::BufferHandle, rhi::kMaxFramesInFlight> light_buffers_{};
-
         /** @brief Registered ImageHandles for swapchain images (one per swapchain image). */
         std::vector<rhi::ImageHandle> swapchain_image_handles_;
 
@@ -407,7 +401,7 @@ namespace himalaya::app {
         void reset_pt_accumulation();
 
         /**
-         * @brief Fills GlobalUBO and LightBuffer for the current frame.
+         * @brief Fills GlobalUBO for the current frame.
          */
         void fill_common_gpu_data(const RenderInput &input) const;
 
@@ -415,6 +409,14 @@ namespace himalaya::app {
          * @brief Path tracing render path: Reference View Pass + Tonemapping + ImGui.
          */
         void render_path_tracing(rhi::CommandBuffer &cmd, const RenderInput &input);
+
+        /**
+         * @brief Fallback render path: ImGui only (no scene / no RT).
+         *
+         * Clears swapchain to black, renders ImGui overlay, ensures
+         * swapchain image transitions to present layout.
+         */
+        void render_imgui_only(rhi::CommandBuffer &cmd, const RenderInput &input);
 
         /** @brief Registers all swapchain images as external images in ResourceManager. */
         void register_swapchain_images();

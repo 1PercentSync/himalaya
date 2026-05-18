@@ -26,15 +26,8 @@ layout(push_constant) uniform PushConstants {
     uint  blue_noise_index;
     float max_clamp;
     uint  env_sampling;          // 1 = env importance sampling enabled
-    uint  directional_lights;    // 1 = directional lights enabled in PT
     uint  emissive_light_count;  // number of emissive triangles (0 = skip NEE emissive)
     uint  lod_max_level;         // ray cone LOD upper clamp (0 = full resolution)
-    uint  lightmap_width;        // lightmap texel width (0 for reference view)
-    uint  lightmap_height;       // lightmap texel height (0 for reference view)
-    float probe_pos_x;           // probe world position x (0 for non-probe)
-    float probe_pos_y;           // probe world position y (0 for non-probe)
-    float probe_pos_z;           // probe world position z (0 for non-probe)
-    uint  face_index;            // probe cubemap face 0-5 (0 for non-probe)
 } pc;
 
 // ---- OIDN auxiliary images (push descriptor, Set 3) ----
@@ -144,11 +137,8 @@ void main() {
     vec3 V = -gl_WorldRayDirectionEXT;
     float NdotV = max(dot(N_shading, V), 1e-4);
 
-    // ---- OIDN auxiliary output (bounce 0, non-lightmap only) ----
-    // Lightmap baker pre-fills aux via rasterized albedo/normal maps (Step 9.5c);
-    // closesthit would overwrite with the wrong surface (first hemisphere hit).
-    // Reference view and probe baker write aux normally (lightmap_width == 0).
-    if (payload.bounce == 0u && pc.lightmap_width == 0u) {
+    // ---- OIDN auxiliary output (bounce 0) ----
+    if (payload.bounce == 0u) {
         ivec2 pixel = ivec2(gl_LaunchIDEXT.xy);
         imageStore(aux_albedo_image, pixel, vec4(diffuse_color, 1.0));
         imageStore(aux_normal_image, pixel, vec4(N_shading, 1.0));
@@ -178,48 +168,7 @@ void main() {
     // ---- Ray origin offset (shared by shadow rays and next bounce) ----
     vec3 offset_pos = offset_ray_origin(world_pos, N_face);
 
-    // ---- NEE: Directional lights (delta distribution, MIS weight = 1) ----
     vec3 nee_radiance = vec3(0.0);
-    for (uint i = 0; i < global.directional_light_count && pc.directional_lights == 1u; ++i) {
-        vec3 L = normalize(-directional_lights[i].direction_and_intensity.xyz);
-        float NdotL = dot(N_shading, L);
-        if (NdotL <= 0.0) {
-            continue;
-        }
-
-        // Shadow ray (terminate on first hit, skip closest-hit shader)
-        shadow_payload.visible = 0;
-        traceRayEXT(
-            tlas,
-            gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsSkipClosestHitShaderEXT,
-            0xFF,
-            0, 0,       // SBT offset, stride
-            1,          // miss index 1 (shadow miss)
-            offset_pos,
-            0.0,
-            L,
-            10000.0,
-            1           // payload location 1
-        );
-
-        if (shadow_payload.visible == 1u) {
-            float intensity = directional_lights[i].direction_and_intensity.w;
-            vec3 light_color = directional_lights[i].color_and_shadow.xyz;
-
-            vec3 H = normalize(V + L);
-            float NdotH = max(dot(N_shading, H), 0.0);
-            float VdotH = max(dot(V, H), 0.0);
-
-            float D   = D_GGX(NdotH, roughness);
-            float Vis = V_SmithGGX(NdotV, NdotL, roughness);
-            vec3  F   = F_Schlick(VdotH, F0);
-
-            vec3 specular = D * Vis * F;
-            vec3 diffuse  = (1.0 - F) * diffuse_color * INV_PI;
-
-            nee_radiance += (diffuse + specular) * light_color * intensity * NdotL;
-        }
-    }
 
     // ---- NEE: Environment light (alias table importance sampling + MIS) ----
     if (pc.env_sampling == 1u) {

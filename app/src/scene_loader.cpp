@@ -243,7 +243,7 @@ namespace himalaya::app {
 
             constexpr auto options = fastgltf::Options::LoadExternalBuffers | fastgltf::Options::LoadExternalImages;
 
-            fastgltf::Parser parser(fastgltf::Extensions::KHR_lights_punctual);
+            fastgltf::Parser parser;
             const auto base_dir = std::filesystem::path(path).parent_path();
             auto asset = parser.loadGltf(gltf_data.get(), base_dir, options);
             if (asset.error() != fastgltf::Error::None) {
@@ -291,7 +291,7 @@ namespace himalaya::app {
 
                 std::vector<framework::Vertex> vertices(vertex_count);
 
-                // Compute local AABB from position data for frustum culling
+                // Compute local AABB from position data
                 glm::vec3 local_min(std::numeric_limits<float>::max());
                 glm::vec3 local_max(std::numeric_limits<float>::lowest());
 
@@ -357,8 +357,9 @@ namespace himalaya::app {
                     }
                 } else {
                     indices.resize(vertex_count);
-                    for (size_t j = 0; j < vertex_count; ++j)
+                    for (size_t j = 0; j < vertex_count; ++j) {
                         indices[j] = static_cast<uint32_t>(j);
+                    }
                 }
 
                 // Generate tangents via MikkTSpace if missing (needs normal + uv0)
@@ -465,9 +466,9 @@ namespace himalaya::app {
         for (const auto &mat : gltf.materials) {
             const auto &pbr = mat.pbrData;
             auto collect = [&](const auto &opt_tex, const framework::TextureRole role) {
-                if (!opt_tex.has_value()) return;
+                if (!opt_tex.has_value()) { return; }
                 const auto key = std::make_pair(opt_tex->textureIndex, role);
-                if (unique_tex_map.contains(key)) return;
+                if (unique_tex_map.contains(key)) { return; }
                 unique_tex_map[key] = unique_entries.size();
                 unique_entries.push_back({opt_tex->textureIndex, role});
             };
@@ -500,7 +501,7 @@ namespace himalaya::app {
         // Phase 2b: Decode only cache-miss images (serial, skips cached textures)
         std::vector<framework::ImageData> decoded_images(tex_count);
         for (int i = 0; i < tex_count; ++i) {
-            if (cache_hit[i]) continue;
+            if (cache_hit[i]) { continue; }
             const auto &tex = gltf.textures[unique_entries[i].texture_index];
             decoded_images[i] = decode_gltf_image(gltf, gltf.images[*tex.imageIndex], base_dir);
         }
@@ -508,7 +509,7 @@ namespace himalaya::app {
         // Phase 2c: Parallel BC compression for cache misses only
         #pragma omp parallel for schedule(dynamic)
         for (int i = 0; i < tex_count; ++i) {
-            if (cache_hit[i]) continue;
+            if (cache_hit[i]) { continue; }
             prepared_textures[i] = framework::compress_texture(
                 decoded_images[i], unique_entries[i].role, source_hashes[i]);
         }
@@ -633,23 +634,7 @@ namespace himalaya::app {
             [&](fastgltf::Node &node, const fastgltf::math::fmat4x4 &world_transform) {
                 const auto world_mat = convert_matrix(world_transform);
 
-                // Extract directional lights from KHR_lights_punctual
-                if (node.lightIndex.has_value()) {
-                    const auto &light = gltf.lights[*node.lightIndex];
-                    if (light.type == fastgltf::LightType::Directional) {
-                        // glTF lights point along -Z of their node transform
-                        const auto direction = glm::normalize(
-                            glm::vec3(world_mat * glm::vec4(0.0f, 0.0f, -1.0f, 0.0f)));
-                        directional_lights_.push_back({
-                            .direction = direction,
-                            .color = {light.color.x(), light.color.y(), light.color.z()},
-                            .intensity = light.intensity,
-                            .cast_shadows = false,
-                        });
-                    }
-                }
-
-                if (!node.meshIndex.has_value()) return;
+                if (!node.meshIndex.has_value()) { return; }
 
                 const auto gltf_mesh_idx = *node.meshIndex;
                 const uint32_t prim_start = mesh_data.prim_offsets[gltf_mesh_idx];
@@ -666,8 +651,8 @@ namespace himalaya::app {
                 }
             });
 
-        spdlog::info("Created {} mesh instances, {} directional lights from {} nodes",
-                     mesh_instances_.size(), directional_lights_.size(), gltf.nodes.size());
+        spdlog::info("Created {} mesh instances from {} nodes",
+                     mesh_instances_.size(), gltf.nodes.size());
 
         // Compute scene AABB (union of all instance world_bounds)
         if (!mesh_instances_.empty()) {
@@ -682,7 +667,7 @@ namespace himalaya::app {
     }
 
     void SceneLoader::destroy() {
-        if (!resource_manager_) return;
+        if (!resource_manager_) { return; }
 
         // Unregister bindless textures first (before destroying images)
         for (const auto idx: bindless_indices_) {
@@ -712,7 +697,6 @@ namespace himalaya::app {
         meshes_.clear();
         material_instances_.clear();
         mesh_instances_.clear();
-        directional_lights_.clear();
         cpu_vertices_.clear();
         cpu_indices_.clear();
         gpu_materials_.clear();
@@ -731,10 +715,6 @@ namespace himalaya::app {
 
     std::span<const framework::MeshInstance> SceneLoader::mesh_instances() const {
         return mesh_instances_;
-    }
-
-    std::span<const framework::DirectionalLight> SceneLoader::directional_lights() const {
-        return directional_lights_;
     }
 
     std::span<const std::vector<framework::Vertex>> SceneLoader::cpu_vertices() const {

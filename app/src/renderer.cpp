@@ -5,9 +5,14 @@
 
 #include <himalaya/app/renderer.h>
 
+#include <himalaya/framework/imgui_backend.h>
+#include <himalaya/framework/render_graph.h>
 #include <himalaya/framework/scene_data.h>
+#include <himalaya/rhi/commands.h>
 #include <himalaya/rhi/resources.h>
 #include <himalaya/rhi/swapchain.h>
+
+#include <array>
 
 #include <GLFW/glfw3.h>
 
@@ -48,8 +53,56 @@ namespace himalaya::app {
     void Renderer::render(rhi::CommandBuffer &cmd, const RenderInput &input) {
         pending_semaphore_signal_ = {};
         fill_common_gpu_data(input);
-        render_path_tracing(cmd, input);
+
+        if (ctx_->rt_supported && scene_as_builder_.tlas_handle().as != VK_NULL_HANDLE) {
+            render_path_tracing(cmd, input);
+        } else {
+            render_imgui_only(cmd, input);
+        }
+
         ++frame_counter_;
+    }
+
+    void Renderer::render_imgui_only(rhi::CommandBuffer &cmd, const RenderInput &input) {
+        render_graph_.clear();
+
+        const auto swapchain_image = render_graph_.import_image(
+            "Swapchain",
+            swapchain_image_handles_[input.image_index],
+            VK_IMAGE_LAYOUT_UNDEFINED,
+            VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+
+        const std::array imgui_resources = {
+            framework::RGResourceUsage{
+                swapchain_image,
+                framework::RGAccessType::ReadWrite,
+                framework::RGStage::ColorAttachment
+            },
+        };
+        render_graph_.add_pass("ImGui", imgui_resources,
+                               [this, &input](const rhi::CommandBuffer &pass_cmd) {
+                                   VkRenderingAttachmentInfo color_attachment{};
+                                   color_attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+                                   color_attachment.imageView = swapchain_->image_views[input.image_index];
+                                   color_attachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+                                   color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+                                   color_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+                                   color_attachment.clearValue.color = {{0.0f, 0.0f, 0.0f, 1.0f}};
+
+                                   VkRenderingInfo rendering_info{};
+                                   rendering_info.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
+                                   rendering_info.renderArea = {{0, 0}, swapchain_->extent};
+                                   rendering_info.layerCount = 1;
+                                   rendering_info.colorAttachmentCount = 1;
+                                   rendering_info.pColorAttachments = &color_attachment;
+
+                                   pass_cmd.begin_rendering(rendering_info);
+                                   imgui_->render(pass_cmd.handle());
+                                   pass_cmd.end_rendering();
+                               });
+
+        render_graph_.compile();
+        render_graph_.execute(cmd);
     }
 
     // ---- Accessors ----

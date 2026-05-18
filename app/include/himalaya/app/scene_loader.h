@@ -82,9 +82,6 @@ namespace himalaya::app {
         /** @brief Returns all scene mesh instances (one per node-primitive combination). */
         [[nodiscard]] std::span<const framework::MeshInstance> mesh_instances() const;
 
-        /** @brief Returns the loaded directional lights (may be empty). */
-        [[nodiscard]] std::span<const framework::DirectionalLight> directional_lights() const;
-
         /** @brief Returns per-mesh CPU vertex data (parallel to meshes()). Available until destroy(). */
         [[nodiscard]] std::span<const std::vector<framework::Vertex>> cpu_vertices() const;
 
@@ -102,7 +99,7 @@ namespace himalaya::app {
          *
          * Available after load() completes. Empty scene returns a degenerate
          * AABB (min = max = 0). Used by Application to initialize
-         * ShadowConfig.max_distance and camera position.
+         * camera positioning.
          */
         [[nodiscard]] const framework::AABB &scene_bounds() const;
 
@@ -128,9 +125,6 @@ namespace himalaya::app {
 
         /** @brief Scene mesh instances (one per node-primitive combination). */
         std::vector<framework::MeshInstance> mesh_instances_;
-
-        /** @brief Directional lights extracted from glTF KHR_lights_punctual. */
-        std::vector<framework::DirectionalLight> directional_lights_;
 
         /** @brief CPU vertex data per mesh (parallel to meshes_). Retained for EmissiveLightBuilder. */
         std::vector<std::vector<framework::Vertex>> cpu_vertices_;

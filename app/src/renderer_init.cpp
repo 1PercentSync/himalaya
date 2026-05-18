@@ -111,21 +111,6 @@ namespace himalaya::app {
                 sizeof(framework::GlobalUniformData));
         }
 
-        // --- LightBuffer SSBOs (per-frame, CpuToGpu) ---
-        constexpr auto light_buffer_size = static_cast<uint64_t>(kMaxDirectionalLights) *
-                                           sizeof(framework::GPUDirectionalLight);
-        constexpr const char *kLightBufferNames[] = {"Light SSBO [Frame 0]", "Light SSBO [Frame 1]"};
-        static_assert(std::size(kLightBufferNames) == rhi::kMaxFramesInFlight);
-        for (uint32_t i = 0; i < rhi::kMaxFramesInFlight; ++i) {
-            light_buffers_[i] = resource_manager_->create_buffer({
-                                                                     .size = light_buffer_size,
-                                                                     .usage = rhi::BufferUsage::StorageBuffer,
-                                                                     .memory = rhi::MemoryUsage::CpuToGpu,
-                                                                 }, kLightBufferNames[i]);
-            descriptor_manager_->write_set0_buffer(
-                i, 1, light_buffers_[i], light_buffer_size);
-        }
-
         // --- Default sampler ---
         default_sampler_ = resource_manager_->create_sampler({
                                                                  .mag_filter = rhi::Filter::Linear,
@@ -240,9 +225,6 @@ namespace himalaya::app {
 
         for (const auto ubo: global_ubo_buffers_) {
             resource_manager_->destroy_buffer(ubo);
-        }
-        for (const auto buf: light_buffers_) {
-            resource_manager_->destroy_buffer(buf);
         }
 
         descriptor_manager_->unregister_texture(blue_noise_bindless_);

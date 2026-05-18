@@ -109,7 +109,7 @@ namespace himalaya::app {
         /** @brief Path tracing configuration parameters. */
         framework::PTConfig pt_config_{};
 
-        // --- Left-click drag state (IBL rotation or fallback light direction) ---
+        // --- Left-click drag state (IBL rotation) ---
 
         /** @brief Previous cursor X for left-click drag delta. */
         double drag_last_x_ = 0.0;
@@ -167,9 +167,7 @@ namespace himalaya::app {
         /**
          * @brief Processes left-click drag input.
          *
-         * Without Alt: rotates IBL environment horizontally (ibl_yaw_).
-         * With Alt: rotates fallback light direction (yaw + pitch), only
-         * when light_source_mode_ is Fallback. Does not hide the cursor.
+         * Left-click drag rotates IBL environment horizontally (ibl_yaw_).
          */
         void update_drag_input();
 

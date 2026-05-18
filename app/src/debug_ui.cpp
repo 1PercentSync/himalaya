@@ -112,7 +112,7 @@ namespace himalaya::app {
 
     void DebugUI::FrameStats::compute() {
         const size_t n = samples_.size();
-        if (n == 0) return;
+        if (n == 0) { return; }
 
         float total = 0.0f;
         for (const float s: samples_) {

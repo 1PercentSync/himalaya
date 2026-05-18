@@ -278,15 +278,8 @@ namespace himalaya::passes {
                              .blue_noise_index = blue_noise_index_,
                              .max_clamp = max_clamp_,
                              .env_sampling = env_sampling_ ? 1u : 0u,
-                             .directional_lights = directional_lights_ ? 1u : 0u,
                              .emissive_light_count = emissive_light_count_,
                              .lod_max_level = lod_max_level_,
-                             .lightmap_width = 0,
-                             .lightmap_height = 0,
-                             .probe_pos_x = 0.0f,
-                             .probe_pos_y = 0.0f,
-                             .probe_pos_z = 0.0f,
-                             .face_index = 0,
                          };
                          cmd.push_constants(
                              rt_pipeline_.layout,
@@ -327,10 +320,6 @@ namespace himalaya::passes {
 
     void ReferenceViewPass::set_env_sampling(const bool v) {
         env_sampling_ = v;
-    }
-
-    void ReferenceViewPass::set_directional_lights(const bool v) {
-        directional_lights_ = v;
     }
 
     void ReferenceViewPass::set_emissive_light_count(const uint32_t v) {

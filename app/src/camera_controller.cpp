@@ -82,12 +82,12 @@ namespace himalaya::app {
 
             glm::vec3 move{0.0f};
 
-            if (glfwGetKey(window_, GLFW_KEY_W) == GLFW_PRESS) move += forward;
-            if (glfwGetKey(window_, GLFW_KEY_S) == GLFW_PRESS) move -= forward;
-            if (glfwGetKey(window_, GLFW_KEY_D) == GLFW_PRESS) move += right;
-            if (glfwGetKey(window_, GLFW_KEY_A) == GLFW_PRESS) move -= right;
-            if (glfwGetKey(window_, GLFW_KEY_SPACE) == GLFW_PRESS) move += world_up;
-            if (glfwGetKey(window_, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS) move -= world_up;
+            if (glfwGetKey(window_, GLFW_KEY_W) == GLFW_PRESS) { move += forward; }
+            if (glfwGetKey(window_, GLFW_KEY_S) == GLFW_PRESS) { move -= forward; }
+            if (glfwGetKey(window_, GLFW_KEY_D) == GLFW_PRESS) { move += right; }
+            if (glfwGetKey(window_, GLFW_KEY_A) == GLFW_PRESS) { move -= right; }
+            if (glfwGetKey(window_, GLFW_KEY_SPACE) == GLFW_PRESS) { move += world_up; }
+            if (glfwGetKey(window_, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS) { move -= world_up; }
 
             if (glm::dot(move, move) > 0.0f) {
                 const float speed = glfwGetKey(window_, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS

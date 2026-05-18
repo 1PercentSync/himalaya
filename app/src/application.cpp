@@ -119,7 +119,7 @@ namespace himalaya::app {
         const float diagonal = glm::length(bounds.max - bounds.min);
 
         constexpr float kEpsilon = 1e-4f;
-        if (diagonal < kEpsilon) return;
+        if (diagonal < kEpsilon) { return; }
 
         camera_.yaw = 0.0f;
         camera_.pitch = glm::radians(-45.0f);
@@ -133,8 +133,8 @@ namespace himalaya::app {
         vkQueueWaitIdle(context_.graphics_queue);
 
         renderer_.abort_denoise();
-        scene_loader_.destroy();
         renderer_.destroy_scene_rt();
+        scene_loader_.destroy();
 
         if (!path.empty()) {
             context_.begin_immediate();
@@ -188,8 +188,8 @@ namespace himalaya::app {
         vkQueueWaitIdle(context_.graphics_queue);
 
         imgui_backend_.destroy();
-        scene_loader_.destroy();
         renderer_.destroy();
+        scene_loader_.destroy();
         descriptor_manager_.destroy();
         resource_manager_.destroy();
         swapchain_.destroy(context_.device);
@@ -211,7 +211,7 @@ namespace himalaya::app {
                 glfwGetFramebufferSize(window_, &fb_width, &fb_height);
             }
 
-            if (!begin_frame()) continue;
+            if (!begin_frame()) { continue; }
 
             update();
             render();
