@@ -64,7 +64,7 @@
 - [x] 精简 `RenderInput`（移除光栅化/烘焙专用字段）
 - [x] 清理 `application.h/cpp`（移除烘焙触发、光栅化模式切换、bake data 管理）
 - [x] 清理 `debug_ui.h/cpp`（移除光栅化/烘焙 UI 面板）
-- [ ] 清理 `config.h/cpp`（移除光栅化/烘焙配置持久化）
+- [x] 清理 `config.h/cpp`（移除光栅化/烘焙配置持久化）
 - [ ] 清理 `scene_loader.h/cpp`（移除 lightmap UV 相关逻辑，如有）
 - [ ] 更新 `app/CMakeLists.txt`（移除已删源文件）
 

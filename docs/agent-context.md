@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的渲染器
 - **分支**：`reflector` — Path Tracing + Gaussian Splatting
 - **Phase**：Phase 1 — 管线精简（移除光栅化和烘焙管线）
-- **进度**：Step 1 进行中（renderer + application + debug_ui 清理完成）
+- **进度**：Step 1 进行中（config 清理完成，剩余 scene_loader + CMakeLists）
 
 ### 下一个任务
 
-Step 1：清理 `config.h/cpp`（移除光栅化/烘焙配置持久化）
+Step 1：清理 `scene_loader.h/cpp`（移除 lightmap UV 相关逻辑，如有）
 
 ---
 
