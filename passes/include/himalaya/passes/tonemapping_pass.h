@@ -4,11 +4,9 @@
  * @file tonemapping_pass.h
  * @brief TonemappingPass: fullscreen post-processing pass (Layer 2).
  *
- * Reads the HDR color buffer (via Set 2 binding 0) and writes the
- * tonemapped result to the swapchain image. Step 4a is passthrough;
- * Step 4b upgrades to ACES tonemapping with exposure control.
- *
- * Non-MSAA pass: always renders at 1x, processes resolved HDR output.
+ * Reads the current HDR presentation source (raw PT accumulation or denoised
+ * output via Set 2 binding 0) and writes the tonemapped result to the
+ * swapchain image.
  */
 
 #include <himalaya/rhi/pipeline.h>

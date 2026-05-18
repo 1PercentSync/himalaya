@@ -36,7 +36,34 @@ namespace himalaya::app {
             VK_IMAGE_LAYOUT_UNDEFINED,
             VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 
-        // Use accumulation buffer as hdr_color for TonemappingPass
+        // --- VP / IBL rotation / config comparison for accumulation reset ---
+        // This must run before importing managed PT images: reset_accumulation()
+        // changes sample_count(), which controls whether RG preserves the
+        // accumulation/aux image contents and whether the aux clear pass runs.
+        const auto &pt = input.pt_config;
+
+        if (input.camera.view_projection != prev_pt_view_projection_ ||
+            input.ibl_rotation_sin != prev_pt_ibl_rotation_sin_ ||
+            input.ibl_rotation_cos != prev_pt_ibl_rotation_cos_ ||
+            pt.max_bounces != prev_max_bounces_ ||
+            pt.max_clamp != prev_max_clamp_ ||
+            pt.env_sampling != prev_env_sampling_ ||
+            pt.emissive_nee != prev_emissive_nee_ ||
+            pt.lod_max_level != prev_lod_max_level_ ||
+            input.indirect_intensity != prev_indirect_intensity_) {
+            reset_pt_accumulation();
+        }
+        prev_pt_view_projection_ = input.camera.view_projection;
+        prev_pt_ibl_rotation_sin_ = input.ibl_rotation_sin;
+        prev_pt_ibl_rotation_cos_ = input.ibl_rotation_cos;
+        prev_max_bounces_ = pt.max_bounces;
+        prev_max_clamp_ = pt.max_clamp;
+        prev_env_sampling_ = pt.env_sampling;
+        prev_emissive_nee_ = pt.emissive_nee;
+        prev_lod_max_level_ = pt.lod_max_level;
+        prev_indirect_intensity_ = input.indirect_intensity;
+
+        // Use accumulation buffer as hdr_color for TonemappingPass.
         // Preserve content only when there are previous samples to accumulate on.
         // sample_count==0 (first frame or after reset): shader overwrites entirely → UNDEFINED ok.
         // sample_count>0: shader does imageLoad for running average → must preserve.
@@ -66,30 +93,6 @@ namespace himalaya::app {
         frame_ctx.pt_aux_normal = aux_normal_resource;
         frame_ctx.frame_index = input.frame_index;
         frame_ctx.frame_number = frame_counter_;
-
-        // --- VP / IBL rotation / config comparison for accumulation reset ---
-        const auto &pt = input.pt_config;
-
-        if (input.camera.view_projection != prev_pt_view_projection_ ||
-            input.ibl_rotation_sin != prev_pt_ibl_rotation_sin_ ||
-            input.ibl_rotation_cos != prev_pt_ibl_rotation_cos_ ||
-            pt.max_bounces != prev_max_bounces_ ||
-            pt.max_clamp != prev_max_clamp_ ||
-            pt.env_sampling != prev_env_sampling_ ||
-            pt.emissive_nee != prev_emissive_nee_ ||
-            pt.lod_max_level != prev_lod_max_level_ ||
-            input.indirect_intensity != prev_indirect_intensity_) {
-            reset_pt_accumulation();
-        }
-        prev_pt_view_projection_ = input.camera.view_projection;
-        prev_pt_ibl_rotation_sin_ = input.ibl_rotation_sin;
-        prev_pt_ibl_rotation_cos_ = input.ibl_rotation_cos;
-        prev_max_bounces_ = pt.max_bounces;
-        prev_max_clamp_ = pt.max_clamp;
-        prev_env_sampling_ = pt.env_sampling;
-        prev_emissive_nee_ = pt.emissive_nee;
-        prev_lod_max_level_ = pt.lod_max_level;
-        prev_indirect_intensity_ = input.indirect_intensity;
 
         // --- Clear aux images on first frame after accumulation reset ---
         // Miss rays (sky) never write aux in closesthit, so without this

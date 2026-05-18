@@ -317,7 +317,9 @@ namespace himalaya::app {
                         ++i;
                     }
                 } else {
-                    for (auto &v: vertices) v.normal = {0.0f, 0.0f, 1.0f};
+                    for (auto &v: vertices) {
+                        v.normal = {0.0f, 0.0f, 1.0f};
+                    }
                 }
 
                 // TEXCOORD_0 (optional, zero-initialized default is fine)
