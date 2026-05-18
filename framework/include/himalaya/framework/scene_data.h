@@ -86,9 +86,8 @@ namespace himalaya::framework {
      * Controls which render path Renderer executes each frame.
      */
     enum class RenderMode : uint8_t {
-        Rasterization, ///< Multi-pass rasterization pipeline (default).
-        PathTracing,   ///< RT path-traced reference view with accumulation.
-        Baking,        ///< Lightmap/probe bake mode (GPU full-time baking).
+        PathTracing,        ///< RT path-traced reference view with accumulation.
+        GaussianSplatting,  ///< Gaussian splatting render path (Phase 2).
     };
 
     /**
