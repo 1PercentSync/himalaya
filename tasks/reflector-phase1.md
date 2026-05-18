@@ -95,10 +95,10 @@
 - [x] 删除烘焙 shader：`bake/pos_normal_map.*`, `bake/probe_filter.comp`, `rt/lightmap_baker.rgen`, `rt/probe_baker.rgen`
 - [x] 删除 `shaders/common/probe_grid.glsl`、`shaders/common/shadow.glsl`
 - [x] 清理 `bindings.glsl`：移除 ProbeBuffer/ProbeGridBuffer 声明、shadow/AO 相关 Set 2 声明（保留 rt_hdr_color）
-- [ ] 清理 `bindings.glsl`：精简 GlobalUBO（与 scene_data.h 同步）
-- [ ] 清理 `bindings.glsl`：移除光栅化专用 `FEATURE_*` flag
-- [ ] 清理 RT shader：移除 closesthit 方向光 NEE、reference_view.rgen directional_lights push constant
-- [ ] 清理 `bindings.glsl`：移除 LightBuffer 声明
+- [x] 清理 `bindings.glsl`：精简 GlobalUBO（与 scene_data.h 同步）— 已在黑屏修复中完成
+- [x] 清理 `bindings.glsl`：移除光栅化专用 `FEATURE_*` flag、`AO_SO_*`、`MAX_SHADOW_CASCADES`、未使用 `DEBUG_MODE_*`
+- [x] 清理 RT shader：移除 closesthit 方向光 NEE、reference_view.rgen directional_lights push constant — 已在 Step 1 中完成
+- [x] 清理 `bindings.glsl`：移除 LightBuffer、GPUDirectionalLight、GPUInstanceData、InstanceBuffer 声明
 
 ## Step 5：清理 third_party
 

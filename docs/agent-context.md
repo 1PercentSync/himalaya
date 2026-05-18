@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的渲染器
 - **分支**：`reflector` — Path Tracing + Gaussian Splatting
 - **Phase**：Phase 1 — 管线精简（移除光栅化和烘焙管线）
-- **进度**：Step 4 进行中（shader 文件删除 + bindings Probe/Set2 清理完成），下一项精简 GlobalUBO
+- **进度**：Step 4 完成（shader 文件删除 + bindings.glsl 全面清理），待运行验证
 
 ### 下一个任务
 
-Step 4：清理 `bindings.glsl` — 精简 GlobalUBO（与 scene_data.h 同步）
+Step 5：清理 third_party
 
 ---
 
