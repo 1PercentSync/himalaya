@@ -105,7 +105,7 @@
 - [x] 删除 `third_party/xatlas/`
 - [x] 更新顶层 `CMakeLists.txt`（移除 xatlas `add_subdirectory`）+ framework/CMakeLists.txt 移除 xatlas 链接
 - [x] 检查 `vcpkg.json`（是否有可移除的依赖）— 全部仍在使用，无需修改
-- [ ] 编译验证
+- [x] 编译验证
 
 ## Step 6：重新编号 descriptor 布局
 

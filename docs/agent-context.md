@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的渲染器
 - **分支**：`reflector` — Path Tracing + Gaussian Splatting
 - **Phase**：Phase 1 — 管线精简（移除光栅化和烘焙管线）
-- **进度**：Step 5 进行中（xatlas 删除 + CMake 更新 + vcpkg 检查完成），待用户编译验证
+- **进度**：Step 5 完成，开始 Step 6
 
 ### 下一个任务
 
-Step 5：编译验证（用户在 CLion 中操作）
+Step 6：重新编号 descriptor 布局 — 规划新的 Set 0 / Set 2 binding 编号方案
 
 ---
 
