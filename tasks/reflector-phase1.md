@@ -109,10 +109,10 @@
 
 ## Step 6：重新编号 descriptor 布局
 
-- [ ] 规划新的 Set 0 / Set 2 binding 编号方案（含回收 LightBuffer binding 1）
-- [ ] 更新 `descriptors.h/cpp`
-- [ ] 更新 `bindings.glsl`
-- [ ] 更新所有引用变更 binding 的 C++ 和 shader 代码
+- [x] 规划新的 Set 0 / Set 2 binding 编号方案（含回收 LightBuffer binding 1）
+- [x] 更新 `descriptors.h/cpp`
+- [x] 更新 `bindings.glsl`
+- [x] 更新所有引用变更 binding 的 C++ 和 shader 代码
 - [ ] 编译验证
 
 ## Step 7：收尾
