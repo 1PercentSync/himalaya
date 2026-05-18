@@ -28,7 +28,7 @@
 ### 纯归档（无需迁移内容）
 
 - [x] 归档 `docs/milestone-1/milestone-1.md`
-- [ ] 归档 `docs/milestone-1/m1-interfaces.md`
+- [x] 归档 `docs/milestone-1/m1-interfaces.md`
 - [ ] 归档 `docs/milestone-1/m1-frame-flow.md`
 - [ ] 归档 `docs/milestone-1/m1-development-order.md`
 - [ ] 归档 `docs/milestone-1/m1-phase-future-decisions.md`
