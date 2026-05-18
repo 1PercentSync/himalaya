@@ -6,13 +6,9 @@
  */
 
 #include <cstdint>
-#include <optional>
-#include <span>
 #include <string>
 #include <vector>
 
-#include <himalaya/framework/bake_data_manager.h>
-#include <himalaya/framework/render_progress.h>
 #include <himalaya/rhi/swapchain.h>
 
 namespace himalaya::rhi {
@@ -20,16 +16,9 @@ namespace himalaya::rhi {
 } // namespace himalaya::rhi
 
 namespace himalaya::framework {
-    struct AOConfig;
-    struct BakeConfig;
     struct Camera;
-    struct ContactShadowConfig;
     enum class DenoiseState : uint8_t;
-    enum class IndirectLightingMode : uint8_t;
     struct PTConfig;
-    enum class RenderMode : uint8_t;
-    struct RenderFeatures;
-    struct ShadowConfig;
 } // namespace himalaya::framework
 
 namespace himalaya::app {
@@ -64,7 +53,7 @@ namespace himalaya::app {
         /** @brief Swapchain for resolution display. */
         rhi::Swapchain& swapchain;
 
-        /** @brief User-selected present mode (combo box). May differ from swapchain.present_mode when PT tearing overrides. */
+        /** @brief User-selected present mode (combo box). */
         rhi::PresentMode& user_present_mode;
 
         // --- Camera (display + control) ---
@@ -132,15 +121,10 @@ namespace himalaya::app {
         /** @brief Original equirect image height (for UI max bounds). */
         uint32_t equirect_height;
 
-        // --- Render mode ---
+        // --- Path tracing ---
 
-        /** @brief Active rendering mode (mutable — combo box changes it). */
-        framework::RenderMode &render_mode;
-
-        /** @brief Whether RT hardware is available (controls PT option visibility). */
+        /** @brief Whether RT hardware is available. */
         bool rt_supported;
-
-        // --- Path tracing state (visible when render_mode == PathTracing) ---
 
         /** @brief Number of PT samples accumulated so far (read-only display). */
         uint32_t pt_sample_count;
@@ -154,7 +138,7 @@ namespace himalaya::app {
         /** @brief Time elapsed since PT accumulation started, in seconds (read-only). */
         float pt_elapsed_time;
 
-        // --- Denoiser state (visible when render_mode == PathTracing) ---
+        // --- Denoiser state ---
 
         /** @brief Denoise feature master switch. Mutable — checkbox. */
         bool& denoise_enabled;
@@ -182,49 +166,8 @@ namespace himalaya::app {
         /** @brief Editable reference to the indirect light intensity. */
         float& indirect_intensity;
 
-        /** @brief Current indirect lighting mode (mutable — toggle changes it). */
-        framework::IndirectLightingMode& indirect_lighting_mode;
-
-        /** @brief Whether any validated bake data is available (controls mode toggle gray-out). */
-        bool has_bake_data;
-
-        /** @brief Currently loaded bake rotation in integer degrees (UI highlight; 0 if none loaded). */
-        uint32_t loaded_bake_rotation;
-
-        /** @brief Whether bake data is currently loaded on the GPU. */
-        bool bake_data_loaded;
-
         /** @brief Editable reference to the exposure value in EV stops. */
         float& ev;
-
-        /** @brief Editable reference to the debug render mode (0=Full PBR, 1-7=debug). */
-        uint32_t& debug_render_mode;
-
-        /** @brief Runtime feature toggles (skybox, shadows, etc.). */
-        framework::RenderFeatures& features;
-
-        /** @brief Shadow bias and sampling parameters (mutable for slider controls). */
-        framework::ShadowConfig& shadow_config;
-
-        /** @brief AO parameters (mutable for slider controls). */
-        framework::AOConfig& ao_config;
-
-        /** @brief Contact shadow parameters (mutable for slider controls). */
-        framework::ContactShadowConfig& contact_shadow_config;
-
-        /** @brief Runtime probe blend parameters (mutable for slider controls). */
-        framework::ProbeBlendConfig& probe_blend_config;
-
-        // --- MSAA (display + action) ---
-
-        /** @brief Current MSAA sample count (display only; changes via DebugUIActions). */
-        uint32_t current_sample_count;
-
-        /** @brief Current shadow map resolution (display only; changes via DebugUIActions). */
-        uint32_t shadow_resolution;
-
-        /** @brief Bitmask of GPU-supported MSAA sample counts (VkSampleCountFlags). */
-        uint32_t supported_sample_counts;
 
         // --- Current file paths (display) ---
 
@@ -238,49 +181,6 @@ namespace himalaya::app {
 
         /** @brief Error message to show in UI (empty = no error). */
         const std::string& error_message;
-
-
-
-        // --- Bake parameters and progress ---
-
-        /** @brief Bake configuration (mutable — slider/checkbox controls). */
-        framework::BakeConfig& bake_config;
-
-        /** @brief Bake progress snapshot (read-only, from Renderer::bake_progress()). */
-        framework::BakeProgress bake_progress;
-
-        /** @brief True if a scene is loaded (Start Bake precondition). */
-        bool has_scene;
-
-        /** @brief True if an HDR environment is loaded (Start Bake precondition). */
-        bool has_hdr;
-
-        /** @brief Longest edge of the scene AABB in meters (for enclosure threshold display). 0 = no scene. */
-        float scene_aabb_longest_edge;
-
-        /**
-         * @brief Validated available bake angles from BakeDataManager.
-         *
-         * Populated by BakeDataManager::scan(). Empty when no valid bake
-         * data exists or before first scan.
-         */
-        std::span<const framework::BakeDataManager::AngleInfo> available_angles;
-
-        // --- Scene statistics (display) ---
-
-        /** @brief Per-frame scene statistics computed after frustum culling. */
-        struct SceneStats {
-            uint32_t total_instances;
-            uint32_t total_meshes;
-            uint32_t total_materials;
-            uint32_t total_textures;
-            uint32_t total_vertices;
-            uint32_t visible_opaque;
-            uint32_t visible_transparent;
-            uint32_t culled;
-            uint32_t draw_calls;
-            uint32_t rendered_triangles;
-        } scene_stats;
     };
 
     /**
@@ -289,12 +189,6 @@ namespace himalaya::app {
      * Application inspects these after each draw() call to apply side effects.
      */
     struct DebugUIActions {
-        /** @brief True if the MSAA sample count was changed this frame. */
-        bool msaa_changed = false;
-
-        /** @brief New MSAA sample count (valid only when msaa_changed is true). */
-        uint32_t new_sample_count = 0;
-
         /** @brief True if the user requested loading a new scene file. */
         bool scene_load_requested = false;
 
@@ -306,12 +200,6 @@ namespace himalaya::app {
 
         /** @brief True if the user clicked the Reload Shaders button. */
         bool reload_shaders = false;
-
-        /** @brief True if the shadow map resolution was changed this frame. */
-        bool shadow_resolution_changed = false;
-
-        /** @brief New shadow map resolution (valid only when shadow_resolution_changed is true). */
-        uint32_t new_shadow_resolution = 0;
 
         /** @brief True if the user requested loading a new HDR environment. */
         bool env_load_requested = false;
@@ -342,24 +230,6 @@ namespace himalaya::app {
 
         /** @brief New auto denoise interval (valid only when denoise_interval_changed is true). */
         uint32_t new_denoise_interval = 0;
-
-        /** @brief Bake start request: set to the desired BakeMode when a bake button is clicked. */
-        std::optional<framework::BakeMode> bake_start_mode;
-
-        /** @brief True if the user clicked the Cancel Bake button. */
-        bool bake_cancel_requested = false;
-
-        /** @brief True if the user clicked the Clear Bake Cache button. */
-        bool clear_bake_cache_requested = false;
-
-        /** @brief True if the user clicked the Clear All Cache button. */
-        bool clear_all_cache_requested = false;
-
-        /** @brief True if the user clicked a bake angle entry to switch to it. */
-        bool angle_switch_requested = false;
-
-        /** @brief Bake angle in integer degrees (valid only when angle_switch_requested is true). */
-        uint32_t new_angle_rotation = 0;
     };
 
     /**
@@ -402,37 +272,8 @@ namespace himalaya::app {
             void compute();
         };
 
-        /**
-         * @brief Smoothed bake throughput (texel-samples/s).
-         *
-         * Accumulates total texel-samples over a 1-second window, then
-         * computes texel-samples/s. Displayed value stays stable
-         * between updates (no flickering). Not reset on instance/probe
-         * transition — the metric is already per-texel normalized.
-         */
-        struct BakeThroughput {
-            /** @brief Smoothed throughput in texel-samples per second. */
-            double throughput = 0.0;
-
-            /**
-             * @brief Feed one frame's dispatch data.
-             * @param delta_time Frame delta in seconds.
-             * @param texel_samples Total texel-samples dispatched this frame
-             *                      (texels_per_dispatch * batch_spp; 0 = no dispatch).
-             */
-            void push(float delta_time, uint64_t texel_samples);
-
-        private:
-            static constexpr float kUpdateInterval = 1.0f;
-            uint64_t accumulated_texel_samples_ = 0;
-            float elapsed_ = 0.0f;
-        };
-
         /** @brief Frame time statistics accumulator. */
         FrameStats frame_stats_;
-
-        /** @brief Bake throughput accumulator. */
-        BakeThroughput bake_throughput_;
     };
 
 } // namespace himalaya::app

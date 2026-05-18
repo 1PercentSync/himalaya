@@ -7,14 +7,13 @@
 
 #include <himalaya/framework/cache.h>
 #include <himalaya/framework/camera.h>
-#include <himalaya/framework/denoiser.h>    // DenoiseState
-#include <himalaya/framework/scene_data.h>  // RenderMode
+#include <himalaya/framework/denoiser.h>
+#include <himalaya/framework/scene_data.h>
 #include <himalaya/rhi/context.h>
 #include <himalaya/rhi/swapchain.h>
 
 #include <algorithm>
 #include <cmath>
-#include <cstdio>
 #include <filesystem>
 
 #include <glm/trigonometric.hpp>
@@ -58,8 +57,6 @@ namespace {
     /**
      * SliderFloat that applies immediately during mouse drag but defers
      * Ctrl+Click text-input changes until Enter / click-away / Tab.
-     * During typing, the underlying value stays at its pre-edit state so
-     * the renderer does not see intermediate keystrokes.
      */
     bool slider_float_deferred(const char *label,
                                float *v,
@@ -137,23 +134,6 @@ namespace himalaya::app {
         low1_fps = 1000.0f / low1_frame_time_ms;
     }
 
-    // ---- BakeThroughput ----
-
-    void DebugUI::BakeThroughput::push(const float delta_time,
-                                       const uint64_t texel_samples) {
-        accumulated_texel_samples_ += texel_samples;
-        elapsed_ += delta_time;
-
-        if (elapsed_ >= kUpdateInterval) {
-            if (accumulated_texel_samples_ > 0) {
-                throughput = static_cast<double>(accumulated_texel_samples_)
-                    / static_cast<double>(elapsed_);
-            }
-            accumulated_texel_samples_ = 0;
-            elapsed_ = 0.0f;
-        }
-    }
-
     // ---- DebugUI ----
 
     // ReSharper disable once CppParameterMayBeConstPtrOrRef
@@ -215,27 +195,6 @@ namespace himalaya::app {
             if (only_fifo) { ImGui::EndDisabled(); }
         }
 
-        // Path Tracing toggle
-        {
-            const bool baking = ctx.render_mode == framework::RenderMode::Baking;
-            bool pt_enabled = ctx.render_mode == framework::RenderMode::PathTracing;
-            if (ctx.rt_supported && !baking) {
-                if (ImGui::Checkbox("Path Tracing", &pt_enabled)) {
-                    ctx.render_mode = pt_enabled
-                                          ? framework::RenderMode::PathTracing
-                                          : framework::RenderMode::Rasterization;
-                }
-            } else {
-                ImGui::BeginDisabled();
-                ImGui::Checkbox("Path Tracing", &pt_enabled);
-                ImGui::EndDisabled();
-                if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
-                    ImGui::SetTooltip(baking ? "Disabled during baking"
-                                             : "Path Tracing requires RT hardware");
-                }
-            }
-        }
-
         // Error banner (dismissable)
         if (!ctx.error_message.empty()) {
             ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.4f, 0.4f, 1.0f));
@@ -258,228 +217,140 @@ namespace himalaya::app {
             actions.new_log_level = current_log_level;
         }
 
-        // Path Tracing controls (visible only in PT mode)
-        if (ctx.render_mode == framework::RenderMode::PathTracing) {
-            ImGui::Separator();
-            if (ImGui::CollapsingHeader("Path Tracing##settings", ImGuiTreeNodeFlags_DefaultOpen)) {
-                // Status line
-                const bool target_reached = ctx.pt_config.target_samples > 0 &&
-                                            ctx.pt_sample_count >= ctx.pt_config.target_samples;
-                if (ctx.pt_config.target_samples > 0) {
-                    ImGui::Text("Samples: %u / %u", ctx.pt_sample_count, ctx.pt_config.target_samples);
-                } else {
-                    ImGui::Text("Samples: %u", ctx.pt_sample_count);
+        // Path Tracing controls
+        ImGui::Separator();
+        if (ImGui::CollapsingHeader("Path Tracing##settings", ImGuiTreeNodeFlags_DefaultOpen)) {
+            // Status line
+            const bool target_reached = ctx.pt_config.target_samples > 0 &&
+                                        ctx.pt_sample_count >= ctx.pt_config.target_samples;
+            if (ctx.pt_config.target_samples > 0) {
+                ImGui::Text("Samples: %u / %u", ctx.pt_sample_count, ctx.pt_config.target_samples);
+            } else {
+                ImGui::Text("Samples: %u", ctx.pt_sample_count);
+            }
+            ImGui::SameLine();
+            ImGui::Text("  Time: %.3fs", static_cast<double>(ctx.pt_elapsed_time));
+            if (target_reached && ctx.pt_sample_count > 0) {
+                ImGui::Text("Avg: %.3f ms/sample",
+                            static_cast<double>(ctx.pt_elapsed_time) /
+                            ctx.pt_sample_count * 1000.0);
+            }
+
+            // Max Bounces slider (1-32)
+            auto bounces = static_cast<int>(ctx.pt_config.max_bounces);
+            if (ImGui::SliderInt("Max Bounces", &bounces, 1, 32)) {
+                ctx.pt_config.max_bounces = static_cast<uint32_t>(bounces);
+            }
+
+            // Firefly Clamp slider (0 = Off)
+            slider_float_deferred("Firefly Clamp", &ctx.pt_config.max_clamp,
+                                  0.0f, 100.0f, "%.1f");
+            if (ctx.pt_config.max_clamp == 0.0f && ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("Firefly clamping disabled");
+            }
+
+            // Env Importance Sampling toggle
+            ImGui::Checkbox("Env Importance Sampling", &ctx.pt_config.env_sampling);
+
+            // Emissive NEE toggle (area light importance sampling)
+            ImGui::Checkbox("Emissive NEE", &ctx.pt_config.emissive_nee);
+
+            // LOD Max Level slider (ray cone texture LOD clamp)
+            {
+                int lod = static_cast<int>(ctx.pt_config.lod_max_level);
+                if (ImGui::SliderInt("LOD Max Level", &lod, 0, 12)) {
+                    ctx.pt_config.lod_max_level = static_cast<uint32_t>(lod);
                 }
-                ImGui::SameLine();
-                ImGui::Text("  Time: %.3fs", static_cast<double>(ctx.pt_elapsed_time));
-                if (target_reached && ctx.pt_sample_count > 0) {
-                    ImGui::Text("Avg: %.3f ms/sample",
-                                static_cast<double>(ctx.pt_elapsed_time) /
-                                ctx.pt_sample_count * 1000.0);
-                }
-
-                // Max Bounces slider (1-32)
-                auto bounces = static_cast<int>(ctx.pt_config.max_bounces);
-                if (ImGui::SliderInt("Max Bounces", &bounces, 1, 32)) {
-                    ctx.pt_config.max_bounces = static_cast<uint32_t>(bounces);
-                }
-
-                // Firefly Clamp slider (0 = Off)
-                slider_float_deferred("Firefly Clamp", &ctx.pt_config.max_clamp,
-                                      0.0f, 100.0f, "%.1f");
-                if (ctx.pt_config.max_clamp == 0.0f && ImGui::IsItemHovered()) {
-                    ImGui::SetTooltip("Firefly clamping disabled");
-                }
-
-                // Env Importance Sampling toggle
-                ImGui::Checkbox("Env Importance Sampling", &ctx.pt_config.env_sampling);
-
-                // Emissive NEE toggle (area light importance sampling)
-                ImGui::Checkbox("Emissive NEE", &ctx.pt_config.emissive_nee);
-
-                // LOD Max Level slider (ray cone texture LOD clamp)
-                {
-                    int lod = static_cast<int>(ctx.pt_config.lod_max_level);
-                    if (ImGui::SliderInt("LOD Max Level", &lod, 0, 12)) {
-                        ctx.pt_config.lod_max_level = static_cast<uint32_t>(lod);
-                    }
-                    if (ImGui::IsItemHovered()) {
-                        ImGui::SetTooltip("Ray cone texture LOD upper clamp.\n0 = full resolution (debug), 4 = default.");
-                    }
-                }
-
-                // Directional Lights toggle (default off — env sampling handles sun)
-                ImGui::Checkbox("Directional Lights", &ctx.pt_config.directional_lights);
                 if (ImGui::IsItemHovered()) {
-                    ImGui::SetTooltip("HDR sun directional light is an approximation of the sun in the environment map.\n"
-                                      "With Env Importance Sampling enabled, the environment map already provides\n"
-                                      "accurate sun lighting — enabling this may cause double illumination artifacts.");
-                }
-
-                // Allow Tearing — override present mode to IMMEDIATE in PT
-                {
-                    const bool can_tear = ctx.swapchain.immediate_supported;
-                    if (!can_tear) { ImGui::BeginDisabled(); }
-                    ImGui::Checkbox("Allow Tearing", &ctx.pt_allow_tearing);
-                    if (ImGui::IsItemHovered()) {
-                        ImGui::SetTooltip(can_tear
-                            ? "Force IMMEDIATE present mode while in PT to bypass\n"
-                              "driver frame rate limits (e.g. Sunshine streaming)."
-                            : "IMMEDIATE present mode not supported by this surface.");
-                    }
-                    if (!can_tear) { ImGui::EndDisabled(); }
-                }
-
-                // Target Samples input (0 = unlimited)
-                ImGui::InputScalar("Target Samples", ImGuiDataType_U32, &ctx.pt_config.target_samples);
-                if (ImGui::IsItemHovered()) {
-                    ImGui::SetTooltip("0 = unlimited");
-                }
-
-                // Reset button
-                if (ImGui::Button("Reset")) {
-                    actions.pt_reset_requested = true;
+                    ImGui::SetTooltip("Ray cone texture LOD upper clamp.\n0 = full resolution (debug), 4 = default.");
                 }
             }
 
-            // OIDN Denoiser controls
-            if (ImGui::CollapsingHeader("Denoiser (OIDN)", ImGuiTreeNodeFlags_DefaultOpen)) {
-                ImGui::Checkbox("Denoise", &ctx.denoise_enabled);
+            // Directional Lights toggle (default off — env sampling handles sun)
+            ImGui::Checkbox("Directional Lights", &ctx.pt_config.directional_lights);
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("HDR sun directional light is an approximation of the sun in the environment map.\n"
+                                  "With Env Importance Sampling enabled, the environment map already provides\n"
+                                  "accurate sun lighting — enabling this may cause double illumination artifacts.");
+            }
 
-                ImGui::Checkbox("Show Denoised", &ctx.show_denoised);
-
-                ImGui::Checkbox("Auto Denoise", &ctx.auto_denoise);
-                if (ctx.auto_denoise) {
-                    ImGui::SameLine();
-                    ImGui::SetNextItemWidth(80.0f);
-                    auto interval = static_cast<int>(ctx.auto_denoise_interval);
-                    if (ImGui::InputInt("##Interval", &interval, 0, 0)) {
-                        if (interval < 16) { interval = 16; }
-                        actions.denoise_interval_changed = true;
-                        actions.new_denoise_interval = static_cast<uint32_t>(interval);
-                    }
-                    if (ImGui::IsItemHovered()) {
-                        ImGui::SetTooltip("Denoise every N samples (min 16)");
-                    }
+            // Allow Tearing — override present mode to IMMEDIATE in PT
+            {
+                const bool can_tear = ctx.swapchain.immediate_supported;
+                if (!can_tear) { ImGui::BeginDisabled(); }
+                ImGui::Checkbox("Allow Tearing", &ctx.pt_allow_tearing);
+                if (ImGui::IsItemHovered()) {
+                    ImGui::SetTooltip(can_tear
+                        ? "Force IMMEDIATE present mode while in PT to bypass\n"
+                          "driver frame rate limits (e.g. Sunshine streaming)."
+                        : "IMMEDIATE present mode not supported by this surface.");
                 }
+                if (!can_tear) { ImGui::EndDisabled(); }
+            }
 
-                // Denoise Now button
-                const bool denoise_disabled =
-                    !ctx.denoise_enabled ||
-                    ctx.auto_denoise ||
-                    ctx.denoise_state != framework::DenoiseState::Idle ||
-                    ctx.pt_sample_count == 0 ||
-                    !ctx.show_denoised;
-                ImGui::BeginDisabled(denoise_disabled);
-                if (ImGui::Button("Denoise Now")) {
-                    actions.pt_denoise_requested = true;
-                }
-                ImGui::EndDisabled();
+            // Target Samples input (0 = unlimited)
+            ImGui::InputScalar("Target Samples", ImGuiDataType_U32, &ctx.pt_config.target_samples);
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("0 = unlimited");
+            }
 
-                // Last denoise info
-                if (ctx.last_denoise_trigger_sample_count > 0) {
-                    ImGui::Text("Last triggered at: %u samples (%.3fs)",
-                                ctx.last_denoise_trigger_sample_count,
-                                static_cast<double>(ctx.last_denoise_duration));
+            // Reset button
+            if (ImGui::Button("Reset")) {
+                actions.pt_reset_requested = true;
+            }
+        }
+
+        // OIDN Denoiser controls
+        if (ImGui::CollapsingHeader("Denoiser (OIDN)", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::Checkbox("Denoise", &ctx.denoise_enabled);
+
+            ImGui::Checkbox("Show Denoised", &ctx.show_denoised);
+
+            ImGui::Checkbox("Auto Denoise", &ctx.auto_denoise);
+            if (ctx.auto_denoise) {
+                ImGui::SameLine();
+                ImGui::SetNextItemWidth(80.0f);
+                auto interval = static_cast<int>(ctx.auto_denoise_interval);
+                if (ImGui::InputInt("##Interval", &interval, 0, 0)) {
+                    if (interval < 16) { interval = 16; }
+                    actions.denoise_interval_changed = true;
+                    actions.new_denoise_interval = static_cast<uint32_t>(interval);
                 }
+                if (ImGui::IsItemHovered()) {
+                    ImGui::SetTooltip("Denoise every N samples (min 16)");
+                }
+            }
+
+            // Denoise Now button
+            const bool denoise_disabled =
+                !ctx.denoise_enabled ||
+                ctx.auto_denoise ||
+                ctx.denoise_state != framework::DenoiseState::Idle ||
+                ctx.pt_sample_count == 0 ||
+                !ctx.show_denoised;
+            ImGui::BeginDisabled(denoise_disabled);
+            if (ImGui::Button("Denoise Now")) {
+                actions.pt_denoise_requested = true;
+            }
+            ImGui::EndDisabled();
+
+            // Last denoise info
+            if (ctx.last_denoise_trigger_sample_count > 0) {
+                ImGui::Text("Last triggered at: %u samples (%.3fs)",
+                            ctx.last_denoise_trigger_sample_count,
+                            static_cast<double>(ctx.last_denoise_duration));
             }
         }
 
         // Rendering section
         ImGui::Separator();
         if (ImGui::CollapsingHeader("Rendering", ImGuiTreeNodeFlags_DefaultOpen)) {
-            // MSAA combo box (1x/2x/4x/8x filtered by GPU support)
-            constexpr uint32_t kSampleCounts[] = {1, 2, 4, 8};
-            constexpr const char *kSampleLabels[] = {"1x", "2x", "4x", "8x"};
-            static_assert(IM_ARRAYSIZE(kSampleCounts) == IM_ARRAYSIZE(kSampleLabels));
-
-            int current_idx = 0;
-            for (int i = 0; i < IM_ARRAYSIZE(kSampleCounts); ++i) {
-                if (kSampleCounts[i] == ctx.current_sample_count) {
-                    current_idx = i;
-                    break;
-                }
+            if (ImGui::Button("Reload Shaders")) {
+                actions.reload_shaders = true;
             }
 
-            if (ImGui::BeginCombo("MSAA", kSampleLabels[current_idx])) {
-                for (int i = 0; i < IM_ARRAYSIZE(kSampleCounts); ++i) {
-                    if (!(ctx.supported_sample_counts & kSampleCounts[i])) continue;
-                    const bool is_selected = (i == current_idx);
-                    if (ImGui::Selectable(kSampleLabels[i], is_selected)) {
-                        if (kSampleCounts[i] != ctx.current_sample_count) {
-                            actions.msaa_changed = true;
-                            actions.new_sample_count = kSampleCounts[i];
-                        }
-                    }
-                    if (is_selected) ImGui::SetItemDefaultFocus();
-                }
-                ImGui::EndCombo();
-            }
-
-            {
-                const bool baking = ctx.render_mode == framework::RenderMode::Baking;
-                if (baking) { ImGui::BeginDisabled(); }
-                if (ImGui::Button("Reload Shaders")) {
-                    actions.reload_shaders = true;
-                }
-                if (baking) { ImGui::EndDisabled(); }
-            }
-
-            // Indirect lighting mode toggle
-            {
-                const bool baking = ctx.render_mode == framework::RenderMode::Baking;
-                const bool is_ibl = ctx.indirect_lighting_mode == framework::IndirectLightingMode::IBL;
-                const bool is_lp = !is_ibl;
-
-                if (baking) { ImGui::BeginDisabled(); }
-                if (ImGui::RadioButton("IBL", is_ibl)) {
-                    ctx.indirect_lighting_mode = framework::IndirectLightingMode::IBL;
-                }
-                ImGui::SameLine();
-
-                const bool can_select_lp = ctx.has_bake_data && !baking;
-                if (!can_select_lp) { ImGui::BeginDisabled(); }
-                if (ImGui::RadioButton("Lightmap/Probe", is_lp)) {
-                    ctx.indirect_lighting_mode = framework::IndirectLightingMode::LightmapProbe;
-                }
-                if (!can_select_lp) { ImGui::EndDisabled(); }
-                if (baking) { ImGui::EndDisabled(); }
-                if (!ctx.has_bake_data && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
-                    ImGui::SetTooltip("No baked lighting data available");
-                }
-
-                // LP mode sub-toggles (only visible when in LP mode)
-                if (is_lp && !baking) {
-                    ImGui::Checkbox("Use Lightmap", &ctx.features.use_lightmap);
-                    ImGui::SameLine();
-                    ImGui::Checkbox("Use Probe", &ctx.features.use_probe);
-
-                    slider_float_deferred("Normal Bias", &ctx.probe_blend_config.normal_bias,
-                                          0.0f, 4.0f, "%.2f");
-                    slider_float_deferred("Roughness Single", &ctx.probe_blend_config.roughness_single,
-                                          0.0f, 1.0f, "%.2f");
-                    slider_float_deferred("Roughness Full", &ctx.probe_blend_config.roughness_full,
-                                          0.0f, 1.0f, "%.2f");
-                    slider_float_deferred("Blend Curve", &ctx.probe_blend_config.blend_curve,
-                                          0.1f, 4.0f, "%.2f");
-                }
-            }
-
-            const char *intensity_label = ctx.indirect_lighting_mode == framework::IndirectLightingMode::IBL
-                ? "IBL Intensity" : "Indirect Intensity";
-            slider_float_deferred(intensity_label, &ctx.indirect_intensity, 0.0f, 5.0f, "%.2f");
+            slider_float_deferred("IBL Intensity", &ctx.indirect_intensity, 0.0f, 5.0f, "%.2f");
             slider_float_deferred("EV", &ctx.ev, -4.0f, 4.0f, "%.1f");
-
-            // Debug render mode
-            constexpr const char *kModeLabels[] = {
-                "Full PBR", "Diffuse Only", "Specular Only", "Indirect Only",
-                "Normal", "Metallic", "Roughness", "AO", "Shadow Cascades", "SSAO",
-                "Contact Shadows", "Lightmap Only",
-            };
-            auto mode = static_cast<int>(ctx.debug_render_mode);
-            if (ImGui::Combo("Debug View", &mode, kModeLabels, IM_ARRAYSIZE(kModeLabels))) {
-                ctx.debug_render_mode = static_cast<uint32_t>(mode);
-            }
         }
 
         // Camera section
@@ -510,10 +381,9 @@ namespace himalaya::app {
                                   ImGuiSliderFlags_Logarithmic);
         }
 
-        // Scene section (file loading + statistics)
+        // Scene section
         ImGui::Separator();
         if (ImGui::CollapsingHeader("Scene")) {
-            // Current scene file
             if (ctx.scene_path.empty()) {
                 ImGui::TextDisabled("No scene loaded");
             } else {
@@ -525,42 +395,17 @@ namespace himalaya::app {
             }
 
 #ifdef _WIN32
-            {
-                const bool baking = ctx.render_mode == framework::RenderMode::Baking;
-                if (baking) { ImGui::BeginDisabled(); }
-                ImGui::SameLine();
-                if (ImGui::Button("Load Scene...")) {
-                    auto path = open_file_dialog(
-                        L"glTF Files (*.gltf;*.glb)\0*.gltf;*.glb\0All Files (*.*)\0*.*\0",
-                        L"Load Scene");
-                    if (!path.empty()) {
-                        actions.scene_load_requested = true;
-                        actions.new_scene_path = std::move(path);
-                    }
+            ImGui::SameLine();
+            if (ImGui::Button("Load Scene...")) {
+                auto path = open_file_dialog(
+                    L"glTF Files (*.gltf;*.glb)\0*.gltf;*.glb\0All Files (*.*)\0*.*\0",
+                    L"Load Scene");
+                if (!path.empty()) {
+                    actions.scene_load_requested = true;
+                    actions.new_scene_path = std::move(path);
                 }
-                if (baking) { ImGui::EndDisabled(); }
             }
 #endif
-
-            ImGui::Separator();
-
-            // ReSharper disable once CppUseStructuredBinding
-            const auto &stats = ctx.scene_stats;
-
-            // Scene assets
-            ImGui::Text("Instances: %u  Meshes: %u",
-                        stats.total_instances, stats.total_meshes);
-            ImGui::Text("Materials: %u  Textures: %u",
-                        stats.total_materials, stats.total_textures);
-            ImGui::Text("Vertices: %u", stats.total_vertices);
-
-            // Per-frame rendering stats
-            ImGui::Separator();
-            ImGui::Text("Visible: %u opaque, %u transparent",
-                        stats.visible_opaque, stats.visible_transparent);
-            ImGui::Text("Culled: %u", stats.culled);
-            ImGui::Text("Draw Calls: %u  Triangles: %u",
-                        stats.draw_calls, stats.rendered_triangles);
         }
 
         // Environment section
@@ -577,20 +422,15 @@ namespace himalaya::app {
             }
 
 #ifdef _WIN32
-            {
-                const bool baking = ctx.render_mode == framework::RenderMode::Baking;
-                if (baking) { ImGui::BeginDisabled(); }
-                ImGui::SameLine();
-                if (ImGui::Button("Load HDR...")) {
-                    auto path = open_file_dialog(
-                        L"HDR Files (*.hdr)\0*.hdr\0All Files (*.*)\0*.*\0",
-                        L"Load HDR Environment");
-                    if (!path.empty()) {
-                        actions.env_load_requested = true;
-                        actions.new_env_path = std::move(path);
-                    }
+            ImGui::SameLine();
+            if (ImGui::Button("Load HDR...")) {
+                auto path = open_file_dialog(
+                    L"HDR Files (*.hdr)\0*.hdr\0All Files (*.*)\0*.*\0",
+                    L"Load HDR Environment");
+                if (!path.empty()) {
+                    actions.env_load_requested = true;
+                    actions.new_env_path = std::move(path);
                 }
-                if (baking) { ImGui::EndDisabled(); }
             }
 #endif
         }
@@ -659,496 +499,6 @@ namespace himalaya::app {
             }
         }
 
-        // Features section
-        ImGui::Separator();
-        if (ImGui::CollapsingHeader("Features", ImGuiTreeNodeFlags_DefaultOpen)) {
-            ImGui::Checkbox("Skybox", &ctx.features.skybox);
-            ImGui::Checkbox("Shadows", &ctx.features.shadows);
-            ImGui::Checkbox("AO", &ctx.features.ao);
-            ImGui::Checkbox("Contact Shadows##feature", &ctx.features.contact_shadows);
-        }
-
-        // Shadow section
-        if (ctx.features.shadows) {
-            ImGui::Separator();
-            if (ImGui::CollapsingHeader("Shadow")) {
-                // Shadow Mode (PCF / PCSS)
-                constexpr const char *kModeLabels[] = {"PCF", "PCSS"};
-                auto mode_idx = static_cast<int>(ctx.shadow_config.shadow_mode);
-                if (ImGui::Combo("Shadow Mode", &mode_idx, kModeLabels, IM_ARRAYSIZE(kModeLabels))) {
-                    ctx.shadow_config.shadow_mode = static_cast<uint32_t>(mode_idx);
-                }
-
-                // Cascade count (pure rendering parameter, no resource rebuild)
-                constexpr uint32_t kCascadeCounts[] = {1, 2, 3, 4};
-                constexpr const char *kCascadeLabels[] = {"1", "2", "3", "4"};
-                int cascade_idx = 0;
-                for (int i = 0; i < IM_ARRAYSIZE(kCascadeCounts); ++i) {
-                    if (kCascadeCounts[i] == ctx.shadow_config.cascade_count) {
-                        cascade_idx = i;
-                        break;
-                    }
-                }
-                if (ImGui::Combo("Cascades", &cascade_idx, kCascadeLabels, IM_ARRAYSIZE(kCascadeLabels))) {
-                    ctx.shadow_config.cascade_count = kCascadeCounts[cascade_idx];
-                }
-
-                // Resolution (triggers resource rebuild via DebugUIActions)
-                constexpr uint32_t kResolutions[] = {512, 1024, 2048, 4096};
-                constexpr const char *kResLabels[] = {"512", "1024", "2048", "4096"};
-                int res_idx = 0;
-                for (int i = 0; i < IM_ARRAYSIZE(kResolutions); ++i) {
-                    if (kResolutions[i] == ctx.shadow_resolution) {
-                        res_idx = i;
-                        break;
-                    }
-                }
-                if (ImGui::Combo("Resolution", &res_idx, kResLabels, IM_ARRAYSIZE(kResLabels))) {
-                    actions.shadow_resolution_changed = true;
-                    actions.new_shadow_resolution = kResolutions[res_idx];
-                }
-
-                ImGui::SliderFloat("Split Lambda", &ctx.shadow_config.split_lambda, 0.0f, 1.0f, "%.2f");
-                ImGui::SliderFloat("Max Distance", &ctx.shadow_config.max_distance, 1.0f, 2000.0f, "%.0f m",
-                                   ImGuiSliderFlags_Logarithmic);
-                ImGui::SliderFloat("Slope Bias", &ctx.shadow_config.slope_bias, 0.0f, 10.0f, "%.1f");
-                ImGui::SliderFloat("Normal Offset", &ctx.shadow_config.normal_offset, 0.0f, 5.0f, "%.2f");
-
-                if (ctx.shadow_config.shadow_mode == 0) {
-                    // PCF mode: show PCF radius
-                    constexpr uint32_t kPcfRadii[] = {0, 1, 2, 3, 4, 5};
-                    constexpr const char *kPcfLabels[] = {"Off", "3x3", "5x5", "7x7", "9x9", "11x11"};
-                    int pcf_idx = 0;
-                    for (int i = 0; i < IM_ARRAYSIZE(kPcfRadii); ++i) {
-                        if (kPcfRadii[i] == ctx.shadow_config.pcf_radius) {
-                            pcf_idx = i;
-                            break;
-                        }
-                    }
-                    if (ImGui::Combo("PCF Radius", &pcf_idx, kPcfLabels, IM_ARRAYSIZE(kPcfLabels))) {
-                        ctx.shadow_config.pcf_radius = kPcfRadii[pcf_idx];
-                    }
-                } else {
-                    // PCSS mode: show angular diameter, quality, blocker early-out
-                    constexpr float kDegToRad = 3.14159265f / 180.0f;
-                    constexpr float kRadToDeg = 180.0f / 3.14159265f;
-                    float angular_deg = ctx.shadow_config.light_angular_diameter * kRadToDeg;
-                    if (ImGui::SliderFloat("Angular Diameter", &angular_deg, 0.1f, 5.0f, "%.2f deg")) {
-                        ctx.shadow_config.light_angular_diameter = angular_deg * kDegToRad;
-                    }
-                    if (ImGui::IsItemHovered()) {
-                        ImGui::SetTooltip("Sun ~0.53 deg (subtle). Use 2-5 deg for visible soft shadows.");
-                    }
-
-                    constexpr const char *kQualityLabels[] = {"Low", "Medium", "High"};
-                    auto quality_idx = static_cast<int>(ctx.shadow_config.pcss_quality);
-                    if (ImGui::Combo("PCSS Quality", &quality_idx, kQualityLabels, IM_ARRAYSIZE(kQualityLabels))) {
-                        ctx.shadow_config.pcss_quality = static_cast<uint32_t>(quality_idx);
-                    }
-
-                    bool early_out = (ctx.shadow_config.pcss_flags & 1u) != 0;
-                    if (ImGui::Checkbox("Blocker Early-Out", &early_out)) {
-                        ctx.shadow_config.pcss_flags = early_out ? (ctx.shadow_config.pcss_flags | 1u)
-                                                                 : (ctx.shadow_config.pcss_flags & ~1u);
-                    }
-                }
-
-                // Blend Width drives both cascade-to-cascade blend and distance fade —
-                // semantically both are "transition smoothness". ShadowConfig keeps
-                // them as separate fields for potential M2+ independent tuning.
-                ImGui::SliderFloat("Blend Width", &ctx.shadow_config.blend_width, 0.0f, 0.5f, "%.2f");
-                ctx.shadow_config.distance_fade_width = ctx.shadow_config.blend_width;
-
-                // Cascade statistics: coverage range and texel density
-                ImGui::Separator();
-                ImGui::TextDisabled("Cascade Statistics");
-                const auto &sc = ctx.shadow_config;
-                const float shadow_far = (std::min)(sc.max_distance, ctx.camera.far_plane);
-                const float tan_half = std::tan(ctx.camera.fov * 0.5f);
-                // Frustum diagonal factor at unit depth
-                const float diag_factor = 2.0f * tan_half
-                    * std::sqrt(ctx.camera.aspect * ctx.camera.aspect + 1.0f);
-                const float res_f = static_cast<float>(ctx.shadow_resolution);
-
-                float prev_split = ctx.camera.near_plane;
-                for (uint32_t i = 0; i < sc.cascade_count; ++i) {
-                    const float t = static_cast<float>(i + 1)
-                        / static_cast<float>(sc.cascade_count);
-                    const float c_log = ctx.camera.near_plane
-                        * std::pow(shadow_far / ctx.camera.near_plane, t);
-                    const float c_lin = ctx.camera.near_plane
-                        + (shadow_far - ctx.camera.near_plane) * t;
-                    const float split = sc.split_lambda * c_log
-                        + (1.0f - sc.split_lambda) * c_lin;
-
-                    const float diagonal = diag_factor * split;
-                    const float density = res_f / diagonal;
-
-                    ImGui::Text("  C%u: %.1f - %.1f m  (%.1f px/m)",
-                                i, prev_split, split, density);
-                    prev_split = split;
-                }
-            }
-        }
-
-        // AO section
-        if (ctx.features.ao) {
-            ImGui::Separator();
-            if (ImGui::CollapsingHeader("Ambient Occlusion")) {
-                ImGui::SliderFloat("Radius", &ctx.ao_config.radius, 0.1f, 5.0f, "%.2f m");
-
-                // Directions combo (2/4/8)
-                constexpr uint32_t kDirections[] = {2, 4, 8};
-                constexpr const char *kDirLabels[] = {"2", "4", "8"};
-                int dir_idx = 1; // default to 4
-                for (int i = 0; i < 3; ++i) {
-                    if (kDirections[i] == ctx.ao_config.directions) { dir_idx = i; break; }
-                }
-                if (ImGui::Combo("Directions", &dir_idx, kDirLabels, 3)) {
-                    ctx.ao_config.directions = kDirections[dir_idx];
-                }
-
-                // Steps per direction combo (2/4/8)
-                constexpr uint32_t kSteps[] = {2, 4, 8};
-                constexpr const char *kStepLabels[] = {"2", "4", "8"};
-                int step_idx = 1; // default to 4
-                for (int i = 0; i < 3; ++i) {
-                    if (kSteps[i] == ctx.ao_config.steps_per_dir) { step_idx = i; break; }
-                }
-                if (ImGui::Combo("Steps/Dir", &step_idx, kStepLabels, 3)) {
-                    ctx.ao_config.steps_per_dir = kSteps[step_idx];
-                }
-
-                ImGui::SliderFloat("Thin Compensation", &ctx.ao_config.thin_compensation, 0.0f, 0.7f, "%.2f");
-                ImGui::SliderFloat("Intensity##ao", &ctx.ao_config.intensity, 0.5f, 3.0f, "%.2f");
-                ImGui::SliderFloat("Temporal Blend", &ctx.ao_config.temporal_blend, 0.0f, 0.98f, "%.2f");
-                ImGui::Checkbox("GTSO (Bent Normal)", &ctx.ao_config.use_gtso);
-            }
-        }
-
-        // Contact Shadows section
-        if (ctx.features.contact_shadows) {
-            ImGui::Separator();
-            if (ImGui::CollapsingHeader("Contact Shadows")) {
-                // Step count combo (8/16/24/32)
-                constexpr uint32_t kStepCounts[] = {8, 16, 24, 32};
-                constexpr const char *kStepLabels[] = {"8", "16", "24", "32"};
-                int step_idx = 1; // default to 16
-                for (int i = 0; i < IM_ARRAYSIZE(kStepCounts); ++i) {
-                    if (kStepCounts[i] == ctx.contact_shadow_config.step_count) {
-                        step_idx = i;
-                        break;
-                    }
-                }
-                if (ImGui::Combo("Step Count", &step_idx, kStepLabels, IM_ARRAYSIZE(kStepLabels))) {
-                    ctx.contact_shadow_config.step_count = kStepCounts[step_idx];
-                }
-
-                ImGui::SliderFloat("Max Distance##cs", &ctx.contact_shadow_config.max_distance,
-                                   0.1f, 5.0f, "%.2f m");
-                ImGui::SliderFloat("Min Thickness (m)", &ctx.contact_shadow_config.base_thickness,
-                                   0.001f, 0.1f, "%.3f m");
-            }
-        }
-
-        // Baking section
-        ImGui::Separator();
-        if (ImGui::CollapsingHeader("Baking")) {
-            // --- Bake Parameters sub-panel ---
-            ImGui::Text("Bake Parameters");
-            ImGui::Spacing();
-
-            {
-                const bool baking = ctx.bake_progress.state != framework::BakeState::Idle;
-                if (baking) { ImGui::BeginDisabled(); }
-
-                // Lightmap parameters
-                slider_float_deferred("Texels/m", &ctx.bake_config.texels_per_meter,
-                                      1.0f, 512.0f, "%.1f");
-
-                {
-                    auto min_res = static_cast<int>(ctx.bake_config.min_resolution);
-                    if (ImGui::SliderInt("Min Resolution", &min_res, 64, 512)) {
-                        ctx.bake_config.min_resolution = static_cast<uint32_t>(
-                            (std::min)(min_res, static_cast<int>(ctx.bake_config.max_resolution)));
-                    }
-                }
-
-                {
-                    auto max_res = static_cast<int>(ctx.bake_config.max_resolution);
-                    if (ImGui::SliderInt("Max Resolution", &max_res, 128, 4096)) {
-                        ctx.bake_config.max_resolution = static_cast<uint32_t>(
-                            (std::max)(max_res, static_cast<int>(ctx.bake_config.min_resolution)));
-                    }
-                }
-
-                {
-                    auto spp = static_cast<int>(ctx.bake_config.lightmap_spp);
-                    if (ImGui::SliderInt("Lightmap SPP", &spp, 64, 16384,
-                                         "%d", ImGuiSliderFlags_Logarithmic)) {
-                        ctx.bake_config.lightmap_spp = static_cast<uint32_t>(spp);
-                    }
-                }
-
-                // Probe parameters
-                {
-                    auto face_res = static_cast<int>(ctx.bake_config.probe_face_resolution);
-                    if (ImGui::SliderInt("Probe Face Res", &face_res, 64, 1024)) {
-                        ctx.bake_config.probe_face_resolution = static_cast<uint32_t>(face_res);
-                    }
-                }
-
-                slider_float_deferred("Probe Spacing", &ctx.bake_config.probe_spacing,
-                                      0.1f, 10.0f, "%.2f m");
-
-                {
-                    auto rays = static_cast<int>(ctx.bake_config.filter_ray_count);
-                    if (ImGui::SliderInt("Filter Rays", &rays, 8, 256)) {
-                        ctx.bake_config.filter_ray_count = static_cast<uint32_t>(rays);
-                    }
-                }
-
-                slider_float_deferred("Enclosure Factor",
-                                      &ctx.bake_config.enclosure_threshold_factor,
-                                      0.01f, 0.5f, "%.3f");
-                if (ctx.scene_aabb_longest_edge > 0.0f) {
-                    ImGui::SameLine();
-                    ImGui::Text("= %.2f m",
-                                static_cast<double>(ctx.bake_config.enclosure_threshold_factor
-                                    * ctx.scene_aabb_longest_edge));
-                }
-
-                {
-                    auto spp = static_cast<int>(ctx.bake_config.probe_spp);
-                    if (ImGui::SliderInt("Probe SPP", &spp, 64, 16384,
-                                         "%d", ImGuiSliderFlags_Logarithmic)) {
-                        ctx.bake_config.probe_spp = static_cast<uint32_t>(spp);
-                    }
-                }
-
-                slider_float_deferred("Probe Min Luminance",
-                                      &ctx.bake_config.probe_min_luminance,
-                                      0.0f, 0.1f, "%.5f");
-
-                // Baker rendering parameters
-                {
-                    auto bounces = static_cast<int>(ctx.bake_config.max_bounces);
-                    if (ImGui::SliderInt("Baker Bounces", &bounces, 1, 64)) {
-                        ctx.bake_config.max_bounces = static_cast<uint32_t>(bounces);
-                    }
-                }
-
-                ImGui::Checkbox("Baker Env Sampling", &ctx.bake_config.env_sampling);
-                ImGui::Checkbox("Baker Emissive NEE", &ctx.bake_config.emissive_nee);
-
-                slider_float_deferred("Baker Clamp", &ctx.bake_config.baker_clamp,
-                                      0.0f, 1000.0f, "%.1f");
-                if (ImGui::IsItemHovered()) {
-                    ImGui::SetTooltip(
-                        "Per-sample radiance clamp for firefly suppression.\n"
-                        "0 = disabled. Prevents extreme outliers from\n"
-                        "corrupting low-resolution lightmaps.");
-                }
-
-                ImGui::Checkbox("Baker Denoise", &ctx.bake_config.denoise);
-                if (ImGui::IsItemHovered()) {
-                    ImGui::SetTooltip(
-                        "Apply OIDN denoising during bake finalize.\n"
-                        "Disable to inspect raw noisy output or when\n"
-                        "using very high SPP that converges without denoising.");
-                }
-
-                {
-                    const bool can_tear = ctx.swapchain.immediate_supported;
-                    if (!can_tear) { ImGui::BeginDisabled(); }
-                    ImGui::Checkbox("Baker Allow Tearing", &ctx.bake_config.allow_tearing);
-                    if (ImGui::IsItemHovered()) {
-                        ImGui::SetTooltip(can_tear
-                            ? "Force IMMEDIATE present mode during baking."
-                            : "IMMEDIATE present mode not supported by this surface.");
-                    }
-                    if (!can_tear) { ImGui::EndDisabled(); }
-                }
-
-                if (baking) { ImGui::EndDisabled(); }
-
-                // SPP per Frame — adjustable during baking (not locked)
-                {
-                    auto spp = static_cast<int>(ctx.bake_config.spp_per_frame);
-                    if (ImGui::SliderInt("SPP per Frame", &spp, 1, 8192)) {
-                        ctx.bake_config.spp_per_frame = static_cast<uint32_t>(spp);
-                    }
-                    if (ImGui::IsItemHovered()) {
-                        ImGui::SetTooltip(
-                            "Number of path tracing samples dispatched per frame.\n"
-                            "Higher values improve GPU utilization but reduce UI responsiveness.");
-                    }
-                }
-            }
-
-            ImGui::Separator();
-
-            // --- Start / Cancel buttons ---
-            {
-                const bool baking = ctx.bake_progress.state != framework::BakeState::Idle;
-
-                if (!baking) {
-                    const bool in_lp_mode = ctx.indirect_lighting_mode
-                        == framework::IndirectLightingMode::LightmapProbe;
-                    const bool can_start_base = ctx.rt_supported && ctx.has_scene && ctx.has_hdr
-                        && ctx.render_mode != framework::RenderMode::Baking
-                        && !in_lp_mode;
-
-                    // Check if current rotation angle has complete bake data
-                    float normalized = std::fmod(ctx.ibl_rotation_deg, 360.0f);
-                    if (normalized < 0.0f) { normalized += 360.0f; }
-                    const auto current_rot = static_cast<uint32_t>(std::round(normalized)) % 360;
-                    bool current_angle_complete = false;
-                    for (const auto &a : ctx.available_angles) {
-                        if (a.rotation == current_rot) {
-                            current_angle_complete = true;
-                            break;
-                        }
-                    }
-
-                    // "Bake All" — always available when base conditions met
-                    if (!can_start_base) { ImGui::BeginDisabled(); }
-                    if (ImGui::Button("Bake All")) {
-                        actions.bake_start_mode = framework::BakeMode::All;
-                    }
-                    if (!can_start_base) { ImGui::EndDisabled(); }
-
-                    // "Bake Lightmap" / "Bake Probe" — only when current angle already complete
-                    ImGui::SameLine();
-                    const bool can_partial = can_start_base && current_angle_complete;
-                    if (!can_partial) { ImGui::BeginDisabled(); }
-                    if (ImGui::Button("Bake Lightmap")) {
-                        actions.bake_start_mode = framework::BakeMode::Lightmap;
-                    }
-                    ImGui::SameLine();
-                    if (ImGui::Button("Bake Probe")) {
-                        actions.bake_start_mode = framework::BakeMode::Probe;
-                    }
-                    if (!can_partial) { ImGui::EndDisabled(); }
-
-                    if (in_lp_mode && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
-                        ImGui::SetTooltip("Switch to IBL mode to start a new bake");
-                    }
-
-                    // Show current IBL rotation angle
-                    ImGui::SameLine();
-                    ImGui::Text("(%.0f%s)", static_cast<double>(ctx.ibl_rotation_deg), "\xC2\xB0");
-                    if (ImGui::IsItemHovered()) {
-                        ImGui::SetTooltip("Bake at this IBL rotation angle.\n"
-                                          "Results are cached per angle.");
-                    }
-                } else {
-                    // Cancel button (visible only during baking)
-                    if (ImGui::Button("Cancel Bake")) {
-                        actions.bake_cancel_requested = true;
-                    }
-                }
-            }
-
-            // --- Bake Progress Display ---
-            {
-                const auto &bp = ctx.bake_progress;
-                const bool active = bp.state == framework::BakeState::BakingLightmaps
-                                 || bp.state == framework::BakeState::BakingProbes;
-
-                if (active) {
-                    ImGui::Separator();
-
-                    // Stage label + current item / total + samples
-                    if (bp.state == framework::BakeState::BakingLightmaps) {
-                        ImGui::Text("Baking Lightmaps");
-                        ImGui::Text("Instance: %u / %u    %u / %u SPP",
-                                    bp.current_instance + 1, bp.total_instances,
-                                    bp.lm_sample_count, bp.lm_target_spp);
-                    } else {
-                        ImGui::Text("Baking Probes");
-                        ImGui::Text("Probe: %u / %u    %u / %u SPP",
-                                    bp.current_probe + 1, bp.total_probes,
-                                    bp.probe_sample_count, bp.probe_target_spp);
-                        if (bp.probes_rejected > 0) {
-                            ImGui::Text("Rejected: %u", bp.probes_rejected);
-                        }
-                    }
-
-                    // Throughput — feed BakeThroughput accumulator
-                    uint64_t texels_per_spp = 0;
-                    if (bp.state == framework::BakeState::BakingLightmaps) {
-                        texels_per_spp = static_cast<uint64_t>(bp.lm_width) * bp.lm_height;
-                    } else {
-                        texels_per_spp = static_cast<uint64_t>(bp.probe_face_res)
-                            * bp.probe_face_res * 6;
-                    }
-                    bake_throughput_.push(ctx.delta_time,
-                        texels_per_spp * ctx.bake_config.spp_per_frame);
-
-                    if (bake_throughput_.throughput > 0.0) {
-                        ImGui::Text("%.1f M paths/s", bake_throughput_.throughput / 1e6);
-                    }
-
-                    // Timing
-                    ImGui::Text("Item: %.1fs  Total: %.1fs",
-                                static_cast<double>(bp.instance_elapsed_s),
-                                static_cast<double>(bp.total_elapsed_s));
-
-                    // Per-phase progress percentage + ETA
-                    {
-                        const uint64_t completed = bp.state == framework::BakeState::BakingLightmaps
-                            ? bp.lm_completed_texel_samples : bp.probe_completed_texel_samples;
-                        const uint64_t total = bp.state == framework::BakeState::BakingLightmaps
-                            ? bp.lm_total_texel_samples : bp.probe_total_texel_samples;
-
-                        if (total > 0) {
-                            const double pct = static_cast<double>(completed)
-                                / static_cast<double>(total) * 100.0;
-                            ImGui::Text("Progress: %.1f%%", pct);
-
-                            if (bake_throughput_.throughput > 0.0) {
-                                const uint64_t remaining = total - completed;
-                                const double eta_s = static_cast<double>(remaining)
-                                    / bake_throughput_.throughput;
-                                if (eta_s < 3600.0) {
-                                    ImGui::SameLine();
-                                    ImGui::Text("  ETA: %.0fs", eta_s);
-                                } else {
-                                    ImGui::SameLine();
-                                    ImGui::Text("  ETA: %.1fh", eta_s / 3600.0);
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            // --- Baked Angle List ---
-            if (!ctx.available_angles.empty()) {
-                ImGui::Separator();
-                ImGui::Text("Baked Angles");
-
-                const bool baking = ctx.render_mode == framework::RenderMode::Baking;
-                if (baking) { ImGui::BeginDisabled(); }
-                for (const auto& [rot, lm, probes] : ctx.available_angles) {
-                    const bool is_loaded = ctx.bake_data_loaded
-                        && rot == ctx.loaded_bake_rotation;
-
-                    char label[64];
-                    std::snprintf(label, sizeof(label),
-                                 "%u%s  LM: %u  Probes: %u",
-                                 rot, "\xC2\xB0", lm, probes);
-
-                    if (ImGui::Selectable(label, is_loaded)) {
-                        actions.angle_switch_requested = true;
-                        actions.new_angle_rotation = rot;
-                    }
-                }
-                if (baking) { ImGui::EndDisabled(); }
-            }
-        }
-
         // Cache section
         ImGui::Separator();
         if (ImGui::CollapsingHeader("Cache")) {
@@ -1161,23 +511,6 @@ namespace himalaya::app {
             if (ImGui::Button("Clear Shader Cache")) {
                 framework::clear_cache("shader_debug");
                 framework::clear_cache("shader_release");
-            }
-            {
-                const bool baking = ctx.render_mode == framework::RenderMode::Baking;
-                if (baking) { ImGui::BeginDisabled(); }
-                if (ImGui::Button("Clear Bake Cache")) {
-                    actions.clear_bake_cache_requested = true;
-                }
-                if (baking) { ImGui::EndDisabled(); }
-            }
-            ImGui::Spacing();
-            {
-                const bool baking = ctx.render_mode == framework::RenderMode::Baking;
-                if (baking) { ImGui::BeginDisabled(); }
-                if (ImGui::Button("Clear All Cache")) {
-                    actions.clear_all_cache_requested = true;
-                }
-                if (baking) { ImGui::EndDisabled(); }
             }
         }
 
