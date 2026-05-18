@@ -92,7 +92,7 @@
 ## Step 4：清理 shader
 
 - [x] 删除光栅化 shader：`depth_prepass*`, `forward.*`, `shadow*`, `skybox.*`, `gtao.comp`, `ao_spatial.comp`, `ao_temporal.comp`, `contact_shadows.comp`（保留 PT 用的 `rt/shadow_miss.rmiss`）
-- [ ] 删除烘焙 shader：`bake/pos_normal_map.*`, `bake/probe_filter.comp`, `rt/lightmap_baker.rgen`, `rt/probe_baker.rgen`
+- [x] 删除烘焙 shader：`bake/pos_normal_map.*`, `bake/probe_filter.comp`, `rt/lightmap_baker.rgen`, `rt/probe_baker.rgen`
 - [ ] 删除 `shaders/common/probe_grid.glsl`、`shaders/common/shadow.glsl`
 - [ ] 清理 `bindings.glsl`：移除 ProbeBuffer/ProbeGridBuffer 声明、shadow/AO 相关 Set 2 声明
 - [ ] 清理 `bindings.glsl`：精简 GlobalUBO（与 scene_data.h 同步）
