@@ -16,8 +16,6 @@
 
 namespace himalaya::app {
     void Renderer::render_path_tracing(rhi::CommandBuffer &cmd, const RenderInput &input) {
-        draw_call_count_ = 0;
-
         // --- Deferred upload completion from previous frame ---
         // complete_upload() is deferred until the next frame so the GPU has
         // actually executed the upload pass (begin_frame fence wait guarantees this).
