@@ -55,38 +55,10 @@ struct GPUMaterialData {
     uint double_sided;             // offset 76 — 1 if glTF doubleSided, 0 otherwise
 };
 
-// ---- Feature flags (bitmask for GlobalUBO.feature_flags) ----
-
-#define FEATURE_SHADOWS         (1u << 0)
-#define FEATURE_AO              (1u << 1)
-#define FEATURE_CONTACT_SHADOWS (1u << 2)
-#define FEATURE_LIGHTMAP       (1u << 3)
-#define FEATURE_PROBE          (1u << 4)
-
-// ---- AO specular occlusion mode (GlobalUBO.ao_so_mode) ----
-
-#define AO_SO_LAGARDE 0
-#define AO_SO_GTSO    1
-
-// ---- Shadow cascade constants ----
-
-#define MAX_SHADOW_CASCADES 4
-
 // ---- Debug render mode constants ----
 
 #define DEBUG_MODE_FULL_PBR          0
-#define DEBUG_MODE_DIFFUSE_ONLY      1
-#define DEBUG_MODE_SPECULAR_ONLY     2
-#define DEBUG_MODE_INDIRECT_ONLY     3
 #define DEBUG_MODE_PASSTHROUGH_START 4
-#define DEBUG_MODE_NORMAL            4
-#define DEBUG_MODE_METALLIC          5
-#define DEBUG_MODE_ROUGHNESS         6
-#define DEBUG_MODE_AO                7
-#define DEBUG_MODE_SHADOW_CASCADES   8
-#define DEBUG_MODE_AO_SSAO           9
-#define DEBUG_MODE_CONTACT_SHADOWS  10
-#define DEBUG_MODE_LIGHTMAP_ONLY   11
 
 // ---- Set 0: Global data (updated once per frame) ----
 
