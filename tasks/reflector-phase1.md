@@ -86,7 +86,8 @@
 - [x] 清理 `scene_data.h`：精简 RenderMode 枚举（仅 PathTracing + GaussianSplatting）
 - [x] 清理 `scene_data.h`：精简 GlobalUniformData（移除 shadow cascade、AO、probe blend、directional_light_count 字段）
 - [x] 清理 `frame_context.h`：移除光栅化专用字段（shadow groups、AO resources、MSAA resources 等）
-- [ ] 更新 `framework/CMakeLists.txt`
+- [x] 更新 `framework/CMakeLists.txt`
+- [x] 审查修复：恢复 inv_projection、删除 4 个死代码类型、修正过时注释、清理 render_constants.h
 
 ## Step 4：清理 shader
 
