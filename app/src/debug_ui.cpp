@@ -195,6 +195,16 @@ namespace himalaya::app {
             if (only_fifo) { ImGui::EndDisabled(); }
         }
 
+        // Render mode toggle (PT always active; GS placeholder for Phase 2)
+        {
+            ImGui::BeginDisabled();
+            ImGui::Checkbox("Path Tracing", &ctx.pt_mode);
+            ImGui::EndDisabled();
+            if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
+                ImGui::SetTooltip("Gaussian Splatting mode coming in Phase 2");
+            }
+        }
+
         // Error banner (dismissable)
         if (!ctx.error_message.empty()) {
             ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.4f, 0.4f, 1.0f));
@@ -217,7 +227,8 @@ namespace himalaya::app {
             actions.new_log_level = current_log_level;
         }
 
-        // Path Tracing controls
+        // Path Tracing controls (visible only when PT mode is active)
+        if (ctx.pt_mode) {
         ImGui::Separator();
         if (ImGui::CollapsingHeader("Path Tracing##settings", ImGuiTreeNodeFlags_DefaultOpen)) {
             // Status line
@@ -341,6 +352,7 @@ namespace himalaya::app {
                             static_cast<double>(ctx.last_denoise_duration));
             }
         }
+        } // if (ctx.pt_mode)
 
         // Rendering section
         ImGui::Separator();
@@ -381,14 +393,14 @@ namespace himalaya::app {
                                   ImGuiSliderFlags_Logarithmic);
         }
 
-        // Scene section
+        // PT Scene section
         ImGui::Separator();
-        if (ImGui::CollapsingHeader("Scene")) {
+        if (ImGui::CollapsingHeader("PT Scene")) {
             if (ctx.scene_path.empty()) {
-                ImGui::TextDisabled("No scene loaded");
+                ImGui::TextDisabled("No PT scene loaded");
             } else {
                 const auto filename = std::filesystem::path(ctx.scene_path).filename().string();
-                ImGui::Text("Scene: %s", filename.c_str());
+                ImGui::Text("PT Scene: %s", filename.c_str());
                 if (ImGui::IsItemHovered()) {
                     ImGui::SetTooltip("%s", ctx.scene_path.c_str());
                 }
@@ -396,10 +408,10 @@ namespace himalaya::app {
 
 #ifdef _WIN32
             ImGui::SameLine();
-            if (ImGui::Button("Load Scene...")) {
+            if (ImGui::Button("Load PT Scene...")) {
                 auto path = open_file_dialog(
                     L"glTF Files (*.gltf;*.glb)\0*.gltf;*.glb\0All Files (*.*)\0*.*\0",
-                    L"Load Scene");
+                    L"Load PT Scene");
                 if (!path.empty()) {
                     actions.scene_load_requested = true;
                     actions.new_scene_path = std::move(path);

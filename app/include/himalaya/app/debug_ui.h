@@ -121,7 +121,10 @@ namespace himalaya::app {
         /** @brief Original equirect image height (for UI max bounds). */
         uint32_t equirect_height;
 
-        // --- Path tracing ---
+        // --- Render mode ---
+
+        /** @brief PT mode active (mutable — future: checkbox toggles PT vs GS). */
+        bool& pt_mode;
 
         /** @brief Whether RT hardware is available. */
         bool rt_supported;

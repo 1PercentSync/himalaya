@@ -420,6 +420,7 @@ namespace himalaya::app {
             .hdr_sun_auto_multiplier = hdr_sun_auto_multiplier_,
             .equirect_width = renderer_.ibl().equirect_width(),
             .equirect_height = renderer_.ibl().equirect_height(),
+            .pt_mode = pt_mode_,
             .rt_supported = context_.rt_supported,
             .pt_sample_count = renderer_.pt_sample_count(),
             .pt_config = pt_config_,

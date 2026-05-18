@@ -158,6 +158,9 @@ namespace himalaya::app {
         /** @brief Constructed HDR Sun DirectionalLight (rebuilt each frame from coords + IBL yaw). */
         framework::DirectionalLight hdr_sun_light_{};
 
+        /** @brief PT mode active (always true; future: toggleable for PT vs GS). */
+        bool pt_mode_ = true;
+
         /** @brief Path tracing configuration parameters. */
         framework::PTConfig pt_config_{};
 
