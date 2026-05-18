@@ -136,9 +136,6 @@ namespace himalaya::framework {
         /** @brief Environment map importance sampling toggle. */
         bool env_sampling = true;
 
-        /** @brief Directional lights enabled in PT (default off — env sampling handles sun). */
-        bool directional_lights = false;
-
         /** @brief Emissive area light NEE toggle. */
         bool emissive_nee = true;
 
