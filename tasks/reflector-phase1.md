@@ -61,7 +61,7 @@
 - [x] 简化 `renderer.cpp` render() 调度（仅 PT 路径）
 - [x] 清理 `renderer_init.cpp`（移除光栅化/烘焙资源创建、managed image、sampler）
 - [x] 清理 `renderer_pt.cpp`（移除对已删模块的引用，如有）
-- [ ] 精简 `RenderInput`（移除光栅化/烘焙专用字段）
+- [x] 精简 `RenderInput`（移除光栅化/烘焙专用字段）
 - [ ] 清理 `application.h/cpp`（移除烘焙触发、光栅化模式切换、bake data 管理）
 - [ ] 清理 `debug_ui.h/cpp`（移除光栅化/烘焙 UI 面板）
 - [ ] 清理 `config.h/cpp`（移除光栅化/烘焙配置持久化）
