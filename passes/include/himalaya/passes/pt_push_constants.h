@@ -5,7 +5,7 @@
  * @brief Shared push constant layout for all path-tracing RT pipelines (Layer 2).
  *
  * Must match the PushConstants block declared in shaders/rt/pt_common.glsl.
- * Used by ReferenceViewPass, LightmapBakerPass, and ProbeBakerPass.
+ * Used by ReferenceViewPass.
  */
 
 #include <cstdint>
