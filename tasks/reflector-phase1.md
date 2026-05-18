@@ -72,10 +72,10 @@
 
 ## Step 2：清理 passes 层
 
-- [ ] 删除光栅化 pass（8 对 .h/.cpp）：DepthPrePass, ForwardPass, ShadowPass, SkyboxPass, GTAOPass, AOSpatialPass, AOTemporalPass, ContactShadowsPass
-- [ ] 删除烘焙 pass（3 对 .h/.cpp）：LightmapBakerPass, ProbeBakerPass, PosNormalMapPass
-- [ ] 确认并处理 `pt_push_constants.h`（PT 使用则保留，否则删除）
-- [ ] 更新 `passes/CMakeLists.txt`
+- [x] 删除光栅化 pass（8 对 .h/.cpp）：DepthPrePass, ForwardPass, ShadowPass, SkyboxPass, GTAOPass, AOSpatialPass, AOTemporalPass, ContactShadowsPass
+- [x] 删除烘焙 pass（3 对 .h/.cpp）：LightmapBakerPass, ProbeBakerPass, PosNormalMapPass
+- [x] 确认并处理 `pt_push_constants.h`（PT 使用则保留，否则删除）
+- [x] 更新 `passes/CMakeLists.txt`
 
 ## Step 3：清理 framework 层
 
