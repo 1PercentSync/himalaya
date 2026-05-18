@@ -23,7 +23,7 @@ namespace himalaya::framework {
     /**
      * @brief Axis-aligned bounding box.
      *
-     * Used for frustum culling.
+     * Used for scene bounds computation and camera focus framing.
      */
     struct AABB {
         /** @brief Minimum corner (most negative x, y, z). */
@@ -55,7 +55,7 @@ namespace himalaya::framework {
         /** @brief Previous frame's transform (M2+ motion vectors, unused in M1). */
         glm::mat4 prev_transform{1.0f};
 
-        /** @brief World-space AABB for frustum culling. */
+        /** @brief World-space AABB for scene bounds and camera focus. */
         AABB world_bounds;
     };
 
@@ -117,7 +117,7 @@ namespace himalaya::framework {
     /**
      * @brief Per-frame global uniform data (Set 0, Binding 0).
      *
-     * std140 layout, 400 bytes (25 × 16) aligned to 16.
+     * std140 layout, 464 bytes (29 × 16) aligned to 16.
      */
     struct GlobalUniformData {
         glm::mat4 view; ///< offset   0
@@ -138,7 +138,8 @@ namespace himalaya::framework {
         uint32_t debug_render_mode = 0; ///< offset 316 — DEBUG_MODE_* constants
         uint32_t frame_index = 0; ///< offset 320 — monotonically increasing frame counter (temporal noise variation)
         uint32_t _pad[3]{}; ///< offset 324 — pad to 336 (mat4 alignment)
-        glm::mat4 inv_view{}; ///< offset 336 — inverse view matrix (PT raygen primary ray computation)
+        glm::mat4 inv_projection{}; ///< offset 336 — NDC → view-space (PT primary ray + ray cone LOD)
+        glm::mat4 inv_view{}; ///< offset 400 — inverse view matrix (PT raygen primary ray computation)
     };
 
     /**
@@ -152,41 +153,6 @@ namespace himalaya::framework {
         uint64_t index_buffer_address;  ///< offset  8 — device address of index buffer
         uint32_t material_buffer_offset; ///< offset 16 — index into MaterialBuffer SSBO
         uint32_t _padding;              ///< offset 20 — pad to 24 bytes (8-byte alignment)
-    };
-
-    /**
-     * @brief Per-instance GPU data (Set 0, Binding 3 SSBO element).
-     *
-     * std430 layout, 128 bytes per element, aligned to 16.
-     * Shader reads via instances[gl_InstanceIndex]. The vkCmdDrawIndexed
-     * firstInstance parameter sets the SSBO base offset for each draw group.
-     *
-     * The normal matrix (transpose(inverse(mat3(model)))) is precomputed on
-     * CPU per-instance rather than per-vertex in the shader, handling
-     * non-uniform scale correctly without per-vertex mat3 inverse.
-     * Stored as 3 vec4 columns to match std430 mat3 layout (vec3 + 4-byte
-     * pad per column = 16 bytes each).
-     */
-    struct GPUInstanceData {
-        glm::mat4 model;         ///< 64 bytes — world-space transform
-        glm::vec4 normal_col0;   ///< 16 bytes — normal matrix column 0 (xyz, w unused)
-        glm::vec4 normal_col1;   ///< 16 bytes — normal matrix column 1 (xyz, w unused)
-        glm::vec4 normal_col2;   ///< 16 bytes — normal matrix column 2 (xyz, w unused)
-        uint32_t material_index; ///<  4 bytes — index into MaterialBuffer SSBO
-        uint32_t lightmap_index = UINT32_MAX; ///<  4 bytes — bindless index into textures[] (UINT32_MAX = no lightmap)
-        uint32_t _padding2{};    ///<  4 bytes — was probe_index, now unused
-        uint32_t _padding{};     ///<  4 bytes — align to 128 (multiple of 16)
-    };
-
-    /**
-     * @brief Per-draw push constant data.
-     *
-     * 4 bytes. Only used by shadow pass (cascade_index); forward and
-     * depth prepass do not push constants (model + material_index moved
-     * to InstanceBuffer SSBO).
-     */
-    struct PushConstantData {
-        uint32_t cascade_index; ///< 4 bytes — shadow.vert cascade selection
     };
 
     /**
@@ -215,46 +181,13 @@ namespace himalaya::framework {
         glm::vec2 uv2;             ///< offset 88 — vertex 2 texture coordinate
     };
 
-    /**
-     * @brief Per-probe GPU data (Set 0, Binding 9 SSBO element).
-     *
-     * std430 layout, 48 bytes per element.
-     * Shader reads via probes[probe_index]. Each probe stores its world-space
-     * position, an AABB for parallax correction (Phase 8.5, filled with zeros
-     * in Phase 8), and a bindless cubemap index.
-     */
-    struct GPUProbeData {
-        glm::vec3 position;      ///<  offset  0 — probe world-space position
-        float _pad0;             ///<  offset 12 — pad to vec3 alignment (16)
-        glm::vec3 aabb_min;      ///<  offset 16 — parallax correction AABB min (Phase 8.5, zero in Phase 8)
-        float _pad1;             ///<  offset 28 — pad to vec3 alignment (32)
-        glm::vec3 aabb_max;      ///<  offset 32 — parallax correction AABB max (Phase 8.5, zero in Phase 8)
-        uint32_t cubemap_index;  ///<  offset 44 — bindless cubemaps[] index
-    };
-
-    // ---- CPU-side Draw Grouping ----
-
-    /**
-     * @brief A group of instances sharing the same mesh, for instanced draw.
-     *
-     * CPU-only — not uploaded to GPU. Built each frame by sorting visible
-     * opaque indices by mesh_id after culling. Transparent objects (Blend)
-     * are not grouped (they need back-to-front ordering).
-     */
-    struct MeshDrawGroup {
-        uint32_t mesh_id; ///< Which mesh resource to bind (VB/IB)
-        uint32_t first_instance; ///< InstanceBuffer SSBO offset (firstInstance param)
-        uint32_t instance_count; ///< Number of instances in this group
-        bool double_sided; ///< Cached from material — controls face culling
-    };
-
     // ---- GPU struct layout guards ----
     // These must match the shader-side layout exactly. A mismatch silently
     // corrupts GPU reads, so catch it at compile time.
     // Size assertions catch additions/removals; offset assertions catch
     // C++ vs std140 alignment divergences (e.g. vec2 requires 8-byte
     // alignment in std140 but glm::vec2 has natural alignment of 4).
-    static_assert(sizeof(GlobalUniformData) == 400, "GlobalUniformData must be 400 bytes (std140)");
+    static_assert(sizeof(GlobalUniformData) == 464, "GlobalUniformData must be 464 bytes (std140)");
     static_assert(offsetof(GlobalUniformData, view) == 0);
     static_assert(offsetof(GlobalUniformData, camera_position_and_exposure) == 256);
     static_assert(offsetof(GlobalUniformData, screen_size) == 272);
@@ -262,22 +195,12 @@ namespace himalaya::framework {
     static_assert(offsetof(GlobalUniformData, indirect_intensity) == 284);
     static_assert(offsetof(GlobalUniformData, debug_render_mode) == 316);
     static_assert(offsetof(GlobalUniformData, frame_index) == 320);
-    static_assert(offsetof(GlobalUniformData, inv_view) == 336);
+    static_assert(offsetof(GlobalUniformData, inv_projection) == 336);
+    static_assert(offsetof(GlobalUniformData, inv_view) == 400);
     static_assert(sizeof(GPUGeometryInfo) == 24, "GPUGeometryInfo must be 24 bytes (std430)");
     static_assert(offsetof(GPUGeometryInfo, vertex_buffer_address) == 0);
     static_assert(offsetof(GPUGeometryInfo, index_buffer_address) == 8);
     static_assert(offsetof(GPUGeometryInfo, material_buffer_offset) == 16);
-    static_assert(sizeof(GPUInstanceData) == 128, "GPUInstanceData must be 128 bytes (std430)");
-    static_assert(offsetof(GPUInstanceData, normal_col0) == 64);
-    static_assert(offsetof(GPUInstanceData, material_index) == 112);
-    static_assert(offsetof(GPUInstanceData, lightmap_index) == 116);
-    static_assert(offsetof(GPUInstanceData, _padding2) == 120);
-    static_assert(sizeof(PushConstantData) == 4, "PushConstantData must be 4 bytes");
-    static_assert(sizeof(GPUProbeData) == 48, "GPUProbeData must be 48 bytes (std430)");
-    static_assert(offsetof(GPUProbeData, position) == 0);
-    static_assert(offsetof(GPUProbeData, aabb_min) == 16);
-    static_assert(offsetof(GPUProbeData, aabb_max) == 32);
-    static_assert(offsetof(GPUProbeData, cubemap_index) == 44);
     static_assert(sizeof(EmissiveTriangle) == 96, "EmissiveTriangle must be 96 bytes (std430)");
     static_assert(offsetof(EmissiveTriangle, v0) == 0);
     static_assert(offsetof(EmissiveTriangle, v1) == 16);

@@ -19,10 +19,4 @@ constexpr VkFormat kDepthFormat = VK_FORMAT_D32_SFLOAT;
 /** Main HDR color render target format. */
 constexpr VkFormat kHdrColorFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
 
-/** G-buffer world-space normal format (10-bit per channel, pack32). */
-constexpr VkFormat kNormalFormat = VK_FORMAT_A2B10G10R10_UNORM_PACK32;
-
-/** G-buffer roughness format (single channel). */
-constexpr VkFormat kRoughnessFormat = VK_FORMAT_R8_UNORM;
-
 } // namespace himalaya::framework
