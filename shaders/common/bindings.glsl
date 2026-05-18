@@ -98,52 +98,19 @@ layout (set = 0, binding = 0) uniform GlobalUBO {
     vec4 camera_position_and_exposure;      // offset 256 — xyz = position, w = exposure
     vec2 screen_size;                       // offset 272
     float time;                             // offset 280 — elapsed time in seconds
-    uint directional_light_count;           // offset 284 — number of active directional lights
-    float indirect_intensity;               // offset 288 — indirect light intensity multiplier
-    uint irradiance_cubemap_index;          // offset 292 — bindless index into cubemaps[]
-    uint prefiltered_cubemap_index;         // offset 296 — bindless index into cubemaps[]
-    uint brdf_lut_index;                    // offset 300 — bindless index into textures[]
-    uint prefiltered_mip_count;             // offset 304 — mip levels in prefiltered env map
-    uint skybox_cubemap_index;              // offset 308 — bindless index into cubemaps[]
-    float ibl_rotation_sin;                 // offset 312 — sin(ibl_yaw) for environment rotation
-    float ibl_rotation_cos;                 // offset 316 — cos(ibl_yaw) for environment rotation
-    uint debug_render_mode;                 // offset 320 — DEBUG_MODE_* constants
-    uint feature_flags;                     // offset 324 — bitmask: FEATURE_SHADOWS, etc.
-    // ---- Shadow fields (phase 4) ----
-    uint shadow_cascade_count;              // offset 328 — active cascade count
-    float shadow_normal_offset;             // offset 332 — normal offset bias strength
-    float shadow_texel_size;                // offset 336 — 1.0 / shadow_map_resolution
-    float shadow_max_distance;              // offset 340 — cascade max coverage distance
-    float shadow_blend_width;               // offset 344 — cascade blend region fraction
-    uint shadow_pcf_radius;                 // offset 348 — PCF kernel radius (0=off)
-    mat4 cascade_view_proj[MAX_SHADOW_CASCADES]; // offset 352 — per-cascade light-space VP
-    vec4 cascade_splits;                    // offset 608 — cascade far boundaries (view-space depth)
-    float shadow_distance_fade_width;       // offset 624 — distance fade region fraction of max_distance
-    // 12 bytes implicit pad (vec4 alignment)
-    vec4 cascade_texel_world_size;          // offset 640 — precomputed world-space size per shadow texel
-    // ---- PCSS fields (Step 7) ----
-    uint shadow_mode;                       // offset 656 — 0 = PCF, 1 = PCSS
-    uint pcss_flags;                        // offset 660 — bit 0: blocker early-out
-    uint pcss_blocker_samples;              // offset 664 — blocker search sample count
-    uint pcss_pcf_samples;                  // offset 668 — PCSS PCF sample count
-    vec4 cascade_light_size_uv;             // offset 672 — per-cascade blocker search radius (U direction)
-    vec4 cascade_pcss_scale;                // offset 688 — per-cascade NDC depth diff → UV penumbra scale
-    vec4 cascade_uv_scale_y;                // offset 704 — per-cascade UV anisotropy correction
-    // ---- Phase 5 fields ----
-    mat4 inv_projection;                    // offset 720 — depth → view-space position (GTAO)
-    mat4 prev_view_projection;              // offset 784 — temporal reprojection (current world → prev UV)
-    uint frame_index;                       // offset 848 — monotonically increasing frame counter (temporal noise)
-    uint ao_so_mode;                        // offset 852 — 0 = Lagarde, 1 = GTSO (bent normal)
-    // 8 bytes implicit pad (vec4 alignment)
-    // ---- Phase 6 fields ----
-    mat4 inv_view;                          // offset 864 — inverse view matrix (PT raygen primary ray)
-    // ---- Phase 8.5 fields ----
-    uint probe_count;                       // offset 928 — number of loaded probes in ProbeBuffer
-    float normal_bias;                      // offset 932 — probe selection normal-vs-distance weight
-    float roughness_single;                 // offset 936 — below this, use top-1 probe only
-    float roughness_full;                   // offset 940 — above this, full top-2 blend
-    float blend_curve;                      // offset 944 — blend transition curve exponent
-    // 12 bytes implicit pad (16-byte alignment to 960)
+    float indirect_intensity;               // offset 284 — indirect light intensity multiplier
+    uint irradiance_cubemap_index;          // offset 288 — bindless index into cubemaps[]
+    uint prefiltered_cubemap_index;         // offset 292 — bindless index into cubemaps[]
+    uint brdf_lut_index;                    // offset 296 — bindless index into textures[]
+    uint prefiltered_mip_count;             // offset 300 — mip levels in prefiltered env map
+    uint skybox_cubemap_index;              // offset 304 — bindless index into cubemaps[]
+    float ibl_rotation_sin;                 // offset 308 — sin(ibl_yaw) for environment rotation
+    float ibl_rotation_cos;                 // offset 312 — cos(ibl_yaw) for environment rotation
+    uint debug_render_mode;                 // offset 316 — DEBUG_MODE_* constants
+    uint frame_index;                       // offset 320 — monotonically increasing frame counter (temporal noise)
+    // 12 bytes implicit pad (mat4 alignment to 336)
+    mat4 inv_projection;                    // offset 336 — NDC → view-space (PT primary ray + ray cone LOD)
+    mat4 inv_view;                          // offset 400 — inverse view matrix (PT raygen primary ray)
 } global;
 
 layout (set = 0, binding = 1) readonly buffer LightBuffer {
