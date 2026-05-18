@@ -5,34 +5,13 @@
  * Defines Set 0 (per-frame global data) and Set 1 (bindless textures).
  * Must match the C++ side data structures exactly:
  * - GlobalUniformData       (scene_data.h)
- * - GPUDirectionalLight     (scene_data.h)
  * - GPUMaterialData         (material_system.h)
- * - GPUInstanceData         (scene_data.h)
- *
- * Push constants are pass-specific and declared in the shaders that
- * use them (e.g. shadow.vert), not here.
  */
 
 #ifndef BINDINGS_GLSL
 #define BINDINGS_GLSL
 
 // ---- GPU struct definitions ----
-
-/** Direction light (std430, 32 bytes). */
-struct GPUDirectionalLight {
-    vec4 direction_and_intensity;   // xyz = direction, w = intensity
-    vec4 color_and_shadow;          // xyz = color, w = cast_shadows (0.0 / 1.0)
-};
-
-/** Per-instance data (std430, 128 bytes). */
-struct GPUInstanceData {
-    mat4 model;                     // 64 bytes — world-space transform
-    mat3 normal_matrix;             // 48 bytes — transpose(inverse(mat3(model))), precomputed
-    uint material_index;            //  4 bytes — index into MaterialBuffer SSBO
-    uint lightmap_index;            //  4 bytes — bindless index into textures[] (0xFFFFFFFF = no lightmap)
-    uint _padding2;                 //  4 bytes — was probe_index, now unused
-    uint _padding;                  //  4 bytes — align to 128 (multiple of 16)
-};
 
 /** PBR material data (std430, 80 bytes). */
 struct GPUMaterialData {
@@ -85,16 +64,8 @@ layout (set = 0, binding = 0) uniform GlobalUBO {
     mat4 inv_view;                          // offset 400 — inverse view matrix (PT raygen primary ray)
 } global;
 
-layout (set = 0, binding = 1) readonly buffer LightBuffer {
-    GPUDirectionalLight directional_lights[];
-};
-
 layout (set = 0, binding = 2) readonly buffer MaterialBuffer {
     GPUMaterialData materials[];
-};
-
-layout (set = 0, binding = 3) readonly buffer InstanceBuffer {
-    GPUInstanceData instances[];
 };
 
 // ---- Set 0: RT-only bindings (guarded by HIMALAYA_RT) ----
