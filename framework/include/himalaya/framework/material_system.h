@@ -131,7 +131,7 @@ namespace himalaya::framework {
          *
          * Must be called within a Context::begin_immediate() / end_immediate() scope.
          * The SSBO uses GpuOnly memory; data is uploaded via staging buffer.
-         * Writes the MaterialBuffer descriptor (binding 2) to both per-frame Set 0.
+         * Writes the MaterialBuffer descriptor (binding 1) to both per-frame Set 0.
          *
          * @param materials Array of GPU material data to upload.
          */

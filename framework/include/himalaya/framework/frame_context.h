@@ -11,20 +11,16 @@
  */
 
 #include <himalaya/framework/render_graph.h>
-#include <himalaya/framework/scene_data.h>
-#include <himalaya/framework/material_system.h>
-#include <himalaya/framework/mesh.h>
 
 #include <cstdint>
-#include <span>
 
 namespace himalaya::framework {
     /**
      * @brief Per-frame rendering context passed to every pass's record().
      *
-     * Carries RG resource IDs for the current frame, non-owning references to
-     * scene data, and frame-level parameters. Constructed by Renderer each
-     * frame; passes consume it read-only.
+     * Carries RG resource IDs for the current frame and frame-level
+     * parameters. Constructed by Renderer each frame; passes consume it
+     * read-only.
      *
      * Fields are extended as new passes and features are added across phases.
      */
@@ -45,17 +41,6 @@ namespace himalaya::framework {
 
         /** @brief PT OIDN auxiliary normal image (R16G16B16A16Sfloat, Storage). */
         RGResourceId pt_aux_normal;
-
-        // ---- Scene data (non-owning references) ----
-
-        /** @brief Loaded mesh resources. */
-        std::span<const Mesh> meshes;
-
-        /** @brief Material instances for draw routing. */
-        std::span<const MaterialInstance> materials;
-
-        /** @brief All mesh instances in the scene. */
-        std::span<const MeshInstance> mesh_instances;
 
         // ---- Frame parameters ----
 

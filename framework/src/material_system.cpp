@@ -4,7 +4,7 @@
  *
  * The Material SSBO is a GpuOnly buffer uploaded once via staging during
  * scene loading. Descriptor write is delegated to DescriptorManager,
- * which writes binding 2 to both per-frame Set 0 instances.
+ * which writes binding 1 to both per-frame Set 0 instances.
  */
 
 #include <himalaya/framework/material_system.h>
