@@ -226,8 +226,8 @@ namespace himalaya::rhi {
                                               const BufferHandle buffer,
                                               const uint64_t range) const {
         assert(frame_index < kMaxFramesInFlight && "Frame index out of range");
-        assert((binding <= 3 || (context_->rt_supported && binding >= 5 && binding <= 8) || binding == 9 || binding == 10)
-            && "Set 0 binding out of range (binding 4 is AS type, use write_set0_tlas)");
+        assert((binding <= 1 || (context_->rt_supported && binding >= 3 && binding <= 6))
+            && "Set 0 binding out of range (binding 2 is AS type, use write_set0_tlas)");
 
         const auto &buf = resource_manager_->get_buffer(buffer);
 
@@ -237,7 +237,7 @@ namespace himalaya::rhi {
             .range = static_cast<VkDeviceSize>(range),
         };
 
-        // Binding 0 is UBO, bindings 1-3 are SSBO (matches create_layouts)
+        // Binding 0 is UBO, all others are SSBO (matches create_layouts)
         const VkDescriptorType type = (binding == 0)
                                           ? VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER
                                           : VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
@@ -277,7 +277,7 @@ namespace himalaya::rhi {
                 .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
                 .pNext = &as_info,
                 .dstSet = set0_sets_[i],
-                .dstBinding = 4,
+                .dstBinding = 2,
                 .descriptorCount = 1,
                 .descriptorType = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR,
             };
@@ -289,29 +289,19 @@ namespace himalaya::rhi {
     void DescriptorManager::write_set0_env_alias_table(const BufferHandle buffer,
                                                         const uint64_t size) const {
         assert(context_->rt_supported && "write_set0_env_alias_table requires RT support");
-        write_set0_buffer(6, buffer, size);
+        write_set0_buffer(4, buffer, size);
     }
 
     void DescriptorManager::write_set0_emissive_triangles(const BufferHandle buffer,
                                                            const uint64_t size) const {
         assert(context_->rt_supported && "write_set0_emissive_triangles requires RT support");
-        write_set0_buffer(7, buffer, size);
+        write_set0_buffer(5, buffer, size);
     }
 
     void DescriptorManager::write_set0_emissive_alias_table(const BufferHandle buffer,
                                                              const uint64_t size) const {
         assert(context_->rt_supported && "write_set0_emissive_alias_table requires RT support");
-        write_set0_buffer(8, buffer, size);
-    }
-
-    void DescriptorManager::write_set0_probe_buffer(const BufferHandle buffer,
-                                                     const uint64_t size) const {
-        write_set0_buffer(9, buffer, size);
-    }
-
-    void DescriptorManager::write_set0_probe_grid_buffer(const BufferHandle buffer,
-                                                          const uint64_t size) const {
-        write_set0_buffer(10, buffer, size);
+        write_set0_buffer(6, buffer, size);
     }
 
     void DescriptorManager::create_layouts() {
@@ -325,13 +315,13 @@ namespace himalaya::rhi {
                                                     VK_SHADER_STAGE_ANY_HIT_BIT_KHR)
                                                  : 0;
 
-        // --- Set 0: GlobalUBO (0) + LightBuffer (1) + MaterialBuffer (2) + InstanceBuffer (3) ---
-        //   RT adds: binding 4 (TLAS) + binding 5 (GeometryInfoBuffer)
+        // --- Set 0: GlobalUBO (0) + MaterialBuffer (1) ---
+        //   RT adds: TLAS (2) + GeometryInfoBuffer (3) + EnvAliasTable (4)
+        //          + EmissiveTriangles (5) + EmissiveAliasTable (6)
         constexpr auto kAllStages = static_cast<VkShaderStageFlags>(VK_SHADER_STAGE_VERTEX_BIT |
                                                                     VK_SHADER_STAGE_FRAGMENT_BIT |
                                                                     VK_SHADER_STAGE_COMPUTE_BIT);
 
-        // Bindings 0-2 get RT stages; binding 3 (InstanceBuffer) does not (RT shaders don't access it)
         const VkDescriptorSetLayoutBinding set0_base_bindings[] = {
             {
                 .binding = 0,
@@ -345,89 +335,49 @@ namespace himalaya::rhi {
                 .descriptorCount = 1,
                 .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT | kRtStages,
             },
-            {
-                .binding = 2,
-                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-                .descriptorCount = 1,
-                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT | kRtStages,
-            },
-            {
-                .binding = 3,
-                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-                .descriptorCount = 1,
-                .stageFlags = kAllStages,
-            },
-        };
-
-        // Binding 9: ProbeBuffer SSBO (not RT-only — forward shader reads probe data)
-        constexpr VkDescriptorSetLayoutBinding kProbeBinding{
-            .binding = 9,
-            .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-            .descriptorCount = 1,
-            .stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-        };
-
-        // Binding 10: ProbeGridBuffer SSBO (not RT-only — fragment shader grid query)
-        constexpr VkDescriptorSetLayoutBinding kProbeGridBinding{
-            .binding = 10,
-            .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-            .descriptorCount = 1,
-            .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
         };
 
         if (rt) {
-            // Extend with RT bindings: 4 (TLAS) + 5 (GeometryInfo) + 6 (EnvAliasTable)
-            //                       + 7 (EmissiveTriangles) + 8 (EmissiveAliasTable)
-            //                       + 9 (ProbeBuffer) + 10 (ProbeGridBuffer)
             const VkDescriptorSetLayoutBinding set0_bindings[] = {
                 set0_base_bindings[0],
                 set0_base_bindings[1],
-                set0_base_bindings[2],
-                set0_base_bindings[3],
                 {
-                    .binding = 4,
+                    .binding = 2,
                     .descriptorType = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR,
                     .descriptorCount = 1,
                     .stageFlags = VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR
                                   | VK_SHADER_STAGE_COMPUTE_BIT,
                 },
                 {
-                    .binding = 5,
+                    .binding = 3,
                     .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
                     .descriptorCount = 1,
                     .stageFlags = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR | VK_SHADER_STAGE_ANY_HIT_BIT_KHR
                                   | VK_SHADER_STAGE_COMPUTE_BIT,
                 },
                 {
-                    .binding = 6,
+                    .binding = 4,
                     .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
                     .descriptorCount = 1,
                     .stageFlags = kRtStages,
                 },
                 {
-                    .binding = 7,
+                    .binding = 5,
                     .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
                     .descriptorCount = 1,
                     .stageFlags = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR,
                 },
                 {
-                    .binding = 8,
+                    .binding = 6,
                     .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
                     .descriptorCount = 1,
                     .stageFlags = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR,
                 },
-                kProbeBinding,
-                kProbeGridBinding,
             };
 
-            // Bindings 0-3: no special flags; bindings 4-10: PARTIALLY_BOUND
             constexpr VkDescriptorBindingFlags set0_binding_flags[] = {
                 0,
                 0,
-                0,
-                0,
-                VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT,
-                VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT,
                 VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT,
                 VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT,
                 VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT,
@@ -438,51 +388,23 @@ namespace himalaya::rhi {
             // ReSharper disable once CppVariableCanBeMadeConstexpr
             const VkDescriptorSetLayoutBindingFlagsCreateInfo set0_flags_info{
                 .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO,
-                .bindingCount = 11,
+                .bindingCount = 7,
                 .pBindingFlags = set0_binding_flags,
             };
 
             const VkDescriptorSetLayoutCreateInfo set0_info{
                 .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
                 .pNext = &set0_flags_info,
-                .bindingCount = 11,
+                .bindingCount = 7,
                 .pBindings = set0_bindings,
             };
 
             VK_CHECK(vkCreateDescriptorSetLayout(context_->device, &set0_info, nullptr, &set0_layout_));
         } else {
-            // Base bindings 0-3 + binding 9 (ProbeBuffer) + binding 10 (ProbeGridBuffer)
-            const VkDescriptorSetLayoutBinding set0_bindings[] = {
-                set0_base_bindings[0],
-                set0_base_bindings[1],
-                set0_base_bindings[2],
-                set0_base_bindings[3],
-                kProbeBinding,
-                kProbeGridBinding,
-            };
-
-            // Bindings 0-3: no special flags; bindings 9-10: PARTIALLY_BOUND
-            constexpr VkDescriptorBindingFlags set0_binding_flags[] = {
-                0,
-                0,
-                0,
-                0,
-                VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT,
-                VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT,
-            };
-
-            // ReSharper disable once CppVariableCanBeMadeConstexpr
-            const VkDescriptorSetLayoutBindingFlagsCreateInfo set0_flags_info{
-                .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO,
-                .bindingCount = 6,
-                .pBindingFlags = set0_binding_flags,
-            };
-
             const VkDescriptorSetLayoutCreateInfo set0_info{
                 .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-                .pNext = &set0_flags_info,
-                .bindingCount = 6,
-                .pBindings = set0_bindings,
+                .bindingCount = 2,
+                .pBindings = set0_base_bindings,
             };
 
             VK_CHECK(vkCreateDescriptorSetLayout(context_->device, &set0_info, nullptr, &set0_layout_));
@@ -575,11 +497,11 @@ namespace himalaya::rhi {
         const bool rt = context_->rt_supported;
 
         // --- Normal pool for Set 0 ---
-        // Base: 2 UBO (binding 0 x2 frames) + 10 SSBO (bindings 1-3,9,10 x2 frames)
-        // RT adds: 2 AS (binding 4 x2) + 8 SSBO (bindings 5-8 x2 frames) → total 18 SSBO
+        // Base: 2 UBO (binding 0 x2 frames) + 2 SSBO (binding 1 x2 frames)
+        // RT adds: 2 AS (binding 2 x2) + 8 SSBO (bindings 3-6 x2 frames) → total 10 SSBO
         const VkDescriptorPoolSize set0_pool_sizes[] = {
             {.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, .descriptorCount = 2},
-            {.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, .descriptorCount = rt ? 18u : 10u},
+            {.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, .descriptorCount = rt ? 10u : 2u},
             {.type = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, .descriptorCount = 2},
         };
 

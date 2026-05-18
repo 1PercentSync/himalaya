@@ -88,7 +88,7 @@ namespace himalaya::framework {
         /** @brief Single TLAS containing all scene instances. */
         rhi::TLASHandle tlas_handle_{};
 
-        /** @brief GPU buffer holding GPUGeometryInfo array (Set 0, Binding 5). */
+        /** @brief GPU buffer holding GPUGeometryInfo array (Set 0, Binding 3). */
         rhi::BufferHandle geometry_info_buffer_{};
 
         /** @brief Resource manager for buffer destruction. */

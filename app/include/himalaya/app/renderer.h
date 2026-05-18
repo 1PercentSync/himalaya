@@ -253,7 +253,7 @@ namespace himalaya::app {
         /** @brief Shader compiler with persistent disk cache. */
         framework::CachedShaderCompiler shader_compiler_{};
 
-        /** @brief Material SSBO management (Set 0, Binding 2). */
+        /** @brief Material SSBO management (Set 0, Binding 1). */
         framework::MaterialSystem material_system_{};
 
         /** @brief IBL precomputation module (cubemaps, BRDF LUT, bindless registration). */

@@ -23,17 +23,17 @@ namespace himalaya::rhi {
     /** @brief Maximum number of cubemaps in the bindless array (Set 1, Binding 1). */
     constexpr uint32_t kMaxBindlessCubemaps = 4096;
 
-    /** @brief Number of render target bindings in Set 2 (pre-allocated for all M1 phases). */
-    constexpr uint32_t kRenderTargetBindingCount = 8;
+    /** @brief Number of render target bindings in Set 2. */
+    constexpr uint32_t kRenderTargetBindingCount = 1;
 
     /**
      * @brief Manages descriptor set layouts, descriptor pools, and bindless texture registration.
      *
      * Owns three descriptor set layouts:
-     * - Set 0: per-frame global data (GlobalUBO + LightBuffer + MaterialBuffer + InstanceBuffer;
-     *          RT adds: TLAS binding 4, GeometryInfoBuffer binding 5)
+     * - Set 0: per-frame global data (GlobalUBO + MaterialBuffer;
+     *          RT adds: TLAS, GeometryInfoBuffer, EnvAliasTable, EmissiveTriangles, EmissiveAliasTable)
      * - Set 1: bindless arrays (binding 0: sampler2D[], binding 1: samplerCube[])
-     * - Set 2: render target intermediates (8 named bindings, PARTIALLY_BOUND)
+     * - Set 2: render target intermediates (rt_hdr_color)
      *
      * Owns three descriptor pools:
      * - Normal pool for Set 0 (2 sets for 2 frames in flight)
@@ -100,12 +100,11 @@ namespace himalaya::rhi {
         /**
          * @brief Writes a buffer descriptor to a Set 0 binding for a specific frame.
          *
-         * Use this for per-frame resources (GlobalUBO, LightBuffer) where each
-         * frame in flight has its own buffer. Also used for RT bindings when
-         * rt_supported (binding 5 = GeometryInfoBuffer SSBO).
+         * Use this for per-frame resources (GlobalUBO) where each frame in flight
+         * has its own buffer.
          *
          * @param frame_index Frame in flight index (0 to kMaxFramesInFlight-1).
-         * @param binding     Binding index within Set 0 (0-3 base; 5 when RT enabled).
+         * @param binding     Binding index within Set 0.
          * @param buffer      Buffer handle to bind.
          * @param range       Byte range of the buffer to expose to the shader.
          */
@@ -117,16 +116,16 @@ namespace himalaya::rhi {
          * Use this for frame-invariant resources (MaterialBuffer, GeometryInfoBuffer)
          * shared across all frames.
          *
-         * @param binding Binding index within Set 0 (0-3 base; 5 when RT enabled).
+         * @param binding Binding index within Set 0.
          * @param buffer  Buffer handle to bind.
          * @param range   Byte range of the buffer to expose to the shader.
          */
         void write_set0_buffer(uint32_t binding, BufferHandle buffer, uint64_t range) const;
 
         /**
-         * @brief Writes a TLAS descriptor to Set 0 binding 4 across all frames in flight.
+         * @brief Writes a TLAS descriptor to Set 0 binding 2 across all frames in flight.
          *
-         * Only valid when rt_supported is true. Binding 4 is
+         * Only valid when rt_supported is true. Binding 2 is
          * VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR.
          *
          * @param tlas TLAS handle whose acceleration structure is bound.
@@ -134,9 +133,9 @@ namespace himalaya::rhi {
         void write_set0_tlas(const TLASHandle &tlas) const;
 
         /**
-         * @brief Writes the env alias table SSBO to Set 0 binding 6 across all frames.
+         * @brief Writes the env alias table SSBO to Set 0 binding 4 across all frames.
          *
-         * Only valid when rt_supported is true. Binding 6 is STORAGE_BUFFER (PARTIALLY_BOUND).
+         * Only valid when rt_supported is true. Binding 4 is STORAGE_BUFFER (PARTIALLY_BOUND).
          *
          * @param buffer Alias table buffer handle.
          * @param size   Buffer size in bytes.
@@ -144,9 +143,9 @@ namespace himalaya::rhi {
         void write_set0_env_alias_table(BufferHandle buffer, uint64_t size) const;
 
         /**
-         * @brief Writes the emissive triangle SSBO to Set 0 binding 7 across all frames.
+         * @brief Writes the emissive triangle SSBO to Set 0 binding 5 across all frames.
          *
-         * Only valid when rt_supported is true. Binding 7 is STORAGE_BUFFER (PARTIALLY_BOUND).
+         * Only valid when rt_supported is true. Binding 5 is STORAGE_BUFFER (PARTIALLY_BOUND).
          *
          * @param buffer Emissive triangle buffer handle.
          * @param size   Buffer size in bytes.
@@ -154,36 +153,14 @@ namespace himalaya::rhi {
         void write_set0_emissive_triangles(BufferHandle buffer, uint64_t size) const;
 
         /**
-         * @brief Writes the emissive alias table SSBO to Set 0 binding 8 across all frames.
+         * @brief Writes the emissive alias table SSBO to Set 0 binding 6 across all frames.
          *
-         * Only valid when rt_supported is true. Binding 8 is STORAGE_BUFFER (PARTIALLY_BOUND).
+         * Only valid when rt_supported is true. Binding 6 is STORAGE_BUFFER (PARTIALLY_BOUND).
          *
          * @param buffer Emissive alias table buffer handle.
          * @param size   Buffer size in bytes.
          */
         void write_set0_emissive_alias_table(BufferHandle buffer, uint64_t size) const;
-
-        /**
-         * @brief Writes the probe data SSBO to Set 0 binding 9 across all frames.
-         *
-         * Binding 9 is STORAGE_BUFFER (PARTIALLY_BOUND), available regardless of
-         * RT support. Forward shader reads probe data for baked indirect specular.
-         *
-         * @param buffer Probe data buffer handle.
-         * @param size   Buffer size in bytes.
-         */
-        void write_set0_probe_buffer(BufferHandle buffer, uint64_t size) const;
-
-        /**
-         * @brief Writes the probe grid SSBO to Set 0 binding 10 across all frames.
-         *
-         * Binding 10 is STORAGE_BUFFER (PARTIALLY_BOUND), available regardless of
-         * RT support. Fragment shader uses this for spatial probe grid queries.
-         *
-         * @param buffer Probe grid buffer handle.
-         * @param size   Buffer size in bytes.
-         */
-        void write_set0_probe_grid_buffer(BufferHandle buffer, uint64_t size) const;
 
         /**
          * @brief Registers a cubemap+sampler pair into the bindless cubemap array.
@@ -267,13 +244,13 @@ namespace himalaya::rhi {
 
         // ---- Layouts ----
 
-        /** @brief Set 0: GlobalUBO (0) + LightBuffer (1) + MaterialBuffer (2) + InstanceBuffer (3) + ProbeBuffer (9) + ProbeGridBuffer (10); RT adds TLAS (4) + GeometryInfoBuffer (5) + EnvAliasTable (6) + EmissiveTriangles (7) + EmissiveAliasTable (8). */
+        /** @brief Set 0: GlobalUBO (0) + MaterialBuffer (1); RT adds TLAS (2) + GeometryInfoBuffer (3) + EnvAliasTable (4) + EmissiveTriangles (5) + EmissiveAliasTable (6). */
         VkDescriptorSetLayout set0_layout_ = VK_NULL_HANDLE;
 
         /** @brief Set 1: bindless sampler2D array (binding 0) + samplerCube array (binding 1). */
         VkDescriptorSetLayout set1_layout_ = VK_NULL_HANDLE;
 
-        /** @brief Set 2: render target intermediates (8 named bindings, PARTIALLY_BOUND). */
+        /** @brief Set 2: render target intermediates (rt_hdr_color, PARTIALLY_BOUND). */
         VkDescriptorSetLayout set2_layout_ = VK_NULL_HANDLE;
 
         // ---- Pools ----

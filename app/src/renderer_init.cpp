@@ -282,7 +282,7 @@ namespace himalaya::app {
 
         const auto geo_buf = scene_as_builder_.geometry_info_buffer();
         const auto &buf_data = resource_manager_->get_buffer(geo_buf);
-        descriptor_manager_->write_set0_buffer(5, geo_buf, buf_data.desc.size);
+        descriptor_manager_->write_set0_buffer(3, geo_buf, buf_data.desc.size);
 
         // ---- Emissive light data (triangle buffer + alias table) ----
 

@@ -73,8 +73,8 @@ namespace himalaya::framework {
         // Upload via staging buffer (caller must be in immediate scope)
         resource_manager_->upload_buffer(material_buffer_, materials.data(), buffer_size);
 
-        // Write descriptor to both per-frame Set 0 (binding 2 = MaterialBuffer)
-        descriptor_manager_->write_set0_buffer(2, material_buffer_, buffer_size);
+        // Write descriptor to both per-frame Set 0 (binding 1 = MaterialBuffer)
+        descriptor_manager_->write_set0_buffer(1, material_buffer_, buffer_size);
 
         spdlog::info("MaterialSystem: uploaded {} materials ({} bytes)", material_count_, buffer_size);
     }

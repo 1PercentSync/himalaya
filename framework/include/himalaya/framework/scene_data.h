@@ -143,7 +143,7 @@ namespace himalaya::framework {
     };
 
     /**
-     * @brief Per-geometry RT info for closesthit/anyhit shader lookup (Set 0, Binding 5 SSBO element).
+     * @brief Per-geometry RT info for closesthit/anyhit shader lookup (Set 0, Binding 3 SSBO element).
      *
      * std430 layout, 24 bytes per element, aligned to 8 (uint64_t).
      * Shader reads via geometry_infos[gl_InstanceCustomIndexEXT + gl_GeometryIndexEXT].
@@ -156,7 +156,7 @@ namespace himalaya::framework {
     };
 
     /**
-     * @brief Emissive triangle data for RT NEE sampling (Set 0, Binding 7 SSBO element).
+     * @brief Emissive triangle data for RT NEE sampling (Set 0, Binding 5 SSBO element).
      *
      * std430 layout, 96 bytes per element, aligned to 16.
      * World-space vertices, emissive factor, precomputed area, material index,

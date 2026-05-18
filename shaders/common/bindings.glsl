@@ -64,7 +64,7 @@ layout (set = 0, binding = 0) uniform GlobalUBO {
     mat4 inv_view;                          // offset 400 — inverse view matrix (PT raygen primary ray)
 } global;
 
-layout (set = 0, binding = 2) readonly buffer MaterialBuffer {
+layout (set = 0, binding = 1) readonly buffer MaterialBuffer {
     GPUMaterialData materials[];
 };
 
@@ -83,9 +83,9 @@ struct GeometryInfo {
     uint     _padding;                 // offset 20 — pad to 24 bytes
 };
 
-layout (set = 0, binding = 4) uniform accelerationStructureEXT tlas;
+layout (set = 0, binding = 2) uniform accelerationStructureEXT tlas;
 
-layout (set = 0, binding = 5) readonly buffer GeometryInfoBuffer {
+layout (set = 0, binding = 3) readonly buffer GeometryInfoBuffer {
     GeometryInfo geometry_infos[];
 };
 
@@ -96,7 +96,7 @@ struct EnvAliasEntry {
     float luminance;    // original downsampled luminance (for PDF computation)
 };
 
-layout (set = 0, binding = 6) readonly buffer EnvAliasTable {
+layout (set = 0, binding = 4) readonly buffer EnvAliasTable {
     float total_luminance;          // sum of luminance × sin(theta) weights
     uint  entry_count;              // number of alias table entries (width * height)
     uint  table_width;              // half-resolution equirect width
@@ -124,11 +124,11 @@ struct EmissiveAliasEntry {
     uint  alias_index;     // redirect index when rejected
 };
 
-layout (set = 0, binding = 7) readonly buffer EmissiveTriangleBuffer {
+layout (set = 0, binding = 5) readonly buffer EmissiveTriangleBuffer {
     EmissiveTriangle emissive_triangles[];
 };
 
-layout (set = 0, binding = 8) readonly buffer EmissiveAliasTable {
+layout (set = 0, binding = 6) readonly buffer EmissiveAliasTable {
     uint  emissive_count;       // number of emissive triangles / alias table entries
     float total_power;          // sum of luminance(emissive_factor) × area weights
     EmissiveAliasEntry emissive_alias_entries[];

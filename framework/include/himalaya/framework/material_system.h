@@ -30,7 +30,7 @@ namespace himalaya::framework {
     };
 
     /**
-     * @brief GPU-side material data (Set 0, Binding 2 SSBO element).
+     * @brief GPU-side material data (Set 0, Binding 1 SSBO element).
      *
      * std430 layout, 80 bytes per element, aligned to 16.
      * Texture fields hold bindless indices into the global texture array (Set 1).
@@ -98,7 +98,7 @@ namespace himalaya::framework {
                                 rhi::BindlessIndex default_black);
 
     /**
-     * @brief Manages the global Material SSBO (Set 0, Binding 2).
+     * @brief Manages the global Material SSBO (Set 0, Binding 1).
      *
      * Holds all material data in a single GPU buffer. Scene loader creates
      * GPUMaterialData entries, then MaterialSystem uploads them and writes

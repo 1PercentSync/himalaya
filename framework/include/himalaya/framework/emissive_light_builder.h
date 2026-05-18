@@ -27,8 +27,8 @@ namespace himalaya::framework {
      * table for O(1) importance sampling in the closesthit shader.
      *
      * Uploads two GPU SSBOs:
-     * - EmissiveTriangleBuffer (Set 0, Binding 7): per-triangle vertex/UV/emission data
-     * - EmissiveAliasTable (Set 0, Binding 8): power-weighted alias table for sampling
+     * - EmissiveTriangleBuffer (Set 0, Binding 5): per-triangle vertex/UV/emission data
+     * - EmissiveAliasTable (Set 0, Binding 6): power-weighted alias table for sampling
      *
      * No-emissive scenes: emissive_count() returns 0, no buffers created.
      * Push constant emissive_light_count = 0 tells the shader to skip NEE emissive.
@@ -71,10 +71,10 @@ namespace himalaya::framework {
         /** @brief Number of emissive triangles (0 = no emissive, skip NEE). */
         [[nodiscard]] uint32_t emissive_count() const;
 
-        /** @brief EmissiveTriangleBuffer handle (Set 0, Binding 7). */
+        /** @brief EmissiveTriangleBuffer handle (Set 0, Binding 5). */
         [[nodiscard]] rhi::BufferHandle triangle_buffer() const;
 
-        /** @brief EmissiveAliasTable buffer handle (Set 0, Binding 8). */
+        /** @brief EmissiveAliasTable buffer handle (Set 0, Binding 6). */
         [[nodiscard]] rhi::BufferHandle alias_table_buffer() const;
 
     private:
