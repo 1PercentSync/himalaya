@@ -1,0 +1,165 @@
+# 渲染器架构与设计理念
+
+> 渲染器在长远视角下的架构特征、层次结构、边界约束和贯穿技术选型的设计理念。
+> 技术选型结果见 `technical-decisions.md`。
+
+---
+
+## 项目定位
+
+Himalaya 是基于 Vulkan 1.4 的渲染器，`reflector` 分支以 Path Tracing 和 Gaussian Splatting 为核心渲染方式。
+
+- **性质**：个人长期学习和练习项目
+- **渲染方式**：Path Tracing（GLTF mesh）+ Gaussian Splatting（GLTF GS 扩展）
+- **开发方式**：AI 辅助开发，瓶颈在于审查、理解和架构决策
+
+---
+
+## 硬件目标
+
+- **目标平台**：支持 Vulkan Ray Tracing 的桌面 GPU
+- **性能理念**：追求技术和画面的最佳性价比，不为低端过度优化，不追求只有高端才能运行的方案
+
+---
+
+## 设计原则
+
+### 排除过于复杂而收益不高的技术
+
+复杂度和收益必须成正比。实现成本远高于视觉或性能收益的技术，排除。
+
+### 渐进式实现
+
+先能用，再好用，再优秀。每个模块可分阶段实现，阶段间的演进应尽量自然（在已有基础上加东西而非推翻重来）。
+
+### 业界已验证的技术
+
+采用有成熟实现和资料的技术，不做实验性方案。资料丰富度直接影响 AI 辅助开发的可靠性。
+
+### 性能性价比
+
+同等画面质量选性能更优的方案；同等性能选画面更好的方案。
+
+### 不可有明显 glitch
+
+画面可以不精确但不能有明显视觉瑕疵。在锐利+闪烁和模糊+不闪烁之间，选择后者。
+
+### 插件化与延后实现
+
+不是所有东西都需要立刻做。后处理等效果天然是独立的全屏 pass，可独立启用/禁用。
+
+---
+
+## 四层架构
+
+```
+Layer 3（应用层）
+  ↓ 填充渲染列表，调用渲染
+Layer 2（渲染 Pass 层）
+  ↓ 通过 Render Graph 注册和执行
+Layer 1（渲染框架层）
+  ↓ 使用资源和命令接口
+Layer 0（Vulkan 抽象层 / RHI）
+```
+
+**严格单向依赖** — 上层依赖下层，下层不知道上层的存在。Layer 2 的各个 Pass 之间也没有直接依赖，只通过 Layer 1 的 Render Graph 间接关联。
+
+### Layer 0：Vulkan 抽象层（RHI）
+
+封装 Vulkan 底层 API，向上层提供简洁的资源创建和操作接口。
+
+包含：Device / Instance / Queue 管理、资源创建（Buffer、Image、Sampler）、Bindless descriptor 管理、Pipeline 创建与缓存（含 RT Pipeline 和 SBT）、Shader 编译（运行时 GLSL→SPIR-V + 热重载）、Command Buffer 录制辅助、Swapchain 管理、内存分配（VMA）、加速结构（BLAS/TLAS 创建、构建、销毁）。
+
+**设计原则**：不包含任何渲染逻辑。薄封装为主，对特别繁琐的部分（descriptor 管理、pipeline 创建、barrier 插入）做适度便利封装。
+
+**对外暴露类型**：句柄或轻量包装类型（ImageHandle、BufferHandle 等），Command Buffer 通过轻量 wrapper 暴露给 Pass 层。
+
+### Layer 1：渲染框架层（Render Framework）
+
+提供渲染相关的通用框架和基础设施，不涉及具体的渲染效果。
+
+包含：Render Graph（编排 + barrier 辅助 + temporal 资源管理）、材质系统（材质模板、材质实例、参数布局）、Mesh / Geometry 管理、纹理加载与格式处理（BC 压缩、mip 生成）、相机（投影矩阵、视图矩阵）、光源数据结构、场景渲染接口（渲染列表）、Scene AS Builder（BLAS/TLAS 构建）、ImGui 集成。
+
+**关键设计**：定义了"渲染一帧"的骨架——接收渲染列表，经 Render Graph 调度各 pass，输出最终图像。具体有哪些 pass、每个 pass 做什么，由上面一层定义。
+
+### Layer 2：渲染 Pass 层（Render Passes）
+
+实现每一个具体的渲染 Pass。每个 Pass 独立模块，声明输入输出，注册到 Render Graph。
+
+**每个 Pass 的标准接口**：声明输入/输出资源、Setup（创建 pipeline 等）、Execute（每帧录制 command buffer）、可选配置结构体、enabled()、on_resize()。
+
+**设计原则**：Pass 之间不直接互相调用或引用，数据传递完全通过 Render Graph 的资源声明。
+
+### Layer 3：应用层（Application）
+
+场景加载、资产管理、相机控制、用户输入。填充渲染列表（mesh 实例、光源、相机），然后调用 Layer 1 的"渲染一帧"接口。
+
+---
+
+## 核心架构特征
+
+### Render Graph
+
+声明式的帧渲染管理系统。每个 pass 声明自己读什么资源、写什么资源，系统负责执行顺序、资源生命周期、同步屏障、资源复用。
+
+**演进方向**：初期手动编排 pass 顺序 + barrier 自动插入，后期升级为自动拓扑排序 + 资源别名分析。
+
+#### 资源管理准则
+
+| 准则 | 管理方式 | 典型资源 |
+|------|---------|---------|
+| 需要 resize（屏幕尺寸相关） | **RG Managed**：RG 创建、缓存、resize 自动重建 | PT accumulation buffer、HDR color buffer |
+| 不需要 resize（固定尺寸） | **Pass 自管理 + 每帧 `import_image()`** | 特定 pass 的自有资源 |
+
+### 材质系统
+
+- **材质模板 / 着色模型** — 定义一种着色方式，对应一组 shader 变体
+- **材质实例** — 基于模板设置具体参数（albedo 贴图、roughness 值等）
+- **Shader 变体管理** — 编译时开关的编译和缓存系统
+
+每种着色模型定义自己的 GPU 材质数据结构体（CPU 端 struct + shader 端 struct 一一对应）。
+
+**Shader 编译**：开发期运行时编译（GLSL→SPIR-V）+ 热重载。
+
+### 场景表示与数据流
+
+渲染器接收一个"渲染视图"：一组要渲染的物体（mesh + 材质 + 变换）、一组光源、相机参数。
+
+### Pass 可插拔性
+
+每个渲染 Pass 是一个自包含的模块，声明自己的输入输出，注册到 Render Graph。添加或移除一个 pass 不需要修改其他 pass 的代码。
+
+### 配置与调参系统
+
+ImGui 面板 + 配置结构体，运行时热调整。
+
+---
+
+## 架构约束
+
+| 约束 | 保护的架构属性 |
+|------|---------------|
+| 上层不接触 Vulkan 类型 | Layer 0 内部实现自由度 |
+| Pass 间只通过资源声明通信 | Pass 可插拔性 |
+| 配置参数单向传递 | 数据流清晰可追踪 |
+| Shader 不硬编码绑定 | 材质系统灵活性（通过 bindless index 访问）|
+| Validation Layer 常开 | 开发期 bug 可见性 |
+
+### Framework 层 Vulkan 类型例外
+
+以下 Framework 层组件允许直接使用 Vulkan 类型：
+
+| 组件 | 理由 |
+|------|------|
+| Render Graph | 本质是 Vulkan barrier 管理器 |
+| ImGui Backend | 第三方库的 Vulkan backend |
+
+其他 Framework 模块的公开接口仍然不使用 Vulkan 类型。
+
+### Shader 数据分层
+
+| 层级 | 内容 | 更新频率 | 绑定方式 |
+|------|------|----------|----------|
+| 全局数据 | 相机矩阵、光源数组、曝光值 | 每帧一次 | 全局 uniform buffer |
+| 材质数据 | PBR 参数、纹理 index | 加载时一次 | 全局 SSBO，通过 material index 读取 |
+| Per-draw 数据 | 模型矩阵、材质 index | 每次绘制 | push constant |

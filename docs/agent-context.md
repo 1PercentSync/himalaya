@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 0：创建 `docs/architecture.md` + 归档源文档
+Step 0：创建 `docs/technical-decisions.md` + 归档源文档
 
 ---
 

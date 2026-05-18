@@ -39,8 +39,8 @@
 
 ### 创建 `docs/architecture.md` + 归档源文档
 
-- [ ] 创建 `docs/architecture.md`（从 `project/architecture.md` + `project/requirements-and-philosophy.md` 提取 PT/GS 适用内容）
-- [ ] 归档 `docs/project/architecture.md`、`docs/project/requirements-and-philosophy.md`
+- [x] 创建 `docs/architecture.md`（从 `project/architecture.md` + `project/requirements-and-philosophy.md` 提取 PT/GS 适用内容）
+- [x] 归档 `docs/project/architecture.md`、`docs/project/requirements-and-philosophy.md`
 
 ### 创建 `docs/technical-decisions.md` + 归档源文档
 
