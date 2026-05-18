@@ -78,7 +78,7 @@ Layer 0（Vulkan 抽象层 / RHI）
 
 提供渲染相关的通用框架和基础设施，不涉及具体的渲染效果。
 
-包含：Render Graph（编排 + barrier 辅助 + temporal 资源管理）、材质系统（材质模板、材质实例、参数布局）、Mesh / Geometry 管理、纹理加载与格式处理（BC 压缩、mip 生成）、相机（投影矩阵、视图矩阵）、光源数据结构、场景渲染接口（渲染列表）、Scene AS Builder（BLAS/TLAS 构建）、ImGui 集成。
+包含：Render Graph（编排 + barrier 辅助 + temporal 资源管理）、材质系统（材质模板、材质实例、参数布局）、Mesh / Geometry 管理、纹理加载与格式处理（BC 压缩、mip 生成）、相机（投影矩阵、视图矩阵）、场景渲染接口（渲染列表）、Scene AS Builder（BLAS/TLAS 构建）、环境光与 emissive 采样数据构建、ImGui 集成。
 
 **关键设计**：定义了"渲染一帧"的骨架——接收渲染列表，经 Render Graph 调度各 pass，输出最终图像。具体有哪些 pass、每个 pass 做什么，由上面一层定义。
 
@@ -92,7 +92,7 @@ Layer 0（Vulkan 抽象层 / RHI）
 
 ### Layer 3：应用层（Application）
 
-场景加载、资产管理、相机控制、用户输入。填充渲染列表（mesh 实例、光源、相机），然后调用 Layer 1 的"渲染一帧"接口。
+场景加载、资产管理、相机控制、用户输入。填充渲染列表（mesh 实例、相机），然后调用 Layer 1 的"渲染一帧"接口。
 
 ---
 
@@ -123,7 +123,7 @@ Layer 0（Vulkan 抽象层 / RHI）
 
 ### 场景表示与数据流
 
-渲染器接收一个"渲染视图"：一组要渲染的物体（mesh + 材质 + 变换）、一组光源、相机参数。
+渲染器接收一个"渲染视图"：一组要渲染的物体（mesh + 材质 + 变换）和相机参数。环境照明来自 IBL，面光源来自 emissive 材质三角形。
 
 ### Pass 可插拔性
 
@@ -160,6 +160,6 @@ ImGui 面板 + 配置结构体，运行时热调整。
 
 | 层级 | 内容 | 更新频率 | 绑定方式 |
 |------|------|----------|----------|
-| 全局数据 | 相机矩阵、光源数组、曝光值 | 每帧一次 | 全局 uniform buffer |
+| 全局数据 | 相机矩阵、曝光值、IBL 索引与旋转 | 每帧一次 | 全局 uniform buffer |
 | 材质数据 | PBR 参数、纹理 index | 加载时一次 | 全局 SSBO，通过 material index 读取 |
 | Per-draw 数据 | 模型矩阵、材质 index | 每次绘制 | push constant |

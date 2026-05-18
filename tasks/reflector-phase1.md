@@ -14,7 +14,7 @@
 | 1 | 文档归档范围 | 全部归档写新文档，4 个活跃文档 |
 | 2 | 代码精简粒度 | 彻底删除光栅化 + 烘焙代码 |
 | 3 | RenderMode | `PathTracing \| GaussianSplatting`，GS 走 compute + raster splatting |
-| 4 | 框架层保留 | PT 依赖模块 + KTX2 + TextureCompress + CubemapFilter + ColorUtils + Cache |
+| 4 | 框架层保留 | PT 依赖模块 + KTX2 + TextureCompress + CubemapFilter + Cache |
 | 5 | Descriptor 布局 | 重新编号 |
 | 6 | 精简顺序 | 逐步精简，每步可编译 |
 | 7 | 方向光 | PT 始终用 HDR 环境光，移除方向光 NEE 及全部方向光 UI/状态 |
@@ -88,6 +88,7 @@
 - [x] 清理 `frame_context.h`：移除光栅化专用字段（shadow groups、AO resources、MSAA resources 等）
 - [x] 更新 `framework/CMakeLists.txt`
 - [x] 审查修复：恢复 inv_projection、删除 4 个死代码类型、修正过时注释、清理 render_constants.h
+- [x] 审查修复：删除 ColorUtils、FrameContext depth 残留、render_constants.h、shader 死文件/死函数，并修正清理后的过时注释
 
 ## Step 4：清理 shader
 

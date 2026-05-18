@@ -107,14 +107,11 @@ vkQueueWaitIdle → renderer.on_swapchain_invalidated() → swapchain.recreate()
 
 FrameContext 是纯每帧数据（RG 资源 ID + 场景数据引用 + 帧参数），不做 service locator。
 
-### Pass 运行时开关
+### Pass 运行时配置
 
-1. `RenderFeatures` 结构体（bool 字段，DebugUI 操作）
-2. `GlobalUBO.feature_flags` bitmask（shader 动态分支）
-3. Renderer 根据 features 跳过 pass `record()`
-4. 消费端检查 FrameContext 资源 ID 有效性，条件声明 RG 依赖
+当前 PT 路径通过 `PTConfig` 和 Renderer 状态驱动运行时行为：DebugUI 修改配置，Renderer 在每帧写入 GlobalUBO 或 pass push constants。需要跳过的工作（如达到目标采样数、关闭降噪显示）由 Renderer 在注册 pass 前判断。
 
-Toggle 无需 GPU idle、无 descriptor 更新，下一帧生效。
+配置变更无需 GPU idle；除资源尺寸或环境贴图重载外，下一帧自然生效。
 
 ---
 
@@ -124,11 +121,9 @@ Toggle 无需 GPU idle、无 descriptor 更新，下一帧生效。
 
 | Set | 内容 | 生命周期 | 份数 |
 |-----|------|---------|------|
-| 0 | 全局 Buffer（GlobalUBO + LightBuffer + MaterialBuffer + RT bindings） | per-frame 双缓冲 | ×2 |
+| 0 | 全局 Buffer（GlobalUBO + MaterialBuffer + RT bindings） | per-frame 双缓冲 | ×2 |
 | 1 | 持久纹理资产（bindless 2D + cubemap） | 场景加载 → 卸载 | ×1 |
-| 2 | 帧内 Render Target | init → destroy | ×2（per-frame） |
-
-> 注：精简后 Set 0/2 的具体 binding 编号待 Phase 1 Step 6 重新规划。
+| 2 | 帧内 Render Target（rt_hdr_color） | init / resize / source switch | ×2（per-frame） |
 
 ### Bindless 纹理
 
@@ -216,7 +211,7 @@ GGX 是工业标准，长尾分布高光拖尾自然。Smith Height-Correlated �
 
 ### 场景数据接口
 
-渲染列表：`SceneRenderData` 用 `std::span` 引用应用层数据（mesh instances + lights + camera），渲染器只读消费。
+渲染列表：`SceneRenderData` 用 `std::span` 引用应用层数据（mesh instances + camera），渲染器只读消费。环境光由 IBL 资源提供；面光源由 emissive 材质三角形构建采样表。
 
 ### Shader 系统
 
@@ -247,7 +242,7 @@ sRGB 色域作为工作空间够用。广色域（ACEScg/Rec.2020）边际收益
 
 - Framework 层 `ibl.h`，自管理全部资源
 - Equirectangular .hdr → GPU cubemap → irradiance / prefiltered / BRDF LUT
-- Skybox mip 剥离 + GPU BC6H 压缩，运行时 ~26 MB
+- 环境 cubemap mip 剥离 + GPU BC6H 压缩，运行时 ~26 MB
 - 加载失败时 fallback 1×1 中性灰 cubemap，管线照常运行
 - IBL 缓存：两组独立（BRDF 固定 key + 3 cubemaps HDR hash），KTX2 格式
 
@@ -300,11 +295,12 @@ RT 扩展为可选：设备选择时 RT 支持作为加分项但非硬需求。`
 
 RT shader 通过已有 descriptor 架构访问场景数据：
 
-- **Set 0 binding 0-2**：复用（GlobalUBO + LightBuffer + MaterialBuffer）
-- **Set 0 TLAS binding**：accelerationStructureEXT
-- **Set 0 GeometryInfo binding**：per-geometry buffer address + material ID
-- **Set 0 EnvAliasTable binding**：环境光重要性采样
-- **Set 0 EmissiveTriangle/AliasTable binding**：面光源 NEE
+- **Set 0 binding 0**：GlobalUBO
+- **Set 0 binding 1**：MaterialBuffer
+- **Set 0 binding 2**：TLAS accelerationStructureEXT
+- **Set 0 binding 3**：GeometryInfo（per-geometry buffer address + material ID）
+- **Set 0 binding 4**：EnvAliasTable（环境光重要性采样）
+- **Set 0 binding 5-6**：EmissiveTriangle / EmissiveAliasTable（面光源 NEE）
 - **Set 1**：复用（bindless textures + cubemaps）
 
 Closest-hit shader 通过 GeometryInfo 获取 buffer address 和 material ID，再读 MaterialBuffer 获取 PBR 参数并采样 bindless 纹理。变换矩阵通过 TLAS 内置 `gl_ObjectToWorldEXT` / `gl_WorldToObjectEXT` 获取。
@@ -338,7 +334,7 @@ Sobol 低差异序列 + Cranley-Patterson rotation + Blue noise 空间去相关�
 
 ### Push Constants
 
-超集布局（60B），各 raygen 只读自己需要的字段：`max_bounces` + `sample_count` + `frame_seed` + `blue_noise_index` + `max_clamp` + `env_sampling` + `directional_lights` + `emissive_light_count` + `lod_max_level`。
+布局 32B：`max_bounces` + `sample_count` + `frame_seed` + `blue_noise_index` + `max_clamp` + `env_sampling` + `emissive_light_count` + `lod_max_level`。
 
 相机逆矩阵从 GlobalUBO 读取（不占 push constant 空间）。
 
@@ -354,7 +350,7 @@ Sobol 低差异序列 + Cranley-Patterson rotation + Blue noise 空间去相关�
 
 **Ray Origin Offset**：Wächter & Binder（Ray Tracing Gems Ch.6）——对 float 位表示做整数偏移，全尺度鲁棒，无需 epsilon 调参。
 
-**Normal Mapping**：closesthit 读取 tangent 做重心坐标插值，复用光栅化的 TBN 法线贴图逻辑。Shading normal clamp 到几何法线半球，消除漏光伪影。
+**Normal Mapping**：closesthit 读取 tangent 做重心坐标插值，使用共享 TBN 法线贴图工具。Shading normal clamp 到几何法线半球，消除漏光伪影。
 
 **Primary Ray Subpixel Jitter**：Sobol 前 2 维在像素内随机偏移，提供 PT 抗锯齿。
 

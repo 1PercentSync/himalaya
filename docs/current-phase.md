@@ -26,13 +26,13 @@ Himalaya 渲染器在 main 分支上以光栅化为主管线，包含完整的 F
 - **PT 核心**：ReferenceViewPass, TonemappingPass, RT shader（reference_view.rgen, closesthit, anyhit, miss）
 - **框架**：RenderGraph, MaterialSystem, IBL, Camera, Mesh, Texture, SceneASBuilder, EmissiveLightBuilder, Denoiser
 - **RHI**：全部保留
-- **工具链**：CachedShaderCompiler, KTX2, TextureCompress（含 BC6H）, CubemapFilter, ColorUtils, Cache
+- **工具链**：CachedShaderCompiler, KTX2, TextureCompress（含 BC6H）, CubemapFilter, Cache
 
 ### 重构
 
 - Descriptor Set 0/2 binding 重新编号（移除空洞）
 - RenderMode 简化为 PathTracing + GaussianSplatting（GS 占位）
-- GlobalUniformData / RenderFeatures / RenderInput 精简
+- GlobalUniformData / RenderInput 精简
 
 ## 实现步骤
 
