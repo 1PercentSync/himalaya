@@ -113,6 +113,29 @@ namespace himalaya::app {
 
         /** @brief Error message to show in UI (empty = no error). */
         const std::string& error_message;
+
+        // --- Scene statistics (display) ---
+
+        /** @brief Scene asset statistics computed by Application from SceneLoader data. */
+        struct SceneStats {
+            /** @brief Total number of scene mesh instances. */
+            uint32_t total_instances;
+
+            /** @brief Total number of mesh primitives. */
+            uint32_t total_meshes;
+
+            /** @brief Total number of materials. */
+            uint32_t total_materials;
+
+            /** @brief Total number of GPU texture images loaded from the scene. */
+            uint32_t total_textures;
+
+            /** @brief Total number of mesh vertices. */
+            uint32_t total_vertices;
+
+            /** @brief Total number of indexed triangles. */
+            uint32_t total_triangles;
+        } scene_stats;
     };
 
     /**

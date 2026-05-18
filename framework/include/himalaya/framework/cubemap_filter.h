@@ -28,8 +28,7 @@ namespace himalaya::framework {
      *
      * The caller is responsible for creating the destination cubemap with the
      * desired resolution, format (R16G16B16A16F), and mip count. This allows
-     * different callers (IBL: 512x512, probe baker: configurable) to share the
-     * same filtering logic.
+     * different callers to share the same filtering logic.
      *
      * Must be called within an active immediate command scope.
      * Source cubemap must be in SHADER_READ_ONLY layout.

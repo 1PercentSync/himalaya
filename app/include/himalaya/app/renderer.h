@@ -122,8 +122,8 @@ namespace himalaya::app {
          * @brief Builds scene RT data: acceleration structures + emissive light tables.
          *
          * Must be called within a Context::begin_immediate() / end_immediate() scope.
-         * Builds BLAS, TLAS, Geometry Info SSBO (Set 0 binding 4/5), and
-         * EmissiveLightBuilder triangle + alias table SSBOs (Set 0 binding 7/8).
+         * Builds BLAS, TLAS, GeometryInfo SSBO (Set 0 binding 3), and
+         * EmissiveLightBuilder triangle + alias table SSBOs (Set 0 bindings 5/6).
          * Safe to call multiple times (auto-destroys previous resources).
          * No-op if RT is not supported.
          *

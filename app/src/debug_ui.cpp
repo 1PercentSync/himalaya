@@ -229,121 +229,121 @@ namespace himalaya::app {
 
         // Path Tracing controls (visible only when PT mode is active)
         if (ctx.pt_mode) {
-        ImGui::Separator();
-        if (ImGui::CollapsingHeader("Path Tracing##settings", ImGuiTreeNodeFlags_DefaultOpen)) {
-            // Status line
-            const bool target_reached = ctx.pt_config.target_samples > 0 &&
-                                        ctx.pt_sample_count >= ctx.pt_config.target_samples;
-            if (ctx.pt_config.target_samples > 0) {
-                ImGui::Text("Samples: %u / %u", ctx.pt_sample_count, ctx.pt_config.target_samples);
-            } else {
-                ImGui::Text("Samples: %u", ctx.pt_sample_count);
-            }
-            ImGui::SameLine();
-            ImGui::Text("  Time: %.3fs", static_cast<double>(ctx.pt_elapsed_time));
-            if (target_reached && ctx.pt_sample_count > 0) {
-                ImGui::Text("Avg: %.3f ms/sample",
-                            static_cast<double>(ctx.pt_elapsed_time) /
-                            ctx.pt_sample_count * 1000.0);
-            }
-
-            // Max Bounces slider (1-32)
-            auto bounces = static_cast<int>(ctx.pt_config.max_bounces);
-            if (ImGui::SliderInt("Max Bounces", &bounces, 1, 32)) {
-                ctx.pt_config.max_bounces = static_cast<uint32_t>(bounces);
-            }
-
-            // Firefly Clamp slider (0 = Off)
-            slider_float_deferred("Firefly Clamp", &ctx.pt_config.max_clamp,
-                                  0.0f, 100.0f, "%.1f");
-            if (ctx.pt_config.max_clamp == 0.0f && ImGui::IsItemHovered()) {
-                ImGui::SetTooltip("Firefly clamping disabled");
-            }
-
-            // Env Importance Sampling toggle
-            ImGui::Checkbox("Env Importance Sampling", &ctx.pt_config.env_sampling);
-
-            // Emissive NEE toggle (area light importance sampling)
-            ImGui::Checkbox("Emissive NEE", &ctx.pt_config.emissive_nee);
-
-            // LOD Max Level slider (ray cone texture LOD clamp)
-            {
-                int lod = static_cast<int>(ctx.pt_config.lod_max_level);
-                if (ImGui::SliderInt("LOD Max Level", &lod, 0, 12)) {
-                    ctx.pt_config.lod_max_level = static_cast<uint32_t>(lod);
+            ImGui::Separator();
+            if (ImGui::CollapsingHeader("Path Tracing##settings", ImGuiTreeNodeFlags_DefaultOpen)) {
+                // Status line
+                const bool target_reached = ctx.pt_config.target_samples > 0 &&
+                                            ctx.pt_sample_count >= ctx.pt_config.target_samples;
+                if (ctx.pt_config.target_samples > 0) {
+                    ImGui::Text("Samples: %u / %u", ctx.pt_sample_count, ctx.pt_config.target_samples);
+                } else {
+                    ImGui::Text("Samples: %u", ctx.pt_sample_count);
                 }
-                if (ImGui::IsItemHovered()) {
-                    ImGui::SetTooltip("Ray cone texture LOD upper clamp.\n0 = full resolution (debug), 4 = default.");
-                }
-            }
-
-            // Allow Tearing — override present mode to IMMEDIATE in PT
-            {
-                const bool can_tear = ctx.swapchain.immediate_supported;
-                if (!can_tear) { ImGui::BeginDisabled(); }
-                ImGui::Checkbox("Allow Tearing", &ctx.pt_allow_tearing);
-                if (ImGui::IsItemHovered()) {
-                    ImGui::SetTooltip(can_tear
-                        ? "Force IMMEDIATE present mode while in PT to bypass\n"
-                          "driver frame rate limits (e.g. Sunshine streaming)."
-                        : "IMMEDIATE present mode not supported by this surface.");
-                }
-                if (!can_tear) { ImGui::EndDisabled(); }
-            }
-
-            // Target Samples input (0 = unlimited)
-            ImGui::InputScalar("Target Samples", ImGuiDataType_U32, &ctx.pt_config.target_samples);
-            if (ImGui::IsItemHovered()) {
-                ImGui::SetTooltip("0 = unlimited");
-            }
-
-            // Reset button
-            if (ImGui::Button("Reset")) {
-                actions.pt_reset_requested = true;
-            }
-        }
-
-        // OIDN Denoiser controls
-        if (ImGui::CollapsingHeader("Denoiser (OIDN)", ImGuiTreeNodeFlags_DefaultOpen)) {
-            ImGui::Checkbox("Denoise", &ctx.denoise_enabled);
-
-            ImGui::Checkbox("Show Denoised", &ctx.show_denoised);
-
-            ImGui::Checkbox("Auto Denoise", &ctx.auto_denoise);
-            if (ctx.auto_denoise) {
                 ImGui::SameLine();
-                ImGui::SetNextItemWidth(80.0f);
-                auto interval = static_cast<int>(ctx.auto_denoise_interval);
-                if (ImGui::InputInt("##Interval", &interval, 0, 0)) {
-                    if (interval < 16) { interval = 16; }
-                    actions.denoise_interval_changed = true;
-                    actions.new_denoise_interval = static_cast<uint32_t>(interval);
+                ImGui::Text("  Time: %.3fs", static_cast<double>(ctx.pt_elapsed_time));
+                if (target_reached && ctx.pt_sample_count > 0) {
+                    ImGui::Text("Avg: %.3f ms/sample",
+                                static_cast<double>(ctx.pt_elapsed_time) /
+                                ctx.pt_sample_count * 1000.0);
                 }
+
+                // Max Bounces slider (1-32)
+                auto bounces = static_cast<int>(ctx.pt_config.max_bounces);
+                if (ImGui::SliderInt("Max Bounces", &bounces, 1, 32)) {
+                    ctx.pt_config.max_bounces = static_cast<uint32_t>(bounces);
+                }
+
+                // Firefly Clamp slider (0 = Off)
+                slider_float_deferred("Firefly Clamp", &ctx.pt_config.max_clamp,
+                                      0.0f, 100.0f, "%.1f");
+                if (ctx.pt_config.max_clamp == 0.0f && ImGui::IsItemHovered()) {
+                    ImGui::SetTooltip("Firefly clamping disabled");
+                }
+
+                // Env Importance Sampling toggle
+                ImGui::Checkbox("Env Importance Sampling", &ctx.pt_config.env_sampling);
+
+                // Emissive NEE toggle (area light importance sampling)
+                ImGui::Checkbox("Emissive NEE", &ctx.pt_config.emissive_nee);
+
+                // LOD Max Level slider (ray cone texture LOD clamp)
+                {
+                    int lod = static_cast<int>(ctx.pt_config.lod_max_level);
+                    if (ImGui::SliderInt("LOD Max Level", &lod, 0, 12)) {
+                        ctx.pt_config.lod_max_level = static_cast<uint32_t>(lod);
+                    }
+                    if (ImGui::IsItemHovered()) {
+                        ImGui::SetTooltip("Ray cone texture LOD upper clamp.\n0 = full resolution (debug), 4 = default.");
+                    }
+                }
+
+                // Allow Tearing — override present mode to IMMEDIATE in PT
+                {
+                    const bool can_tear = ctx.swapchain.immediate_supported;
+                    if (!can_tear) { ImGui::BeginDisabled(); }
+                    ImGui::Checkbox("Allow Tearing", &ctx.pt_allow_tearing);
+                    if (ImGui::IsItemHovered()) {
+                        ImGui::SetTooltip(can_tear
+                            ? "Force IMMEDIATE present mode while in PT to bypass\n"
+                              "driver frame rate limits (e.g. Sunshine streaming)."
+                            : "IMMEDIATE present mode not supported by this surface.");
+                    }
+                    if (!can_tear) { ImGui::EndDisabled(); }
+                }
+
+                // Target Samples input (0 = unlimited)
+                ImGui::InputScalar("Target Samples", ImGuiDataType_U32, &ctx.pt_config.target_samples);
                 if (ImGui::IsItemHovered()) {
-                    ImGui::SetTooltip("Denoise every N samples (min 16)");
+                    ImGui::SetTooltip("0 = unlimited");
+                }
+
+                // Reset button
+                if (ImGui::Button("Reset")) {
+                    actions.pt_reset_requested = true;
                 }
             }
 
-            // Denoise Now button
-            const bool denoise_disabled =
-                !ctx.denoise_enabled ||
-                ctx.auto_denoise ||
-                ctx.denoise_state != framework::DenoiseState::Idle ||
-                ctx.pt_sample_count == 0 ||
-                !ctx.show_denoised;
-            ImGui::BeginDisabled(denoise_disabled);
-            if (ImGui::Button("Denoise Now")) {
-                actions.pt_denoise_requested = true;
-            }
-            ImGui::EndDisabled();
+            // OIDN Denoiser controls
+            if (ImGui::CollapsingHeader("Denoiser (OIDN)", ImGuiTreeNodeFlags_DefaultOpen)) {
+                ImGui::Checkbox("Denoise", &ctx.denoise_enabled);
 
-            // Last denoise info
-            if (ctx.last_denoise_trigger_sample_count > 0) {
-                ImGui::Text("Last triggered at: %u samples (%.3fs)",
-                            ctx.last_denoise_trigger_sample_count,
-                            static_cast<double>(ctx.last_denoise_duration));
+                ImGui::Checkbox("Show Denoised", &ctx.show_denoised);
+
+                ImGui::Checkbox("Auto Denoise", &ctx.auto_denoise);
+                if (ctx.auto_denoise) {
+                    ImGui::SameLine();
+                    ImGui::SetNextItemWidth(80.0f);
+                    auto interval = static_cast<int>(ctx.auto_denoise_interval);
+                    if (ImGui::InputInt("##Interval", &interval, 0, 0)) {
+                        if (interval < 16) { interval = 16; }
+                        actions.denoise_interval_changed = true;
+                        actions.new_denoise_interval = static_cast<uint32_t>(interval);
+                    }
+                    if (ImGui::IsItemHovered()) {
+                        ImGui::SetTooltip("Denoise every N samples (min 16)");
+                    }
+                }
+
+                // Denoise Now button
+                const bool denoise_disabled =
+                    !ctx.denoise_enabled ||
+                    ctx.auto_denoise ||
+                    ctx.denoise_state != framework::DenoiseState::Idle ||
+                    ctx.pt_sample_count == 0 ||
+                    !ctx.show_denoised;
+                ImGui::BeginDisabled(denoise_disabled);
+                if (ImGui::Button("Denoise Now")) {
+                    actions.pt_denoise_requested = true;
+                }
+                ImGui::EndDisabled();
+
+                // Last denoise info
+                if (ctx.last_denoise_trigger_sample_count > 0) {
+                    ImGui::Text("Last triggered at: %u samples (%.3fs)",
+                                ctx.last_denoise_trigger_sample_count,
+                                static_cast<double>(ctx.last_denoise_duration));
+                }
             }
-        }
         } // if (ctx.pt_mode)
 
         // Rendering section
@@ -385,14 +385,14 @@ namespace himalaya::app {
                                   ImGuiSliderFlags_Logarithmic);
         }
 
-        // PT Scene section
+        // Scene section (file loading + asset statistics)
         ImGui::Separator();
-        if (ImGui::CollapsingHeader("PT Scene")) {
+        if (ImGui::CollapsingHeader("Scene")) {
             if (ctx.scene_path.empty()) {
-                ImGui::TextDisabled("No PT scene loaded");
+                ImGui::TextDisabled("No scene loaded");
             } else {
                 const auto filename = std::filesystem::path(ctx.scene_path).filename().string();
-                ImGui::Text("PT Scene: %s", filename.c_str());
+                ImGui::Text("Scene: %s", filename.c_str());
                 if (ImGui::IsItemHovered()) {
                     ImGui::SetTooltip("%s", ctx.scene_path.c_str());
                 }
@@ -400,16 +400,22 @@ namespace himalaya::app {
 
 #ifdef _WIN32
             ImGui::SameLine();
-            if (ImGui::Button("Load PT Scene...")) {
+            if (ImGui::Button("Load Scene...")) {
                 auto path = open_file_dialog(
                     L"glTF Files (*.gltf;*.glb)\0*.gltf;*.glb\0All Files (*.*)\0*.*\0",
-                    L"Load PT Scene");
+                    L"Load Scene");
                 if (!path.empty()) {
                     actions.scene_load_requested = true;
                     actions.new_scene_path = std::move(path);
                 }
             }
 #endif
+
+            ImGui::Separator();
+            const auto &stats = ctx.scene_stats;
+            ImGui::Text("Instances: %u  Meshes: %u", stats.total_instances, stats.total_meshes);
+            ImGui::Text("Materials: %u  Textures: %u", stats.total_materials, stats.total_textures);
+            ImGui::Text("Vertices: %u  Triangles: %u", stats.total_vertices, stats.total_triangles);
         }
 
         // Environment section

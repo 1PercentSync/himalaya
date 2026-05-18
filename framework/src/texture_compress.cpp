@@ -287,7 +287,7 @@ namespace himalaya::framework {
 
             // Transition BC6H image TRANSFER_DST -> SHADER_READ_ONLY.
             // dst scope is ALL_COMMANDS so callers can freely consume the
-            // output (fragment shader for IBL, transfer for bake readback).
+            // output (fragment shader sampling, transfer readback, etc.).
             VkImageMemoryBarrier2 dst_to_read{};
             dst_to_read.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
             dst_to_read.srcStageMask = VK_PIPELINE_STAGE_2_COPY_BIT;

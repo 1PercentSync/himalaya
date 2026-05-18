@@ -37,13 +37,10 @@ namespace himalaya::framework {
         /** @brief HDR color buffer (R16G16B16A16F, 1x). */
         RGResourceId hdr_color;
 
-        /** @brief Depth buffer (D32Sfloat). */
-        RGResourceId depth;
-
         /** @brief PT accumulation buffer (RGBA32F, Storage). */
         RGResourceId pt_accumulation;
 
-        /** @brief PT OIDN auxiliary albedo image (R8G8B8A8Unorm, Storage). */
+        /** @brief PT OIDN auxiliary albedo image (R16G16B16A16Sfloat, Storage). */
         RGResourceId pt_aux_albedo;
 
         /** @brief PT OIDN auxiliary normal image (R16G16B16A16Sfloat, Storage). */

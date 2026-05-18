@@ -252,6 +252,14 @@ namespace himalaya::app {
         // Left-click drag: IBL rotation
         update_drag_input();
 
+        const auto meshes = scene_loader_.meshes();
+        uint32_t total_vertices = 0;
+        uint32_t total_triangles = 0;
+        for (const auto &mesh: meshes) {
+            total_vertices += mesh.vertex_count;
+            total_triangles += mesh.index_count / 3;
+        }
+
         // Debug UI
         DebugUIContext ui_ctx{
             .delta_time = delta_time,
@@ -278,6 +286,14 @@ namespace himalaya::app {
             .scene_path = config_.scene_path,
             .env_path = config_.env_path,
             .error_message = error_message_,
+            .scene_stats = {
+                .total_instances = static_cast<uint32_t>(scene_loader_.mesh_instances().size()),
+                .total_meshes = static_cast<uint32_t>(meshes.size()),
+                .total_materials = static_cast<uint32_t>(scene_loader_.material_instances().size()),
+                .total_textures = scene_loader_.texture_count(),
+                .total_vertices = total_vertices,
+                .total_triangles = total_triangles,
+            },
         };
         // ReSharper disable once CppUseStructuredBinding
         const auto actions = debug_ui_.draw(ui_ctx);

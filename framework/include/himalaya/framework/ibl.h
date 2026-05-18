@@ -83,7 +83,7 @@ namespace himalaya::framework {
         /** @brief Bindless index of the BRDF integration LUT in Set 1 textures[]. */
         [[nodiscard]] rhi::BindlessIndex brdf_lut_index() const;
 
-        /** @brief Bindless index of the intermediate cubemap for Skybox Pass in Set 1 cubemaps[]. */
+        /** @brief Bindless index of the environment cubemap in Set 1 cubemaps[]. */
         [[nodiscard]] rhi::BindlessIndex skybox_cubemap_index() const;
 
         /** @brief Number of mip levels in the prefiltered environment map (for roughness → mip mapping). */
@@ -114,7 +114,7 @@ namespace himalaya::framework {
          * @brief Sample an HDR pixel by loading the file on demand.
          *
          * Calls stbi_loadf, reads the specified pixel, then frees the data.
-         * Intended for infrequent calls (HDR load, sun coords change).
+         * Intended for infrequent diagnostic or future tooling calls.
          *
          * @param path  Path to the .hdr file.
          * @param x     Pixel x coordinate (column).
@@ -152,8 +152,8 @@ namespace himalaya::framework {
          * @brief Create minimal 1×1 neutral gray cubemaps as fallback when HDR loading fails.
          *
          * Uses vkCmdClearColorImage to fill cubemap_, irradiance_cubemap_, and
-         * prefiltered_cubemap_ with a uniform neutral gray. The pipeline (bindless
-         * registration, skybox, forward IBL) works identically — no shader-side
+         * prefiltered_cubemap_ with a uniform neutral gray. Bindless registration
+         * and runtime environment sampling work identically — no shader-side
          * conditionals needed.
          * Must be called within an active immediate scope.
          *
@@ -224,12 +224,12 @@ namespace himalaya::framework {
                                  DeferredCleanup &deferred);
 
         /**
-         * @brief Replace the skybox cubemap with a mip-0-only copy.
+         * @brief Replace the environment cubemap with a mip-0-only copy.
          *
          * The full mip chain is only needed during compute_prefiltered() for
-         * filtered importance sampling. After prefiltering completes, only mip 0
-         * is used for skybox rendering. This replaces cubemap_ with a 1-mip copy,
-         * freeing ~25% of its memory (e.g. 64 MB for a 2048² cubemap).
+         * filtered importance sampling. After prefiltering completes, runtime
+         * environment lookup only needs mip 0. This replaces cubemap_ with a
+         * 1-mip copy, freeing ~25% of its memory (e.g. 64 MB for a 2048² cubemap).
          * No-op if cubemap_ already has a single mip level.
          * Must be called within an active immediate scope.
          *
@@ -272,7 +272,7 @@ namespace himalaya::framework {
         rhi::DescriptorManager *dm_ = nullptr;
 
         // --- GPU resources (owned) ---
-        rhi::ImageHandle cubemap_; ///< Skybox cubemap (mip-0-only after prefiltering)
+        rhi::ImageHandle cubemap_; ///< Environment cubemap (mip-0-only after prefiltering)
         rhi::ImageHandle irradiance_cubemap_; ///< Irradiance map (32×32 per face)
         rhi::ImageHandle prefiltered_cubemap_; ///< Prefiltered env map (512×512, multi-mip)
         rhi::ImageHandle brdf_lut_; ///< BRDF integration LUT (256×256)
@@ -289,14 +289,14 @@ namespace himalaya::framework {
         // --- Prefiltered mip count ---
         uint32_t prefiltered_mip_count_ = 0;
 
-        // --- Original equirect dimensions (for HDR Sun coordinate conversion) ---
+        // --- Original equirect dimensions (for alias table metadata and diagnostics) ---
         uint32_t equirect_width_ = 0;
         uint32_t equirect_height_ = 0;
 
-        // --- HDR content hash (bake cache key component) ---
+        // --- HDR content hash (IBL cache key component) ---
         std::string hdr_hash_;
 
-        // --- Env alias table (Step 11, importance sampling) ---
+        // --- Environment alias table (importance sampling) ---
 
         /**
          * @brief Build environment map alias table from raw HDR pixel data.

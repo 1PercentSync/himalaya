@@ -5,7 +5,7 @@
  * @brief Path tracing closest-hit shader — full surface shading in a single stage.
  *
  * Performs vertex interpolation, normal mapping, material sampling, NEE for
- * directional lights (shadow rays), multi-lobe BRDF sampling (diffuse +
+ * environment and emissive area lights, multi-lobe BRDF sampling (diffuse +
  * specular), and writes results back through PrimaryPayload. Also outputs
  * OIDN auxiliary data (albedo + normal) on bounce 0.
  *

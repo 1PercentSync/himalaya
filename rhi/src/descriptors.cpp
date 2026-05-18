@@ -178,7 +178,7 @@ namespace himalaya::rhi {
     void DescriptorManager::update_render_target(const uint32_t binding,
                                                  const ImageHandle image,
                                                  const SamplerHandle sampler) const {
-        // Write to both per-frame copies (init/resize/MSAA switch path)
+        // Write to both per-frame copies (init/resize/source switch path).
         for (uint32_t i = 0; i < kMaxFramesInFlight; ++i) {
             update_render_target(i, binding, image, sampler);
         }
@@ -463,7 +463,7 @@ namespace himalaya::rhi {
 
         VK_CHECK(vkCreateDescriptorSetLayout(context_->device, &set1_info, nullptr, &set1_layout_));
 
-        // --- Set 2: render target intermediates (8 COMBINED_IMAGE_SAMPLER, PARTIALLY_BOUND) ---
+        // --- Set 2: render target intermediates (COMBINED_IMAGE_SAMPLER, PARTIALLY_BOUND) ---
         VkDescriptorSetLayoutBinding set2_bindings[kRenderTargetBindingCount];
         VkDescriptorBindingFlags set2_binding_flags_array[kRenderTargetBindingCount];
         for (uint32_t i = 0; i < kRenderTargetBindingCount; ++i) {

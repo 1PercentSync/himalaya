@@ -29,14 +29,14 @@ namespace himalaya::framework {
          *
          * The actual pixel dimensions are computed as
          * (reference_width * width_scale, reference_height * height_scale).
-         * Used for screen-sized render targets (depth, HDR color, MSAA buffers).
+         * Used for screen-sized render targets (PT accumulation, HDR color, denoised output).
          */
         Relative,
 
         /**
          * @brief Size is a fixed pixel dimension.
          *
-         * Used for resolution-independent resources (shadow maps, LUTs).
+         * Used for resolution-independent resources (LUTs, fixed-size caches).
          */
         Absolute,
     };
@@ -80,7 +80,7 @@ namespace himalaya::framework {
         /** @brief Usage flags for the backing image. */
         rhi::ImageUsage usage;
 
-        /** @brief Samples per pixel (1 = no MSAA). */
+        /** @brief Vulkan sample count for the backing image (1 for single-sample images). */
         uint32_t sample_count;
 
         /** @brief Number of mip levels (1 = single level). */
@@ -320,7 +320,7 @@ namespace himalaya::framework {
          *
          * If the resolved image properties change (dimensions, format, sample count,
          * etc.), the backing GPU image is destroyed and recreated. The handle
-         * remains valid. Used for MSAA sample count switching.
+         * remains valid. Used when a managed image needs a new format, size, or usage.
          *
          * @param handle   Managed image handle.
          * @param new_desc New image description.
@@ -335,18 +335,18 @@ namespace himalaya::framework {
          *
          * @param handle Handle returned by create_managed_image().
          */
+        void destroy_managed_image(RGManagedHandle handle);
+
         /**
          * @brief Returns the backing ImageHandle of a managed image.
          *
-         * Used in resize/MSAA-change handlers to immediately obtain the new
-         * backing handle after rebuild, for updating Set 2 descriptors.
+         * Used after resize or description updates to obtain the current
+         * backing handle for descriptor updates.
          *
          * @param handle Managed image handle.
          * @return The current backing ImageHandle.
          */
         [[nodiscard]] rhi::ImageHandle get_managed_backing_image(RGManagedHandle handle) const;
-
-        void destroy_managed_image(RGManagedHandle handle);
 
         /**
          * @brief Imports a managed image into the current frame's graph.

@@ -199,10 +199,10 @@ namespace himalaya::rhi {
         /**
          * @brief Updates a Set 2 render target binding across all frames in flight.
          *
-         * Called at init, resize, or MSAA switch to point a named render target
+         * Called at init, resize, or source switch to point a named render target
          * binding to its current backing image. Writes to both per-frame copies.
          *
-         * @param binding Binding index within Set 2 (0-7).
+         * @param binding Binding index within Set 2.
          * @param image   Image handle for the render target.
          * @param sampler Sampler handle for sampling the render target.
          */
@@ -215,7 +215,7 @@ namespace himalaya::rhi {
          * only the current frame's Set 2 copy is updated.
          *
          * @param frame_index Frame in flight index (0 to kMaxFramesInFlight-1).
-         * @param binding     Binding index within Set 2 (0-7).
+         * @param binding     Binding index within Set 2.
          * @param image       Image handle for the render target.
          * @param sampler     Sampler handle for sampling the render target.
          */

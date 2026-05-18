@@ -329,7 +329,7 @@ vec2 compute_texel_density(GeometryInfo geo, int primitiveID,
  *
  * Uses a robust branch that avoids near-parallel cross products:
  * when N is nearly aligned with +Z, crosses with +X instead.
- * Shared by closesthit BRDF sampling and baker raygen initial ray generation.
+ * Shared by closesthit BRDF sampling and any future raygen sampling utilities.
  *
  * @param N  Unit normal (must be normalized).
  * @param T  Output tangent vector (perpendicular to N).
@@ -675,8 +675,7 @@ float env_pdf(vec3 world_dir) {
  * Power heuristic for multiple importance sampling (beta = 2).
  *
  * Returns the MIS weight for strategy A given two PDFs.
- * Defined in Step 6a; used from Step 11 (environment map sampling) onward.
- * Directional light NEE uses weight 1.0 (delta distribution, no MIS).
+ * Used by environment and emissive area-light sampling strategies.
  *
  * @param pdf_a PDF of strategy A (the one being weighted).
  * @param pdf_b PDF of strategy B.
@@ -791,9 +790,8 @@ layout(location = 0) rayPayloadEXT PrimaryPayload payload;
  *
  * @param origin              World-space ray origin.
  * @param direction           World-space ray direction (normalized).
- * @param initial_cone_width  Ray cone width at origin (0 for camera/lightmap).
- * @param initial_cone_spread Ray cone spread angle in radians
- *                            (pixel_spread for camera, 0 for lightmap baker).
+ * @param initial_cone_width  Ray cone width at origin (0 for camera rays).
+ * @param initial_cone_spread Ray cone spread angle in radians (pixel_spread for camera rays).
  * @param pixel               Pixel/texel coordinate for Sobol sampling decorrelation.
  * @return Accumulated path radiance (one sample).
  */

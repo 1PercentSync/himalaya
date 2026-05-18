@@ -470,7 +470,7 @@ namespace himalaya::framework {
         const auto pixel_count = static_cast<uint32_t>(w) * static_cast<uint32_t>(h);
         std::vector<uint16_t> rgba16(pixel_count * 4);
 
-        // Clamp to float16 max to prevent Inf/NaN (HDR sun can exceed 65504)
+        // Clamp to float16 max to prevent Inf/NaN (very bright HDR texels can exceed 65504).
         for (uint32_t i = 0; i < pixel_count; ++i) {
             constexpr float kHalfMax = 65504.0f;
             rgba16[i * 4 + 0] = glm::packHalf1x16(std::min(rgb_data[i * 3 + 0], kHalfMax));

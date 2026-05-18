@@ -200,7 +200,7 @@ namespace himalaya::framework {
 
         spdlog::info("EmissiveLightBuilder: alias table built (total power {:.2f})", power_sum);
 
-        // ---- Phase 3a: Upload EmissiveTriangleBuffer SSBO (Set 0, Binding 7) ----
+        // ---- Phase 3a: Upload EmissiveTriangleBuffer SSBO (Set 0, Binding 5) ----
 
         const auto tri_buffer_size = static_cast<uint64_t>(emissive_count_) * sizeof(EmissiveTriangle);
 
@@ -216,7 +216,7 @@ namespace himalaya::framework {
                      emissive_count_,
                      static_cast<double>(tri_buffer_size) / 1024.0);
 
-        // ---- Phase 3b: Upload EmissiveAliasTable SSBO (Set 0, Binding 8) ----
+        // ---- Phase 3b: Upload EmissiveAliasTable SSBO (Set 0, Binding 6) ----
         // Layout: [uint entry_count, float total_power] [AliasEntry[entry_count]]
         //   Header = 8 bytes, AliasEntry = {float prob, uint alias} = 8 bytes
 
