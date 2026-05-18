@@ -57,7 +57,7 @@
 > passes 和 framework 的被删模块暂时保留（未被引用，不影响编译）。
 
 - [x] 删除 `renderer_rasterization.cpp`、`renderer_bake.cpp`
-- [ ] 清理 `renderer.h`（移除已删 pass 的 include/成员/方法声明，移除烘焙状态，移除光栅化 buffer）
+- [x] 清理 `renderer.h`（移除已删 pass 的 include/成员/方法声明，移除烘焙状态，移除光栅化 buffer）
 - [ ] 简化 `renderer.cpp` render() 调度（仅 PT 路径）
 - [ ] 清理 `renderer_init.cpp`（移除光栅化/烘焙资源创建、managed image、sampler）
 - [ ] 清理 `renderer_pt.cpp`（移除对已删模块的引用，如有）
