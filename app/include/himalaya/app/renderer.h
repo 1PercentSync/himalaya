@@ -32,9 +32,7 @@ namespace himalaya::rhi {
 }
 
 namespace himalaya::framework {
-    struct AABB;
     struct Camera;
-    struct CullResult;
     struct DirectionalLight;
     class ImGuiBackend;
     struct Mesh;
@@ -59,26 +57,11 @@ namespace himalaya::app {
         /** @brief Current frame-in-flight index (0 or 1). */
         uint32_t frame_index;
 
-        /** @brief Active rendering mode (rasterization or path tracing). */
-        framework::RenderMode render_mode;
-
         /** @brief Camera state (position, matrices). */
         const framework::Camera &camera;
 
         /** @brief Active directional lights for this frame. */
         std::span<const framework::DirectionalLight> lights;
-
-        /** @brief Frustum culling result (visible opaque/transparent indices). */
-        const framework::CullResult &cull_result;
-
-        /** @brief All loaded meshes (vertex/index buffer handles and counts). */
-        std::span<const framework::Mesh> meshes;
-
-        /** @brief All loaded material instances (PBR parameters, alpha mode). */
-        std::span<const framework::MaterialInstance> materials;
-
-        /** @brief All scene mesh instances (transform, mesh_id, material_id). */
-        std::span<const framework::MeshInstance> mesh_instances;
 
         /** @brief Indirect light intensity multiplier. */
         float indirect_intensity;
@@ -92,32 +75,8 @@ namespace himalaya::app {
         /** @brief IBL rotation cos(yaw) for environment horizontal rotation. */
         float ibl_rotation_cos;
 
-        /** @brief Debug render mode (0=Full PBR, 1-7=debug visualizations). */
-        uint32_t debug_render_mode;
-
-        /** @brief Runtime feature toggles (skybox, shadows, etc.). */
-        const framework::RenderFeatures &features;
-
-        /** @brief Shadow system parameters. */
-        const framework::ShadowConfig &shadow_config;
-
-        /** @brief AO configuration parameters. */
-        const framework::AOConfig &ao_config;
-
-        /** @brief Contact Shadows configuration parameters. */
-        const framework::ContactShadowConfig &contact_shadow_config;
-
         /** @brief Path tracing configuration parameters. */
         const framework::PTConfig &pt_config;
-
-        /** @brief Bake configuration parameters. */
-        const framework::BakeConfig &bake_config;
-
-        /** @brief Runtime probe blend parameters (normal_bias, roughness thresholds, curve). */
-        const framework::ProbeBlendConfig &probe_blend_config;
-
-        /** @brief Scene world-space AABB for shadow Z range extension. */
-        const framework::AABB &scene_bounds;
     };
 
     /**
