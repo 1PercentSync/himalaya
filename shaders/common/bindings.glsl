@@ -125,25 +125,6 @@ layout (set = 0, binding = 3) readonly buffer InstanceBuffer {
     GPUInstanceData instances[];
 };
 
-/** Probe data (std430, 48 bytes). Parallax AABB fields reserved for Phase 8.5. */
-struct GPUProbeData {
-    vec3 position;          // offset  0 — probe world-space position (+4B pad)
-    vec3 aabb_min;          // offset 16 — parallax correction AABB min (+4B pad)
-    vec3 aabb_max;          // offset 32 — parallax correction AABB max
-    uint cubemap_index;     // offset 44 — bindless cubemaps[] index
-};                          // total: 48 bytes
-
-layout (set = 0, binding = 9) readonly buffer ProbeBuffer {
-    GPUProbeData probes[];
-};
-
-/** 3D spatial grid for probe lookup (header + CSR cell_offsets + flat probe_indices). */
-layout (set = 0, binding = 10) readonly buffer ProbeGridBuffer {
-    vec4  grid_origin_and_cell_size;    // xyz = grid origin, w = cell size
-    uvec4 grid_dims_and_pad;            // xyz = grid dimensions, w = padding
-    uint  grid_data[];                  // [0..cell_count] = cell_offsets (CSR), then probe_indices
-};
-
 // ---- Set 0: RT-only bindings (guarded by HIMALAYA_RT) ----
 
 #ifdef HIMALAYA_RT
@@ -218,15 +199,7 @@ layout (set = 1, binding = 0) uniform sampler2D textures[];
 layout (set = 1, binding = 1) uniform samplerCube cubemaps[];
 
 // ---- Set 2: Render target intermediate products ----
-// PARTIALLY_BOUND — bindings are written as their producing passes are added.
-// Accessing an unwritten binding is guarded by feature_flags in the shader.
 
 layout (set = 2, binding = 0) uniform sampler2D rt_hdr_color;
-layout (set = 2, binding = 1) uniform sampler2D rt_depth_resolved;
-layout (set = 2, binding = 2) uniform sampler2D rt_normal_resolved;
-layout (set = 2, binding = 3) uniform sampler2D rt_ao_texture;
-layout (set = 2, binding = 4) uniform sampler2D rt_contact_shadow_mask;
-layout (set = 2, binding = 5) uniform sampler2DArrayShadow rt_shadow_map;
-layout (set = 2, binding = 6) uniform sampler2DArray rt_shadow_map_depth;
 
 #endif // BINDINGS_GLSL
