@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 0：创建 `docs/technical-decisions.md` + 归档源文档
+Step 0：更新 `docs/agent-context.md` 文档目录
 
 ---
 

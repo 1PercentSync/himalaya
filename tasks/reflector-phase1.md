@@ -44,8 +44,8 @@
 
 ### 创建 `docs/technical-decisions.md` + 归档源文档
 
-- [ ] 创建 `docs/technical-decisions.md`（从 `project/technical-decisions.md` + `project/decision-process.md` + `milestone-1/m1-rt-decisions.md` + `milestone-1/m1-design-decisions-core.md` 提取 PT/GS 相关）
-- [ ] 归档 `docs/project/technical-decisions.md`、`docs/project/decision-process.md`、`docs/milestone-1/m1-rt-decisions.md`、`docs/milestone-1/m1-design-decisions-core.md`
+- [x] 创建 `docs/technical-decisions.md`（从 `project/technical-decisions.md` + `project/decision-process.md` + `milestone-1/m1-rt-decisions.md` + `milestone-1/m1-design-decisions-core.md` 提取 PT/GS 相关）
+- [x] 归档 `docs/project/technical-decisions.md`、`docs/project/decision-process.md`、`docs/milestone-1/m1-rt-decisions.md`、`docs/milestone-1/m1-design-decisions-core.md`
 
 ### 收尾
 
