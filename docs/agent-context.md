@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 0：归档 `docs/milestone-1/m1-development-order.md`
+Step 0：归档 `docs/milestone-1/m1-phase-future-decisions.md`
 
 ---
 
@@ -23,6 +23,7 @@ CLAUDE.md 已自动加载，以下为额外必读：
 
 | 文档 | 说明 |
 |------|------|
+| `docs/roadmap.md` | Reflector 分支 phase 概览与顺序 |
 | `docs/current-phase.md` | Phase 1 精简范围与步骤概述 |
 | `tasks/reflector-phase1.md` | Phase 1 任务清单（复选框进度跟踪） |
 
