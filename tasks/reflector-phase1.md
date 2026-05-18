@@ -59,7 +59,7 @@
 - [x] 删除 `renderer_rasterization.cpp`、`renderer_bake.cpp`
 - [x] 清理 `renderer.h`（移除已删 pass 的 include/成员/方法声明，移除烘焙状态，移除光栅化 buffer）
 - [x] 简化 `renderer.cpp` render() 调度（仅 PT 路径）
-- [ ] 清理 `renderer_init.cpp`（移除光栅化/烘焙资源创建、managed image、sampler）
+- [x] 清理 `renderer_init.cpp`（移除光栅化/烘焙资源创建、managed image、sampler）
 - [ ] 清理 `renderer_pt.cpp`（移除对已删模块的引用，如有）
 - [ ] 精简 `RenderInput`（移除光栅化/烘焙专用字段）
 - [ ] 清理 `application.h/cpp`（移除烘焙触发、光栅化模式切换、bake data 管理）
