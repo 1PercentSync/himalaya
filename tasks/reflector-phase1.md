@@ -79,7 +79,7 @@
 
 ## Step 3：清理 framework 层
 
-- [ ] 删除 `shadow.h/cpp`、`culling.h/cpp`、`bake_data_manager.h/cpp`、`bake_denoiser.h/cpp`、`lightmap_uv.h/cpp`、`probe_placement.h/cpp`、`render_progress.h`
+- [x] 删除 `shadow.h/cpp`、`culling.h/cpp`、`bake_data_manager.h/cpp`、`bake_denoiser.h/cpp`、`lightmap_uv.h/cpp`、`probe_placement.h/cpp`、`render_progress.h`
 - [ ] 清理 `scene_data.h`：移除 BakeState, BakeMode, BakeConfig, ShadowConfig, AOConfig, ContactShadowConfig, ProbeBlendConfig, IndirectLightingMode, DirectionalLight, GPUDirectionalLight
 - [ ] 清理 `scene_data.h`：移除 PTConfig.directional_lights 字段
 - [ ] 清理 `scene_data.h`：精简 RenderFeatures（移除光栅化专用 flag）
