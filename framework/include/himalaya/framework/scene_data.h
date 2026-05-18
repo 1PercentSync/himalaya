@@ -16,7 +16,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <span>
-#include <vector>
 
 namespace himalaya::framework {
     // ---- Shadow Constants ----
@@ -66,25 +65,6 @@ namespace himalaya::framework {
     };
 
     /**
-     * @brief Directional light (sun/moon).
-     *
-     * Direction points from the light toward the scene (light travel direction).
-     */
-    struct DirectionalLight {
-        /** @brief Normalized light direction (toward scene). */
-        glm::vec3 direction;
-
-        /** @brief Linear-space light color. */
-        glm::vec3 color;
-
-        /** @brief Light intensity multiplier. */
-        float intensity;
-
-        /** @brief Whether this light casts shadows. */
-        bool cast_shadows;
-    };
-
-    /**
      * @brief Aggregate scene data — the renderer's read-only input.
      *
      * Application layer fills this each frame. Renderer consumes it without
@@ -94,25 +74,8 @@ namespace himalaya::framework {
         /** @brief All mesh instances to consider for rendering. */
         std::span<const MeshInstance> mesh_instances;
 
-        /** @brief Active directional lights. */
-        std::span<const DirectionalLight> directional_lights;
-
         /** @brief Current camera state. */
         Camera camera;
-    };
-
-    /**
-     * @brief Frustum culling output.
-     *
-     * Indices into SceneRenderData::mesh_instances for visible objects.
-     * Does not modify SceneRenderData.
-     */
-    struct CullResult {
-        /** @brief Indices of visible opaque mesh instances. */
-        std::vector<uint32_t> visible_opaque_indices;
-
-        /** @brief Indices of visible transparent mesh instances (sorted back-to-front). */
-        std::vector<uint32_t> visible_transparent_indices;
     };
 
     // ---- Render Configuration ----
@@ -120,40 +83,12 @@ namespace himalaya::framework {
     /**
      * @brief Top-level rendering mode selection.
      *
-     * Controls which render path Renderer executes each frame:
-     * rasterization (full multi-pass pipeline) or path tracing
-     * (RT reference view + tonemapping).
+     * Controls which render path Renderer executes each frame.
      */
     enum class RenderMode : uint8_t {
         Rasterization, ///< Multi-pass rasterization pipeline (default).
         PathTracing,   ///< RT path-traced reference view with accumulation.
         Baking,        ///< Lightmap/probe bake mode (GPU full-time baking).
-    };
-
-    /**
-     * @brief Indirect lighting source selection.
-     *
-     * Controls whether indirect lighting comes from real-time IBL sampling
-     * or from pre-baked lightmaps and reflection probes.
-     */
-    enum class IndirectLightingMode : uint8_t {
-        IBL,           ///< Real-time IBL sampling (irradiance + prefiltered cubemaps).
-        LightmapProbe, ///< Pre-baked lightmaps (diffuse) + reflection probes (specular).
-    };
-
-    /** @brief Bake pipeline state machine. */
-    enum class BakeState : uint8_t {
-        Idle,             ///< No bake in progress.
-        BakingLightmaps,  ///< Lightmap bake loop running.
-        BakingProbes,     ///< Probe bake loop running.
-        Complete,         ///< All bake work finished.
-    };
-
-    /** @brief Bake scope selection — which phases to execute. */
-    enum class BakeMode : uint8_t {
-        All,       ///< Full bake: lightmaps then probes (default).
-        Lightmap,  ///< Lightmaps only, skip probe phase.
-        Probe,     ///< Probes only, skip xatlas/lightmap phase.
     };
 
     /**
@@ -186,118 +121,6 @@ namespace himalaya::framework {
     };
 
     /**
-     * @brief CSM shadow configuration parameters.
-     *
-     * Application holds the instance, DebugUI modifies fields directly,
-     * Renderer and ShadowPass consume them. Default max_distance (100m)
-     * doubles as the degenerate-scene fallback — only overridden when
-     * the loaded scene has a valid AABB (diagonal × 1.5).
-     */
-    struct ShadowConfig {
-        /** @brief Number of active shadow cascades (1-4). Pure rendering parameter — does not affect resources. */
-        uint32_t cascade_count;
-
-        /** @brief PSSM log/linear blend factor (0 = linear, 1 = logarithmic). */
-        float split_lambda;
-
-        /** @brief Maximum shadow coverage distance in meters. */
-        float max_distance;
-
-        /** @brief Hardware depth bias slope factor. */
-        float slope_bias;
-
-        /** @brief Shader-side normal offset bias strength. */
-        float normal_offset;
-
-        /** @brief PCF kernel radius (0=off, 1=3x3, 2=5x5, ..., 5=11x11). */
-        uint32_t pcf_radius;
-
-        /** @brief Cascade blend region as fraction of cascade range. */
-        float blend_width;
-
-        /**
-         * @brief Shadow distance fade region as fraction of max_distance.
-         *
-         * Independent from blend_width — blend_width controls cascade-to-cascade
-         * transitions, distance_fade_width controls the far-edge fadeout to
-         * unshadowed. Currently defaults to the same value as blend_width (0.1),
-         * but can be tuned independently.
-         */
-        float distance_fade_width;
-
-        // ---- PCSS fields (Step 7) ----
-
-        /** @brief Shadow filtering mode: 0 = PCF (fixed kernel), 1 = PCSS (contact-hardening). */
-        uint32_t shadow_mode;
-
-        /**
-         * @brief Angular diameter of the light source in radians.
-         *
-         * Controls PCSS blocker search radius and penumbra width.
-         * Default 0.00925 rad ~ 0.53 deg (solar angular diameter).
-         * Larger values produce softer shadows.
-         */
-        float light_angular_diameter;
-
-        /**
-         * @brief PCSS behavior flags (bitmask).
-         *
-         * Bit 0: blocker early-out — when all blocker search samples find
-         * occluders, return 0.0 immediately (mitigates multi-layer light leak).
-         */
-        uint32_t pcss_flags;
-
-        /** @brief PCSS quality preset: 0 = Low (16+16), 1 = Medium (16+25), 2 = High (32+49). */
-        uint32_t pcss_quality;
-    };
-
-    /**
-     * @brief AO runtime configuration parameters.
-     *
-     * Application holds the instance, DebugUI modifies fields directly,
-     * GTAOPass and AOTemporalPass consume via push constants.
-     */
-    struct AOConfig {
-        /** @brief Sampling radius in world-space meters. */
-        float radius;
-
-        /** @brief Number of search directions (2/4/8). */
-        uint32_t directions;
-
-        /** @brief Steps per search direction (2/4/8). */
-        uint32_t steps_per_dir;
-
-        /** @brief Thin occluder compensation (0 = off, 0.7 = XeGTAO quality). */
-        float thin_compensation;
-
-        /** @brief AO intensity multiplier (higher = darker occlusion). */
-        float intensity;
-
-        /** @brief History blend factor for temporal accumulation (0.0-1.0). */
-        float temporal_blend;
-
-        /** @brief Use GTSO (bent normal cone intersection) for specular occlusion; false = Lagarde approximation. */
-        bool use_gtso;
-    };
-
-    /**
-     * @brief Contact Shadows runtime configuration parameters.
-     *
-     * Application holds the instance, DebugUI modifies fields directly,
-     * ContactShadowsPass consumes via push constants.
-     */
-    struct ContactShadowConfig {
-        /** @brief Ray march step count (8/16/24/32). */
-        uint32_t step_count;
-
-        /** @brief Maximum search distance in world-space meters. */
-        float max_distance;
-
-        /** @brief Base thickness for depth-adaptive comparison (scales with linear depth). */
-        float base_thickness;
-    };
-
-    /**
      * @brief Path tracing runtime configuration parameters.
      *
      * Application holds the instance, DebugUI modifies fields directly,
@@ -324,93 +147,6 @@ namespace himalaya::framework {
 
         /** @brief Target sample count (0 = unlimited). */
         uint32_t target_samples = 2048;
-    };
-
-    /**
-     * @brief Bake runtime configuration parameters.
-     *
-     * Application holds the instance, DebugUI modifies fields directly,
-     * Renderer reads via RenderInput when baking. All values are
-     * snapshotted at bake start and locked during the bake session.
-     */
-    struct BakeConfig {
-        /** @brief Global lightmap density (texels per world-space meter). */
-        float texels_per_meter = 256.0f;
-
-        /** @brief Minimum lightmap resolution per instance (aligned to 4). */
-        uint32_t min_resolution = 64;
-
-        /** @brief Maximum lightmap resolution per instance (aligned to 4). */
-        uint32_t max_resolution = 2048;
-
-        /** @brief Lightmap target sample count (SPP). OIDN denoising allows lower values. */
-        uint32_t lightmap_spp = 1024;
-
-        /** @brief Probe cubemap face resolution in texels. */
-        uint32_t probe_face_resolution = 512;
-
-        /** @brief Probe grid spacing in meters. */
-        float probe_spacing = 1.0f;
-
-        /** @brief Number of Monte Carlo rays per probe candidate (Fibonacci sphere sampling). */
-        uint32_t filter_ray_count = 64;
-
-        /** @brief Enclosure detection threshold factor (× AABB longest edge = max hit distance). */
-        float enclosure_threshold_factor = 0.05f;
-
-        /** @brief Probe target sample count (SPP). OIDN denoising allows lower values.
-         *  Half of lightmap SPP: prefilter mip chain provides additional spatial averaging. */
-        uint32_t probe_spp = 512;
-
-        /** @brief Baker max ray bounce depth (independent from PT reference view). */
-        uint32_t max_bounces = 32;
-
-        /** @brief Baker environment map importance sampling toggle. */
-        bool env_sampling = true;
-
-        /** @brief Baker emissive area light NEE toggle. */
-        bool emissive_nee = true;
-
-        /** @brief Override present mode to IMMEDIATE during baking (bypass VSync). */
-        bool allow_tearing = false;
-
-        /** @brief Number of SPP batched per frame during baking.
-         *  Higher values improve GPU utilization but reduce UI responsiveness. */
-        uint32_t spp_per_frame = 256;
-
-        /** @brief Probes with average luminance below this threshold are rejected.
-         *  Rejected probes do not produce KTX2 files or manifest entries. */
-        float probe_min_luminance = 1e-4f;
-
-        /** @brief Per-sample radiance clamp for firefly suppression (0 = disabled).
-         *  Applied in the shared trace_path() bounce loop. Prevents extreme outliers
-         *  from corrupting low-resolution lightmaps and confusing OIDN. */
-        float baker_clamp = 100.0f;
-
-        /** @brief Enable OIDN denoising in bake finalize (lightmap + probe).
-         *  When false, raw noisy accumulation is compressed directly to BC6H. */
-        bool denoise = true;
-    };
-
-    /**
-     * @brief Runtime probe blend parameters (not bake-related).
-     *
-     * Controls per-pixel probe selection scoring and top-2 blend
-     * behaviour. Application holds the instance, DebugUI modifies
-     * fields directly, Renderer uploads to GlobalUBO each frame.
-     */
-    struct ProbeBlendConfig {
-        /** @brief Normal-vs-distance weight exponent in probe scoring. */
-        float normal_bias = 1.0f;
-
-        /** @brief Below this roughness, use top-1 probe only (no blend). */
-        float roughness_single = 0.15f;
-
-        /** @brief Above this roughness, full top-2 blend. */
-        float roughness_full = 0.5f;
-
-        /** @brief Blend transition curve exponent (1 = linear). */
-        float blend_curve = 1.0f;
     };
 
     // ---- GPU Data Structures ----
@@ -475,16 +211,6 @@ namespace himalaya::framework {
         float roughness_full = 0.5f; ///< offset 940 — above this roughness, full top-2 blend
         float blend_curve = 1.0f; ///< offset 944 — blend transition curve exponent
         uint32_t _phase85_pad[3]{}; ///< offset 948 — pad to 960 (16-byte alignment)
-    };
-
-    /**
-     * @brief GPU directional light data (Set 0, Binding 1 SSBO element).
-     *
-     * std430 layout, 32 bytes per element, aligned to 16.
-     */
-    struct alignas(16) GPUDirectionalLight {
-        glm::vec4 direction_and_intensity; ///< xyz = direction, w = intensity
-        glm::vec4 color_and_shadow; ///< xyz = color, w = cast_shadows (0.0 / 1.0)
     };
 
     /**
@@ -634,7 +360,6 @@ namespace himalaya::framework {
     static_assert(offsetof(GPUGeometryInfo, vertex_buffer_address) == 0);
     static_assert(offsetof(GPUGeometryInfo, index_buffer_address) == 8);
     static_assert(offsetof(GPUGeometryInfo, material_buffer_offset) == 16);
-    static_assert(sizeof(GPUDirectionalLight) == 32, "GPUDirectionalLight must be 32 bytes (std430)");
     static_assert(sizeof(GPUInstanceData) == 128, "GPUInstanceData must be 128 bytes (std430)");
     static_assert(offsetof(GPUInstanceData, normal_col0) == 64);
     static_assert(offsetof(GPUInstanceData, material_index) == 112);
