@@ -6,14 +6,14 @@
 
 ## 当前位置
 
-- **项目**：Himalaya — 基于 Vulkan 1.4 的实时渲染器，光栅化起步
-- **Milestone**：M1 — 静态场景演示（场景和光源静态、镜头自由移动，画面写实度说得过去）
-- **Phase**：阶段八点五 — 间接光照质量提升（规划中）
-- **进度**：Step 5.1 全部完成，待用户编译验证
+- **项目**：Himalaya — 基于 Vulkan 1.4 的渲染器
+- **分支**：`reflector` — Path Tracing + Gaussian Splatting
+- **Phase**：Phase 1 — 管线精简（移除光栅化和烘焙管线）
+- **进度**：Step 0 文档归档与重建进行中
 
 ### 下一个任务
 
-Phase 8.5 Step 6：Probe Relocation — Pre-bake
+Step 0：创建 `docs/current-phase.md`
 
 ---
 
@@ -23,36 +23,53 @@ CLAUDE.md 已自动加载，以下为额外必读：
 
 | 文档 | 说明 |
 |------|------|
-| `docs/milestone-1/milestone-1.md` | M1 范围、预期效果、已知局限性 |
-| `docs/current-phase.md` | 当前阶段实现步骤（阶段八点五） |
-| `docs/milestone-1/m1-rt-decisions.md` | M1 RT 架构决策（阶段六~八点五） |
-| `docs/milestone-1/m1-interfaces.md` | M1 接口与目标结构：反映当前 Phase 结束时的目标状态，Phase 开始前更新至设计目标，实现完成后应与代码一致 |
-| `docs/milestone-1/m1-development-order.md` | M1 开发阶段顺序（含阶段六~十） |
-| `tasks/m1-phase8.5.md` | 阶段八点五任务清单（复选框进度跟踪） |
+| `tasks/reflector-phase1.md` | Phase 1 任务清单（复选框进度跟踪） |
+
+> `docs/current-phase.md` 待创建（Step 0 下一项）。
+
+---
 
 ## 按需文档
 
-遇到需要理解"为什么这么设计"时查阅：
+### M1 参考（待归档）
+
+以下文档属于 main 分支的 M1 路线，待 Step 0 后续归档步骤完成后移入归档区。精简过程中可能需要参考（了解当前代码的设计背景）。
 
 | 文档 | 说明 |
 |------|------|
+| `docs/milestone-1/milestone-1.md` | M1 范围、预期效果、已知局限性 |
+| `docs/milestone-1/m1-design-decisions-core.md` | M1 核心设计决策参考 |
+| `docs/milestone-1/m1-rt-decisions.md` | M1 RT 架构决策（阶段六~八点五） |
+| `docs/milestone-1/m1-interfaces.md` | M1 接口与目标结构 |
+| `docs/milestone-1/m1-development-order.md` | M1 开发阶段顺序 |
+| `docs/milestone-1/m1-frame-flow.md` | M1 完整帧流程 |
+| `docs/milestone-1/m1-phase-future-decisions.md` | M1 未来阶段设计构想 |
+
+### 项目级文档（待归档重写）
+
+| 文档 | 说明 |
+|------|------|
+| `docs/project/architecture.md` | 渲染器长远架构、四层结构、架构约束 |
 | `docs/project/technical-decisions.md` | 所有技术模块的最终选型结果与演进路线 |
 | `docs/project/decision-process.md` | 每项选型的推理过程、候选方案、排除理由 |
 | `docs/project/requirements-and-philosophy.md` | 项目定位、技术选型原则、画面质量目标 |
-| `docs/project/architecture.md` | 渲染器长远架构、四层结构、架构约束 |
-| `docs/milestone-1/m1-design-decisions-core.md` | M1 核心设计决策参考（决策结果摘要，日后开发仍需参考） |
-| `docs/milestone-1/m1-rt-decisions.md` | M1 RT 架构决策（阶段六~八点五：PT 参考视图 + 烘焙器 + 间接光照集成 + 质量提升） |
-| `docs/milestone-1/m1-phase-future-decisions.md` | M1 未来阶段设计构想（阶段九~十非正式规划） |
-| `docs/milestone-1/m1-frame-flow.md` | M1 完整帧流程（pass 执行顺序、资源生命周期） |
-| `docs/milestone-1/m1-development-order.md` | M1 的 10 个开发阶段及依赖关系 |
-| `docs/roadmap/milestone-2.md` | M2 规划（画质全面提升） |
-| `docs/roadmap/milestone-3.md` | M3 规划（动态物体 + 性能优化） |
+
+### Roadmap（待归档）
+
+| 文档 | 说明 |
+|------|------|
+| `docs/roadmap/milestone-2.md` | M2 规划 |
+| `docs/roadmap/milestone-3.md` | M3 规划 |
 | `docs/roadmap/milestone-future.md` | 远期可选目标 |
+
+---
 
 ## 归档文档
 
 | 文档 | 说明 |
 |------|------|
+| `docs/archive/m1-phase8.5-plan.md` | M1 阶段八点五实现步骤（原 current-phase.md） |
+| `tasks/archive/m1-phase8.5.md` | M1 阶段八点五任务清单 |
 | `docs/archive/conversation-initial-design.md` | 初始设计的完整对话记录 |
 | `docs/archive/m1-phase1-plan.md` | M1 阶段一实现步骤（已完成） |
 | `docs/archive/m1-phase2-plan.md` | M1 阶段二实现步骤（已完成） |
@@ -84,5 +101,5 @@ CLAUDE.md 已自动加载，以下为额外必读：
 ## 维护规则
 
 - **每完成一小项后**：更新"当前位置"的进度描述和"下一个任务"
-- **Phase 切换时**：更新 Phase 行、进度、下一个任务、必读文档列表中的 phase 文档路径
-- **Milestone 切换时**：全面更新本文档
+- **Phase 切换时**：更新 Phase 行、进度、下一个任务、必读文档列表
+- **文档归档时**：将文档从"按需"移入"归档"，更新路径
