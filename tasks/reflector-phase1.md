@@ -56,7 +56,7 @@
 > 从最顶层开始，删除文件并清理引用，使 app 不再依赖光栅化/烘焙模块。
 > passes 和 framework 的被删模块暂时保留（未被引用，不影响编译）。
 
-- [ ] 删除 `renderer_rasterization.cpp`、`renderer_bake.cpp`
+- [x] 删除 `renderer_rasterization.cpp`、`renderer_bake.cpp`
 - [ ] 清理 `renderer.h`（移除已删 pass 的 include/成员/方法声明，移除烘焙状态，移除光栅化 buffer）
 - [ ] 简化 `renderer.cpp` render() 调度（仅 PT 路径）
 - [ ] 清理 `renderer_init.cpp`（移除光栅化/烘焙资源创建、managed image、sampler）
