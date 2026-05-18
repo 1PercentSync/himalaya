@@ -29,7 +29,7 @@
 
 - [x] 归档 `docs/milestone-1/milestone-1.md`
 - [x] 归档 `docs/milestone-1/m1-interfaces.md`
-- [ ] 归档 `docs/milestone-1/m1-frame-flow.md`
+- [x] 归档 `docs/milestone-1/m1-frame-flow.md`
 - [ ] 归档 `docs/milestone-1/m1-development-order.md`
 - [ ] 归档 `docs/milestone-1/m1-phase-future-decisions.md`
 - [ ] 归档 `docs/roadmap/`（3 files）
