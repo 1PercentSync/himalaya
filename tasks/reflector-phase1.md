@@ -85,7 +85,7 @@
 - [x] 清理 `scene_data.h`：精简 RenderFeatures（移除光栅化专用 flag）
 - [x] 清理 `scene_data.h`：精简 RenderMode 枚举（仅 PathTracing + GaussianSplatting）
 - [x] 清理 `scene_data.h`：精简 GlobalUniformData（移除 shadow cascade、AO、probe blend、directional_light_count 字段）
-- [ ] 清理 `frame_context.h`：移除光栅化专用字段（shadow groups、AO resources、MSAA resources 等）
+- [x] 清理 `frame_context.h`：移除光栅化专用字段（shadow groups、AO resources、MSAA resources 等）
 - [ ] 更新 `framework/CMakeLists.txt`
 
 ## Step 4：清理 shader
