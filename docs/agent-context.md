@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的渲染器
 - **分支**：`reflector` — Path Tracing + Gaussian Splatting
 - **Phase**：Phase 1 — 管线精简（移除光栅化和烘焙管线）
-- **进度**：Step 5 进行中（xatlas 已删除），下一项更新顶层 CMakeLists.txt
+- **进度**：Step 5 进行中（xatlas 删除 + CMake 更新完成），下一项检查 vcpkg.json
 
 ### 下一个任务
 
-Step 5：更新顶层 `CMakeLists.txt`（移除 xatlas `add_subdirectory`）
+Step 5：检查 `vcpkg.json`（是否有可移除的依赖）
 
 ---
 

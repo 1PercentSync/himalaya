@@ -103,7 +103,7 @@
 ## Step 5：清理 third_party
 
 - [x] 删除 `third_party/xatlas/`
-- [ ] 更新顶层 `CMakeLists.txt`（移除 xatlas `add_subdirectory`）
+- [x] 更新顶层 `CMakeLists.txt`（移除 xatlas `add_subdirectory`）+ framework/CMakeLists.txt 移除 xatlas 链接
 - [ ] 检查 `vcpkg.json`（是否有可移除的依赖）
 - [ ] 编译验证
 
