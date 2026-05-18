@@ -1,6 +1,6 @@
 # Himalaya 渲染器
 
-基于 Vulkan 1.4 的实时渲染器，以光栅化渲染为起步。
+基于 Vulkan 1.4 的实时渲染器。
 
 - 设计文档索引：`docs/agent-context.md`
 - 任务规划：`tasks/`
@@ -148,7 +148,6 @@ himalaya/
 │   └── src/
 ├── third_party/         # 非 vcpkg 第三方依赖
 │   ├── bc7enc/          # 源码编译（ISPC + C++）
-│   ├── xatlas/          # 源码编译（单文件库）
 │   └── oidn/            # 预编译二进制（SHARED IMPORTED）
 ├── shaders/
 ├── docs/
@@ -163,7 +162,7 @@ vcpkg 有端口的库通过 `vcpkg.json` 管理。vcpkg 无端口的库放入 `t
 
 | 类型 | 目录结构 | 示例 |
 |------|----------|------|
-| 源码编译 | `include/himalaya/<name>/` + `src/` | bc7enc, xatlas |
+| 源码编译 | `include/himalaya/<name>/` + `src/` | bc7enc |
 | 预编译二进制 | `include/` + `lib/` + `bin/`（保持上游布局） | oidn |
 
 源码编译库的头文件放入 `include/himalaya/<name>/` 以统一 include 路径风格（`#include <himalaya/<name>/xxx.h>`）。PRIVATE include 指向头文件目录，解决源文件中的相对路径引用。第三方代码统一禁用编译器警告（MSVC `/W0`，GCC/Clang `-w`）。
@@ -177,7 +176,7 @@ vcpkg 有端口的库通过 `vcpkg.json` 管理。vcpkg 无端口的库放入 `t
 | 渲染模式 | Dynamic Rendering（Vulkan 1.3+ 核心） |
 | 同步 API | Synchronization2（Vulkan 1.3+ 核心） |
 | 管线动态状态 | Extended Dynamic State（Vulkan 1.3+ 核心） |
-| 描述符 | Set 0 传统 Descriptor Set（全局数据） + Set 1 传统 Descriptor Set（Bindless 纹理） |
+| 描述符 | Set 0 传统 Descriptor Set（GlobalUBO + MaterialBuffer + RT 资源） + Set 1 传统 Descriptor Set（Bindless 纹理） + Set 2 传统 Descriptor Set（渲染目标） |
 | 资源句柄 | Generation-based（index + generation） |
 | 对象销毁 | 显式 `destroy()` 方法，不依赖析构函数 |
 | 帧并行 | 2 Frames in Flight |
