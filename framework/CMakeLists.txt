@@ -7,7 +7,6 @@ target_sources(himalaya_framework PRIVATE
         src/color_utils.cpp
         src/denoiser.cpp
         src/ktx2.cpp
-        src/culling.cpp
         src/ibl.cpp
         src/ibl_compute.cpp
         src/cubemap_filter.cpp
@@ -18,13 +17,8 @@ target_sources(himalaya_framework PRIVATE
         src/scene_as_builder.cpp
         src/emissive_light_builder.cpp
         src/render_graph.cpp
-        src/shadow.cpp
         src/stb_impl.cpp
         src/texture.cpp
-        src/lightmap_uv.cpp
-        src/bake_denoiser.cpp
-        src/probe_placement.cpp
-        src/bake_data_manager.cpp
 )
 
 target_include_directories(himalaya_framework PUBLIC include)
@@ -39,5 +33,5 @@ target_include_directories(himalaya_framework PRIVATE ${Stb_INCLUDE_DIR})
 
 target_link_libraries(himalaya_framework
         PUBLIC himalaya_rhi imgui::imgui
-        PRIVATE mikktspace::mikktspace nlohmann_json::nlohmann_json xxHash::xxhash bc7enc xatlas oidn
+        PRIVATE mikktspace::mikktspace nlohmann_json::nlohmann_json xxHash::xxhash bc7enc oidn
 )
