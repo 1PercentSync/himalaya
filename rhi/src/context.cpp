@@ -285,7 +285,6 @@ namespace himalaya::rhi {
 
         // Vulkan 1.0 optional features
         if (!f.samplerAnisotropy) return false;
-        if (!f.depthBiasClamp) return false;
         if (!f.textureCompressionBC) return false;
         if (!f.shaderStorageImageExtendedFormats) return false;
 
@@ -388,10 +387,6 @@ namespace himalaya::rhi {
         gpu_name = props.deviceName;
         max_sampler_anisotropy = props.limits.maxSamplerAnisotropy;
 
-        // MSAA sample counts supported by both color and depth framebuffers (bitmask)
-        msaa_sample_counts = props.limits.framebufferColorSampleCounts &
-                             props.limits.framebufferDepthSampleCounts;
-
         rt_supported = has_rt_extensions(physical_device);
 
         if (rt_supported) {
@@ -420,8 +415,8 @@ namespace himalaya::rhi {
                          rt_min_scratch_offset_alignment);
         }
 
-        spdlog::info("Selected GPU: {} (score: {}, MSAA support: 0x{:x}, RT: {})",
-                     gpu_name, best_score, msaa_sample_counts, rt_supported ? "yes" : "no");
+        spdlog::info("Selected GPU: {} (score: {}, RT: {})",
+                     gpu_name, best_score, rt_supported ? "yes" : "no");
     }
 
     void Context::create_device() {
@@ -485,7 +480,6 @@ namespace himalaya::rhi {
         // Vulkan 1.0 core features
         VkPhysicalDeviceFeatures features_10{};
         features_10.samplerAnisotropy = VK_TRUE;
-        features_10.depthBiasClamp = VK_TRUE;
         features_10.textureCompressionBC = VK_TRUE;
         features_10.shaderStorageImageExtendedFormats = VK_TRUE;
 

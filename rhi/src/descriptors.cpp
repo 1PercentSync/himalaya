@@ -514,7 +514,7 @@ namespace himalaya::rhi {
 
         VK_CHECK(vkCreateDescriptorPool(context_->device, &set0_pool_info, nullptr, &set0_pool_));
 
-        // --- UPDATE_AFTER_BIND pool for Set 1 (maxSets=1, 4096+256 COMBINED_IMAGE_SAMPLER) ---
+        // --- UPDATE_AFTER_BIND pool for Set 1 (maxSets=1, textures + cubemaps) ---
         constexpr VkDescriptorPoolSize set1_pool_size{
             .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
             .descriptorCount = kMaxBindlessTextures + kMaxBindlessCubemaps,
@@ -531,7 +531,7 @@ namespace himalaya::rhi {
 
         VK_CHECK(vkCreateDescriptorPool(context_->device, &set1_pool_info, nullptr, &set1_pool_));
 
-        // --- Normal pool for Set 2 (maxSets=2, 16 COMBINED_IMAGE_SAMPLER for 2 frames in flight) ---
+        // --- Normal pool for Set 2 (one render target binding per frame in flight) ---
         constexpr VkDescriptorPoolSize set2_pool_size{
             .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
             .descriptorCount = kRenderTargetBindingCount * kMaxFramesInFlight,

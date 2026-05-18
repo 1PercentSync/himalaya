@@ -135,9 +135,8 @@ namespace himalaya::framework {
         uint32_t skybox_cubemap_index = UINT32_MAX; ///< offset 304 — bindless index into cubemaps[]
         float ibl_rotation_sin = 0.0f; ///< offset 308 — sin(ibl_yaw) for environment rotation
         float ibl_rotation_cos = 1.0f; ///< offset 312 — cos(ibl_yaw) for environment rotation
-        uint32_t debug_render_mode = 0; ///< offset 316 — DEBUG_MODE_* constants
-        uint32_t frame_index = 0; ///< offset 320 — monotonically increasing frame counter (temporal noise variation)
-        uint32_t _pad[3]{}; ///< offset 324 — pad to 336 (mat4 alignment)
+        uint32_t frame_index = 0; ///< offset 316 — monotonically increasing frame counter (temporal noise variation)
+        uint32_t _pad[4]{}; ///< offset 320 — pad to 336 (mat4 alignment)
         glm::mat4 inv_projection{}; ///< offset 336 — NDC → view-space (PT primary ray + ray cone LOD)
         glm::mat4 inv_view{}; ///< offset 400 — inverse view matrix (PT raygen primary ray computation)
     };
@@ -193,8 +192,7 @@ namespace himalaya::framework {
     static_assert(offsetof(GlobalUniformData, screen_size) == 272);
     static_assert(offsetof(GlobalUniformData, time) == 280);
     static_assert(offsetof(GlobalUniformData, indirect_intensity) == 284);
-    static_assert(offsetof(GlobalUniformData, debug_render_mode) == 316);
-    static_assert(offsetof(GlobalUniformData, frame_index) == 320);
+    static_assert(offsetof(GlobalUniformData, frame_index) == 316);
     static_assert(offsetof(GlobalUniformData, inv_projection) == 336);
     static_assert(offsetof(GlobalUniformData, inv_view) == 400);
     static_assert(sizeof(GPUGeometryInfo) == 24, "GPUGeometryInfo must be 24 bytes (std430)");

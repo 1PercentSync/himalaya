@@ -34,11 +34,6 @@ struct GPUMaterialData {
     uint double_sided;             // offset 76 — 1 if glTF doubleSided, 0 otherwise
 };
 
-// ---- Debug render mode constants ----
-
-#define DEBUG_MODE_FULL_PBR          0
-#define DEBUG_MODE_PASSTHROUGH_START 4
-
 // ---- Set 0: Global data (updated once per frame) ----
 
 layout (set = 0, binding = 0) uniform GlobalUBO {
@@ -57,9 +52,8 @@ layout (set = 0, binding = 0) uniform GlobalUBO {
     uint skybox_cubemap_index;              // offset 304 — bindless index into cubemaps[]
     float ibl_rotation_sin;                 // offset 308 — sin(ibl_yaw) for environment rotation
     float ibl_rotation_cos;                 // offset 312 — cos(ibl_yaw) for environment rotation
-    uint debug_render_mode;                 // offset 316 — DEBUG_MODE_* constants
-    uint frame_index;                       // offset 320 — monotonically increasing frame counter (temporal noise)
-    // 12 bytes implicit pad (mat4 alignment to 336)
+    uint frame_index;                       // offset 316 — monotonically increasing frame counter (temporal noise)
+    uvec4 _padding;                         // offset 320 — pad to keep matrix offsets stable
     mat4 inv_projection;                    // offset 336 — NDC → view-space (PT primary ray + ray cone LOD)
     mat4 inv_view;                          // offset 400 — inverse view matrix (PT raygen primary ray)
 } global;
