@@ -25,11 +25,27 @@
 - [x] 归档 `docs/current-phase.md` 和 `tasks/m1-phase8.5.md`
 - [x] 创建 `tasks/reflector-phase1.md` + 更新 `docs/agent-context.md`
 - [x] 创建 `docs/current-phase.md`（Phase 1 精简步骤）
-- [ ] 归档 `docs/milestone-1/`（7 files）→ `docs/archive/`
-- [ ] 归档 `docs/roadmap/`（3 files）→ `docs/archive/`
-- [ ] 归档 `docs/project/`（4 files）→ `docs/archive/`
-- [ ] 创建 `docs/architecture.md`（合并 architecture + requirements-and-philosophy）
-- [ ] 创建 `docs/technical-decisions.md`（合并 technical-decisions + decision-process + m1-rt-decisions，仅 PT/GS 相关）
+### 纯归档（无需迁移内容）
+
+- [x] 归档 `docs/milestone-1/milestone-1.md`
+- [ ] 归档 `docs/milestone-1/m1-interfaces.md`
+- [ ] 归档 `docs/milestone-1/m1-frame-flow.md`
+- [ ] 归档 `docs/milestone-1/m1-development-order.md`
+- [ ] 归档 `docs/milestone-1/m1-phase-future-decisions.md`
+- [ ] 归档 `docs/roadmap/`（3 files）
+
+### 创建 `docs/architecture.md` + 归档源文档
+
+- [ ] 创建 `docs/architecture.md`（从 `project/architecture.md` + `project/requirements-and-philosophy.md` 提取 PT/GS 适用内容）
+- [ ] 归档 `docs/project/architecture.md`、`docs/project/requirements-and-philosophy.md`
+
+### 创建 `docs/technical-decisions.md` + 归档源文档
+
+- [ ] 创建 `docs/technical-decisions.md`（从 `project/technical-decisions.md` + `project/decision-process.md` + `milestone-1/m1-rt-decisions.md` + `milestone-1/m1-design-decisions-core.md` 提取 PT/GS 相关）
+- [ ] 归档 `docs/project/technical-decisions.md`、`docs/project/decision-process.md`、`docs/milestone-1/m1-rt-decisions.md`、`docs/milestone-1/m1-design-decisions-core.md`
+
+### 收尾
+
 - [ ] 更新 `docs/agent-context.md` 文档目录（指向新文档）
 
 ## Step 1：清理 app 层（移除光栅化/烘焙路径）
