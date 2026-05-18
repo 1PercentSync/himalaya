@@ -49,7 +49,7 @@
 
 ### 收尾
 
-- [ ] 更新 `docs/agent-context.md` 文档目录（指向新文档）
+- [x] 更新 `docs/agent-context.md` 文档目录（指向新文档）
 
 ## Step 1：清理 app 层（移除光栅化/烘焙路径）
 
