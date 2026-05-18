@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 0：归档 `docs/milestone-1/m1-phase-future-decisions.md`
+Step 0：归档 `docs/roadmap/`（3 files）
 
 ---
 
