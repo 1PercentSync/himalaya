@@ -1,6 +1,6 @@
 /**
  * @file renderer_init.cpp
- * @brief Renderer lifecycle: init, destroy, resize, reload, descriptor helpers.
+ * @brief Renderer lifecycle: init, destroy, resize, reload.
  */
 
 #include <himalaya/app/renderer.h>
@@ -16,9 +16,6 @@
 #include <spdlog/spdlog.h>
 
 namespace himalaya::app {
-    /** @brief Maximum instances the InstanceBuffer can hold. */
-    constexpr uint32_t kMaxInstances = 65536;
-
     // ---- Init / Destroy ----
 
     void Renderer::init(rhi::Context &ctx,
@@ -37,122 +34,7 @@ namespace himalaya::app {
         render_graph_.set_reference_resolution(swapchain_->extent);
         register_swapchain_images();
 
-        // HDR color buffer as managed resource (ForwardPass writes, TonemappingPass samples,
-        // bake preview clears + blits as transfer destination)
-        managed_hdr_color_ = render_graph_.create_managed_image("HDR Color", {
-                                                                    .size_mode = framework::RGSizeMode::Relative,
-                                                                    .width_scale = 1.0f,
-                                                                    .height_scale = 1.0f,
-                                                                    .width = 0,
-                                                                    .height = 0,
-                                                                    .format = rhi::Format::R16G16B16A16Sfloat,
-                                                                    .usage = rhi::ImageUsage::ColorAttachment |
-                                                                             rhi::ImageUsage::Sampled |
-                                                                             rhi::ImageUsage::TransferDst,
-                                                                    .sample_count = 1,
-                                                                    .mip_levels = 1,
-                                                                }, false);
-
-        // Resolved depth buffer (1x, temporal): direct render target in 1x mode,
-        // MSAA depth resolve target (MAX_BIT) in multi-sample mode.
-        // Temporal for AO reprojection (get_history_image returns previous frame depth).
-        managed_depth_ = render_graph_.create_managed_image("Depth", {
-                                                                .size_mode = framework::RGSizeMode::Relative,
-                                                                .width_scale = 1.0f,
-                                                                .height_scale = 1.0f,
-                                                                .width = 0,
-                                                                .height = 0,
-                                                                .format = rhi::Format::D32Sfloat,
-                                                                .usage = rhi::ImageUsage::DepthAttachment |
-                                                                         rhi::ImageUsage::Sampled,
-                                                                .sample_count = 1,
-                                                                .mip_levels = 1,
-                                                            }, true);
-
-        // Resolved normal buffer (1x): direct render target in 1x mode,
-        // MSAA normal resolve target (AVERAGE) in multi-sample mode.
-        managed_normal_ = render_graph_.create_managed_image("Normal", {
-                                                                 .size_mode = framework::RGSizeMode::Relative,
-                                                                 .width_scale = 1.0f,
-                                                                 .height_scale = 1.0f,
-                                                                 .width = 0,
-                                                                 .height = 0,
-                                                                 .format = rhi::Format::A2B10G10R10UnormPack32,
-                                                                 .usage = rhi::ImageUsage::ColorAttachment |
-                                                                          rhi::ImageUsage::Sampled,
-                                                                 .sample_count = 1,
-                                                                 .mip_levels = 1,
-                                                             }, false);
-
-        // --- Phase 5 AO/Contact Shadow resources ---
-
-        managed_ao_noisy_ = render_graph_.create_managed_image("AO Noisy", {
-                                                                   .size_mode = framework::RGSizeMode::Relative,
-                                                                   .width_scale = 1.0f,
-                                                                   .height_scale = 1.0f,
-                                                                   .width = 0,
-                                                                   .height = 0,
-                                                                   .format = rhi::Format::R8G8B8A8Unorm,
-                                                                   .usage = rhi::ImageUsage::Storage |
-                                                                            rhi::ImageUsage::Sampled,
-                                                                   .sample_count = 1,
-                                                                   .mip_levels = 1,
-                                                               }, false);
-
-        managed_ao_blurred_ = render_graph_.create_managed_image("AO Blurred", {
-                                                                     .size_mode = framework::RGSizeMode::Relative,
-                                                                     .width_scale = 1.0f,
-                                                                     .height_scale = 1.0f,
-                                                                     .width = 0,
-                                                                     .height = 0,
-                                                                     .format = rhi::Format::R8G8B8A8Unorm,
-                                                                     .usage = rhi::ImageUsage::Storage |
-                                                                              rhi::ImageUsage::Sampled,
-                                                                     .sample_count = 1,
-                                                                     .mip_levels = 1,
-                                                                 }, false);
-
-        managed_ao_filtered_ = render_graph_.create_managed_image("AO Filtered", {
-                                                                      .size_mode = framework::RGSizeMode::Relative,
-                                                                      .width_scale = 1.0f,
-                                                                      .height_scale = 1.0f,
-                                                                      .width = 0,
-                                                                      .height = 0,
-                                                                      .format = rhi::Format::R8G8B8A8Unorm,
-                                                                      .usage = rhi::ImageUsage::Storage |
-                                                                               rhi::ImageUsage::Sampled,
-                                                                      .sample_count = 1,
-                                                                      .mip_levels = 1,
-                                                                  }, true);
-
-        managed_contact_shadow_mask_ = render_graph_.create_managed_image("Contact Shadow Mask", {
-                                                                              .size_mode =
-                                                                              framework::RGSizeMode::Relative,
-                                                                              .width_scale = 1.0f,
-                                                                              .height_scale = 1.0f,
-                                                                              .width = 0,
-                                                                              .height = 0,
-                                                                              .format = rhi::Format::R8Unorm,
-                                                                              .usage = rhi::ImageUsage::Storage |
-                                                                                  rhi::ImageUsage::Sampled,
-                                                                              .sample_count = 1,
-                                                                              .mip_levels = 1,
-                                                                          }, false);
-
-        managed_roughness_ = render_graph_.create_managed_image("Roughness", {
-                                                                    .size_mode = framework::RGSizeMode::Relative,
-                                                                    .width_scale = 1.0f,
-                                                                    .height_scale = 1.0f,
-                                                                    .width = 0,
-                                                                    .height = 0,
-                                                                    .format = rhi::Format::R8Unorm,
-                                                                    .usage = rhi::ImageUsage::ColorAttachment |
-                                                                             rhi::ImageUsage::Sampled,
-                                                                    .sample_count = 1,
-                                                                    .mip_levels = 1,
-                                                                }, false);
-
-        // --- Phase 6 PT resources (only when RT is supported) ---
+        // --- PT resources (only when RT is supported) ---
 
         if (ctx_->rt_supported) {
             managed_pt_accumulation_ = render_graph_.create_managed_image(
@@ -206,65 +88,6 @@ namespace himalaya::app {
 
             denoiser_.init(*ctx_, *resource_manager_,
                            swapchain_->extent.width, swapchain_->extent.height);
-            bake_denoiser_.init();
-        }
-
-        // Fall back to the highest supported sample count if the default isn't available
-        while (current_sample_count_ > 1 &&
-               !(ctx_->msaa_sample_counts & current_sample_count_)) {
-            current_sample_count_ >>= 1;
-        }
-
-        // MSAA buffers (only created when sample_count > 1; 1x uses resolved targets directly)
-        if (current_sample_count_ > 1) {
-            managed_msaa_color_ = render_graph_.create_managed_image("MSAA Color", {
-                                                                         .size_mode = framework::RGSizeMode::Relative,
-                                                                         .width_scale = 1.0f,
-                                                                         .height_scale = 1.0f,
-                                                                         .width = 0,
-                                                                         .height = 0,
-                                                                         .format = rhi::Format::R16G16B16A16Sfloat,
-                                                                         .usage = rhi::ImageUsage::ColorAttachment,
-                                                                         .sample_count = current_sample_count_,
-                                                                         .mip_levels = 1,
-                                                                     }, false);
-
-            managed_msaa_depth_ = render_graph_.create_managed_image("MSAA Depth", {
-                                                                         .size_mode = framework::RGSizeMode::Relative,
-                                                                         .width_scale = 1.0f,
-                                                                         .height_scale = 1.0f,
-                                                                         .width = 0,
-                                                                         .height = 0,
-                                                                         .format = rhi::Format::D32Sfloat,
-                                                                         .usage = rhi::ImageUsage::DepthAttachment,
-                                                                         .sample_count = current_sample_count_,
-                                                                         .mip_levels = 1,
-                                                                     }, false);
-
-            managed_msaa_normal_ = render_graph_.create_managed_image("MSAA Normal", {
-                                                                          .size_mode = framework::RGSizeMode::Relative,
-                                                                          .width_scale = 1.0f,
-                                                                          .height_scale = 1.0f,
-                                                                          .width = 0,
-                                                                          .height = 0,
-                                                                          .format = rhi::Format::A2B10G10R10UnormPack32,
-                                                                          .usage = rhi::ImageUsage::ColorAttachment,
-                                                                          .sample_count = current_sample_count_,
-                                                                          .mip_levels = 1,
-                                                                      }, false);
-
-            managed_msaa_roughness_ = render_graph_.create_managed_image("MSAA Roughness", {
-                                                                             .size_mode =
-                                                                             framework::RGSizeMode::Relative,
-                                                                             .width_scale = 1.0f,
-                                                                             .height_scale = 1.0f,
-                                                                             .width = 0,
-                                                                             .height = 0,
-                                                                             .format = rhi::Format::R8Unorm,
-                                                                             .usage = rhi::ImageUsage::ColorAttachment,
-                                                                             .sample_count = current_sample_count_,
-                                                                             .mip_levels = 1,
-                                                                         }, false);
         }
 
         shader_compiler_.set_include_path("shaders");
@@ -303,20 +126,6 @@ namespace himalaya::app {
                 i, 1, light_buffers_[i], light_buffer_size);
         }
 
-        // --- InstanceBuffer SSBOs (per-frame, CpuToGpu, fixed upper bound) ---
-        constexpr auto instance_buffer_size = static_cast<uint64_t>(kMaxInstances) *
-                                              sizeof(framework::GPUInstanceData);
-        constexpr const char *kInstanceBufferNames[] = {"Instance SSBO [Frame 0]", "Instance SSBO [Frame 1]"};
-        static_assert(std::size(kInstanceBufferNames) == rhi::kMaxFramesInFlight);
-        for (uint32_t i = 0; i < rhi::kMaxFramesInFlight; ++i) {
-            instance_buffers_[i] = resource_manager_->create_buffer({
-                                                                        .size = instance_buffer_size,
-                                                                        .usage = rhi::BufferUsage::StorageBuffer,
-                                                                        .memory = rhi::MemoryUsage::CpuToGpu,
-                                                                    }, kInstanceBufferNames[i]);
-            descriptor_manager_->write_set0_buffer(i, 3, instance_buffers_[i], instance_buffer_size);
-        }
-
         // --- Default sampler ---
         default_sampler_ = resource_manager_->create_sampler({
                                                                  .mag_filter = rhi::Filter::Linear,
@@ -334,30 +143,6 @@ namespace himalaya::app {
         material_system_.init(resource_manager_, descriptor_manager_);
 
         // --- Samplers ---
-
-        shadow_comparison_sampler_ = resource_manager_->create_sampler({
-                                                                           .mag_filter = rhi::Filter::Linear,
-                                                                           .min_filter = rhi::Filter::Linear,
-                                                                           .mip_mode = rhi::SamplerMipMode::Nearest,
-                                                                           .wrap_u = rhi::SamplerWrapMode::ClampToEdge,
-                                                                           .wrap_v = rhi::SamplerWrapMode::ClampToEdge,
-                                                                           .max_anisotropy = 0.0f,
-                                                                           .max_lod = 0.0f,
-                                                                           .compare_enable = true,
-                                                                           .compare_op = rhi::CompareOp::GreaterOrEqual,
-                                                                       }, "Shadow Comparison Sampler");
-
-        shadow_depth_sampler_ = resource_manager_->create_sampler({
-                                                                      .mag_filter = rhi::Filter::Nearest,
-                                                                      .min_filter = rhi::Filter::Nearest,
-                                                                      .mip_mode = rhi::SamplerMipMode::Nearest,
-                                                                      .wrap_u = rhi::SamplerWrapMode::ClampToEdge,
-                                                                      .wrap_v = rhi::SamplerWrapMode::ClampToEdge,
-                                                                      .max_anisotropy = 0.0f,
-                                                                      .max_lod = 0.0f,
-                                                                      .compare_enable = false,
-                                                                      .compare_op = rhi::CompareOp::Never,
-                                                                  }, "Shadow Depth Sampler");
 
         nearest_clamp_sampler_ = resource_manager_->create_sampler({
                                                                        .mag_filter = rhi::Filter::Nearest,
@@ -382,9 +167,6 @@ namespace himalaya::app {
                                                                       .compare_enable = false,
                                                                       .compare_op = rhi::CompareOp::Never,
                                                                   }, "Linear Clamp Sampler");
-
-        // --- Bake data manager (scan/load/unload baked lighting data) ---
-        bake_data_manager_.init(rm, dm, linear_clamp_sampler_, default_sampler_);
 
         // --- RT acceleration structure manager (conditional on hardware support) ---
         if (ctx_->rt_supported) {
@@ -437,77 +219,29 @@ namespace himalaya::app {
         }
 
         // --- Pass setup ---
-        shadow_pass_.setup(*ctx_, *resource_manager_, *descriptor_manager_, shader_compiler_);
-        depth_prepass_.setup(*ctx_, *resource_manager_, *descriptor_manager_, shader_compiler_, current_sample_count_);
-        forward_pass_.setup(*ctx_, *resource_manager_, *descriptor_manager_, shader_compiler_, current_sample_count_);
-        skybox_pass_.setup(*ctx_, *resource_manager_, *descriptor_manager_, shader_compiler_);
         tonemapping_pass_.setup(*ctx_, *resource_manager_, *descriptor_manager_, shader_compiler_, swapchain_->format);
-        gtao_pass_.setup(*ctx_, *resource_manager_, *descriptor_manager_, shader_compiler_);
-        ao_spatial_pass_.setup(*ctx_, *resource_manager_, *descriptor_manager_, shader_compiler_, nearest_clamp_sampler_);
-        ao_temporal_pass_.setup(*ctx_, *resource_manager_, *descriptor_manager_, shader_compiler_, nearest_clamp_sampler_);
-        contact_shadows_pass_.setup(*ctx_, *resource_manager_, *descriptor_manager_, shader_compiler_);
 
         if (ctx_->rt_supported) {
             reference_view_pass_.setup(*ctx_, *resource_manager_, *descriptor_manager_,
                                        shader_compiler_, sobol_buffer_, blue_noise_bindless_.index);
-            pos_normal_map_pass_.setup(*ctx_, *resource_manager_, *descriptor_manager_,
-                                       shader_compiler_);
-            lightmap_baker_pass_.setup(*ctx_, *resource_manager_, *descriptor_manager_,
-                                       shader_compiler_, sobol_buffer_, blue_noise_bindless_.index);
-            probe_baker_pass_.setup(*ctx_, *resource_manager_, *descriptor_manager_,
-                                    shader_compiler_, sobol_buffer_, blue_noise_bindless_.index);
         }
-
-        // --- Set 2 initial descriptor writes ---
-        update_hdr_color_descriptor();
-        update_depth_descriptor();
-        update_normal_descriptor();
-        update_ao_descriptor();
-        update_contact_shadow_descriptor();
-        update_shadow_map_descriptor();
-        update_shadow_depth_descriptor();
     }
 
     void Renderer::destroy() {
-        bake_data_manager_.destroy();
-
-        // Clean up any in-progress bake state (per-instance images + vectors)
-        destroy_bake_instance_images();
-        destroy_probe_bake_instance_images();
-        bake_instance_indices_.clear();
-        bake_lightmap_sizes_.clear();
-        bake_lightmap_keys_.clear();
-        bake_probe_positions_.clear();
-        bake_state_ = framework::BakeState::Idle;
-
         emissive_light_builder_.destroy();
         scene_as_builder_.destroy();
         as_manager_.destroy();
         if (ctx_->rt_supported) {
-            probe_baker_pass_.destroy();
-            lightmap_baker_pass_.destroy();
             reference_view_pass_.destroy();
-            pos_normal_map_pass_.destroy();
         }
         ibl_.destroy();
         material_system_.destroy();
-        shadow_pass_.destroy();
-        depth_prepass_.destroy();
-        forward_pass_.destroy();
-        skybox_pass_.destroy();
         tonemapping_pass_.destroy();
-        gtao_pass_.destroy();
-        ao_spatial_pass_.destroy();
-        ao_temporal_pass_.destroy();
-        contact_shadows_pass_.destroy();
 
         for (const auto ubo: global_ubo_buffers_) {
             resource_manager_->destroy_buffer(ubo);
         }
         for (const auto buf: light_buffers_) {
-            resource_manager_->destroy_buffer(buf);
-        }
-        for (const auto buf: instance_buffers_) {
             resource_manager_->destroy_buffer(buf);
         }
 
@@ -522,23 +256,9 @@ namespace himalaya::app {
         resource_manager_->destroy_image(default_textures_.flat_normal.image);
         resource_manager_->destroy_image(default_textures_.black.image);
         resource_manager_->destroy_sampler(default_sampler_);
-        resource_manager_->destroy_sampler(shadow_comparison_sampler_);
-        resource_manager_->destroy_sampler(shadow_depth_sampler_);
         resource_manager_->destroy_sampler(nearest_clamp_sampler_);
         resource_manager_->destroy_sampler(linear_clamp_sampler_);
 
-        if (managed_msaa_color_.valid()) {
-            render_graph_.destroy_managed_image(managed_msaa_color_);
-        }
-        if (managed_msaa_depth_.valid()) {
-            render_graph_.destroy_managed_image(managed_msaa_depth_);
-        }
-        if (managed_msaa_normal_.valid()) {
-            render_graph_.destroy_managed_image(managed_msaa_normal_);
-        }
-        if (managed_msaa_roughness_.valid()) {
-            render_graph_.destroy_managed_image(managed_msaa_roughness_);
-        }
         if (managed_pt_accumulation_.valid()) {
             render_graph_.destroy_managed_image(managed_pt_accumulation_);
         }
@@ -552,15 +272,6 @@ namespace himalaya::app {
             render_graph_.destroy_managed_image(managed_denoised_);
         }
         denoiser_.destroy();
-        bake_denoiser_.destroy();
-        render_graph_.destroy_managed_image(managed_ao_noisy_);
-        render_graph_.destroy_managed_image(managed_ao_blurred_);
-        render_graph_.destroy_managed_image(managed_ao_filtered_);
-        render_graph_.destroy_managed_image(managed_contact_shadow_mask_);
-        render_graph_.destroy_managed_image(managed_hdr_color_);
-        render_graph_.destroy_managed_image(managed_depth_);
-        render_graph_.destroy_managed_image(managed_normal_);
-        render_graph_.destroy_managed_image(managed_roughness_);
         unregister_swapchain_images();
     }
 
@@ -629,100 +340,9 @@ namespace himalaya::app {
             descriptor_manager_->write_set0_env_alias_table(ibl_.alias_table_buffer(), buf.desc.size);
         }
 
-        // Environment change invalidates accumulated PT samples
         reset_pt_accumulation();
 
         return ok;
-    }
-
-    // ---- MSAA switching ----
-
-    void Renderer::handle_msaa_change(const uint32_t new_sample_count) {
-        if (new_sample_count == current_sample_count_) return;
-
-        vkQueueWaitIdle(ctx_->graphics_queue);
-
-        const uint32_t old = current_sample_count_;
-        current_sample_count_ = new_sample_count;
-
-        if (old > 1 && new_sample_count > 1) {
-            render_graph_.update_managed_desc(managed_msaa_color_, {
-                                                  .size_mode = framework::RGSizeMode::Relative,
-                                                  .width_scale = 1.0f, .height_scale = 1.0f,
-                                                  .width = 0, .height = 0,
-                                                  .format = rhi::Format::R16G16B16A16Sfloat,
-                                                  .usage = rhi::ImageUsage::ColorAttachment,
-                                                  .sample_count = new_sample_count, .mip_levels = 1,
-                                              });
-            render_graph_.update_managed_desc(managed_msaa_depth_, {
-                                                  .size_mode = framework::RGSizeMode::Relative,
-                                                  .width_scale = 1.0f, .height_scale = 1.0f,
-                                                  .width = 0, .height = 0,
-                                                  .format = rhi::Format::D32Sfloat,
-                                                  .usage = rhi::ImageUsage::DepthAttachment,
-                                                  .sample_count = new_sample_count, .mip_levels = 1,
-                                              });
-            render_graph_.update_managed_desc(managed_msaa_normal_, {
-                                                  .size_mode = framework::RGSizeMode::Relative,
-                                                  .width_scale = 1.0f, .height_scale = 1.0f,
-                                                  .width = 0, .height = 0,
-                                                  .format = rhi::Format::A2B10G10R10UnormPack32,
-                                                  .usage = rhi::ImageUsage::ColorAttachment,
-                                                  .sample_count = new_sample_count, .mip_levels = 1,
-                                              });
-            render_graph_.update_managed_desc(managed_msaa_roughness_, {
-                                                  .size_mode = framework::RGSizeMode::Relative,
-                                                  .width_scale = 1.0f, .height_scale = 1.0f,
-                                                  .width = 0, .height = 0,
-                                                  .format = rhi::Format::R8Unorm,
-                                                  .usage = rhi::ImageUsage::ColorAttachment,
-                                                  .sample_count = new_sample_count, .mip_levels = 1,
-                                              });
-        } else if (old > 1) {
-            render_graph_.destroy_managed_image(managed_msaa_color_);
-            render_graph_.destroy_managed_image(managed_msaa_depth_);
-            render_graph_.destroy_managed_image(managed_msaa_normal_);
-            render_graph_.destroy_managed_image(managed_msaa_roughness_);
-            managed_msaa_color_ = {};
-            managed_msaa_depth_ = {};
-            managed_msaa_normal_ = {};
-            managed_msaa_roughness_ = {};
-        } else {
-            managed_msaa_color_ = render_graph_.create_managed_image("MSAA Color", {
-                .size_mode = framework::RGSizeMode::Relative, .width_scale = 1.0f, .height_scale = 1.0f,
-                .width = 0, .height = 0, .format = rhi::Format::R16G16B16A16Sfloat,
-                .usage = rhi::ImageUsage::ColorAttachment, .sample_count = new_sample_count, .mip_levels = 1,
-            }, false);
-            managed_msaa_depth_ = render_graph_.create_managed_image("MSAA Depth", {
-                .size_mode = framework::RGSizeMode::Relative, .width_scale = 1.0f, .height_scale = 1.0f,
-                .width = 0, .height = 0, .format = rhi::Format::D32Sfloat,
-                .usage = rhi::ImageUsage::DepthAttachment, .sample_count = new_sample_count, .mip_levels = 1,
-            }, false);
-            managed_msaa_normal_ = render_graph_.create_managed_image("MSAA Normal", {
-                .size_mode = framework::RGSizeMode::Relative, .width_scale = 1.0f, .height_scale = 1.0f,
-                .width = 0, .height = 0, .format = rhi::Format::A2B10G10R10UnormPack32,
-                .usage = rhi::ImageUsage::ColorAttachment, .sample_count = new_sample_count, .mip_levels = 1,
-            }, false);
-            managed_msaa_roughness_ = render_graph_.create_managed_image("MSAA Roughness", {
-                .size_mode = framework::RGSizeMode::Relative, .width_scale = 1.0f, .height_scale = 1.0f,
-                .width = 0, .height = 0, .format = rhi::Format::R8Unorm,
-                .usage = rhi::ImageUsage::ColorAttachment, .sample_count = new_sample_count, .mip_levels = 1,
-            }, false);
-        }
-
-        depth_prepass_.on_sample_count_changed(new_sample_count);
-        forward_pass_.on_sample_count_changed(new_sample_count);
-    }
-
-    // ---- Shadow resolution change ----
-
-    void Renderer::handle_shadow_resolution_changed(const uint32_t new_resolution) {
-        if (new_resolution == shadow_pass_.resolution()) return;
-
-        vkQueueWaitIdle(ctx_->graphics_queue);
-        shadow_pass_.on_resolution_changed(new_resolution);
-        update_shadow_map_descriptor();
-        update_shadow_depth_descriptor();
     }
 
     // ---- Shader hot-reload ----
@@ -730,20 +350,9 @@ namespace himalaya::app {
     void Renderer::reload_shaders() {
         vkQueueWaitIdle(ctx_->graphics_queue);
 
-        shadow_pass_.rebuild_pipelines();
-        depth_prepass_.rebuild_pipelines();
-        forward_pass_.rebuild_pipelines();
-        skybox_pass_.rebuild_pipelines();
         tonemapping_pass_.rebuild_pipelines();
-        gtao_pass_.rebuild_pipelines();
-        ao_spatial_pass_.rebuild_pipelines();
-        ao_temporal_pass_.rebuild_pipelines();
-        contact_shadows_pass_.rebuild_pipelines();
         if (ctx_->rt_supported) {
             reference_view_pass_.rebuild_pipelines();
-            pos_normal_map_pass_.rebuild_pipelines();
-            lightmap_baker_pass_.rebuild_pipelines();
-            probe_baker_pass_.rebuild_pipelines();
         }
 
         spdlog::info("All shaders reloaded");
@@ -759,56 +368,11 @@ namespace himalaya::app {
         register_swapchain_images();
         render_graph_.set_reference_resolution(swapchain_->extent);
 
-        update_hdr_color_descriptor();
-        update_depth_descriptor();
-        update_normal_descriptor();
-        update_ao_descriptor();
-        update_contact_shadow_descriptor();
-
         if (ctx_->rt_supported) {
             denoiser_.on_resize(*resource_manager_,
                                 swapchain_->extent.width, swapchain_->extent.height);
             reset_pt_accumulation();
         }
-    }
-
-    // ---- Descriptor update helpers ----
-
-    void Renderer::update_hdr_color_descriptor() const {
-        const auto hdr_backing = render_graph_.get_managed_backing_image(managed_hdr_color_);
-        descriptor_manager_->update_render_target(0, hdr_backing, default_sampler_);
-    }
-
-    void Renderer::update_depth_descriptor() const {
-        const auto depth_backing = render_graph_.get_managed_backing_image(managed_depth_);
-        descriptor_manager_->update_render_target(1, depth_backing, nearest_clamp_sampler_);
-    }
-
-    void Renderer::update_normal_descriptor() const {
-        const auto normal_backing = render_graph_.get_managed_backing_image(managed_normal_);
-        descriptor_manager_->update_render_target(2, normal_backing, nearest_clamp_sampler_);
-    }
-
-    void Renderer::update_ao_descriptor() const {
-        const auto ao_backing = render_graph_.get_managed_backing_image(managed_ao_filtered_);
-        descriptor_manager_->update_render_target(3, ao_backing, linear_clamp_sampler_);
-    }
-
-    void Renderer::update_contact_shadow_descriptor() const {
-        const auto cs_backing = render_graph_.get_managed_backing_image(managed_contact_shadow_mask_);
-        descriptor_manager_->update_render_target(4, cs_backing, linear_clamp_sampler_);
-    }
-
-    void Renderer::update_shadow_map_descriptor() const {
-        descriptor_manager_->update_render_target(5,
-                                                  shadow_pass_.shadow_map_image(),
-                                                  shadow_comparison_sampler_);
-    }
-
-    void Renderer::update_shadow_depth_descriptor() const {
-        descriptor_manager_->update_render_target(6,
-                                                  shadow_pass_.shadow_map_image(),
-                                                  shadow_depth_sampler_);
     }
 
     // ---- Swapchain image registration ----
