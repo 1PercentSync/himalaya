@@ -119,3 +119,10 @@
 ## Step 7：收尾
 
 - [x] 更新 `CLAUDE.md`（项目描述、结构、约定、第三方库）
+
+## Step 8：审查后清理
+
+- [x] 审查并修复 `app/` 清理残留（旧 binding 注释、PT UI 缩进、Scene stats UI）
+- [x] 审查并修复 `passes/`、`framework/` 清理残留（material binding 注释、FrameContext 死字段）
+- [x] 审查并修复 `shaders/` 清理残留（移除 `debug_render_mode` / passthrough 调试模式）
+- [x] 审查并精简 `rhi/` 清理残留（layer view、depth bias、MSAA capability、过时 descriptor 注释）
