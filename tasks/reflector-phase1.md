@@ -82,7 +82,7 @@
 - [x] 删除 `shadow.h/cpp`、`culling.h/cpp`、`bake_data_manager.h/cpp`、`bake_denoiser.h/cpp`、`lightmap_uv.h/cpp`、`probe_placement.h/cpp`、`render_progress.h`
 - [x] 清理 `scene_data.h`：移除 BakeState, BakeMode, BakeConfig, ShadowConfig, AOConfig, ContactShadowConfig, ProbeBlendConfig, IndirectLightingMode, DirectionalLight, GPUDirectionalLight
 - [x] 清理 `scene_data.h`：移除 PTConfig.directional_lights 字段
-- [ ] 清理 `scene_data.h`：精简 RenderFeatures（移除光栅化专用 flag）
+- [x] 清理 `scene_data.h`：精简 RenderFeatures（移除光栅化专用 flag）
 - [ ] 清理 `scene_data.h`：精简 RenderMode 枚举（仅 PathTracing + GaussianSplatting）
 - [ ] 清理 `scene_data.h`：精简 GlobalUniformData（移除 shadow cascade、AO、probe blend、directional_light_count 字段）
 - [ ] 清理 `frame_context.h`：移除光栅化专用字段（shadow groups、AO resources、MSAA resources 等）
