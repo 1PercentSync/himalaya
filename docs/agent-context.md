@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 0：归档 `docs/roadmap/`（3 files）
+Step 0：创建 `docs/architecture.md` + 归档源文档
 
 ---
 

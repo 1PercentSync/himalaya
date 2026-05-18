@@ -31,7 +31,7 @@
 - [x] 归档 `docs/milestone-1/m1-interfaces.md`
 - [x] 归档 `docs/milestone-1/m1-frame-flow.md`
 - [x] 归档 `docs/milestone-1/m1-phase-future-decisions.md`
-- [ ] 归档 `docs/roadmap/`（3 files）
+- [x] 归档 `docs/roadmap/`（3 files）
 
 ### 创建 `docs/roadmap.md` + 归档源文档
 
