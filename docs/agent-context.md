@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的渲染器
 - **分支**：`reflector` — Path Tracing + Gaussian Splatting
 - **Phase**：Phase 1 — 管线精简（移除光栅化和烘焙管线）
-- **进度**：Step 4 进行中（光栅化 14 + 烘焙 5 shader 已删除），下一项删除 probe_grid.glsl 和 shadow.glsl
+- **进度**：Step 4 进行中（shader 文件删除完成），下一项清理 bindings.glsl
 
 ### 下一个任务
 
-Step 4：删除 `shaders/common/probe_grid.glsl`、`shaders/common/shadow.glsl`
+Step 4：清理 `bindings.glsl` — 移除 ProbeBuffer/ProbeGridBuffer、shadow/AO Set 2 声明
 
 ---
 
