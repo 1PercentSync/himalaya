@@ -92,35 +92,6 @@ namespace himalaya::framework {
     };
 
     /**
-     * @brief Runtime toggles for optional rendering effects.
-     *
-     * Application holds the instance, DebugUI modifies fields directly,
-     * Renderer checks flags to conditionally record passes.
-     */
-    struct RenderFeatures {
-        /** @brief Enable skybox rendering (SkyboxPass). */
-        bool skybox;
-
-        /** @brief Enable shadow mapping (ShadowPass + forward sampling). */
-        bool shadows;
-
-        /** @brief Enable ambient occlusion (GTAOPass + AOTemporalPass + forward AO/SO). */
-        bool ao;
-
-        /** @brief Enable contact shadows (ContactShadowsPass + forward shadow attenuation). */
-        bool contact_shadows;
-
-        /** @brief Enable lightmap/probe indirect lighting (master switch for LP mode). */
-        bool lightmap_probe = false;
-
-        /** @brief Use baked lightmaps for diffuse indirect (debug sub-toggle within LP mode). */
-        bool use_lightmap = true;
-
-        /** @brief Use baked probes for specular indirect (debug sub-toggle within LP mode). */
-        bool use_probe = true;
-    };
-
-    /**
      * @brief Path tracing runtime configuration parameters.
      *
      * Application holds the instance, DebugUI modifies fields directly,
