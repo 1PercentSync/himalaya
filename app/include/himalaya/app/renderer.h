@@ -5,9 +5,6 @@
  * @brief Rendering subsystem: pass orchestration, GPU data filling, resource ownership.
  */
 
-#include <himalaya/framework/bake_data_manager.h>
-#include <himalaya/framework/lightmap_uv.h>
-#include <himalaya/framework/bake_denoiser.h>
 #include <himalaya/framework/cached_shader_compiler.h>
 #include <himalaya/framework/denoiser.h>
 #include <himalaya/framework/ibl.h>
@@ -15,21 +12,9 @@
 #include <himalaya/framework/render_graph.h>
 #include <himalaya/framework/emissive_light_builder.h>
 #include <himalaya/framework/scene_as_builder.h>
-#include <himalaya/framework/render_progress.h>
 #include <himalaya/framework/scene_data.h>
 #include <himalaya/framework/texture.h>
 #include <himalaya/rhi/acceleration_structure.h>
-#include <himalaya/passes/ao_spatial_pass.h>
-#include <himalaya/passes/ao_temporal_pass.h>
-#include <himalaya/passes/contact_shadows_pass.h>
-#include <himalaya/passes/depth_prepass.h>
-#include <himalaya/passes/forward_pass.h>
-#include <himalaya/passes/gtao_pass.h>
-#include <himalaya/passes/skybox_pass.h>
-#include <himalaya/passes/shadow_pass.h>
-#include <himalaya/passes/lightmap_baker_pass.h>
-#include <himalaya/passes/probe_baker_pass.h>
-#include <himalaya/passes/pos_normal_map_pass.h>
 #include <himalaya/passes/reference_view_pass.h>
 #include <himalaya/passes/tonemapping_pass.h>
 #include <himalaya/rhi/context.h>
@@ -38,7 +23,6 @@
 #include <chrono>
 #include <cstdint>
 #include <span>
-#include <unordered_map>
 #include <vector>
 
 namespace himalaya::rhi {
@@ -60,8 +44,6 @@ namespace himalaya::framework {
 namespace himalaya::app {
     /** @brief Maximum directional lights the LightBuffer can hold. */
     inline constexpr uint32_t kMaxDirectionalLights = 1;
-
-    class SceneLoader;
 
     /**
      * @brief Per-frame semantic data passed from Application to Renderer.
@@ -141,8 +123,7 @@ namespace himalaya::app {
     /**
      * @brief Rendering subsystem owning render passes, GPU buffers, and shared resources.
      *
-     * Extracted from Application to separate rendering concerns from window/input
-     * management. Translates per-frame RenderInput into GPU data (UBO/SSBO),
+     * Translates per-frame RenderInput into GPU data (UBO/SSBO),
      * builds and executes the render graph.
      *
      * Lifetime: init() after RHI infrastructure is ready, destroy() before RHI teardown.
@@ -184,29 +165,6 @@ namespace himalaya::app {
 
         /** @brief Destroys all owned rendering resources in reverse init order. */
         void destroy();
-
-        /**
-         * @brief Handles MSAA sample count change: waits for GPU idle, then
-         *        creates/destroys/updates MSAA managed resources and rebuilds
-         *        affected pipelines.
-         *
-         * Safe to call between begin_frame() and render(). No-op if
-         * new_sample_count equals current_sample_count_.
-         *
-         * @param new_sample_count New MSAA sample count (1/2/4/8).
-         */
-        void handle_msaa_change(uint32_t new_sample_count);
-
-        /**
-         * @brief Handles shadow map resolution change: waits for GPU idle, then
-         *        destroys and recreates shadow map resources at the new resolution
-         *        and updates the Set 2 shadow map descriptor.
-         *
-         * No-op if new_resolution equals the current shadow map resolution.
-         *
-         * @param new_resolution New shadow map resolution (512/1024/2048/4096).
-         */
-        void handle_shadow_resolution_changed(uint32_t new_resolution);
 
         /**
          * @brief Builds scene RT data: acceleration structures + emissive light tables.
@@ -262,9 +220,6 @@ namespace himalaya::app {
 
         // --- Accessors ---
 
-        /** @brief Returns the current MSAA sample count (1 = no MSAA). */
-        [[nodiscard]] uint32_t current_sample_count() const;
-
         /** @brief Returns the default sampler (linear filter, repeat wrap, linear mip). */
         [[nodiscard]] rhi::SamplerHandle default_sampler() const;
 
@@ -274,14 +229,8 @@ namespace himalaya::app {
         /** @brief Returns the material system for SSBO management. */
         framework::MaterialSystem &material_system();
 
-        /** @brief Returns the total GPU draw calls (vkCmdDrawIndexed) from the last frame. */
-        [[nodiscard]] uint32_t last_draw_call_count() const;
-
         /** @brief Returns the IBL module (read-only, for equirect dimensions etc.). */
         [[nodiscard]] const framework::IBL &ibl() const;
-
-        /** @brief Returns the current shadow map resolution (width = height). */
-        [[nodiscard]] uint32_t shadow_resolution() const;
 
         /** @brief Returns timeline semaphore signal info for the current denoise frame (null if none). */
         [[nodiscard]] framework::Denoiser::SemaphoreSignal pending_denoise_signal() const;
@@ -294,228 +243,6 @@ namespace himalaya::app {
 
         /** @brief Requests a manual denoise trigger (consumed in next render_path_tracing). */
         void request_manual_denoise();
-
-        /** @brief Returns true when the current lightmap instance needs finalize (Application drives immediate scope). */
-        [[nodiscard]] bool lightmap_finalize_pending() const;
-
-        /** @brief Returns true when the current probe needs finalize (Application drives immediate scope). */
-        [[nodiscard]] bool probe_finalize_pending() const;
-
-        /**
-         * @brief Finalizes the current probe: readback, per-face denoise, prefilter,
-         *        BC6H compress, write KTX2, destroy images, and advance to the next probe.
-         *
-         * Manages its own immediate scopes internally (multiple GPU-CPU
-         * round-trips). Must NOT be called while another immediate scope is active.
-         * Application calls this when probe_finalize_pending() returns true, after fence wait.
-         */
-        void probe_bake_finalize();
-
-        /**
-         * @brief Initiates a bake session: filters bakeable instances, computes
-         *        per-instance lightmap resolutions, and starts the first instance.
-         *
-         * Called by Application when the user clicks Start Bake. Must be called
-         * within an active immediate command scope (begin_immediate / end_immediate),
-         * because begin_bake_instance() records position/normal map rasterization
-         * into the immediate command buffer.
-         *
-         * @param config        Bake parameters (snapshotted and locked).
-         * @param mesh_instances All scene mesh instances.
-         * @param meshes        All loaded meshes (vertex/index counts).
-         * @param materials     All material instances (alpha mode filtering).
-         * @param cpu_vertices       Per-mesh CPU vertex data (surface area + xatlas input).
-         * @param cpu_indices        Per-mesh CPU index data (surface area + xatlas input).
-         * @param scene_loader       Scene loader (VB/IB rebuild after xatlas).
-         * @param hdr_hash           Content hash of the HDR environment file.
-         * @param scene_textures_hash Composite hash of all scene texture source bytes.
-         * @param ibl_rotation_deg   Current IBL rotation angle in degrees.
-         * @param pre_bake_mode     RenderMode to restore on cancel/complete.
-         * @param mode              Bake scope: All, Lightmap only, or Probe only.
-         */
-        void start_bake(const framework::BakeConfig &config,
-                        std::span<const framework::MeshInstance> mesh_instances,
-                        std::span<const framework::Mesh> meshes,
-                        std::span<const framework::MaterialInstance> materials,
-                        std::span<const std::vector<framework::Vertex>> cpu_vertices,
-                        std::span<const std::vector<uint32_t>> cpu_indices,
-                        SceneLoader &scene_loader,
-                        const std::string &hdr_hash,
-                        const std::string &scene_textures_hash,
-                        float ibl_rotation_deg,
-                        framework::RenderMode pre_bake_mode,
-                        framework::BakeMode mode = framework::BakeMode::All);
-
-        /**
-         * @brief Cancels the current bake session: destroys per-instance images,
-         *        resets state to Idle. Application should restore RenderMode to
-         *        bake_pre_mode() after calling this.
-         */
-        void cancel_bake();
-
-        /**
-         * @brief Resets bake state to Idle after a completed bake session.
-         *
-         * Called by Application when framework::BakeState::Complete is detected.
-         * Unlike cancel_bake(), does not destroy per-instance images
-         * (already cleaned up by finalize) and logs completion instead
-         * of cancellation.
-         */
-        void complete_bake();
-
-        /**
-         * @brief Returns the RenderMode recorded before entering Baking.
-         *
-         * Application restores this after cancel or complete.
-         */
-        [[nodiscard]] framework::RenderMode bake_pre_mode() const;
-
-        /**
-         * @brief Computes per-instance lightmap cache keys for all bakeable instances.
-         *
-         * Filters out degenerate and transparent instances, then computes a
-         * content hash key for each remaining instance. The result is stored
-         * internally and accessible via bake_lightmap_keys().
-         *
-         * Called by Application after scene/HDR load (for baked angle scanning)
-         * and internally by start_bake().
-         *
-         * @param mesh_instances      All scene instances.
-         * @param meshes              All loaded meshes (vertex/index counts).
-         * @param materials           All material instances (alpha mode filtering).
-         * @param scene_loader        Scene loader (provides scene_hash, cpu_vertices, cpu_indices).
-         * @param hdr_hash            Content hash of the HDR environment file.
-         * @param scene_textures_hash Composite hash of all scene texture source bytes.
-         */
-        void compute_lightmap_keys(
-            std::span<const framework::MeshInstance> mesh_instances,
-            std::span<const framework::Mesh> meshes,
-            std::span<const framework::MaterialInstance> materials,
-            const SceneLoader &scene_loader,
-            const std::string &hdr_hash,
-            const std::string &scene_textures_hash);
-
-        /**
-         * @brief Returns the cached per-instance lightmap keys.
-         *
-         * Populated by compute_lightmap_keys() or start_bake(). Retained
-         * across cancel/complete (only invalidated by scene/HDR change).
-         */
-        [[nodiscard]] const std::vector<std::string> &bake_lightmap_keys() const;
-
-        /**
-         * @brief Scans bake cache for completed angles (delegates to BakeDataManager).
-         *
-         * @param lightmap_keys Per-bakeable-instance lightmap cache key hashes.
-         * @param probe_set_key Probe set cache key hash.
-         */
-        void scan_bake_data(std::span<const std::string> lightmap_keys,
-                            const std::string& probe_set_key);
-
-        /** @brief Returns validated available bake angles (delegates to BakeDataManager). */
-        [[nodiscard]] std::span<const framework::BakeDataManager::AngleInfo> available_bake_angles() const;
-
-        /** @brief Returns true if at least one validated bake angle exists. */
-        [[nodiscard]] bool has_bake_data() const;
-
-        /** @brief Returns true if a bake angle is currently loaded on the GPU. */
-        [[nodiscard]] bool bake_data_loaded() const;
-
-        /** @brief Returns the currently loaded bake rotation in integer degrees (0 if not loaded). */
-        [[nodiscard]] uint32_t bake_data_manager_loaded_rotation() const;
-
-        /**
-         * @brief Switches to a different bake angle: GPU idle, unload old, load new.
-         *
-         * Waits for GPU idle, unloads any currently loaded angle, then loads
-         * the specified angle within an immediate command scope.
-         *
-         * @param rotation_int   Bake angle in integer degrees (0-359).
-         * @param mesh_instances All scene mesh instances (for probe-to-instance assignment).
-         * @param scene_loader   Scene loader (VB/IB rebuild from cached UV data).
-         */
-        void switch_bake_angle(uint32_t rotation_int,
-                               std::span<const framework::MeshInstance> mesh_instances,
-                               SceneLoader &scene_loader);
-
-        /**
-         * @brief Unloads the currently loaded bake angle without loading a new one.
-         *
-         * Waits for GPU idle. Safe to call when nothing is loaded (no-op).
-         */
-        void unload_bake_angle();
-
-        /** @brief Returns the bake rotation angle in integer degrees from the last bake session. */
-        [[nodiscard]] uint32_t bake_rotation_int() const;
-
-        /**
-         * @brief Returns the current bake state.
-         */
-        [[nodiscard]] framework::BakeState bake_state() const;
-
-        /**
-         * @brief Returns a snapshot of current bake progress for UI display.
-         *
-         * Computes elapsed times and completed texel-samples on each call.
-         * Cheap to call every frame (no allocations, no I/O).
-         */
-        [[nodiscard]] framework::BakeProgress bake_progress() const;
-
-        /**
-         * @brief Finalizes the current lightmap bake instance: readback, denoise,
-         *        compress, write KTX2, destroy images, and advance to the next instance.
-         *
-         * Manages its own immediate scopes internally (multiple GPU-CPU
-         * round-trips: readback, upload, BC6H compress). Must NOT be called
-         * while another immediate scope is active. Application calls this
-         * when lightmap_finalize_pending() returns true, after fence wait.
-         *
-         * @param meshes         All loaded meshes (for next instance begin).
-         * @param mesh_instances All scene mesh instances (for next instance begin).
-         */
-        void lightmap_bake_finalize(std::span<const framework::Mesh> meshes,
-                                    std::span<const framework::MeshInstance> mesh_instances);
-
-        /**
-         * @brief Prepares a bake instance: creates per-instance images and renders
-         *        position/normal maps. Must be called within an active immediate scope.
-         *
-         * Called by Application for instance 0 after start_bake(), and for
-         * subsequent instances as part of the finalize-then-advance flow.
-         *
-         * @param instance_index Index into bake_instance_indices_ (0-based).
-         * @param mesh_instances Scene mesh instances (for transform lookup).
-         * @param meshes         Loaded meshes (for VB/IB handles).
-         */
-        void begin_bake_instance(uint32_t instance_index,
-                                 std::span<const framework::MeshInstance> mesh_instances,
-                                 std::span<const framework::Mesh> meshes);
-
-        /**
-         * @brief Destroys the current bake instance's per-instance images.
-         *
-         * Called during finalize before advancing to the next instance,
-         * or on cancel to clean up. Safe to call when no instance is active.
-         */
-        void destroy_bake_instance_images();
-
-        /**
-         * @brief Prepares a probe bake instance: creates per-probe cubemap images,
-         *        transitions layouts, and configures the probe baker pass.
-         *
-         * Must be called within an active immediate command scope.
-         *
-         * @param probe_index Index into bake_probe_positions_ (0-based).
-         */
-        void begin_probe_bake_instance(uint32_t probe_index);
-
-        /**
-         * @brief Destroys the current probe's per-instance cubemap images and face views.
-         *
-         * Called during probe finalize before advancing to the next probe,
-         * or on cancel to clean up. Safe to call when no probe instance is active.
-         */
-        void destroy_probe_bake_instance_images();
 
         // --- Denoiser parameter accessors (for DebugUIContext binding) ---
 
@@ -566,7 +293,7 @@ namespace himalaya::app {
         /** @brief ImGui integration backend. */
         framework::ImGuiBackend *imgui_ = nullptr;
 
-        // --- Owned rendering resources (migrated from Application) ---
+        // --- Owned rendering resources ---
 
         /** @brief Render graph for pass orchestration and automatic barriers. */
         framework::RenderGraph render_graph_{};
@@ -580,44 +307,11 @@ namespace himalaya::app {
         /** @brief IBL precomputation module (cubemaps, BRDF LUT, bindless registration). */
         framework::IBL ibl_{};
 
-        /** @brief Depth + Normal PrePass (fills depth and normal buffers). */
-        passes::DepthPrePass depth_prepass_{};
-
-        /** @brief Forward lighting pass (renders to HDR color + depth). */
-        passes::ForwardPass forward_pass_{};
-
-        /** @brief CSM shadow pass (depth rendering from light space). */
-        passes::ShadowPass shadow_pass_{};
-
-        /** @brief Skybox pass (cubemap sky rendering into hdr_color). */
-        passes::SkyboxPass skybox_pass_{};
-
-        /** @brief Tonemapping pass (reads HDR color, writes swapchain). */
-        passes::TonemappingPass tonemapping_pass_{};
-
-        /** @brief GTAO compute pass (horizon search AO). */
-        passes::GTAOPass gtao_pass_{};
-
-        /** @brief AO spatial denoising compute pass (5x5 bilateral blur). */
-        passes::AOSpatialPass ao_spatial_pass_{};
-
-        /** @brief AO temporal filter compute pass (reprojection + rejection + blend). */
-        passes::AOTemporalPass ao_temporal_pass_{};
-
-        /** @brief Contact shadows compute pass (screen-space ray march). */
-        passes::ContactShadowsPass contact_shadows_pass_{};
-
         /** @brief PT reference view pass (RT pipeline dispatch + accumulation). */
         passes::ReferenceViewPass reference_view_pass_{};
 
-        /** @brief UV-space rasterization pass for lightmap position/normal map generation. */
-        passes::PosNormalMapPass pos_normal_map_pass_{};
-
-        /** @brief Lightmap baker RT pass (UV-space dispatch with accumulation). */
-        passes::LightmapBakerPass lightmap_baker_pass_{};
-
-        /** @brief Probe baker RT pass (cubemap 6-face dispatch with accumulation). */
-        passes::ProbeBakerPass probe_baker_pass_{};
+        /** @brief Tonemapping pass (reads HDR color, writes swapchain). */
+        passes::TonemappingPass tonemapping_pass_{};
 
         /** @brief Acceleration structure manager (RT, initialized when rt_supported). */
         rhi::AccelerationStructureManager as_manager_{};
@@ -627,42 +321,6 @@ namespace himalaya::app {
 
         /** @brief Emissive face light builder (RT, builds emissive triangle + alias table SSBOs). */
         framework::EmissiveLightBuilder emissive_light_builder_{};
-
-        /** @brief HDR color buffer (R16G16B16A16F, 1x, managed, auto-rebuilt on resize). */
-        framework::RGManagedHandle managed_hdr_color_;
-
-        /** @brief Depth buffer (D32Sfloat, 1x, managed by render graph, auto-rebuilt on resize). */
-        framework::RGManagedHandle managed_depth_;
-
-        /** @brief MSAA color buffer (R16G16B16A16F, Nx, managed); invalid when sample_count == 1. */
-        framework::RGManagedHandle managed_msaa_color_;
-
-        /** @brief MSAA depth buffer (D32Sfloat, Nx, managed); invalid when sample_count == 1. */
-        framework::RGManagedHandle managed_msaa_depth_;
-
-        /** @brief MSAA normal buffer (R10G10B10A2, Nx, managed); invalid when sample_count == 1. */
-        framework::RGManagedHandle managed_msaa_normal_;
-
-        /** @brief Resolved normal buffer (R10G10B10A2, 1x, managed, auto-rebuilt on resize). */
-        framework::RGManagedHandle managed_normal_;
-
-        /** @brief GTAO raw output (RG8, non-temporal, Storage | Sampled). */
-        framework::RGManagedHandle managed_ao_noisy_;
-
-        /** @brief Spatially denoised AO (RG8, non-temporal, Storage | Sampled). */
-        framework::RGManagedHandle managed_ao_blurred_;
-
-        /** @brief AO temporal-filtered output (RG8, temporal, Storage | Sampled). */
-        framework::RGManagedHandle managed_ao_filtered_;
-
-        /** @brief Contact shadow mask (R8, non-temporal, Storage | Sampled). */
-        framework::RGManagedHandle managed_contact_shadow_mask_;
-
-        /** @brief Resolved roughness buffer (R8Unorm, 1x, ColorAttachment | Sampled). */
-        framework::RGManagedHandle managed_roughness_;
-
-        /** @brief MSAA roughness buffer (R8Unorm, Nx, ColorAttachment); invalid when sample_count == 1. */
-        framework::RGManagedHandle managed_msaa_roughness_;
 
         /** @brief PT accumulation buffer (RGBA32F, Relative 1.0x, Storage); created when rt_supported. */
         framework::RGManagedHandle managed_pt_accumulation_;
@@ -678,9 +336,6 @@ namespace himalaya::app {
 
         /** @brief OIDN asynchronous denoiser instance (reference view). */
         framework::Denoiser denoiser_{};
-
-        /** @brief OIDN synchronous denoiser instance (bake finalize). */
-        framework::BakeDenoiser bake_denoiser_{};
 
         /** @brief Timeline semaphore signal to inject into the current frame's submit. Set by launch_processing(), cleared at frame start. */
         framework::Denoiser::SemaphoreSignal pending_semaphore_signal_{};
@@ -747,17 +402,8 @@ namespace himalaya::app {
         /** @brief Cached indirect intensity from previous PT frame (change detection → reset). */
         float prev_indirect_intensity_ = 1.0f;
 
-        /** @brief Current MSAA sample count (1 = no MSAA, default 4x). */
-        uint32_t current_sample_count_ = 4;
-
         /** @brief Default sampler (linear filter, repeat wrap, linear mip). */
         rhi::SamplerHandle default_sampler_;
-
-        /** @brief Shadow comparison sampler (GREATER_OR_EQUAL, linear filter, clamp to edge). */
-        rhi::SamplerHandle shadow_comparison_sampler_;
-
-        /** @brief Shadow depth sampler (NEAREST, no compare, clamp to edge) for PCSS blocker search. */
-        rhi::SamplerHandle shadow_depth_sampler_;
 
         /** @brief Nearest clamp sampler (nearest filter, clamp to edge) for screen-space reads. */
         rhi::SamplerHandle nearest_clamp_sampler_;
@@ -783,42 +429,8 @@ namespace himalaya::app {
         /** @brief Per-frame LightBuffer SSBOs (CpuToGpu, one per frame in flight). */
         std::array<rhi::BufferHandle, rhi::kMaxFramesInFlight> light_buffers_{};
 
-        /** @brief Per-frame InstanceBuffer SSBOs (CpuToGpu, one per frame in flight). */
-        std::array<rhi::BufferHandle, rhi::kMaxFramesInFlight> instance_buffers_{};
-
         /** @brief Registered ImageHandles for swapchain images (one per swapchain image). */
         std::vector<rhi::ImageHandle> swapchain_image_handles_;
-
-        // ---- Instancing working buffers (reused across frames, zero-alloc after first frame) ----
-
-        /** @brief Sorted copy of visible_opaque_indices (by mesh_id). */
-        std::vector<uint32_t> sorted_opaque_indices_;
-
-        /** @brief Opaque draw groups built from sorted indices (AlphaMode::Opaque). */
-        std::vector<framework::MeshDrawGroup> opaque_draw_groups_;
-
-        /** @brief Mask draw groups built from sorted indices (AlphaMode::Mask). */
-        std::vector<framework::MeshDrawGroup> mask_draw_groups_;
-
-        // ---- Per-cascade shadow culling working buffers ----
-
-        /** @brief Temporary buffer for per-cascade frustum cull output (reused across cascades). */
-        std::vector<uint32_t> shadow_cull_buffer_;
-
-        /** @brief Per-cascade sorted non-Blend visible indices after frustum culling. */
-        std::array<std::vector<uint32_t>, framework::kMaxShadowCascades> shadow_cascade_sorted_;
-
-        /** @brief Per-cascade shadow opaque draw groups (frustum-culled). */
-        std::array<std::vector<framework::MeshDrawGroup>, framework::kMaxShadowCascades> shadow_cascade_opaque_groups_;
-
-        /** @brief Per-cascade shadow mask draw groups (frustum-culled). */
-        std::array<std::vector<framework::MeshDrawGroup>, framework::kMaxShadowCascades> shadow_cascade_mask_groups_;
-
-        /** @brief Total vkCmdDrawIndexed calls from the last frame (across all scene passes). */
-        uint32_t draw_call_count_ = 0;
-
-        /** @brief Cached view-projection from the previous frame (temporal reprojection). */
-        glm::mat4 prev_view_projection_{1.0f};
 
         /** @brief Monotonically increasing frame counter for temporal noise variation. */
         uint32_t frame_counter_ = 0;
@@ -841,128 +453,6 @@ namespace himalaya::app {
         /** @brief Cached light color+shadow from the previous PT frame (accumulation reset detection). */
         glm::vec4 prev_pt_light_color_shadow_{0.0f};
 
-        // --- Bake data management ---
-
-        /** @brief Bake data lifecycle manager (scan/load/unload baked lighting data). */
-        framework::BakeDataManager bake_data_manager_{};
-
-        // --- Bake state ---
-
-        /** @brief Current bake state machine position. */
-        framework::BakeState bake_state_ = framework::BakeState::Idle;
-
-        /** @brief Index of the current instance being baked (into bakeable instance list). */
-        uint32_t bake_current_instance_ = 0;
-
-        /** @brief Total number of bakeable instances (excludes degenerate/transparent). */
-        uint32_t bake_total_instances_ = 0;
-
-        /** @brief Per-instance accumulation buffer (RGBA32F, lightmap resolution). */
-        rhi::ImageHandle bake_accumulation_;
-
-        /** @brief Per-instance position map (RGBA32F, lightmap resolution). */
-        rhi::ImageHandle bake_position_map_;
-
-        /** @brief Per-instance normal map (RGBA32F, lightmap resolution). */
-        rhi::ImageHandle bake_normal_map_;
-
-        /** @brief Per-instance albedo map (RGBA16F, lightmap resolution, base color for OIDN aux). */
-        rhi::ImageHandle bake_albedo_map_;
-
-        /** @brief Per-instance OIDN auxiliary albedo (RGBA16F, lightmap resolution). */
-        rhi::ImageHandle bake_aux_albedo_;
-
-        /** @brief Per-instance OIDN auxiliary normal (RGBA16F, lightmap resolution). */
-        rhi::ImageHandle bake_aux_normal_;
-
-        /** @brief Current instance lightmap width. */
-        uint32_t bake_lightmap_width_ = 0;
-
-        /** @brief Current instance lightmap height. */
-        uint32_t bake_lightmap_height_ = 0;
-
-        /** @brief True when the current lightmap instance reached target SPP and awaits finalize. */
-        bool lightmap_finalize_pending_ = false;
-
-        /** @brief RenderMode recorded before entering Baking, restored on cancel/complete. */
-        framework::RenderMode bake_pre_mode_ = framework::RenderMode::Rasterization;
-
-        /** @brief Bake scope for the current session (which phases to execute). */
-        framework::BakeMode bake_mode_ = framework::BakeMode::All;
-
-        /** @brief Indices of bakeable instances (non-degenerate, non-Blend). */
-        std::vector<uint32_t> bake_instance_indices_;
-
-        /** @brief Per-bakeable-instance lightmap resolution (parallel to bake_instance_indices_). */
-        std::vector<uint32_t> bake_lightmap_sizes_;
-
-        /** @brief Per-bakeable-instance lightmap cache key hash (parallel to bake_instance_indices_). */
-        std::vector<std::string> bake_lightmap_keys_;
-
-        /** @brief Per-mesh xatlas results from the current bake session (mesh_id → result). */
-        std::unordered_map<uint32_t, framework::LightmapUVResult> bake_xatlas_results_;
-
-        /** @brief IBL rotation encoded as integer degrees 0-359 for cache file naming. */
-        uint32_t bake_rotation_int_ = 0;
-
-        /** @brief Probe set cache key hash (scene + hdr + scene_textures, no position). */
-        std::string bake_probe_set_key_;
-
-        /** @brief Rotation angle whose xatlas UVs are currently applied to mesh VB/IB.
-         *  UINT32_MAX = no UV data loaded. Used to skip VB/IB + BLAS/TLAS rebuild
-         *  when switching to the same angle (only textures need load/unload). */
-        uint32_t loaded_uv_rotation_ = UINT32_MAX;
-
-        /** @brief Snapshotted BakeConfig at bake start (locked during bake session). */
-        framework::BakeConfig bake_locked_config_{};
-
-        /** @brief Time point when the current bake session started (for total elapsed). */
-        std::chrono::steady_clock::time_point bake_start_time_{};
-
-        /** @brief Time point when the current instance started baking. */
-        std::chrono::steady_clock::time_point bake_instance_start_time_{};
-
-        /** @brief Total lightmap texel-samples for the bake session (known at bake start). */
-        uint64_t bake_lm_total_texel_samples_ = 0;
-
-        /** @brief Accumulated texel-samples from fully completed lightmap instances. */
-        uint64_t bake_completed_lm_texel_samples_ = 0;
-
-        /** @brief Total probe texel-samples for the bake session (known after placement). */
-        uint64_t bake_probe_total_texel_samples_ = 0;
-
-        // --- Probe bake state ---
-
-        /** @brief World-space positions from generate_probe_grid(). */
-        std::vector<glm::vec3> bake_probe_positions_;
-
-        /** @brief Total number of probes to bake. */
-        uint32_t bake_probe_total_ = 0;
-
-        /** @brief Index of the probe currently being baked. */
-        uint32_t bake_current_probe_ = 0;
-
-        /** @brief Per-probe accumulation cubemap (RGBA32F, 6 layers). */
-        rhi::ImageHandle bake_probe_accumulation_;
-
-        /** @brief Per-probe OIDN auxiliary albedo cubemap (RGBA16F, 6 layers). */
-        rhi::ImageHandle bake_probe_aux_albedo_;
-
-        /** @brief Per-probe OIDN auxiliary normal cubemap (RGBA16F, 6 layers). */
-        rhi::ImageHandle bake_probe_aux_normal_;
-
-        /** @brief True when the current probe reached target SPP and awaits finalize. */
-        bool bake_probe_finalize_pending_ = false;
-
-        /** @brief Deferred probe placement flag (avoid nested immediate scopes in start_bake). */
-        bool bake_probe_placement_pending_ = false;
-
-        /** @brief Number of probes that passed luminance check (KTX2 file index). */
-        uint32_t bake_probe_accepted_count_ = 0;
-
-        /** @brief World-space positions of accepted probes (for deferred manifest write). */
-        std::vector<glm::vec3> bake_probe_accepted_positions_;
-
         // --- Private helpers ---
 
         /**
@@ -975,57 +465,13 @@ namespace himalaya::app {
 
         /**
          * @brief Fills GlobalUBO and LightBuffer for the current frame.
-         *
-         * Shared by both rasterization and path tracing paths. Writes all UBO
-         * fields (including shadow cascade data) and the light SSBO.
          */
         void fill_common_gpu_data(const RenderInput &input) const;
-
-        /**
-         * @brief Rasterization render path: instancing, draw groups, full multi-pass pipeline.
-         */
-        void render_rasterization(rhi::CommandBuffer &cmd, const RenderInput &input);
 
         /**
          * @brief Path tracing render path: Reference View Pass + Tonemapping + ImGui.
          */
         void render_path_tracing(rhi::CommandBuffer &cmd, const RenderInput &input);
-
-        /**
-         * @brief Bake render path: lightmap/probe baker dispatch + preview blit + tonemapping + ImGui.
-         */
-        void render_baking(rhi::CommandBuffer &cmd, const RenderInput &input);
-
-        /**
-         * @brief Resets bake state machine fields to Idle defaults.
-         *
-         * Shared by cancel_bake() and complete_bake(). Clears working arrays,
-         * flags, and counters. Does NOT destroy per-instance images (cancel
-         * does that before calling, complete doesn't need to).
-         * Intentionally retains bake_lightmap_keys_ for baked angle scanning.
-         */
-        void reset_bake_state();
-
-        /** @brief Updates Set 2 binding 0 with the current hdr_color backing image. */
-        void update_hdr_color_descriptor() const;
-
-        /** @brief Updates Set 2 binding 5 with the current shadow map image (comparison sampler). */
-        void update_shadow_map_descriptor() const;
-
-        /** @brief Updates Set 2 binding 6 with the current shadow map image (depth sampler for PCSS). */
-        void update_shadow_depth_descriptor() const;
-
-        /** @brief Updates Set 2 binding 1 with the current depth_resolved backing image (nearest). */
-        void update_depth_descriptor() const;
-
-        /** @brief Updates Set 2 binding 2 with the current normal_resolved backing image (nearest). */
-        void update_normal_descriptor() const;
-
-        /** @brief Updates Set 2 binding 3 with the current ao_filtered backing image (linear). */
-        void update_ao_descriptor() const;
-
-        /** @brief Updates Set 2 binding 4 with the current contact_shadow_mask backing image (linear). */
-        void update_contact_shadow_descriptor() const;
 
         /** @brief Registers all swapchain images as external images in ResourceManager. */
         void register_swapchain_images();
