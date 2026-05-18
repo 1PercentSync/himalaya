@@ -24,7 +24,7 @@
 
 - [x] 归档 `docs/current-phase.md` 和 `tasks/m1-phase8.5.md`
 - [x] 创建 `tasks/reflector-phase1.md` + 更新 `docs/agent-context.md`
-- [ ] 创建 `docs/current-phase.md`（Phase 1 精简步骤）
+- [x] 创建 `docs/current-phase.md`（Phase 1 精简步骤）
 - [ ] 归档 `docs/milestone-1/`（7 files）→ `docs/archive/`
 - [ ] 归档 `docs/roadmap/`（3 files）→ `docs/archive/`
 - [ ] 归档 `docs/project/`（4 files）→ `docs/archive/`

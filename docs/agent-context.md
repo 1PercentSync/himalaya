@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Step 0：创建 `docs/current-phase.md`
+Step 0：归档 `docs/milestone-1/`（7 files）
 
 ---
 
@@ -23,9 +23,8 @@ CLAUDE.md 已自动加载，以下为额外必读：
 
 | 文档 | 说明 |
 |------|------|
+| `docs/current-phase.md` | Phase 1 精简范围与步骤概述 |
 | `tasks/reflector-phase1.md` | Phase 1 任务清单（复选框进度跟踪） |
-
-> `docs/current-phase.md` 待创建（Step 0 下一项）。
 
 ---
 
