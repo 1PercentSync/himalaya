@@ -113,8 +113,8 @@
 - [x] 更新 `descriptors.h/cpp`
 - [x] 更新 `bindings.glsl`
 - [x] 更新所有引用变更 binding 的 C++ 和 shader 代码
-- [ ] 编译验证
+- [x] 编译验证
 
 ## Step 7：收尾
 
-- [ ] 更新 `CLAUDE.md`（项目描述、结构、约定、第三方库）
+- [x] 更新 `CLAUDE.md`（项目描述、结构、约定、第三方库）
