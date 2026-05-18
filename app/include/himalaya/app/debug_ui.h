@@ -23,20 +23,6 @@ namespace himalaya::framework {
 
 namespace himalaya::app {
     /**
-     * @brief Which directional light source is active.
-     *
-     * Scene, Fallback, and HdrSun are mutually exclusive. None disables
-     * all directional lights (IBL only). Application auto-selects on
-     * scene load: Scene if glTF has lights, otherwise Fallback.
-     */
-    enum class LightSourceMode : uint8_t {
-        Scene,    ///< Use scene's glTF directional lights.
-        Fallback, ///< Use the user-controllable fallback light.
-        HdrSun,   ///< Derive direction from HDR sun pixel coordinates + IBL rotation.
-        None,     ///< No directional lights (IBL only).
-    };
-
-    /**
      * @brief Data passed to DebugUI each frame.
      *
      * DebugUI receives everything it needs through this struct
@@ -61,65 +47,8 @@ namespace himalaya::app {
         /** @brief Camera state for position/orientation display and parameter sliders. */
         framework::Camera& camera;
 
-        // --- Lighting (display + controls) ---
-
-        /** @brief Current light source mode (mutable — combo box changes it). */
-        LightSourceMode &light_source_mode;
-
-        /** @brief Whether the scene provides directional lights (to gray out Scene option). */
-        bool scene_has_lights;
-
-        /** @brief Number of directional lights active this frame. */
-        uint32_t active_light_count;
-
-        /** @brief Current light direction yaw in degrees (display only, any mode). */
-        float light_yaw_deg;
-
-        /** @brief Current light direction pitch in degrees (display only, any mode). */
-        float light_pitch_deg;
-
         /** @brief IBL horizontal rotation angle in degrees (display only). */
         float ibl_rotation_deg;
-
-        // --- Fallback light controls (mutable, shown only in Fallback mode) ---
-
-        /** @brief Fallback light intensity multiplier. */
-        float &fallback_intensity;
-
-        /** @brief Whether the fallback light casts shadows. */
-        bool &fallback_cast_shadows;
-
-        /** @brief Fallback light color temperature in Kelvin. */
-        float &fallback_color_temp;
-
-        // --- HDR Sun light controls (mutable, shown only in HdrSun mode) ---
-
-        /** @brief HDR sun pixel X coordinate. */
-        int &hdr_sun_x;
-
-        /** @brief HDR sun pixel Y coordinate. */
-        int &hdr_sun_y;
-
-        /** @brief HDR Sun light intensity multiplier. */
-        float &hdr_sun_intensity;
-
-        /** @brief HDR Sun light color temperature in Kelvin. */
-        float &hdr_sun_color_temp;
-
-        /** @brief Whether the HDR Sun light casts shadows. */
-        bool &hdr_sun_cast_shadows;
-
-        /** @brief Auto-derive color and intensity from HDR pixel. */
-        bool &hdr_sun_auto;
-
-        /** @brief Multiplier for auto sun intensity (calibrated via PT comparison). */
-        float &hdr_sun_auto_multiplier;
-
-        /** @brief Original equirect image width (for UI max bounds). */
-        uint32_t equirect_width;
-
-        /** @brief Original equirect image height (for UI max bounds). */
-        uint32_t equirect_height;
 
         // --- Render mode ---
 
@@ -209,12 +138,6 @@ namespace himalaya::app {
 
         /** @brief Path selected by the user (valid only when env_load_requested is true). */
         std::string new_env_path;
-
-        /** @brief True if HDR sun coordinates were modified (triggers config save). */
-        bool hdr_sun_coords_changed = false;
-
-        /** @brief True if HDR sun auto multiplier was modified (triggers config save + resample). */
-        bool hdr_sun_multiplier_changed = false;
 
         /** @brief True if the log level was changed via the combo box. */
         bool log_level_changed = false;

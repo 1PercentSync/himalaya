@@ -103,61 +103,6 @@ namespace himalaya::app {
         /** @brief IBL horizontal rotation angle in radians (left-click drag controlled). */
         float ibl_yaw_ = 0.0f;
 
-        // --- Light source ---
-
-        /** @brief Active light source mode (Scene/Fallback/HdrSun/None). */
-        LightSourceMode light_source_mode_ = LightSourceMode::Scene;
-
-        /** @brief Fallback light direction yaw in radians. */
-        float fallback_light_yaw_ = 0.0f;
-
-        /** @brief Fallback light direction pitch in radians (negative = from above). */
-        float fallback_light_pitch_ = glm::radians(-45.0f);
-
-        /** @brief Fallback light intensity multiplier. */
-        float fallback_light_intensity_ = 3.0f;
-
-        /** @brief Whether the fallback light casts shadows. */
-        bool fallback_light_cast_shadows_ = true;
-
-        /** @brief Fallback light color temperature in Kelvin. */
-        float fallback_light_color_temp_ = 6500.0f;
-
-        /** @brief Constructed fallback DirectionalLight (rebuilt each frame from yaw/pitch). */
-        framework::DirectionalLight fallback_light_{};
-
-        // --- HDR Sun light ---
-
-        /** @brief HDR sun pixel X coordinate in equirectangular image. */
-        int hdr_sun_x_ = 0;
-
-        /** @brief HDR sun pixel Y coordinate in equirectangular image. */
-        int hdr_sun_y_ = 0;
-
-        /** @brief HDR Sun light intensity multiplier. */
-        float hdr_sun_intensity_ = 3.0f;
-
-        /** @brief HDR Sun light color temperature in Kelvin. */
-        float hdr_sun_color_temp_ = 6500.0f;
-
-        /** @brief Whether the HDR Sun light casts shadows. */
-        bool hdr_sun_cast_shadows_ = true;
-
-        /** @brief Auto-derive HDR sun color and intensity from HDR pixel sampling. */
-        bool hdr_sun_auto_ = true;
-
-        /** @brief Cached auto-sampled sun color (normalized). Updated by update_hdr_sun_sample(). */
-        glm::vec3 hdr_sun_auto_color_{1.0f};
-
-        /** @brief Cached auto-sampled sun intensity (max_comp × multiplier). Updated by update_hdr_sun_sample(). */
-        float hdr_sun_auto_intensity_ = 3.0f;
-
-        /** @brief User-tunable multiplier for auto sun intensity (calibrated via PT comparison, persisted per-HDR). */
-        float hdr_sun_auto_multiplier_ = 0.2f;
-
-        /** @brief Constructed HDR Sun DirectionalLight (rebuilt each frame from coords + IBL yaw). */
-        framework::DirectionalLight hdr_sun_light_{};
-
         /** @brief PT mode active (always true; future: toggleable for PT vs GS). */
         bool pt_mode_ = true;
 
@@ -168,9 +113,6 @@ namespace himalaya::app {
 
         /** @brief Previous cursor X for left-click drag delta. */
         double drag_last_x_ = 0.0;
-
-        /** @brief Previous cursor Y for left-click drag delta (fallback light pitch). */
-        double drag_last_y_ = 0.0;
 
         /** @brief Whether the left mouse button is being held for dragging. */
         bool drag_active_ = false;
@@ -260,9 +202,6 @@ namespace himalaya::app {
          * @param path Absolute path to the new .hdr file.
          */
         void switch_environment(const std::string &path);
-
-        /** @brief Re-sample HDR pixel at sun coords and update cached color/intensity. */
-        void update_hdr_sun_sample();
 
         /** @brief Persistent config (updated on scene/environment switch). */
         AppConfig config_{};

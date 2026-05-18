@@ -17,6 +17,7 @@
 | 4 | 框架层保留 | PT 依赖模块 + KTX2 + TextureCompress + CubemapFilter + ColorUtils + Cache |
 | 5 | Descriptor 布局 | 重新编号 |
 | 6 | 精简顺序 | 逐步精简，每步可编译 |
+| 7 | 方向光 | PT 始终用 HDR 环境光，移除方向光 NEE 及全部方向光 UI/状态 |
 
 ---
 
@@ -67,6 +68,7 @@
 - [x] 清理 `config.h/cpp`（移除光栅化/烘焙配置持久化）
 - [x] 清理 `scene_loader.h/cpp`（移除 lightmap UV 相关逻辑，如有）
 - [x] 更新 `app/CMakeLists.txt`（移除已删源文件）
+- [ ] 移除 app 层方向光（Lighting 面板、LightSourceMode、fallback/hdr_sun 状态、RenderInput.lights、LightBuffer 填充、PT directional_lights 开关、config 持久化）
 
 ## Step 2：清理 passes 层
 
@@ -78,10 +80,11 @@
 ## Step 3：清理 framework 层
 
 - [ ] 删除 `shadow.h/cpp`、`culling.h/cpp`、`bake_data_manager.h/cpp`、`bake_denoiser.h/cpp`、`lightmap_uv.h/cpp`、`probe_placement.h/cpp`、`render_progress.h`
-- [ ] 清理 `scene_data.h`：移除 BakeState, BakeMode, BakeConfig, ShadowConfig, AOConfig, ContactShadowConfig, ProbeBlendConfig, IndirectLightingMode
+- [ ] 清理 `scene_data.h`：移除 BakeState, BakeMode, BakeConfig, ShadowConfig, AOConfig, ContactShadowConfig, ProbeBlendConfig, IndirectLightingMode, DirectionalLight, GPUDirectionalLight
+- [ ] 清理 `scene_data.h`：移除 PTConfig.directional_lights 字段
 - [ ] 清理 `scene_data.h`：精简 RenderFeatures（移除光栅化专用 flag）
 - [ ] 清理 `scene_data.h`：精简 RenderMode 枚举（仅 PathTracing + GaussianSplatting）
-- [ ] 清理 `scene_data.h`：精简 GlobalUniformData（移除 shadow cascade、AO、probe blend 字段）
+- [ ] 清理 `scene_data.h`：精简 GlobalUniformData（移除 shadow cascade、AO、probe blend、directional_light_count 字段）
 - [ ] 清理 `frame_context.h`：移除光栅化专用字段（shadow groups、AO resources、MSAA resources 等）
 - [ ] 更新 `framework/CMakeLists.txt`
 
@@ -93,6 +96,8 @@
 - [ ] 清理 `bindings.glsl`：移除 ProbeBuffer/ProbeGridBuffer 声明、shadow/AO 相关 Set 2 声明
 - [ ] 清理 `bindings.glsl`：精简 GlobalUBO（与 scene_data.h 同步）
 - [ ] 清理 `bindings.glsl`：移除光栅化专用 `FEATURE_*` flag
+- [ ] 清理 RT shader：移除 closesthit 方向光 NEE、reference_view.rgen directional_lights push constant
+- [ ] 清理 `bindings.glsl`：移除 LightBuffer 声明
 
 ## Step 5：清理 third_party
 
@@ -103,7 +108,7 @@
 
 ## Step 6：重新编号 descriptor 布局
 
-- [ ] 规划新的 Set 0 / Set 2 binding 编号方案
+- [ ] 规划新的 Set 0 / Set 2 binding 编号方案（含回收 LightBuffer binding 1）
 - [ ] 更新 `descriptors.h/cpp`
 - [ ] 更新 `bindings.glsl`
 - [ ] 更新所有引用变更 binding 的 C++ 和 shader 代码

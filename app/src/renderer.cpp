@@ -9,8 +9,6 @@
 #include <himalaya/rhi/resources.h>
 #include <himalaya/rhi/swapchain.h>
 
-#include <array>
-
 #include <GLFW/glfw3.h>
 
 namespace himalaya::app {
@@ -42,25 +40,7 @@ namespace himalaya::app {
         ubo_data.inv_view = glm::inverse(input.camera.view);
         ubo_data.frame_index = frame_counter_;
 
-        const auto light_count = static_cast<uint32_t>(
-            std::min(input.lights.size(), static_cast<size_t>(kMaxDirectionalLights)));
-        ubo_data.directional_light_count = light_count;
         std::memcpy(ubo_buf.allocation_info.pMappedData, &ubo_data, sizeof(ubo_data));
-
-        // --- Fill LightBuffer ---
-        const auto &light_buf = resource_manager_->get_buffer(light_buffers_[input.frame_index]);
-        if (light_count > 0) {
-            std::array<framework::GPUDirectionalLight, kMaxDirectionalLights> gpu_lights{};
-            for (uint32_t i = 0; i < light_count; ++i) {
-                gpu_lights[i].direction_and_intensity = glm::vec4(
-                    input.lights[i].direction, input.lights[i].intensity);
-                gpu_lights[i].color_and_shadow = glm::vec4(
-                    input.lights[i].color, input.lights[i].cast_shadows ? 1.0f : 0.0f);
-            }
-            std::memcpy(light_buf.allocation_info.pMappedData,
-                        gpu_lights.data(),
-                        light_count * sizeof(framework::GPUDirectionalLight));
-        }
     }
 
     // ---- Render dispatch ----

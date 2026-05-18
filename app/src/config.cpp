@@ -80,22 +80,6 @@ namespace himalaya::app {
             if (json.contains("pt_allow_tearing") && json["pt_allow_tearing"].is_boolean()) {
                 config.pt_allow_tearing = json["pt_allow_tearing"].get<bool>();
             }
-            if (json.contains("hdr_sun_coords") && json["hdr_sun_coords"].is_object()) {
-                for (auto& [key, val] : json["hdr_sun_coords"].items()) {
-                    if (val.is_array() && val.size() == 2
-                        && val[0].is_number_integer() && val[1].is_number_integer()) {
-                        config.hdr_sun_coords[key] = {val[0].get<int>(), val[1].get<int>()};
-                    }
-                }
-            }
-            if (json.contains("hdr_sun_auto_multipliers") && json["hdr_sun_auto_multipliers"].is_object()) {
-                for (auto& [key, val] : json["hdr_sun_auto_multipliers"].items()) {
-                    if (val.is_number()) {
-                        config.hdr_sun_auto_multipliers[key] = val.get<float>();
-                    }
-                }
-            }
-
             spdlog::info("Loaded config from {}", path.string());
         } catch (const std::exception& e) {
             spdlog::warn("Failed to load config: {}", e.what());
@@ -127,16 +111,6 @@ namespace himalaya::app {
                     j["auto_denoise_interval"] = config.auto_denoise_interval;
                 }
                 j["pt_allow_tearing"] = config.pt_allow_tearing;
-                nlohmann::json coords = nlohmann::json::object();
-                for (const auto& [hdr_path, xy] : config.hdr_sun_coords) {
-                    coords[hdr_path] = {xy.first, xy.second};
-                }
-                j["hdr_sun_coords"] = coords;
-                nlohmann::json multipliers = nlohmann::json::object();
-                for (const auto& [hdr_path, mult] : config.hdr_sun_auto_multipliers) {
-                    multipliers[hdr_path] = mult;
-                }
-                j["hdr_sun_auto_multipliers"] = multipliers;
                 file << j.dump(2);
             }
 

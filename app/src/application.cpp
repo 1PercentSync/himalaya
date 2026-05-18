@@ -5,8 +5,6 @@
 
 #include <himalaya/app/application.h>
 
-#include <himalaya/framework/color_utils.h>
-#include <himalaya/framework/ibl.h>
 #include <himalaya/framework/scene_data.h>
 #include <himalaya/rhi/commands.h>
 
@@ -54,17 +52,13 @@ namespace himalaya::app {
         context_.init(window_);
         rhi::CommandBuffer::init_debug_functions(context_.instance);
         swapchain_.init(context_, window_, user_present_mode_);
-        // Sync fallback: if requested mode was unavailable, reflect actual mode
         user_present_mode_ = swapchain_.present_mode;
 
-        // Framebuffer resize detection via GLFW callback
         glfwSetWindowUserPointer(window_, &framebuffer_resized_);
         glfwSetFramebufferSizeCallback(window_, [](GLFWwindow *w, int, int) {
             *static_cast<bool *>(glfwGetWindowUserPointer(w)) = true;
         });
 
-        // ImGui must be initialized after the framebuffer resize callback
-        // so ImGui chains our callback when install_callbacks = true.
         imgui_backend_.init(context_, swapchain_, window_);
 
         resource_manager_.init(&context_);
@@ -75,8 +69,7 @@ namespace himalaya::app {
         camera_.update_all();
         camera_controller_.init(window_, &camera_);
 
-        // --- Renderer (owns pipelines, buffers, default textures, sampler) ---
-        // HDR failure is handled internally by IBL (fallback to gray cubemap).
+        // --- Renderer ---
         renderer_.init(context_,
                        swapchain_,
                        resource_manager_,
@@ -88,8 +81,7 @@ namespace himalaya::app {
             renderer_.auto_denoise_interval() = config_.auto_denoise_interval;
         }
 
-        // --- Scene loading (uses Renderer's default resources) ---
-        // Scene failure → empty scene (0 instances), skybox still renders if HDR loaded.
+        // --- Scene loading ---
         if (!config_.scene_path.empty()) {
             context_.begin_immediate();
             const bool scene_ok = scene_loader_.load(
@@ -106,7 +98,6 @@ namespace himalaya::app {
                 error_message_ = "Failed to load scene: " + config_.scene_path;
             }
 
-            // Build RT data (acceleration structures + emissive lights) if supported.
             if (scene_ok && context_.rt_supported) {
                 context_.begin_immediate();
                 renderer_.build_scene_rt(scene_loader_.meshes(),
@@ -121,28 +112,6 @@ namespace himalaya::app {
 
         auto_position_camera();
         camera_controller_.set_focus_target(&scene_loader_.scene_bounds());
-
-        // Auto-select light source: Scene if glTF has lights,
-        // HdrSun if HDR loaded, Fallback as last resort
-        if (!scene_loader_.directional_lights().empty()) {
-            light_source_mode_ = LightSourceMode::Scene;
-        } else if (renderer_.ibl().equirect_width() > 0) {
-            light_source_mode_ = LightSourceMode::HdrSun;
-        } else {
-            light_source_mode_ = LightSourceMode::Fallback;
-        }
-
-        // Restore persisted HDR sun coordinates and auto multiplier
-        if (const auto it = config_.hdr_sun_coords.find(config_.env_path);
-            it != config_.hdr_sun_coords.end()) {
-            hdr_sun_x_ = it->second.first;
-            hdr_sun_y_ = it->second.second;
-        }
-        if (const auto it = config_.hdr_sun_auto_multipliers.find(config_.env_path);
-            it != config_.hdr_sun_auto_multipliers.end()) {
-            hdr_sun_auto_multiplier_ = it->second;
-        }
-        update_hdr_sun_sample();
     }
 
     void Application::auto_position_camera() {
@@ -150,7 +119,7 @@ namespace himalaya::app {
         const float diagonal = glm::length(bounds.max - bounds.min);
 
         constexpr float kEpsilon = 1e-4f;
-        if (diagonal < kEpsilon) return; // degenerate — keep default position
+        if (diagonal < kEpsilon) return;
 
         camera_.yaw = 0.0f;
         camera_.pitch = glm::radians(-45.0f);
@@ -181,7 +150,6 @@ namespace himalaya::app {
                 error_message_.clear();
             }
 
-            // Build RT data if supported.
             if (ok && context_.rt_supported) {
                 context_.begin_immediate();
                 renderer_.build_scene_rt(scene_loader_.meshes(),
@@ -213,36 +181,7 @@ namespace himalaya::app {
         }
 
         config_.env_path = path;
-
-        // Restore persisted HDR sun coordinates and auto multiplier for the new environment
-        if (const auto it = config_.hdr_sun_coords.find(path);
-            it != config_.hdr_sun_coords.end()) {
-            hdr_sun_x_ = it->second.first;
-            hdr_sun_y_ = it->second.second;
-        } else {
-            hdr_sun_x_ = 0;
-            hdr_sun_y_ = 0;
-        }
-        if (const auto it = config_.hdr_sun_auto_multipliers.find(path);
-            it != config_.hdr_sun_auto_multipliers.end()) {
-            hdr_sun_auto_multiplier_ = it->second;
-        } else {
-            hdr_sun_auto_multiplier_ = 0.2f;
-        }
-
-        update_hdr_sun_sample();
         save_config(config_);
-    }
-
-    void Application::update_hdr_sun_sample() {
-        if (!hdr_sun_auto_ || config_.env_path.empty()) {
-            return;
-        }
-        const auto sampled = framework::IBL::sample_hdr_pixel(
-            config_.env_path, hdr_sun_x_, hdr_sun_y_);
-        const float max_comp = std::max({sampled.r, sampled.g, sampled.b, 1e-6f});
-        hdr_sun_auto_color_ = sampled / max_comp;
-        hdr_sun_auto_intensity_ = max_comp * hdr_sun_auto_multiplier_;
     }
 
     void Application::destroy() {
@@ -265,7 +204,6 @@ namespace himalaya::app {
         while (!glfwWindowShouldClose(window_)) {
             glfwPollEvents();
 
-            // Pause rendering while minimized (framebuffer extent is 0)
             int fb_width = 0, fb_height = 0;
             glfwGetFramebufferSize(window_, &fb_width, &fb_height);
             while ((fb_width == 0 || fb_height == 0) && !glfwWindowShouldClose(window_)) {
@@ -284,13 +222,9 @@ namespace himalaya::app {
     bool Application::begin_frame() {
         auto &frame = context_.current_frame();
 
-        // Wait for the GPU to finish the previous use of this frame's resources
         VK_CHECK(vkWaitForFences(context_.device, 1, &frame.render_fence, VK_TRUE, UINT64_MAX));
-
-        // Safe to flush deferred deletions now
         frame.deletion_queue.flush();
 
-        // Acquire next swapchain image
         const VkResult acquire_result = vkAcquireNextImageKHR(
             context_.device, swapchain_.swapchain, UINT64_MAX,
             frame.image_available_semaphore, VK_NULL_HANDLE, &image_index_);
@@ -303,10 +237,7 @@ namespace himalaya::app {
             std::abort();
         }
 
-        // Reset fence only after a successful acquire guarantees we will submit work
         VK_CHECK(vkResetFences(context_.device, 1, &frame.render_fence));
-
-        // Start ImGui frame
         imgui_backend_.begin_frame();
 
         return true;
@@ -315,85 +246,11 @@ namespace himalaya::app {
     void Application::update() {
         const float delta_time = ImGui::GetIO().DeltaTime;
 
-        // Update camera
         camera_.aspect = static_cast<float>(swapchain_.extent.width) / static_cast<float>(swapchain_.extent.height);
         camera_controller_.update(delta_time);
 
-        // Build fallback light from yaw/pitch each frame
-        fallback_light_ = {
-            .direction = {
-                std::sin(fallback_light_yaw_) * std::cos(fallback_light_pitch_),
-                std::sin(fallback_light_pitch_),
-                -std::cos(fallback_light_yaw_) * std::cos(fallback_light_pitch_),
-            },
-            .color = framework::color_temperature_to_rgb(fallback_light_color_temp_),
-            .intensity = fallback_light_intensity_,
-            .cast_shadows = fallback_light_cast_shadows_,
-        };
-
-        // Build HDR Sun light from equirect pixel coords + IBL rotation each frame.
-        {
-            const auto &ibl = renderer_.ibl();
-            const auto eq_w = static_cast<float>(ibl.equirect_width());
-            const auto eq_h = static_cast<float>(ibl.equirect_height());
-            glm::vec3 sun_dir{0.0f, 1.0f, 0.0f};
-            if (eq_w > 0.0f && eq_h > 0.0f) {
-                constexpr float kPi = 3.14159265358979323846f;
-                constexpr float kTwoPi = 2.0f * kPi;
-                const float phi = (static_cast<float>(hdr_sun_x_) / eq_w - 0.5f) * kTwoPi;
-                const float theta = (0.5f - static_cast<float>(hdr_sun_y_) / eq_h) * kPi;
-                sun_dir = {
-                    std::cos(theta) * std::cos(phi),
-                    std::sin(theta),
-                    std::cos(theta) * std::sin(phi),
-                };
-            }
-            const float s = std::sin(ibl_yaw_);
-            const float c = std::cos(ibl_yaw_);
-            const glm::vec3 rotated_sun{
-                c * sun_dir.x - s * sun_dir.z,
-                sun_dir.y,
-                s * sun_dir.x + c * sun_dir.z,
-            };
-            hdr_sun_light_ = {
-                .direction = -rotated_sun,
-                .color = hdr_sun_auto_ ? hdr_sun_auto_color_ : framework::color_temperature_to_rgb(hdr_sun_color_temp_),
-                .intensity = hdr_sun_auto_ ? hdr_sun_auto_intensity_ : hdr_sun_intensity_,
-                .cast_shadows = hdr_sun_cast_shadows_,
-            };
-        }
-
-        // Determine active lights based on light source mode
-        const auto scene_lights = scene_loader_.directional_lights();
-        std::span<const framework::DirectionalLight> lights;
-        switch (light_source_mode_) {
-            case LightSourceMode::Scene:
-                lights = scene_lights;
-                break;
-            case LightSourceMode::Fallback:
-                lights = {&fallback_light_, 1};
-                break;
-            case LightSourceMode::HdrSun:
-                lights = {&hdr_sun_light_, 1};
-                break;
-            case LightSourceMode::None:
-                break;
-        }
-
-        // Left-click drag: IBL rotation (no modifier) or fallback light direction (Alt)
+        // Left-click drag: IBL rotation
         update_drag_input();
-
-        // Compute light direction yaw/pitch for display
-        float display_light_yaw_deg = 0.0f;
-        float display_light_pitch_deg = 0.0f;
-        if (light_source_mode_ == LightSourceMode::Fallback) {
-            display_light_yaw_deg = glm::degrees(fallback_light_yaw_);
-            display_light_pitch_deg = glm::degrees(fallback_light_pitch_);
-        } else if (!lights.empty()) {
-            const auto &dir = lights[0].direction;
-            display_light_pitch_deg = glm::degrees(std::asin(dir.y));
-            display_light_yaw_deg = glm::degrees(std::atan2(dir.x, -dir.z));
-        }
 
         // Debug UI
         DebugUIContext ui_ctx{
@@ -402,24 +259,7 @@ namespace himalaya::app {
             .swapchain = swapchain_,
             .user_present_mode = user_present_mode_,
             .camera = camera_,
-            .light_source_mode = light_source_mode_,
-            .scene_has_lights = !scene_lights.empty(),
-            .active_light_count = static_cast<uint32_t>(lights.size()),
-            .light_yaw_deg = display_light_yaw_deg,
-            .light_pitch_deg = display_light_pitch_deg,
             .ibl_rotation_deg = glm::degrees(ibl_yaw_),
-            .fallback_intensity = fallback_light_intensity_,
-            .fallback_cast_shadows = fallback_light_cast_shadows_,
-            .fallback_color_temp = fallback_light_color_temp_,
-            .hdr_sun_x = hdr_sun_x_,
-            .hdr_sun_y = hdr_sun_y_,
-            .hdr_sun_intensity = hdr_sun_intensity_,
-            .hdr_sun_color_temp = hdr_sun_color_temp_,
-            .hdr_sun_cast_shadows = hdr_sun_cast_shadows_,
-            .hdr_sun_auto = hdr_sun_auto_,
-            .hdr_sun_auto_multiplier = hdr_sun_auto_multiplier_,
-            .equirect_width = renderer_.ibl().equirect_width(),
-            .equirect_height = renderer_.ibl().equirect_height(),
             .pt_mode = pt_mode_,
             .rt_supported = context_.rt_supported,
             .pt_sample_count = renderer_.pt_sample_count(),
@@ -452,32 +292,10 @@ namespace himalaya::app {
 
         if (actions.scene_load_requested) {
             switch_scene(actions.new_scene_path);
-
-            // Refresh light source mode based on new scene
-            const auto new_scene_lights = scene_loader_.directional_lights();
-            if (!new_scene_lights.empty()) {
-                light_source_mode_ = LightSourceMode::Scene;
-            } else if (renderer_.ibl().equirect_width() > 0) {
-                light_source_mode_ = LightSourceMode::HdrSun;
-            } else {
-                light_source_mode_ = LightSourceMode::Fallback;
-            }
         }
 
         if (actions.env_load_requested) {
             switch_environment(actions.new_env_path);
-        }
-
-        if (actions.hdr_sun_coords_changed && !config_.env_path.empty()) {
-            config_.hdr_sun_coords[config_.env_path] = {hdr_sun_x_, hdr_sun_y_};
-            update_hdr_sun_sample();
-            save_config(config_);
-        }
-
-        if (actions.hdr_sun_multiplier_changed && !config_.env_path.empty()) {
-            config_.hdr_sun_auto_multipliers[config_.env_path] = hdr_sun_auto_multiplier_;
-            update_hdr_sun_sample();
-            save_config(config_);
         }
 
         if (actions.log_level_changed) {
@@ -511,7 +329,6 @@ namespace himalaya::app {
             present_mode_changed_ = true;
         }
 
-        // ---- Persist allow_tearing on change ----
         if (config_.pt_allow_tearing != pt_allow_tearing_) {
             config_.pt_allow_tearing = pt_allow_tearing_;
             save_config(config_);
@@ -523,27 +340,10 @@ namespace himalaya::app {
         rhi::CommandBuffer cmd(frame.command_buffer);
         cmd.begin();
 
-        // Determine active lights
-        std::span<const framework::DirectionalLight> lights;
-        switch (light_source_mode_) {
-            case LightSourceMode::Scene:
-                lights = scene_loader_.directional_lights();
-                break;
-            case LightSourceMode::Fallback:
-                lights = {&fallback_light_, 1};
-                break;
-            case LightSourceMode::HdrSun:
-                lights = {&hdr_sun_light_, 1};
-                break;
-            case LightSourceMode::None:
-                break;
-        }
-
         const RenderInput input{
             .image_index = image_index_,
             .frame_index = context_.frame_index,
             .camera = camera_,
-            .lights = lights,
             .indirect_intensity = indirect_intensity_,
             .exposure = std::pow(2.0f, ev_),
             .ibl_rotation_sin = std::sin(ibl_yaw_),
@@ -565,7 +365,6 @@ namespace himalaya::app {
         wait_info.semaphore = frame.image_available_semaphore;
         wait_info.stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
 
-        // Signal semaphores: render-finished + optional denoise timeline
         VkSemaphoreSubmitInfo signal_info{};
         signal_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO;
         signal_info.semaphore = swapchain_.render_finished_semaphores[image_index_];
@@ -614,17 +413,14 @@ namespace himalaya::app {
             std::abort();
         }
 
-        // Present mode change — deferred from update() to after present.
         if (present_mode_changed_) {
             present_mode_changed_ = false;
             recreate_swapchain();
 
-            // PT tearing override: if IMMEDIATE fell back, revert checkbox
             if (pt_allow_tearing_ && swapchain_.present_mode != rhi::PresentMode::Immediate) {
                 pt_allow_tearing_ = false;
             }
             if (!pt_allow_tearing_) {
-                // User combo change: sync fallback result back to combo display
                 user_present_mode_ = swapchain_.present_mode;
             }
         }
@@ -641,14 +437,12 @@ namespace himalaya::app {
         renderer_.on_swapchain_recreated();
     }
 
-    // ---- Left-click drag input (IBL rotation / fallback light direction) ----
+    // ---- Left-click drag input (IBL rotation) ----
 
     void Application::update_drag_input() {
         const ImGuiIO &io = ImGui::GetIO();
         const bool left_pressed = !io.WantCaptureMouse &&
                                   glfwGetMouseButton(window_, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS;
-        const bool alt_held = glfwGetKey(window_, GLFW_KEY_LEFT_ALT) == GLFW_PRESS ||
-                              glfwGetKey(window_, GLFW_KEY_RIGHT_ALT) == GLFW_PRESS;
 
         double cursor_x, cursor_y;
         glfwGetCursorPos(window_, &cursor_x, &cursor_y);
@@ -657,26 +451,13 @@ namespace himalaya::app {
             if (!drag_active_) {
                 drag_active_ = true;
                 drag_last_x_ = cursor_x;
-                drag_last_y_ = cursor_y;
             }
 
             const auto dx = static_cast<float>(cursor_x - drag_last_x_);
-            const auto dy = static_cast<float>(cursor_y - drag_last_y_);
             drag_last_x_ = cursor_x;
-            drag_last_y_ = cursor_y;
 
             constexpr float kSensitivity = 0.003f;
-
-            if (alt_held && light_source_mode_ == LightSourceMode::Fallback) {
-                // Alt + left drag: rotate fallback light direction
-                fallback_light_yaw_ += dx * kSensitivity;
-                fallback_light_pitch_ -= dy * kSensitivity;
-                constexpr float kMaxPitch = glm::radians(89.0f);
-                fallback_light_pitch_ = std::clamp(fallback_light_pitch_, -kMaxPitch, kMaxPitch);
-            } else if (!alt_held) {
-                // Left drag without Alt: IBL rotation (horizontal only)
-                ibl_yaw_ += dx * kSensitivity;
-            }
+            ibl_yaw_ += dx * kSensitivity;
         } else {
             drag_active_ = false;
         }

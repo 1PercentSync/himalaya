@@ -33,7 +33,6 @@ namespace himalaya::rhi {
 
 namespace himalaya::framework {
     struct Camera;
-    struct DirectionalLight;
     class ImGuiBackend;
     struct Mesh;
     struct MeshInstance;
@@ -59,9 +58,6 @@ namespace himalaya::app {
 
         /** @brief Camera state (position, matrices). */
         const framework::Camera &camera;
-
-        /** @brief Active directional lights for this frame. */
-        std::span<const framework::DirectionalLight> lights;
 
         /** @brief Indirect light intensity multiplier. */
         float indirect_intensity;
@@ -349,9 +345,6 @@ namespace himalaya::app {
         /** @brief Cached env sampling from previous PT frame (change detection → reset). */
         bool prev_env_sampling_ = true;
 
-        /** @brief Cached directional lights from previous PT frame (change detection → reset). */
-        bool prev_directional_lights_ = false;
-
         /** @brief Cached emissive NEE from previous PT frame (change detection → reset). */
         bool prev_emissive_nee_ = true;
 
@@ -402,15 +395,6 @@ namespace himalaya::app {
 
         /** @brief Cached IBL rotation cos from the previous PT frame (accumulation reset detection). */
         float prev_pt_ibl_rotation_cos_ = 1.0f;
-
-        /** @brief Cached light count from the previous PT frame (accumulation reset detection). */
-        uint32_t prev_pt_light_count_ = 0;
-
-        /** @brief Cached light direction+intensity from the previous PT frame (accumulation reset detection). */
-        glm::vec4 prev_pt_light_dir_intensity_{0.0f};
-
-        /** @brief Cached light color+shadow from the previous PT frame (accumulation reset detection). */
-        glm::vec4 prev_pt_light_color_shadow_{0.0f};
 
         // --- Private helpers ---
 

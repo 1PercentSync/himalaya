@@ -7,8 +7,6 @@
 
 #include <filesystem>
 #include <string>
-#include <unordered_map>
-#include <utility>
 
 namespace himalaya::app {
     /**
@@ -25,23 +23,6 @@ namespace himalaya::app {
 
         /** @brief Absolute path to the HDR environment map (.hdr). */
         std::string env_path;
-
-        /**
-         * @brief Per-HDR sun pixel coordinates (x, y).
-         *
-         * Key is the HDR absolute file path. Value is the pixel position
-         * of the sun in the equirectangular image, used by HdrSun light mode.
-         */
-        std::unordered_map<std::string, std::pair<int, int>> hdr_sun_coords;
-
-        /**
-         * @brief Per-HDR auto sun intensity multiplier.
-         *
-         * Key is the HDR absolute file path. Multiplied with the max RGB
-         * component of the sampled HDR pixel to produce directional light
-         * intensity. Calibrated by user via PT reference comparison.
-         */
-        std::unordered_map<std::string, float> hdr_sun_auto_multipliers;
 
         /**
          * @brief Persisted spdlog log level name (e.g. "warn", "info").

@@ -277,14 +277,6 @@ namespace himalaya::app {
                 }
             }
 
-            // Directional Lights toggle (default off — env sampling handles sun)
-            ImGui::Checkbox("Directional Lights", &ctx.pt_config.directional_lights);
-            if (ImGui::IsItemHovered()) {
-                ImGui::SetTooltip("HDR sun directional light is an approximation of the sun in the environment map.\n"
-                                  "With Env Importance Sampling enabled, the environment map already provides\n"
-                                  "accurate sun lighting — enabling this may cause double illumination artifacts.");
-            }
-
             // Allow Tearing — override present mode to IMMEDIATE in PT
             {
                 const bool can_tear = ctx.swapchain.immediate_supported;
@@ -445,70 +437,9 @@ namespace himalaya::app {
                 }
             }
 #endif
-        }
 
-        // Lighting section
-        ImGui::Separator();
-        if (ImGui::CollapsingHeader("Lighting", ImGuiTreeNodeFlags_DefaultOpen)) {
-            // Light source mode combo
-            constexpr const char *kModeLabels[] = {"Scene", "Fallback", "HDR Sun", "None"};
-            auto mode_index = static_cast<int>(ctx.light_source_mode);
-            if (ImGui::Combo("Light Source", &mode_index, kModeLabels, 4)) {
-                // Prevent selecting Scene when scene has no lights
-                if (mode_index == 0 && !ctx.scene_has_lights) {
-                    mode_index = static_cast<int>(ctx.light_source_mode);
-                }
-                ctx.light_source_mode = static_cast<LightSourceMode>(mode_index);
-            }
-            if (!ctx.scene_has_lights && ctx.light_source_mode == LightSourceMode::Scene) {
-                ctx.light_source_mode = LightSourceMode::Fallback;
-            }
-
-            // Direction display (always visible)
-            ImGui::Text("Direction: Yaw %.1f%s  Pitch %.1f%s",
-                        ctx.light_yaw_deg, "\xC2\xB0",
-                        ctx.light_pitch_deg, "\xC2\xB0");
-
-            ImGui::Text("Active Lights: %u", ctx.active_light_count);
             ImGui::Text("IBL Rotation: %.1f%s", ctx.ibl_rotation_deg, "\xC2\xB0");
-
-            // Fallback light controls (only in Fallback mode)
-            if (ctx.light_source_mode == LightSourceMode::Fallback) {
-                ImGui::SliderFloat("Intensity", &ctx.fallback_intensity, 0.0f, 20.0f, "%.1f");
-                ImGui::SliderFloat("Color Temp (K)##fallback", &ctx.fallback_color_temp,
-                                   2000.0f, 12000.0f, "%.0f");
-                ImGui::Checkbox("Cast Shadows", &ctx.fallback_cast_shadows);
-                ImGui::TextDisabled("Alt + Left Drag to rotate");
-            }
-
-            // HDR Sun light controls (only in HdrSun mode)
-            if (ctx.light_source_mode == LightSourceMode::HdrSun) {
-                if (ImGui::InputInt("Sun X", &ctx.hdr_sun_x)) {
-                    ctx.hdr_sun_x = std::clamp(ctx.hdr_sun_x, 0,
-                        ctx.equirect_width > 0 ? static_cast<int>(ctx.equirect_width) - 1 : 0);
-                    actions.hdr_sun_coords_changed = true;
-                }
-                if (ImGui::InputInt("Sun Y", &ctx.hdr_sun_y)) {
-                    ctx.hdr_sun_y = std::clamp(ctx.hdr_sun_y, 0,
-                        ctx.equirect_height > 0 ? static_cast<int>(ctx.equirect_height) - 1 : 0);
-                    actions.hdr_sun_coords_changed = true;
-                }
-                ImGui::Checkbox("Auto from HDR", &ctx.hdr_sun_auto);
-                if (ctx.hdr_sun_auto) {
-                    if (ImGui::SliderFloat("Intensity Mult##hdrsun_mult",
-                                           &ctx.hdr_sun_auto_multiplier,
-                                           0.0001f, 1.0f, "%.4f",
-                                           ImGuiSliderFlags_Logarithmic)) {
-                        actions.hdr_sun_multiplier_changed = true;
-                    }
-                }
-                ImGui::BeginDisabled(ctx.hdr_sun_auto);
-                ImGui::SliderFloat("Intensity##hdrsun", &ctx.hdr_sun_intensity, 0.0f, 20.0f, "%.1f");
-                ImGui::SliderFloat("Color Temp (K)##hdrsun", &ctx.hdr_sun_color_temp,
-                                   2000.0f, 12000.0f, "%.0f");
-                ImGui::EndDisabled();
-                ImGui::Checkbox("Cast Shadows##hdrsun", &ctx.hdr_sun_cast_shadows);
-            }
+            ImGui::TextDisabled("Left drag to rotate");
         }
 
         // Cache section
