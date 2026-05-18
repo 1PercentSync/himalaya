@@ -5,18 +5,13 @@
 
 #include <himalaya/app/application.h>
 
-#include <himalaya/framework/cache.h>
 #include <himalaya/framework/color_utils.h>
-#include <himalaya/framework/culling.h>
 #include <himalaya/framework/ibl.h>
-#include <himalaya/framework/mesh.h>
 #include <himalaya/framework/scene_data.h>
 #include <himalaya/rhi/commands.h>
 
-#include <algorithm>
 #include <array>
 #include <cmath>
-#include <thread>
 
 #include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
@@ -50,9 +45,6 @@ namespace himalaya::app {
             : spdlog::level::from_str(config_.log_level));
 
         pt_allow_tearing_ = config_.pt_allow_tearing;
-        bake_config_.allow_tearing = config_.bake_allow_tearing;
-        bake_config_.spp_per_frame = std::max(1u, config_.bake_spp_per_frame);
-        bake_config_.probe_min_luminance = config_.bake_probe_min_luminance;
 
         glfwInit();
         glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
@@ -92,11 +84,6 @@ namespace himalaya::app {
                        imgui_backend_,
                        config_.env_path);
 
-        // Cache env content hash (used for bake cache key computation every frame)
-        if (!config_.env_path.empty()) {
-            env_content_hash_ = framework::content_hash(config_.env_path);
-        }
-
         if (config_.auto_denoise_interval > 0) {
             renderer_.auto_denoise_interval() = config_.auto_denoise_interval;
         }
@@ -132,11 +119,6 @@ namespace himalaya::app {
             }
         }
 
-        // Compute lightmap keys and scan bake cache.
-        refresh_lightmap_keys();
-        trigger_bake_scan();
-
-        update_shadow_config_from_scene();
         auto_position_camera();
         camera_controller_.set_focus_target(&scene_loader_.scene_bounds());
 
@@ -176,29 +158,10 @@ namespace himalaya::app {
         camera_.update_all();
     }
 
-    void Application::update_shadow_config_from_scene() {
-        const auto &bounds = scene_loader_.scene_bounds();
-        const float diagonal = glm::length(bounds.max - bounds.min);
-        constexpr float kEpsilon = 1e-4f;
-        if (diagonal > kEpsilon) {
-            shadow_config_.max_distance = diagonal * 1.5f;
-        }
-        // else: keep the initialized 100m fallback
-    }
-
     // ---- Runtime scene/environment switching ----
 
     void Application::switch_scene(const std::string &path) {
         vkQueueWaitIdle(context_.graphics_queue);
-
-        // Unload bake data before destroying scene (indices reference old instances)
-        if (renderer_.bake_data_loaded()) {
-            renderer_.unload_bake_angle();
-        }
-        if (features_.lightmap_probe) {
-            indirect_lighting_mode_ = framework::IndirectLightingMode::IBL;
-            features_.lightmap_probe = false;
-        }
 
         renderer_.abort_denoise();
         scene_loader_.destroy();
@@ -231,27 +194,15 @@ namespace himalaya::app {
             }
         }
 
-        update_shadow_config_from_scene();
         auto_position_camera();
         camera_controller_.set_focus_target(&scene_loader_.scene_bounds());
 
         config_.scene_path = path;
-        refresh_lightmap_keys();
-        trigger_bake_scan();
         save_config(config_);
     }
 
     void Application::switch_environment(const std::string &path) {
         vkQueueWaitIdle(context_.graphics_queue);
-
-        // Unload bake data (baked with old HDR, keys will change)
-        if (renderer_.bake_data_loaded()) {
-            renderer_.unload_bake_angle();
-        }
-        if (features_.lightmap_probe) {
-            indirect_lighting_mode_ = framework::IndirectLightingMode::IBL;
-            features_.lightmap_probe = false;
-        }
 
         const bool ok = renderer_.reload_environment(path);
 
@@ -262,9 +213,6 @@ namespace himalaya::app {
         }
 
         config_.env_path = path;
-        env_content_hash_ = path.empty() ? std::string{} : framework::content_hash(path);
-        refresh_lightmap_keys();
-        trigger_bake_scan();
 
         // Restore persisted HDR sun coordinates and auto multiplier for the new environment
         if (const auto it = config_.hdr_sun_coords.find(path);
@@ -297,59 +245,6 @@ namespace himalaya::app {
         hdr_sun_auto_intensity_ = max_comp * hdr_sun_auto_multiplier_;
     }
 
-    void Application::start_bake_session(const framework::BakeMode mode) {
-        vkQueueWaitIdle(context_.graphics_queue);
-
-        if (renderer_.bake_data_loaded()) {
-            renderer_.unload_bake_angle();
-        }
-
-        context_.begin_immediate();
-        renderer_.start_bake(bake_config_,
-                             scene_loader_.mesh_instances(),
-                             scene_loader_.meshes(),
-                             scene_loader_.material_instances(),
-                             scene_loader_.cpu_vertices(),
-                             scene_loader_.cpu_indices(),
-                             scene_loader_,
-                             env_content_hash_,
-                             scene_loader_.scene_textures_hash(),
-                             glm::degrees(ibl_yaw_),
-                             render_mode_,
-                             mode);
-        context_.end_immediate();
-
-        render_mode_ = framework::RenderMode::Baking;
-    }
-
-    void Application::refresh_lightmap_keys() {
-        if (config_.scene_path.empty() || env_content_hash_.empty()) {
-            return;
-        }
-        renderer_.compute_lightmap_keys(
-            scene_loader_.mesh_instances(),
-            scene_loader_.meshes(),
-            scene_loader_.material_instances(),
-            scene_loader_,
-            env_content_hash_,
-            scene_loader_.scene_textures_hash());
-    }
-
-    void Application::trigger_bake_scan() {
-        if (config_.scene_path.empty() || env_content_hash_.empty()) {
-            renderer_.scan_bake_data({}, "");
-            return;
-        }
-        const std::string key_input = scene_loader_.scene_hash()
-            + env_content_hash_
-            + scene_loader_.scene_textures_hash();
-        const auto probe_set_key = framework::content_hash(
-            key_input.data(), key_input.size());
-        renderer_.scan_bake_data(renderer_.bake_lightmap_keys(), probe_set_key);
-    }
-
-
-
     void Application::destroy() {
         vkQueueWaitIdle(context_.graphics_queue);
 
@@ -379,40 +274,6 @@ namespace himalaya::app {
             }
 
             if (!begin_frame()) continue;
-
-            // Lightmap bake finalize: after fence wait (GPU done), before render().
-            // lightmap_bake_finalize() manages its own immediate scopes internally
-            // (multiple GPU→CPU→GPU round-trips: readback → OIDN → upload → BC6H → KTX2).
-            if (renderer_.lightmap_finalize_pending()) {
-                renderer_.lightmap_bake_finalize(
-                    scene_loader_.meshes(),
-                    scene_loader_.mesh_instances());
-            }
-
-            // Probe bake finalize: same pattern as lightmap finalize.
-            // probe_bake_finalize() manages its own immediate scopes internally
-            // (readback → per-face OIDN → upload → prefilter → BC6H → KTX2).
-            if (renderer_.probe_finalize_pending()) {
-                renderer_.probe_bake_finalize();
-            }
-
-            // Bake complete: restore pre-bake render mode, auto-switch to LightmapProbe.
-            if (renderer_.bake_state() == framework::BakeState::Complete) {
-                const uint32_t baked_rotation = renderer_.bake_rotation_int();
-                render_mode_ = renderer_.bake_pre_mode();
-                renderer_.complete_bake();
-                trigger_bake_scan();
-
-                // Auto-switch to LightmapProbe and load the just-baked angle
-                if (renderer_.has_bake_data()) {
-                    indirect_lighting_mode_ = framework::IndirectLightingMode::LightmapProbe;
-                    features_.lightmap_probe = true;
-                    renderer_.switch_bake_angle(baked_rotation,
-                                                scene_render_data_.mesh_instances,
-                                                scene_loader_);
-                    ibl_yaw_ = glm::radians(static_cast<float>(baked_rotation));
-                }
-            }
 
             update();
             render();
@@ -471,15 +332,11 @@ namespace himalaya::app {
         };
 
         // Build HDR Sun light from equirect pixel coords + IBL rotation each frame.
-        // Inverse of equirect_to_cubemap.comp sample_equirect():
-        //   phi   = (x/w - 0.5) * 2π   (longitude, from +X axis)
-        //   theta = (0.5 - y/h) * π     (latitude, +Y = up)
-        //   dir   = (cos(theta)*cos(phi), sin(theta), cos(theta)*sin(phi))
         {
             const auto &ibl = renderer_.ibl();
             const auto eq_w = static_cast<float>(ibl.equirect_width());
             const auto eq_h = static_cast<float>(ibl.equirect_height());
-            glm::vec3 sun_dir{0.0f, 1.0f, 0.0f}; // default: straight up
+            glm::vec3 sun_dir{0.0f, 1.0f, 0.0f};
             if (eq_w > 0.0f && eq_h > 0.0f) {
                 constexpr float kPi = 3.14159265358979323846f;
                 constexpr float kTwoPi = 2.0f * kPi;
@@ -491,8 +348,6 @@ namespace himalaya::app {
                     std::cos(theta) * std::sin(phi),
                 };
             }
-            // Inverse of shader rotate_y: shader rotates world→HDR by +yaw,
-            // we need HDR→world which is -yaw (negate sin component)
             const float s = std::sin(ibl_yaw_);
             const float c = std::cos(ibl_yaw_);
             const glm::vec3 rotated_sun{
@@ -527,32 +382,6 @@ namespace himalaya::app {
 
         // Left-click drag: IBL rotation (no modifier) or fallback light direction (Alt)
         update_drag_input();
-
-        // Fill SceneRenderData for culling and render
-        scene_render_data_.mesh_instances = scene_loader_.mesh_instances();
-        scene_render_data_.directional_lights = lights;
-        scene_render_data_.camera = camera_;
-
-        // Frustum culling + material bucketing
-        perform_camera_culling();
-
-        // Compute scene statistics for debug UI
-        const auto meshes = scene_loader_.meshes();
-        const auto &instances = scene_render_data_.mesh_instances;
-
-        uint32_t rendered_triangles = 0;
-        for (const auto idx: cull_result_.visible_opaque_indices)
-            rendered_triangles += meshes[instances[idx].mesh_id].index_count / 3;
-        for (const auto idx: cull_result_.visible_transparent_indices)
-            rendered_triangles += meshes[instances[idx].mesh_id].index_count / 3;
-
-        uint32_t total_vertices = 0;
-        for (const auto &mesh: meshes)
-            total_vertices += mesh.vertex_count;
-
-        const auto visible_opaque = static_cast<uint32_t>(cull_result_.visible_opaque_indices.size());
-        const auto visible_transparent = static_cast<uint32_t>(cull_result_.visible_transparent_indices.size());
-        const auto total_instances = static_cast<uint32_t>(instances.size());
 
         // Compute light direction yaw/pitch for display
         float display_light_yaw_deg = 0.0f;
@@ -591,7 +420,6 @@ namespace himalaya::app {
             .hdr_sun_auto_multiplier = hdr_sun_auto_multiplier_,
             .equirect_width = renderer_.ibl().equirect_width(),
             .equirect_height = renderer_.ibl().equirect_height(),
-            .render_mode = render_mode_,
             .rt_supported = context_.rt_supported,
             .pt_sample_count = renderer_.pt_sample_count(),
             .pt_config = pt_config_,
@@ -605,45 +433,10 @@ namespace himalaya::app {
             .last_denoise_trigger_sample_count = renderer_.last_denoise_trigger_sample_count(),
             .last_denoise_duration = renderer_.last_denoise_duration(),
             .indirect_intensity = indirect_intensity_,
-            .indirect_lighting_mode = indirect_lighting_mode_,
-            .has_bake_data = renderer_.has_bake_data(),
-            .loaded_bake_rotation = renderer_.bake_data_manager_loaded_rotation(),
-            .bake_data_loaded = renderer_.bake_data_loaded(),
             .ev = ev_,
-            .debug_render_mode = debug_render_mode_,
-            .features = features_,
-            .shadow_config = shadow_config_,
-            .ao_config = ao_config_,
-            .contact_shadow_config = contact_shadow_config_,
-            .probe_blend_config = probe_blend_config_,
-            .current_sample_count = renderer_.current_sample_count(),
-            .shadow_resolution = renderer_.shadow_resolution(),
-            .supported_sample_counts = context_.msaa_sample_counts,
             .scene_path = config_.scene_path,
             .env_path = config_.env_path,
             .error_message = error_message_,
-            .bake_config = bake_config_,
-            .bake_progress = renderer_.bake_progress(),
-            .has_scene = !config_.scene_path.empty(),
-            .has_hdr = !config_.env_path.empty(),
-            .scene_aabb_longest_edge = [&] {
-                const auto &b = scene_loader_.scene_bounds();
-                const auto ext = b.max - b.min;
-                return std::max({ext.x, ext.y, ext.z, 0.0f});
-            }(),
-            .available_angles = renderer_.available_bake_angles(),
-            .scene_stats = {
-                .total_instances = total_instances,
-                .total_meshes = static_cast<uint32_t>(meshes.size()),
-                .total_materials = static_cast<uint32_t>(scene_loader_.material_instances().size()),
-                .total_textures = scene_loader_.texture_count(),
-                .total_vertices = total_vertices,
-                .visible_opaque = visible_opaque,
-                .visible_transparent = visible_transparent,
-                .culled = total_instances - visible_opaque - visible_transparent,
-                .draw_calls = renderer_.last_draw_call_count(),
-                .rendered_triangles = rendered_triangles,
-            },
         };
         // ReSharper disable once CppUseStructuredBinding
         const auto actions = debug_ui_.draw(ui_ctx);
@@ -656,22 +449,11 @@ namespace himalaya::app {
             renderer_.reload_shaders();
         }
 
-        if (actions.msaa_changed) {
-            renderer_.handle_msaa_change(actions.new_sample_count);
-        }
-
-        if (actions.shadow_resolution_changed) {
-            renderer_.handle_shadow_resolution_changed(actions.new_shadow_resolution);
-        }
-
         if (actions.scene_load_requested) {
             switch_scene(actions.new_scene_path);
 
-            // Refresh scene data after switch — the old spans and cull indices
-            // are dangling because switch_scene() destroyed the previous scene.
+            // Refresh light source mode based on new scene
             const auto new_scene_lights = scene_loader_.directional_lights();
-
-            // Auto-select light source mode based on new scene
             if (!new_scene_lights.empty()) {
                 light_source_mode_ = LightSourceMode::Scene;
             } else if (renderer_.ibl().equirect_width() > 0) {
@@ -679,23 +461,6 @@ namespace himalaya::app {
             } else {
                 light_source_mode_ = LightSourceMode::Fallback;
             }
-
-            scene_render_data_.mesh_instances = scene_loader_.mesh_instances();
-            switch (light_source_mode_) {
-                case LightSourceMode::Scene:
-                    scene_render_data_.directional_lights = new_scene_lights;
-                    break;
-                case LightSourceMode::Fallback:
-                    scene_render_data_.directional_lights = {&fallback_light_, 1};
-                    break;
-                case LightSourceMode::HdrSun:
-                    scene_render_data_.directional_lights = {&hdr_sun_light_, 1};
-                    break;
-                case LightSourceMode::None:
-                    scene_render_data_.directional_lights = {};
-                    break;
-            }
-            perform_camera_culling();
         }
 
         if (actions.env_load_requested) {
@@ -735,96 +500,9 @@ namespace himalaya::app {
             renderer_.request_manual_denoise();
         }
 
-
-        // ---- Bake actions ----
-        if (actions.bake_start_mode) {
-            start_bake_session(*actions.bake_start_mode);
-            trigger_bake_scan();
-        }
-        if (actions.bake_cancel_requested) {
-            vkQueueWaitIdle(context_.graphics_queue);
-            renderer_.cancel_bake();
-            render_mode_ = renderer_.bake_pre_mode();
-        }
-        if (actions.clear_bake_cache_requested) {
-            if (renderer_.bake_data_loaded()) {
-                renderer_.unload_bake_angle();
-            }
-            if (features_.lightmap_probe) {
-                indirect_lighting_mode_ = framework::IndirectLightingMode::IBL;
-                features_.lightmap_probe = false;
-            }
-            framework::clear_cache("bake");
-            trigger_bake_scan();
-        }
-        if (actions.clear_all_cache_requested) {
-            if (renderer_.bake_data_loaded()) {
-                renderer_.unload_bake_angle();
-            }
-            if (features_.lightmap_probe) {
-                indirect_lighting_mode_ = framework::IndirectLightingMode::IBL;
-                features_.lightmap_probe = false;
-            }
-            framework::clear_all_cache();
-            trigger_bake_scan();
-        }
-
-        // ---- Angle switch (from bake angle list click) ----
-        if (actions.angle_switch_requested) {
-            ibl_yaw_ = glm::radians(static_cast<float>(actions.new_angle_rotation));
-            if (features_.lightmap_probe) {
-                renderer_.switch_bake_angle(actions.new_angle_rotation,
-                                            scene_render_data_.mesh_instances,
-                                            scene_loader_);
-            }
-        }
-
-        // ---- Indirect lighting mode switch ----
-        // Detect change: indirect_lighting_mode_ was mutated by DebugUI radio buttons.
-        // Sync features_.lightmap_probe and handle load/unload.
-        {
-            const bool want_lp = indirect_lighting_mode_ == framework::IndirectLightingMode::LightmapProbe;
-            const bool was_lp = features_.lightmap_probe;
-
-            if (want_lp && !was_lp) {
-                // IBL → LightmapProbe: load bake data if needed
-                if (renderer_.has_bake_data()) {
-                    const auto angles = renderer_.available_bake_angles();
-                    float normalized = std::fmod(glm::degrees(ibl_yaw_), 360.0f);
-                    if (normalized < 0.0f) { normalized += 360.0f; }
-                    const auto current_rot = static_cast<uint32_t>(std::round(normalized)) % 360;
-
-                    uint32_t target_rotation = angles[0].rotation;
-                    for (const auto &a : angles) {
-                        if (a.rotation == current_rot) {
-                            target_rotation = current_rot;
-                            break;
-                        }
-                    }
-
-                    // Skip load if already loaded at the correct angle
-                    const bool already_loaded = renderer_.bake_data_loaded()
-                        && renderer_.bake_data_manager_loaded_rotation() == target_rotation;
-                    if (!already_loaded) {
-                        renderer_.switch_bake_angle(target_rotation,
-                                                    scene_render_data_.mesh_instances,
-                                                    scene_loader_);
-                    }
-                    ibl_yaw_ = glm::radians(static_cast<float>(target_rotation));
-                }
-                features_.lightmap_probe = true;
-            } else if (!want_lp && was_lp) {
-                // LightmapProbe → IBL: keep bake data loaded (fast switch back)
-                features_.lightmap_probe = false;
-            }
-        }
-
-        // ---- Effective present mode (user preference + PT/Bake tearing override) ----
-        // Deferred to end_frame() after present — mid-frame recreate would
-        // invalidate the acquired image and renderer's swapchain references.
+        // ---- Effective present mode (user preference + PT tearing override) ----
         rhi::PresentMode effective = user_present_mode_;
-        if ((render_mode_ == framework::RenderMode::PathTracing && pt_allow_tearing_) ||
-            (render_mode_ == framework::RenderMode::Baking && bake_config_.allow_tearing)) {
+        if (pt_allow_tearing_) {
             effective = rhi::PresentMode::Immediate;
         }
         if (effective != swapchain_.present_mode) {
@@ -837,18 +515,6 @@ namespace himalaya::app {
             config_.pt_allow_tearing = pt_allow_tearing_;
             save_config(config_);
         }
-        if (config_.bake_allow_tearing != bake_config_.allow_tearing) {
-            config_.bake_allow_tearing = bake_config_.allow_tearing;
-            save_config(config_);
-        }
-        if (config_.bake_spp_per_frame != bake_config_.spp_per_frame) {
-            config_.bake_spp_per_frame = bake_config_.spp_per_frame;
-            save_config(config_);
-        }
-        if (config_.bake_probe_min_luminance != bake_config_.probe_min_luminance) {
-            config_.bake_probe_min_luminance = bake_config_.probe_min_luminance;
-            save_config(config_);
-        }
     }
 
     void Application::render() {
@@ -856,33 +522,32 @@ namespace himalaya::app {
         rhi::CommandBuffer cmd(frame.command_buffer);
         cmd.begin();
 
-        // Baking mode overrides: normalized IBL intensity, no directional lights
-        const bool is_baking = render_mode_ == framework::RenderMode::Baking;
+        // Determine active lights
+        std::span<const framework::DirectionalLight> lights;
+        switch (light_source_mode_) {
+            case LightSourceMode::Scene:
+                lights = scene_loader_.directional_lights();
+                break;
+            case LightSourceMode::Fallback:
+                lights = {&fallback_light_, 1};
+                break;
+            case LightSourceMode::HdrSun:
+                lights = {&hdr_sun_light_, 1};
+                break;
+            case LightSourceMode::None:
+                break;
+        }
 
         const RenderInput input{
             .image_index = image_index_,
             .frame_index = context_.frame_index,
-            .render_mode = render_mode_,
             .camera = camera_,
-            .lights = is_baking ? std::span<const framework::DirectionalLight>{}
-                                : scene_render_data_.directional_lights,
-            .cull_result = cull_result_,
-            .meshes = scene_loader_.meshes(),
-            .materials = scene_loader_.material_instances(),
-            .mesh_instances = scene_render_data_.mesh_instances,
-            .indirect_intensity = is_baking ? 1.0f : indirect_intensity_,
+            .lights = lights,
+            .indirect_intensity = indirect_intensity_,
             .exposure = std::pow(2.0f, ev_),
             .ibl_rotation_sin = std::sin(ibl_yaw_),
             .ibl_rotation_cos = std::cos(ibl_yaw_),
-            .debug_render_mode = debug_render_mode_,
-            .features = features_,
-            .shadow_config = shadow_config_,
-            .ao_config = ao_config_,
-            .contact_shadow_config = contact_shadow_config_,
             .pt_config = pt_config_,
-            .bake_config = bake_config_,
-            .probe_blend_config = probe_blend_config_,
-            .scene_bounds = scene_loader_.scene_bounds(),
         };
 
         renderer_.render(cmd, input);
@@ -949,23 +614,15 @@ namespace himalaya::app {
         }
 
         // Present mode change — deferred from update() to after present.
-        // Must go through recreate_swapchain() for renderer swapchain hooks.
         if (present_mode_changed_) {
             present_mode_changed_ = false;
             recreate_swapchain();
 
-            // Post-recreate: fallback may have changed swapchain_.present_mode
-            if (render_mode_ == framework::RenderMode::PathTracing && pt_allow_tearing_) {
-                // PT tearing override: if IMMEDIATE fell back, revert checkbox
-                if (swapchain_.present_mode != rhi::PresentMode::Immediate) {
-                    pt_allow_tearing_ = false;
-                }
-            } else if (render_mode_ == framework::RenderMode::Baking && bake_config_.allow_tearing) {
-                // Bake tearing override: if IMMEDIATE fell back, revert flag
-                if (swapchain_.present_mode != rhi::PresentMode::Immediate) {
-                    bake_config_.allow_tearing = false;
-                }
-            } else {
+            // PT tearing override: if IMMEDIATE fell back, revert checkbox
+            if (pt_allow_tearing_ && swapchain_.present_mode != rhi::PresentMode::Immediate) {
+                pt_allow_tearing_ = false;
+            }
+            if (!pt_allow_tearing_) {
                 // User combo change: sync fallback result back to combo display
                 user_present_mode_ = swapchain_.present_mode;
             }
@@ -976,8 +633,6 @@ namespace himalaya::app {
 
     // ---- Resize handling ----
 
-    // Waits for GPU idle, invalidates renderer state, recreates swapchain
-    // (resize, present mode change, etc.), then rebuilds renderer resources.
     void Application::recreate_swapchain() {
         vkQueueWaitIdle(context_.graphics_queue);
         renderer_.on_swapchain_invalidated();
@@ -1019,52 +674,10 @@ namespace himalaya::app {
                 fallback_light_pitch_ = std::clamp(fallback_light_pitch_, -kMaxPitch, kMaxPitch);
             } else if (!alt_held) {
                 // Left drag without Alt: IBL rotation (horizontal only)
-                // Blocked during baking (rotation locked to bake_rotation_int_)
-                // and in Lightmap/Probe mode (Step 10 will add snap-to-angle)
-                if (render_mode_ != framework::RenderMode::Baking
-                    && indirect_lighting_mode_ != framework::IndirectLightingMode::LightmapProbe) {
-                    ibl_yaw_ += dx * kSensitivity;
-                }
+                ibl_yaw_ += dx * kSensitivity;
             }
         } else {
             drag_active_ = false;
-        }
-    }
-    // ---- Camera frustum culling + material bucketing ----
-
-    void Application::perform_camera_culling() {
-        const auto frustum = framework::extract_frustum(camera_.view_projection);
-        framework::cull_against_frustum(scene_render_data_.mesh_instances,
-                                        frustum, visible_indices_);
-
-        // Bucket visible instances by alpha mode
-        cull_result_.visible_opaque_indices.clear();
-        cull_result_.visible_transparent_indices.clear();
-
-        const auto materials = scene_loader_.material_instances();
-        const auto &instances = scene_render_data_.mesh_instances;
-
-        for (const auto idx : visible_indices_) {
-            if (materials[instances[idx].material_id].alpha_mode == framework::AlphaMode::Blend) {
-                cull_result_.visible_transparent_indices.push_back(idx);
-            } else {
-                cull_result_.visible_opaque_indices.push_back(idx);
-            }
-        }
-
-        // Sort transparent instances back-to-front by AABB center distance
-        if (!cull_result_.visible_transparent_indices.empty()) {
-            const auto cam_pos = camera_.position;
-            std::ranges::sort(cull_result_.visible_transparent_indices,
-                              [&](const uint32_t a, const uint32_t b) {
-                                  const auto center_a = (instances[a].world_bounds.min +
-                                                         instances[a].world_bounds.max) * 0.5f;
-                                  const auto center_b = (instances[b].world_bounds.min +
-                                                         instances[b].world_bounds.max) * 0.5f;
-                                  const float dist_a = glm::dot(center_a - cam_pos, center_a - cam_pos);
-                                  const float dist_b = glm::dot(center_b - cam_pos, center_b - cam_pos);
-                                  return dist_a > dist_b; // far first
-                              });
         }
     }
 } // namespace himalaya::app

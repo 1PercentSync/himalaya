@@ -90,15 +90,6 @@ namespace himalaya::app {
         /** @brief glTF scene loader and resource owner. */
         SceneLoader scene_loader_{};
 
-        /** @brief Per-frame scene render data (populated in update()). */
-        framework::SceneRenderData scene_render_data_{};
-
-        /** @brief Per-frame frustum culling result (populated in update()). */
-        framework::CullResult cull_result_{};
-
-        /** @brief Flat visible-instance buffer for cull_against_frustum() (reused across frames). */
-        std::vector<uint32_t> visible_indices_;
-
         // --- Rendering parameters (controlled via DebugUI) ---
 
         /** @brief Indirect light intensity multiplier (written to GlobalUBO each frame). */
@@ -167,68 +158,8 @@ namespace himalaya::app {
         /** @brief Constructed HDR Sun DirectionalLight (rebuilt each frame from coords + IBL yaw). */
         framework::DirectionalLight hdr_sun_light_{};
 
-        /** @brief Active rendering mode (Rasterization or PathTracing). */
-        framework::RenderMode render_mode_ = framework::RenderMode::Rasterization;
-
-        /** @brief Active indirect lighting source (IBL or Lightmap/Probe). */
-        framework::IndirectLightingMode indirect_lighting_mode_ = framework::IndirectLightingMode::IBL;
-
-        /** @brief Debug render mode (0=Full PBR, 1-7=debug visualizations). */
-        uint32_t debug_render_mode_ = 0;
-
-        /** @brief Runtime feature toggles (skybox, shadows, etc.). */
-        framework::RenderFeatures features_{
-            .skybox = true,
-            .shadows = true,
-            .ao = true,
-            .contact_shadows = true,
-        };
-
-        /** @brief CSM shadow configuration parameters. */
-        framework::ShadowConfig shadow_config_{
-            .cascade_count = 4,
-            .split_lambda = 0.75f,
-            .max_distance = 100.0f,
-            .slope_bias = 1.5f,
-            .normal_offset = 1.0f,
-            .pcf_radius = 1,
-            .blend_width = 0.1f,
-            .distance_fade_width = 0.1f,
-            .shadow_mode = 0,                    // PCF
-            .light_angular_diameter = 0.00925f,  // ~0.53 deg (sun)
-            .pcss_flags = 1,                     // blocker early-out enabled
-            .pcss_quality = 1,                   // Medium (16 blocker + 25 PCF)
-        };
-
-        /** @brief AO configuration parameters. */
-        framework::AOConfig ao_config_{
-            .radius = 0.15f,
-            .directions = 4,
-            .steps_per_dir = 4,
-            .thin_compensation = 0.2f,
-            .intensity = 1.0f,
-            .temporal_blend = 0.9f,
-            .use_gtso = true,
-        };
-
-        /** @brief Contact Shadows configuration parameters. */
-        framework::ContactShadowConfig contact_shadow_config_{
-            .step_count = 16,
-            .max_distance = 0.5f,
-            .base_thickness = 0.01f,
-        };
-
         /** @brief Path tracing configuration parameters. */
         framework::PTConfig pt_config_{};
-
-        /** @brief Bake configuration parameters. */
-        framework::BakeConfig bake_config_{};
-
-        /** @brief Runtime probe blend parameters. */
-        framework::ProbeBlendConfig probe_blend_config_{};
-
-        /** @brief Cached content hash of current HDR file (computed once on load). */
-        std::string env_content_hash_;
 
         // --- Left-click drag state (IBL rotation or fallback light direction) ---
 
@@ -285,10 +216,6 @@ namespace himalaya::app {
         /**
          * @brief Handles window resize: waits for GPU idle, destroys old resolution-dependent
          *        resources, recreates swapchain, and rebuilds those resources.
-         *
-         * Called from begin_frame() (acquire failure), end_frame() (present failure,
-         * framebuffer resize, or present mode change). Uses vkQueueWaitIdle for
-         * immediate destruction instead of deferred deletion.
          */
         void recreate_swapchain();
 
@@ -308,23 +235,6 @@ namespace himalaya::app {
          * using compute_focus_position(). No-op if the scene AABB is degenerate.
          */
         void auto_position_camera();
-
-        /**
-         * @brief Updates shadow_config_.max_distance from current scene AABB.
-         *
-         * Called after scene load/switch. If the scene AABB diagonal is valid,
-         * sets max_distance = diagonal * 1.5; otherwise keeps the 100m fallback.
-         */
-        void update_shadow_config_from_scene();
-
-        /**
-         * @brief Performs camera frustum culling and material bucketing.
-         *
-         * Extracts frustum from camera VP, runs cull_against_frustum() into
-         * visible_indices_, then buckets into cull_result_ (opaque/transparent)
-         * and sorts transparent back-to-front.
-         */
-        void perform_camera_culling();
 
         // --- Runtime scene/environment switching ---
 
@@ -356,32 +266,5 @@ namespace himalaya::app {
 
         /** @brief Error message shown in DebugUI (empty = no error, auto-dismissed after timeout). */
         std::string error_message_;
-
-        /**
-         * @brief Starts a bake session.
-         *
-         * Lightmap UVs are already applied during scene load (init / switch_scene),
-         * so this method simply waits for GPU idle and calls start_bake().
-         *
-         * @param mode Bake scope: All (lightmaps + probes), Lightmap only, or Probe only.
-         */
-        void start_bake_session(framework::BakeMode mode);
-
-        /**
-         * @brief Recomputes per-instance lightmap cache keys if scene and HDR are loaded.
-         *
-         * Called after scene load, HDR load, or any event that invalidates keys.
-         * No-op when either scene or HDR is unavailable.
-         */
-        void refresh_lightmap_keys();
-
-        /**
-         * @brief Computes probe_set_key and triggers BakeDataManager::scan().
-         *
-         * No-op (scans with empty key) when either scene or HDR is unavailable.
-         * Called after scene/HDR load, bake complete, and cache clear.
-         */
-        void trigger_bake_scan();
-
     };
 } // namespace himalaya::app
