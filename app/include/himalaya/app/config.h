@@ -65,20 +65,7 @@ namespace himalaya::app {
          */
         bool pt_allow_tearing = false;
 
-        /**
-         * @brief Override present mode to IMMEDIATE during baking.
-         *
-         * Same semantics as pt_allow_tearing but for the bake pipeline.
-         */
-        bool bake_allow_tearing = false;
-
-        /** @brief Number of SPP batched per frame during baking. */
-        uint32_t bake_spp_per_frame = 256;
-
-        /** @brief Minimum average luminance for a probe to be accepted during baking. */
-        float bake_probe_min_luminance = 1e-4f;
-
-        };
+    };
 
     /**
      * @brief Returns the config file path: `%LOCALAPPDATA%\himalaya\config.json`.

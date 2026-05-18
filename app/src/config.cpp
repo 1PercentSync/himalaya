@@ -80,15 +80,6 @@ namespace himalaya::app {
             if (json.contains("pt_allow_tearing") && json["pt_allow_tearing"].is_boolean()) {
                 config.pt_allow_tearing = json["pt_allow_tearing"].get<bool>();
             }
-            if (json.contains("bake_allow_tearing") && json["bake_allow_tearing"].is_boolean()) {
-                config.bake_allow_tearing = json["bake_allow_tearing"].get<bool>();
-            }
-            if (json.contains("bake_spp_per_frame") && json["bake_spp_per_frame"].is_number_unsigned()) {
-                config.bake_spp_per_frame = json["bake_spp_per_frame"].get<uint32_t>();
-            }
-            if (json.contains("bake_probe_min_luminance") && json["bake_probe_min_luminance"].is_number()) {
-                config.bake_probe_min_luminance = json["bake_probe_min_luminance"].get<float>();
-            }
             if (json.contains("hdr_sun_coords") && json["hdr_sun_coords"].is_object()) {
                 for (auto& [key, val] : json["hdr_sun_coords"].items()) {
                     if (val.is_array() && val.size() == 2
@@ -136,9 +127,6 @@ namespace himalaya::app {
                     j["auto_denoise_interval"] = config.auto_denoise_interval;
                 }
                 j["pt_allow_tearing"] = config.pt_allow_tearing;
-                j["bake_allow_tearing"] = config.bake_allow_tearing;
-                j["bake_spp_per_frame"] = config.bake_spp_per_frame;
-                j["bake_probe_min_luminance"] = config.bake_probe_min_luminance;
                 nlohmann::json coords = nlohmann::json::object();
                 for (const auto& [hdr_path, xy] : config.hdr_sun_coords) {
                     coords[hdr_path] = {xy.first, xy.second};
