@@ -38,7 +38,6 @@ namespace himalaya::app {
         ubo_data.skybox_cubemap_index = ibl_.skybox_cubemap_index().index;
         ubo_data.ibl_rotation_sin = input.ibl_rotation_sin;
         ubo_data.ibl_rotation_cos = input.ibl_rotation_cos;
-        ubo_data.debug_render_mode = input.debug_render_mode;
         ubo_data.inv_projection = glm::inverse(input.camera.projection);
         ubo_data.inv_view = glm::inverse(input.camera.view);
         ubo_data.frame_index = frame_counter_;
