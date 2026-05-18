@@ -18,11 +18,6 @@
 #include <span>
 
 namespace himalaya::framework {
-    // ---- Shadow Constants ----
-
-    /** @brief Maximum number of shadow cascade layers (resource + array sizing). */
-    inline constexpr uint32_t kMaxShadowCascades = 4;
-
     // ---- Shared Types ----
 
     /**
@@ -122,7 +117,7 @@ namespace himalaya::framework {
     /**
      * @brief Per-frame global uniform data (Set 0, Binding 0).
      *
-     * std140 layout, 928 bytes (58 × 16) aligned to 16.
+     * std140 layout, 400 bytes (25 × 16) aligned to 16.
      */
     struct GlobalUniformData {
         glm::mat4 view; ///< offset   0
@@ -132,52 +127,18 @@ namespace himalaya::framework {
         glm::vec4 camera_position_and_exposure; ///< offset 256 — xyz = position, w = exposure
         glm::vec2 screen_size; ///< offset 272
         float time; ///< offset 280 — elapsed time in seconds
-        uint32_t directional_light_count = 0; ///< offset 284 — number of active directional lights
-        float indirect_intensity = 1.0f; ///< offset 288 — indirect light intensity multiplier
-        uint32_t irradiance_cubemap_index = UINT32_MAX; ///< offset 292 — bindless index into cubemaps[]
-        uint32_t prefiltered_cubemap_index = UINT32_MAX; ///< offset 296 — bindless index into cubemaps[]
-        uint32_t brdf_lut_index = UINT32_MAX; ///< offset 300 — bindless index into textures[]
-        uint32_t prefiltered_mip_count = 0; ///< offset 304 — mip levels in prefiltered env map
-        uint32_t skybox_cubemap_index = UINT32_MAX; ///< offset 308 — bindless index into cubemaps[]
-        float ibl_rotation_sin = 0.0f; ///< offset 312 — sin(ibl_yaw) for environment rotation
-        float ibl_rotation_cos = 1.0f; ///< offset 316 — cos(ibl_yaw) for environment rotation
-        uint32_t debug_render_mode = 0; ///< offset 320 — DEBUG_MODE_* constants
-        uint32_t feature_flags = 0; ///< offset 324 — bitmask: FEATURE_SHADOWS, etc.
-        // ---- Shadow fields (phase 4) ----
-        uint32_t shadow_cascade_count = 0; ///< offset 328 — active cascade count
-        float shadow_normal_offset = 0.0f; ///< offset 332 — normal offset bias strength
-        float shadow_texel_size = 0.0f; ///< offset 336 — 1.0 / shadow_map_resolution
-        float shadow_max_distance = 0.0f; ///< offset 340 — cascade max coverage distance
-        float shadow_blend_width = 0.0f; ///< offset 344 — cascade blend region fraction
-        uint32_t shadow_pcf_radius = 0; ///< offset 348 — PCF kernel radius (0=off)
-        glm::mat4 cascade_view_proj[kMaxShadowCascades]{}; ///< offset 352 — per-cascade light-space VP (16-aligned)
-        glm::vec4 cascade_splits{}; ///< offset 608 — cascade far boundaries (view-space depth)
-        float shadow_distance_fade_width = 0.0f; ///< offset 624 — distance fade region fraction
-        float _shadow_pad[3]{}; ///< offset 628 — pad to 640 (vec4 alignment)
-        glm::vec4 cascade_texel_world_size{}; ///< offset 640 — precomputed world-space size per shadow texel
-        // ---- PCSS fields (Step 7) ----
-        uint32_t shadow_mode = 0; ///< offset 656 — 0 = PCF, 1 = PCSS
-        uint32_t pcss_flags = 0; ///< offset 660 — bit 0: blocker early-out
-        uint32_t pcss_blocker_samples = 0; ///< offset 664 — blocker search sample count
-        uint32_t pcss_pcf_samples = 0; ///< offset 668 — PCSS PCF sample count
-        glm::vec4 cascade_light_size_uv{}; ///< offset 672 — per-cascade blocker search radius (U direction)
-        glm::vec4 cascade_pcss_scale{}; ///< offset 688 — per-cascade NDC depth diff → UV penumbra scale
-        glm::vec4 cascade_uv_scale_y{}; ///< offset 704 — per-cascade UV anisotropy correction (width_x / width_y)
-        // ---- Phase 5 fields ----
-        glm::mat4 inv_projection{}; ///< offset 720 — depth → view-space position reconstruction (GTAO)
-        glm::mat4 prev_view_projection{}; ///< offset 784 — temporal reprojection (current world → prev UV)
-        uint32_t frame_index = 0; ///< offset 848 — monotonically increasing frame counter (temporal noise variation)
-        uint32_t ao_so_mode = 1; ///< offset 852 — 0 = Lagarde approximation, 1 = GTSO (bent normal)
-        uint32_t _phase5_pad[2]{}; ///< offset 856 — pad to 864 (vec4 alignment)
-        // ---- Phase 6 fields ----
-        glm::mat4 inv_view{}; ///< offset 864 — inverse view matrix (PT raygen primary ray computation)
-        // ---- Phase 8.5 fields ----
-        uint32_t probe_count = 0; ///< offset 928 — number of loaded probes in ProbeBuffer
-        float normal_bias = 1.0f; ///< offset 932 — probe selection normal-vs-distance weight
-        float roughness_single = 0.15f; ///< offset 936 — below this roughness, use top-1 probe only
-        float roughness_full = 0.5f; ///< offset 940 — above this roughness, full top-2 blend
-        float blend_curve = 1.0f; ///< offset 944 — blend transition curve exponent
-        uint32_t _phase85_pad[3]{}; ///< offset 948 — pad to 960 (16-byte alignment)
+        float indirect_intensity = 1.0f; ///< offset 284 — indirect light intensity multiplier
+        uint32_t irradiance_cubemap_index = UINT32_MAX; ///< offset 288 — bindless index into cubemaps[]
+        uint32_t prefiltered_cubemap_index = UINT32_MAX; ///< offset 292 — bindless index into cubemaps[]
+        uint32_t brdf_lut_index = UINT32_MAX; ///< offset 296 — bindless index into textures[]
+        uint32_t prefiltered_mip_count = 0; ///< offset 300 — mip levels in prefiltered env map
+        uint32_t skybox_cubemap_index = UINT32_MAX; ///< offset 304 — bindless index into cubemaps[]
+        float ibl_rotation_sin = 0.0f; ///< offset 308 — sin(ibl_yaw) for environment rotation
+        float ibl_rotation_cos = 1.0f; ///< offset 312 — cos(ibl_yaw) for environment rotation
+        uint32_t debug_render_mode = 0; ///< offset 316 — DEBUG_MODE_* constants
+        uint32_t frame_index = 0; ///< offset 320 — monotonically increasing frame counter (temporal noise variation)
+        uint32_t _pad[3]{}; ///< offset 324 — pad to 336 (mat4 alignment)
+        glm::mat4 inv_view{}; ///< offset 336 — inverse view matrix (PT raygen primary ray computation)
     };
 
     /**
@@ -293,36 +254,15 @@ namespace himalaya::framework {
     // Size assertions catch additions/removals; offset assertions catch
     // C++ vs std140 alignment divergences (e.g. vec2 requires 8-byte
     // alignment in std140 but glm::vec2 has natural alignment of 4).
-    static_assert(sizeof(GlobalUniformData) == 960, "GlobalUniformData must be 960 bytes (std140)");
+    static_assert(sizeof(GlobalUniformData) == 400, "GlobalUniformData must be 400 bytes (std140)");
     static_assert(offsetof(GlobalUniformData, view) == 0);
     static_assert(offsetof(GlobalUniformData, camera_position_and_exposure) == 256);
     static_assert(offsetof(GlobalUniformData, screen_size) == 272);
     static_assert(offsetof(GlobalUniformData, time) == 280);
-    static_assert(offsetof(GlobalUniformData, directional_light_count) == 284);
-    static_assert(offsetof(GlobalUniformData, indirect_intensity) == 288);
-    static_assert(offsetof(GlobalUniformData, debug_render_mode) == 320);
-    static_assert(offsetof(GlobalUniformData, feature_flags) == 324);
-    static_assert(offsetof(GlobalUniformData, shadow_cascade_count) == 328);
-    static_assert(offsetof(GlobalUniformData, shadow_texel_size) == 336);
-    static_assert(offsetof(GlobalUniformData, cascade_view_proj) == 352);
-    static_assert(offsetof(GlobalUniformData, cascade_splits) == 608);
-    static_assert(offsetof(GlobalUniformData, shadow_distance_fade_width) == 624);
-    static_assert(offsetof(GlobalUniformData, cascade_texel_world_size) == 640);
-    static_assert(offsetof(GlobalUniformData, shadow_mode) == 656);
-    static_assert(offsetof(GlobalUniformData, pcss_blocker_samples) == 664);
-    static_assert(offsetof(GlobalUniformData, cascade_light_size_uv) == 672);
-    static_assert(offsetof(GlobalUniformData, cascade_pcss_scale) == 688);
-    static_assert(offsetof(GlobalUniformData, cascade_uv_scale_y) == 704);
-    static_assert(offsetof(GlobalUniformData, inv_projection) == 720);
-    static_assert(offsetof(GlobalUniformData, prev_view_projection) == 784);
-    static_assert(offsetof(GlobalUniformData, frame_index) == 848);
-    static_assert(offsetof(GlobalUniformData, ao_so_mode) == 852);
-    static_assert(offsetof(GlobalUniformData, inv_view) == 864);
-    static_assert(offsetof(GlobalUniformData, probe_count) == 928);
-    static_assert(offsetof(GlobalUniformData, normal_bias) == 932);
-    static_assert(offsetof(GlobalUniformData, roughness_single) == 936);
-    static_assert(offsetof(GlobalUniformData, roughness_full) == 940);
-    static_assert(offsetof(GlobalUniformData, blend_curve) == 944);
+    static_assert(offsetof(GlobalUniformData, indirect_intensity) == 284);
+    static_assert(offsetof(GlobalUniformData, debug_render_mode) == 316);
+    static_assert(offsetof(GlobalUniformData, frame_index) == 320);
+    static_assert(offsetof(GlobalUniformData, inv_view) == 336);
     static_assert(sizeof(GPUGeometryInfo) == 24, "GPUGeometryInfo must be 24 bytes (std430)");
     static_assert(offsetof(GPUGeometryInfo, vertex_buffer_address) == 0);
     static_assert(offsetof(GPUGeometryInfo, index_buffer_address) == 8);
