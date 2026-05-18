@@ -15,7 +15,6 @@
 #include <himalaya/framework/material_system.h>
 #include <himalaya/framework/mesh.h>
 
-#include <array>
 #include <cstdint>
 #include <span>
 
@@ -41,53 +40,14 @@ namespace himalaya::framework {
         /** @brief Depth buffer (D32Sfloat). */
         RGResourceId depth;
 
-        /** @brief MSAA color buffer; invalid when sample_count == 1. */
-        RGResourceId msaa_color;
-
-        /** @brief MSAA depth buffer; invalid when sample_count == 1. */
-        RGResourceId msaa_depth;
-
-        /** @brief MSAA normal buffer; invalid when sample_count == 1. */
-        RGResourceId msaa_normal;
-
-        /** @brief Resolved normal buffer (R10G10B10A2_UNORM). */
-        RGResourceId normal;
-
-        /** @brief Shadow map (2D Array, D32Sfloat); invalid when shadows disabled. */
-        RGResourceId shadow_map;
-
-        /** @brief Previous frame's resolved depth (temporal history, D32Sfloat). */
-        RGResourceId depth_prev;
-
-        /** @brief GTAO raw output (RG8: R=diffuse AO, G=specular occlusion). */
-        RGResourceId ao_noisy;
-
-        /** @brief Spatially denoised AO (RG8, output of 5x5 bilateral blur). */
-        RGResourceId ao_blurred;
-
-        /** @brief AO temporal-filtered output (RG8 temporal current, Set 2 binding 3). */
-        RGResourceId ao_filtered;
-
-        /** @brief Previous frame's AO filtered result (temporal history of ao_filtered). */
-        RGResourceId ao_history;
-
-        /** @brief Contact shadow mask (R8, Set 2 binding 4). */
-        RGResourceId contact_shadow_mask;
-
-        /** @brief PT accumulation buffer (RGBA32F, Storage); invalid in rasterization mode. */
+        /** @brief PT accumulation buffer (RGBA32F, Storage). */
         RGResourceId pt_accumulation;
 
-        /** @brief PT OIDN auxiliary albedo image (R8G8B8A8Unorm, Storage); invalid in rasterization mode. */
+        /** @brief PT OIDN auxiliary albedo image (R8G8B8A8Unorm, Storage). */
         RGResourceId pt_aux_albedo;
 
-        /** @brief PT OIDN auxiliary normal image (R16G16B16A16Sfloat, Storage); invalid in rasterization mode. */
+        /** @brief PT OIDN auxiliary normal image (R16G16B16A16Sfloat, Storage). */
         RGResourceId pt_aux_normal;
-
-        /** @brief Resolved roughness buffer (R8Unorm, 1x). */
-        RGResourceId roughness;
-
-        /** @brief MSAA roughness buffer; invalid when sample_count == 1. */
-        RGResourceId msaa_roughness;
 
         // ---- Scene data (non-owning references) ----
 
@@ -97,44 +57,8 @@ namespace himalaya::framework {
         /** @brief Material instances for draw routing. */
         std::span<const MaterialInstance> materials;
 
-        /** @brief Frustum culling results (visible opaque + transparent indices). */
-        const CullResult *cull_result = nullptr;
-
         /** @brief All mesh instances in the scene. */
         std::span<const MeshInstance> mesh_instances;
-
-        // ---- Instancing draw groups (Renderer fills after culling) ----
-
-        /** @brief Opaque draw groups (AlphaMode::Opaque, sorted by mesh_id). */
-        std::span<const MeshDrawGroup> opaque_draw_groups;
-
-        /** @brief Alpha-mask draw groups (AlphaMode::Mask, sorted by mesh_id). */
-        std::span<const MeshDrawGroup> mask_draw_groups;
-
-        // ---- Shadow draw groups (per-cascade, frustum-culled) ----
-
-        /** @brief Per-cascade shadow opaque draw groups (frustum-culled per cascade). */
-        std::array<std::span<const MeshDrawGroup>, kMaxShadowCascades> shadow_cascade_opaque_groups{};
-
-        /** @brief Per-cascade shadow mask draw groups (frustum-culled per cascade). */
-        std::array<std::span<const MeshDrawGroup>, kMaxShadowCascades> shadow_cascade_mask_groups{};
-
-        // ---- Render configuration (non-owning references) ----
-
-        /** @brief Runtime feature toggles (skybox, shadows, etc.). */
-        const RenderFeatures *features = nullptr;
-
-        /** @brief Shadow system parameters. */
-        const ShadowConfig *shadow_config = nullptr;
-
-        /** @brief AO configuration parameters. */
-        const AOConfig *ao_config = nullptr;
-
-        /** @brief Contact Shadows configuration parameters. */
-        const ContactShadowConfig *contact_shadow_config = nullptr;
-
-        /** @brief Whether ao_filtered history content is valid (false on first frame / resize). */
-        bool ao_history_valid = false;
 
         // ---- Frame parameters ----
 
@@ -143,8 +67,5 @@ namespace himalaya::framework {
 
         /** @brief Monotonically increasing frame counter for temporal noise variation. */
         uint32_t frame_number = 0;
-
-        /** @brief Current MSAA sample count (1 = no MSAA). */
-        uint32_t sample_count = 1;
     };
 } // namespace himalaya::framework
