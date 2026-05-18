@@ -68,7 +68,7 @@
 - [x] 清理 `config.h/cpp`（移除光栅化/烘焙配置持久化）
 - [x] 清理 `scene_loader.h/cpp`（移除 lightmap UV 相关逻辑，如有）
 - [x] 更新 `app/CMakeLists.txt`（移除已删源文件）
-- [ ] 移除 app 层方向光（Lighting 面板、LightSourceMode、fallback/hdr_sun 状态、RenderInput.lights、LightBuffer 填充、PT directional_lights 开关、config 持久化）
+- [x] 移除 app 层方向光（Lighting 面板、LightSourceMode、fallback/hdr_sun 状态、RenderInput.lights、LightBuffer 填充、PT directional_lights 开关、config 持久化）
 
 ## Step 2：清理 passes 层
 
