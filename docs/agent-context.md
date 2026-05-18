@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的渲染器
 - **分支**：`reflector` — Path Tracing + Gaussian Splatting
 - **Phase**：Phase 1 — 管线精简（移除光栅化和烘焙管线）
-- **进度**：Step 3 进行中（模块文件删除 + scene_data.h 类型清理完成），下一项移除 PTConfig.directional_lights
+- **进度**：Step 3 进行中（模块删除 + scene_data.h 类型/PTConfig 清理完成），下一项精简 RenderFeatures
 
 ### 下一个任务
 
-Step 3：清理 `scene_data.h` — 移除 PTConfig.directional_lights 字段
+Step 3：清理 `scene_data.h` — 精简 RenderFeatures（移除光栅化专用 flag）
 
 ---
 
