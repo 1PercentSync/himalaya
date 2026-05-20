@@ -48,14 +48,14 @@
 
 - [x] 创建 `framework/include/himalaya/framework/ply_converter.h`
 - [x] 创建 `framework/src/ply_converter.cpp`
-- [ ] 实现 PLY 解析（tinyply 读取 position、rotation、scale、opacity、SH 系数）
+- [x] 实现 PLY 解析（tinyply 读取 position、rotation、scale、opacity、SH 系数）
 - [ ] 实现激活函数（sigmoid opacity、exp scale）
 - [ ] 实现坐标系转换（COLMAP → glTF：position Y/Z 取反）
 - [ ] 实现四元数转换（wxyz → xyzw，Y/Z 分量取反）
 - [ ] 实现 SH 系数坐标系转换（Y/Z 方向项符号翻转）
 - [ ] 实现 .gltf + .bin 输出（nlohmann/json 构造 JSON，手写 binary buffer）
 - [ ] 集成缓存（content hash → 缓存路径，命中时跳过转换）
-- [ ] 更新 `framework/CMakeLists.txt`（链接 tinyply）
+- [x] 更新 `framework/CMakeLists.txt`（链接 tinyply）
 - [ ] 编译验证
 
 ## Step 2：GS glTF 加载器
