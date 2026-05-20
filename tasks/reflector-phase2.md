@@ -73,7 +73,7 @@
 - [x] 实现 AABB 计算（per-primitive bounds + scene_bounds 并集）
 - [x] 更新 `app/CMakeLists.txt`
 - [x] 编译验证
-- [ ] 实现 extensionsRequired 兼容（消毒 JSON 移除 KHR_gaussian_splatting 后传给 fastgltf；.gltf 重新序列化，.glb 重组内存 GLB）
+- [x] 实现 extensionsRequired 兼容（消毒 JSON 移除 KHR_gaussian_splatting 后传给 fastgltf；.gltf 重新序列化，.glb 重组内存 GLB）
 
 ## Step 3：Application 集成
 
