@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的渲染器
 - **分支**：`reflector` — Path Tracing + Gaussian Splatting
 - **Phase**：Phase 2 — Gaussian Splatting 数据管线
-- **进度**：Phase 2 Step 0 完成，Step 1 开始
+- **进度**：Phase 2 Step 1 完成，Step 2 开始
 
 ### 下一个任务
 
-Phase 2 Step 1：PLY 转换器（创建 ply_converter.h/cpp）
+Phase 2 Step 2：GS glTF 加载器（gaussian_splat_data.h、gaussian_splat_loader.h/cpp）
 
 ---
 
