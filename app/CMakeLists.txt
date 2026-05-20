@@ -8,6 +8,7 @@ add_executable(himalaya_app
     src/camera_controller.cpp
     src/debug_ui.cpp
     src/scene_loader.cpp
+    src/gltf_utils.cpp
 )
 
 target_include_directories(himalaya_app PRIVATE include)
