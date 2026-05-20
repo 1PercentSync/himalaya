@@ -42,7 +42,7 @@
 - [x] 修改 `SceneLoader` 调用 gltf_utils 中的共享函数
 - [x] 更新 `CLAUDE.md` 第三方库表（添加 tinyply）
 - [x] 修正 `scene_data.h` 中 `RenderMode::GaussianSplatting` 注释（Phase 2 → Phase 3）
-- [ ] 编译验证
+- [x] 编译验证
 
 ## Step 1：PLY 转换器
 
