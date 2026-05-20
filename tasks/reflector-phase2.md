@@ -28,6 +28,7 @@
 | 15 | Phase 2 输出边界 | 只交付 CPU 端数据，GPU upload 留给 Phase 3 |
 | 16 | 多 primitive 支持 | 支持，GaussianSplatScene 包含 vector&lt;GaussianSplatPrimitive&gt; |
 | 17 | 加载入口 | 双入口（PT/GS），用户显式选择模式，各 loader 自行检测数据，不做自动路由 |
+| 18 | extensionsRequired 兼容 | GS loader 消毒 JSON 后传给 fastgltf（fastgltf 不认识 KHR_gaussian_splatting，会拒绝 extensionsRequired） |
 
 ---
 
@@ -72,6 +73,7 @@
 - [x] 实现 AABB 计算（per-primitive bounds + scene_bounds 并集）
 - [x] 更新 `app/CMakeLists.txt`
 - [x] 编译验证
+- [ ] 实现 extensionsRequired 兼容（消毒 JSON 移除 KHR_gaussian_splatting 后传给 fastgltf；.gltf 重新序列化，.glb 重组内存 GLB）
 
 ## Step 3：Application 集成
 

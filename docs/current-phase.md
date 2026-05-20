@@ -59,5 +59,5 @@ Khronos 官方扩展（Release Candidate），在 mesh primitive 上定义 GS �
 |------|------|------|
 | 0 | 基础设施 | gltf_utils 提取、tinyply 集成、CMake 配置 |
 | 1 | PLY 转换器 | tinyply 解析 → 数据转换 → .gltf 输出 → 缓存 |
-| 2 | GS glTF 加载器 | 数据结构定义、extension JSON 提取、attribute 读取、AABB 计算 |
+| 2 | GS glTF 加载器 | 数据结构定义、extension JSON 提取、attribute 读取、AABB 计算、extensionsRequired 兼容 |
 | 3 | Application 集成 | 文件路由、PLY 自动转换、相机初始化 |

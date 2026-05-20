@@ -616,6 +616,28 @@ fastgltf 的 `Primitive` 不暴露 extension JSON。使用 nlohmann/json 对 glT
 
 提取步骤：跳过 12 字节 glb header → 读 4 字节 chunk length → 验证 4 字节 chunk type 为 JSON → 读 length 字节 JSON 数据 → nlohmann/json 解析。
 
+### extensionsRequired 兼容
+
+fastgltf 的 `extensionStrings` 表中没有 `KHR_gaussian_splatting`。当 glTF 文件声明 `"extensionsRequired": ["KHR_gaussian_splatting"]` 时，fastgltf 返回 `UnknownRequiredExtension` 拒绝解析。
+
+GS loader 自身实现了 KHR_gaussian_splatting 支持（extension metadata 由 nlohmann/json 解析，attribute 数据由 fastgltf 按通用 accessor 读取），因此有权从 `extensionsRequired` 中移除该扩展名再交给 fastgltf。只移除 `KHR_gaussian_splatting`，不移除其他未知扩展。
+
+处理流程：
+
+1. nlohmann/json 解析原始 JSON（已有逻辑）
+2. 检查 `extensionsRequired` 是否包含 `KHR_gaussian_splatting`
+3. 若不包含：走 `gltf_utils::parse_gltf(path, ...)` 正常路径（零开销）
+4. 若包含：从 JSON 副本的 `extensionsRequired` 中移除 `KHR_gaussian_splatting`，将消毒后的数据传给 fastgltf
+
+.gltf 消毒：将修改后的 JSON dump 为字符串 → `GltfDataBuffer::FromBytes` → `parser.loadGltf`（外部 .bin 通过 `path.parent_path()` 解析）。
+
+.glb 消毒：读取原始文件 → 用修改后的 JSON 重组内存 GLB → `GltfDataBuffer::FromBytes`。JSON chunk 之后的所有 chunk 原样保留（不假定只有一个 BIN chunk）。
+
+重组规则：
+- JSON chunk 需 4 字节对齐，padding 字符为空格（0x20）
+- 重组后更新三个字段：GLB header 中的 total length、JSON chunk length、JSON chunk type
+- 后续 chunk（从原始文件偏移 `12 + 8 + orig_json_chunk_length` 处开始）整体复制，不解析不修改
+
 ### 加载入口
 
 渲染器有两个独立加载入口，由用户显式选择模式，各入口自行处理数据：
