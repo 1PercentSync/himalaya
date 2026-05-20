@@ -17,8 +17,11 @@ namespace himalaya::app {
      * empty/default means no value configured.
      */
     struct AppConfig {
-        /** @brief Absolute path to the glTF scene file (.gltf / .glb). */
+        /** @brief Absolute path to the PT scene file (.gltf / .glb). */
         std::string scene_path;
+
+        /** @brief Absolute path to the GS scene file (.gltf / .glb / .ply). */
+        std::string gs_scene_path;
 
         /** @brief Absolute path to the HDR environment map (.hdr). */
         std::string env_path;

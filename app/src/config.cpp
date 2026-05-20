@@ -68,6 +68,9 @@ namespace himalaya::app {
             if (json.contains("scene_path") && json["scene_path"].is_string()) {
                 config.scene_path = json["scene_path"].get<std::string>();
             }
+            if (json.contains("gs_scene_path") && json["gs_scene_path"].is_string()) {
+                config.gs_scene_path = json["gs_scene_path"].get<std::string>();
+            }
             if (json.contains("env_path") && json["env_path"].is_string()) {
                 config.env_path = json["env_path"].get<std::string>();
             }
@@ -103,6 +106,7 @@ namespace himalaya::app {
 
                 nlohmann::json j;
                 j["scene_path"] = config.scene_path;
+                j["gs_scene_path"] = config.gs_scene_path;
                 j["env_path"] = config.env_path;
                 if (!config.log_level.empty()) {
                     j["log_level"] = config.log_level;

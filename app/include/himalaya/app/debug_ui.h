@@ -103,8 +103,11 @@ namespace himalaya::app {
 
         // --- Current file paths (display) ---
 
-        /** @brief Current scene file path (empty = no scene loaded). */
+        /** @brief Current PT scene file path (empty = no scene loaded). */
         const std::string& scene_path;
+
+        /** @brief Current GS scene file path (empty = no GS scene loaded). */
+        const std::string& gs_scene_path;
 
         /** @brief Current HDR environment map path (empty = fallback). */
         const std::string& env_path;
@@ -144,11 +147,17 @@ namespace himalaya::app {
      * Application inspects these after each draw() call to apply side effects.
      */
     struct DebugUIActions {
-        /** @brief True if the user requested loading a new scene file. */
+        /** @brief True if the user requested loading a new PT scene file. */
         bool scene_load_requested = false;
 
         /** @brief Path selected by the user (valid only when scene_load_requested is true). */
         std::string new_scene_path;
+
+        /** @brief True if the user requested loading a new GS scene file. */
+        bool gs_scene_load_requested = false;
+
+        /** @brief Path selected by the user (valid only when gs_scene_load_requested is true). */
+        std::string new_gs_scene_path;
 
         /** @brief True if the user dismissed the error banner. */
         bool error_dismissed = false;

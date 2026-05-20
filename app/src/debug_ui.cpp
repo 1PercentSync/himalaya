@@ -388,11 +388,12 @@ namespace himalaya::app {
         // Scene section (file loading + asset statistics)
         ImGui::Separator();
         if (ImGui::CollapsingHeader("Scene")) {
+            // PT scene picker
             if (ctx.scene_path.empty()) {
-                ImGui::TextDisabled("No scene loaded");
+                ImGui::TextDisabled("PT: No scene loaded");
             } else {
                 const auto filename = std::filesystem::path(ctx.scene_path).filename().string();
-                ImGui::Text("Scene: %s", filename.c_str());
+                ImGui::Text("PT: %s", filename.c_str());
                 if (ImGui::IsItemHovered()) {
                     ImGui::SetTooltip("%s", ctx.scene_path.c_str());
                 }
@@ -400,13 +401,37 @@ namespace himalaya::app {
 
 #ifdef _WIN32
             ImGui::SameLine();
-            if (ImGui::Button("Load Scene...")) {
+            if (ImGui::Button("Load PT...")) {
                 auto path = open_file_dialog(
                     L"glTF Files (*.gltf;*.glb)\0*.gltf;*.glb\0All Files (*.*)\0*.*\0",
-                    L"Load Scene");
+                    L"Load PT Scene");
                 if (!path.empty()) {
                     actions.scene_load_requested = true;
                     actions.new_scene_path = std::move(path);
+                }
+            }
+#endif
+
+            // GS scene picker
+            if (ctx.gs_scene_path.empty()) {
+                ImGui::TextDisabled("GS: No scene loaded");
+            } else {
+                const auto filename = std::filesystem::path(ctx.gs_scene_path).filename().string();
+                ImGui::Text("GS: %s", filename.c_str());
+                if (ImGui::IsItemHovered()) {
+                    ImGui::SetTooltip("%s", ctx.gs_scene_path.c_str());
+                }
+            }
+
+#ifdef _WIN32
+            ImGui::SameLine();
+            if (ImGui::Button("Load GS...")) {
+                auto path = open_file_dialog(
+                    L"GS Files (*.gltf;*.glb;*.ply)\0*.gltf;*.glb;*.ply\0All Files (*.*)\0*.*\0",
+                    L"Load GS Scene");
+                if (!path.empty()) {
+                    actions.gs_scene_load_requested = true;
+                    actions.new_gs_scene_path = std::move(path);
                 }
             }
 #endif

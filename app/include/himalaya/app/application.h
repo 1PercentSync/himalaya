@@ -11,11 +11,14 @@
 #include <himalaya/app/renderer.h>
 #include <himalaya/app/scene_loader.h>
 #include <himalaya/framework/camera.h>
+#include <himalaya/framework/gaussian_splat_data.h>
 #include <himalaya/framework/imgui_backend.h>
 #include <himalaya/rhi/context.h>
 #include <himalaya/rhi/descriptors.h>
 #include <himalaya/rhi/resources.h>
 #include <himalaya/rhi/swapchain.h>
+
+#include <optional>
 
 struct GLFWwindow;
 
@@ -87,8 +90,11 @@ namespace himalaya::app {
         /** @brief Debug UI panel. */
         DebugUI debug_ui_{};
 
-        /** @brief glTF scene loader and resource owner. */
+        /** @brief glTF scene loader and resource owner (PT entry). */
         SceneLoader scene_loader_{};
+
+        /** @brief Loaded Gaussian Splatting scene data (GS entry). */
+        std::optional<framework::GaussianSplatScene> gs_scene_;
 
         // --- Rendering parameters (controlled via DebugUI) ---
 
@@ -190,6 +196,16 @@ namespace himalaya::app {
          * @param path Absolute path to the new .gltf / .glb file.
          */
         void switch_scene(const std::string &path);
+
+        /**
+         * @brief Switches to a new GS scene file.
+         *
+         * Loads .gltf/.glb via GaussianSplatLoader, .ply via PLY converter
+         * then GaussianSplatLoader. On failure, remains with no GS scene.
+         *
+         * @param path Absolute path to .gltf, .glb, or .ply file.
+         */
+        void switch_gs_scene(const std::string &path);
 
         /**
          * @brief Switches to a new HDR environment map.

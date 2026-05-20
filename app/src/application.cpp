@@ -5,6 +5,7 @@
 
 #include <himalaya/app/application.h>
 
+#include <himalaya/app/gaussian_splat_loader.h>
 #include <himalaya/framework/scene_data.h>
 #include <himalaya/rhi/commands.h>
 
@@ -110,6 +111,11 @@ namespace himalaya::app {
             }
         }
 
+        // --- GS scene loading ---
+        if (!config_.gs_scene_path.empty()) {
+            switch_gs_scene(config_.gs_scene_path);
+        }
+
         auto_position_camera();
         camera_controller_.set_focus_target(&scene_loader_.scene_bounds());
     }
@@ -169,6 +175,25 @@ namespace himalaya::app {
         save_config(config_);
     }
 
+    void Application::switch_gs_scene(const std::string &path) {
+        gs_scene_.reset();
+
+        if (!path.empty()) {
+            auto result = gaussian_splat_loader::load(path);
+            if (!result) {
+                error_message_ = "Failed to load GS scene: " + path;
+            } else {
+                error_message_.clear();
+                gs_scene_ = std::move(result);
+                spdlog::info("Loaded GS scene: {} ({} primitives)",
+                             path, gs_scene_->primitives.size());
+            }
+        }
+
+        config_.gs_scene_path = path;
+        save_config(config_);
+    }
+
     void Application::switch_environment(const std::string &path) {
         vkQueueWaitIdle(context_.graphics_queue);
 
@@ -189,6 +214,7 @@ namespace himalaya::app {
 
         imgui_backend_.destroy();
         renderer_.destroy();
+        gs_scene_.reset();
         scene_loader_.destroy();
         descriptor_manager_.destroy();
         resource_manager_.destroy();
@@ -284,6 +310,7 @@ namespace himalaya::app {
             .indirect_intensity = indirect_intensity_,
             .ev = ev_,
             .scene_path = config_.scene_path,
+            .gs_scene_path = config_.gs_scene_path,
             .env_path = config_.env_path,
             .error_message = error_message_,
             .scene_stats = {
@@ -308,6 +335,10 @@ namespace himalaya::app {
 
         if (actions.scene_load_requested) {
             switch_scene(actions.new_scene_path);
+        }
+
+        if (actions.gs_scene_load_requested) {
+            switch_gs_scene(actions.new_gs_scene_path);
         }
 
         if (actions.env_load_requested) {
