@@ -60,9 +60,9 @@
 
 ## Step 2：GS glTF 加载器
 
-- [ ] 创建 `framework/include/himalaya/framework/gaussian_splat_data.h`（GaussianSplatPrimitive + GaussianSplatMetadata + GaussianSplatScene 结构体定义）
-- [ ] 创建 `app/include/himalaya/app/gaussian_splat_loader.h`
-- [ ] 创建 `app/src/gaussian_splat_loader.cpp`
+- [x] 创建 `framework/include/himalaya/framework/gaussian_splat_data.h`（GaussianSplatPrimitive + GaussianSplatMetadata + GaussianSplatScene 结构体定义）
+- [x] 创建 `app/include/himalaya/app/gaussian_splat_loader.h`
+- [x] 创建 `app/src/gaussian_splat_loader.cpp`
 - [ ] 实现 extension JSON 提取（nlohmann/json 解析 .gltf JSON 或 .glb JSON chunk）
 - [ ] 实现 GS primitive 检测（遍历 mesh primitive 查找 KHR_gaussian_splatting extension）
 - [ ] 实现 attribute 读取（fastgltf iterateAccessor 读 position、rotation、scale、opacity）
@@ -70,7 +70,7 @@
 - [ ] 实现多 primitive 支持（遍历所有 GS primitive，各自构建 GaussianSplatPrimitive）
 - [ ] 实现 node transform 提取（iterateSceneNodes 获取每个 primitive 的世界变换矩阵）
 - [ ] 实现 AABB 计算（per-primitive bounds + scene_bounds 并集）
-- [ ] 更新 `app/CMakeLists.txt`
+- [x] 更新 `app/CMakeLists.txt`
 - [ ] 编译验证
 
 ## Step 3：Application 集成
