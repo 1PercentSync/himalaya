@@ -35,6 +35,8 @@ CLAUDE.md 已自动加载，以下为额外必读：
 
 | 文档 | 说明 |
 |------|------|
+| `docs/archive/reflector-phase1-plan.md` | Reflector Phase 1 精简范围与步骤（原 current-phase.md） |
+| `tasks/archive/reflector-phase1.md` | Reflector Phase 1 任务清单（原 tasks/reflector-phase1.md） |
 | `docs/archive/m1-phase8.5-plan.md` | M1 阶段八点五实现步骤（原 current-phase.md） |
 | `tasks/archive/m1-phase8.5.md` | M1 阶段八点五任务清单 |
 | `docs/archive/m1-milestone-1.md` | M1 范围、预期效果、已知局限性 |
