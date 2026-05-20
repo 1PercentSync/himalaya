@@ -70,6 +70,15 @@ scope 可选，常用值：`rhi`, `app`, `framework`, `passes`, `shaders`
 
 **分离原则**：代码变更和文档变更必须分开提交，不得混在同一个 commit 中
 
+### 文档归档规范
+
+Phase 切换或文档被替换时，旧文档必须先归档再创建新文档：
+
+1. 使用 `git mv` 将旧文档移入 `docs/archive/` 或 `tasks/archive/`（保留 git 跟踪历史）
+2. 归档作为**独立 commit**，不与新文档创建混在一起
+3. `docs/` 和 `tasks/` 下的文件**成对归档**（如 `current-phase.md` 和对应的 `tasks/reflector-phaseN.md`）
+4. 归档后更新 `docs/agent-context.md` 的归档文档列表
+
 ---
 
 ## 编码规范
