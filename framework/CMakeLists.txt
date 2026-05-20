@@ -18,6 +18,7 @@ target_sources(himalaya_framework PRIVATE
         src/render_graph.cpp
         src/stb_impl.cpp
         src/texture.cpp
+        src/ply_converter.cpp
 )
 
 target_include_directories(himalaya_framework PUBLIC include)
@@ -32,5 +33,5 @@ target_include_directories(himalaya_framework PRIVATE ${Stb_INCLUDE_DIR})
 
 target_link_libraries(himalaya_framework
         PUBLIC himalaya_rhi imgui::imgui
-        PRIVATE mikktspace::mikktspace nlohmann_json::nlohmann_json xxHash::xxhash bc7enc oidn
+        PRIVATE mikktspace::mikktspace nlohmann_json::nlohmann_json xxHash::xxhash bc7enc oidn tinyply
 )
