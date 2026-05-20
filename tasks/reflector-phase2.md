@@ -32,8 +32,8 @@
 
 ## Step 0：基础设施
 
-- [ ] 集成 tinyply 到 `third_party/tinyply/`（源码 + CMakeLists.txt）
-- [ ] 更新顶层 `CMakeLists.txt`（add_subdirectory tinyply）
+- [x] 集成 tinyply 到 `third_party/tinyply/`（源码 + CMakeLists.txt）
+- [x] 更新顶层 `CMakeLists.txt`（add_subdirectory tinyply）
 - [ ] 创建 `app/include/himalaya/app/gltf_utils.h` 和 `app/src/gltf_utils.cpp`
 - [ ] 将 `SceneLoader::load()` 中的 glTF 文件解析逻辑提取为 `gltf_utils::parse_gltf` 函数
 - [ ] 将 `scene_loader.cpp` 匿名 namespace 中的 `transform_aabb` 提取到 gltf_utils
