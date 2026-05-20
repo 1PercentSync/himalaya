@@ -193,6 +193,7 @@ namespace himalaya::app {
                 try {
                     gltf_path = framework::convert_ply_to_gltf(path);
                 } catch (const std::exception &e) {
+                    spdlog::error("PLY conversion failed: {}: {}", path, e.what());
                     error_message_ = "PLY conversion failed: " + std::string(e.what());
                     config_.gs_scene_path = path;
                     save_config(config_);
@@ -216,6 +217,7 @@ namespace himalaya::app {
                     gltf_path = framework::convert_ply_to_gltf(path);
                     result = gaussian_splat_loader::load(gltf_path);
                 } catch (const std::exception &e) {
+                    spdlog::error("PLY conversion failed (retry): {}: {}", path, e.what());
                     error_message_ = "PLY conversion failed: " + std::string(e.what());
                     config_.gs_scene_path = path;
                     save_config(config_);
@@ -224,6 +226,7 @@ namespace himalaya::app {
             }
 
             if (!result) {
+                spdlog::error("Failed to load GS scene: {}", path);
                 error_message_ = "Failed to load GS scene: " + path;
             } else {
                 error_message_.clear();
