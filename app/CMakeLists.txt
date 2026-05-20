@@ -9,6 +9,7 @@ add_executable(himalaya_app
     src/debug_ui.cpp
     src/scene_loader.cpp
     src/gltf_utils.cpp
+    src/gaussian_splat_loader.cpp
 )
 
 target_include_directories(himalaya_app PRIVATE include)
