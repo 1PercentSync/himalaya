@@ -155,12 +155,69 @@ namespace himalaya::framework {
             return data;
         }
 
-        void apply_activations(PlyGaussianData &) {
-            // TODO: Step 1 items 4-5
+        void apply_activations(PlyGaussianData &data) {
+            for (auto &o : data.opacities) {
+                o = 1.0f / (1.0f + std::exp(-o));
+            }
+            for (auto &s : data.scales) {
+                s = std::exp(s);
+            }
         }
 
-        void transform_to_gltf_coords(PlyGaussianData &) {
-            // TODO: Step 1 items 5-7
+        // SH rest coefficient indices that need sign flip per degree.
+        // Derived from COLMAP→glTF coordinate substitution (y→-y, z→-z)
+        // into each SH basis function's directional factor.
+        constexpr uint32_t kShFlipDeg1[] = {0, 1};
+        constexpr uint32_t kShFlipDeg2[] = {0, 1, 3, 6};
+        constexpr uint32_t kShFlipDeg3[] = {0, 1, 3, 6, 8, 10, 11, 13};
+
+        void transform_to_gltf_coords(PlyGaussianData &data) {
+            // Position: (x, y, z) → (x, -y, -z)
+            for (uint32_t i = 0; i < data.count; ++i) {
+                data.positions[i * 3 + 1] = -data.positions[i * 3 + 1];
+                data.positions[i * 3 + 2] = -data.positions[i * 3 + 2];
+            }
+
+            // Quaternion: INRIA (w,x,y,z) → glTF (x,-y,-z,w)
+            for (uint32_t i = 0; i < data.count; ++i) {
+                const float w = data.rotations[i * 4 + 0];
+                const float x = data.rotations[i * 4 + 1];
+                const float y = data.rotations[i * 4 + 2];
+                const float z = data.rotations[i * 4 + 3];
+                data.rotations[i * 4 + 0] = x;
+                data.rotations[i * 4 + 1] = -y;
+                data.rotations[i * 4 + 2] = -z;
+                data.rotations[i * 4 + 3] = w;
+            }
+
+            // SH coefficient sign flip
+            if (data.sh_degree == 0) { return; }
+
+            const uint32_t *flip_indices = nullptr;
+            uint32_t flip_count = 0;
+            if (data.sh_degree >= 3) {
+                flip_indices = kShFlipDeg3;
+                flip_count = std::size(kShFlipDeg3);
+            } else if (data.sh_degree >= 2) {
+                flip_indices = kShFlipDeg2;
+                flip_count = std::size(kShFlipDeg2);
+            } else {
+                flip_indices = kShFlipDeg1;
+                flip_count = std::size(kShFlipDeg1);
+            }
+
+            const uint32_t rest_per_channel = (data.sh_degree + 1) * (data.sh_degree + 1) - 1;
+            const uint32_t total_rest = rest_per_channel * 3;
+
+            for (uint32_t i = 0; i < data.count; ++i) {
+                const uint32_t base = i * total_rest;
+                for (uint32_t fi = 0; fi < flip_count; ++fi) {
+                    const uint32_t j = flip_indices[fi];
+                    for (uint32_t ch = 0; ch < 3; ++ch) {
+                        data.sh_rest[base + ch * rest_per_channel + j] *= -1.0f;
+                    }
+                }
+            }
         }
 
         void write_gltf(const PlyGaussianData &, const std::filesystem::path &) {
