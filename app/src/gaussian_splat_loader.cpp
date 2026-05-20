@@ -14,10 +14,13 @@
 #include <nlohmann/json.hpp>
 #include <spdlog/spdlog.h>
 
+#include <cstddef>
 #include <cstring>
 #include <fstream>
 #include <limits>
+#include <stdexcept>
 #include <unordered_map>
+#include <vector>
 
 namespace himalaya::app::gaussian_splat_loader {
     namespace {
@@ -60,6 +63,187 @@ namespace himalaya::app::gaussian_splat_loader {
 
             file.seekg(0);
             return nlohmann::json::parse(file);
+        }
+
+        // ---- extensionsRequired sanitization ----
+
+        constexpr const char *kGsExtensionName = "KHR_gaussian_splatting";
+
+        /**
+         * Checks whether extensionsRequired contains KHR_gaussian_splatting,
+         * which fastgltf rejects as an unknown required extension.
+         */
+        bool needs_sanitization(const nlohmann::json &gltf_json) {
+            if (!gltf_json.contains("extensionsRequired")) {
+                return false;
+            }
+            for (const auto &ext : gltf_json["extensionsRequired"]) {
+                if (ext.get<std::string>() == kGsExtensionName) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        /**
+         * Returns a JSON copy with KHR_gaussian_splatting removed from
+         * extensionsRequired. Removes the key entirely if the array empties.
+         */
+        nlohmann::json sanitize_extensions_required(nlohmann::json json) {
+            auto &required = json["extensionsRequired"];
+            for (auto it = required.begin(); it != required.end();) {
+                if (it->get<std::string>() == kGsExtensionName) {
+                    it = required.erase(it);
+                } else {
+                    ++it;
+                }
+            }
+            if (required.empty()) {
+                json.erase("extensionsRequired");
+            }
+            return json;
+        }
+
+        /**
+         * Parses a sanitized .gltf by serializing the modified JSON to a
+         * string and feeding it to fastgltf. External .bin files are resolved
+         * relative to the original file's directory.
+         */
+        fastgltf::Expected<fastgltf::Asset> parse_sanitized_gltf(
+            const std::filesystem::path &path,
+            const nlohmann::json &sanitized_json,
+            const fastgltf::Options options) {
+
+            const auto json_str = sanitized_json.dump();
+            auto buffer = fastgltf::GltfDataBuffer::FromBytes(
+                reinterpret_cast<const std::byte *>(json_str.data()),
+                json_str.size());
+            if (buffer.error() != fastgltf::Error::None) {
+                throw std::runtime_error("Failed to create sanitized glTF buffer");
+            }
+
+            fastgltf::Parser parser;
+            return parser.loadGltf(buffer.get(), path.parent_path(), options);
+        }
+
+        /**
+         * Parses a sanitized .glb by reassembling the binary in memory with
+         * the modified JSON chunk. All chunks after JSON are copied verbatim.
+         */
+        fastgltf::Expected<fastgltf::Asset> parse_sanitized_glb(
+            const std::filesystem::path &path,
+            const nlohmann::json &sanitized_json,
+            const fastgltf::Options options) {
+
+            std::ifstream file(path, std::ios::binary | std::ios::ate);
+            if (!file.is_open()) {
+                throw std::runtime_error("Failed to open: " + path.string());
+            }
+            const auto file_size = static_cast<size_t>(file.tellg());
+            if (file_size < 20) {
+                throw std::runtime_error(
+                    "GLB too small: " + std::to_string(file_size) + " bytes");
+            }
+
+            file.seekg(0);
+            std::vector<std::byte> original(file_size);
+            file.read(reinterpret_cast<char *>(original.data()),
+                      static_cast<std::streamsize>(file_size));
+            if (!file) {
+                throw std::runtime_error("Failed to read GLB: " + path.string());
+            }
+
+            uint32_t magic = 0;
+            uint32_t version = 0;
+            std::memcpy(&magic, original.data(), sizeof(uint32_t));
+            std::memcpy(&version, original.data() + 4, sizeof(uint32_t));
+            if (magic != kGlbMagic) {
+                throw std::runtime_error("Invalid GLB magic");
+            }
+            if (version != 2) {
+                throw std::runtime_error(
+                    "Unsupported GLB version: " + std::to_string(version));
+            }
+
+            uint32_t orig_json_chunk_length = 0;
+            uint32_t chunk_type = 0;
+            std::memcpy(&orig_json_chunk_length, original.data() + 12,
+                        sizeof(uint32_t));
+            std::memcpy(&chunk_type, original.data() + 16, sizeof(uint32_t));
+            if (chunk_type != kGlbJsonChunkType) {
+                throw std::runtime_error("GLB first chunk is not JSON");
+            }
+            if (20 + static_cast<size_t>(orig_json_chunk_length) > file_size) {
+                throw std::runtime_error("GLB JSON chunk extends past file end");
+            }
+
+            auto json_str = sanitized_json.dump();
+            while (json_str.size() % 4 != 0) {
+                json_str.push_back(' ');
+            }
+            const auto new_json_length = static_cast<uint32_t>(json_str.size());
+
+            const size_t rest_offset = 12 + 8 + orig_json_chunk_length;
+            const size_t rest_size = file_size - rest_offset;
+
+            const size_t new_total_size = 12 + 8 + new_json_length + rest_size;
+            if (new_total_size > std::numeric_limits<uint32_t>::max()) {
+                throw std::runtime_error("Sanitized GLB exceeds maximum size");
+            }
+            const auto new_total = static_cast<uint32_t>(new_total_size);
+            std::vector<std::byte> glb(new_total);
+
+            std::memcpy(glb.data(), &kGlbMagic, 4);
+            constexpr uint32_t kGlbVersion = 2;
+            std::memcpy(glb.data() + 4, &kGlbVersion, 4);
+            std::memcpy(glb.data() + 8, &new_total, 4);
+
+            std::memcpy(glb.data() + 12, &new_json_length, 4);
+            std::memcpy(glb.data() + 16, &kGlbJsonChunkType, 4);
+            std::memcpy(glb.data() + 20, json_str.data(), json_str.size());
+
+            if (rest_size > 0) {
+                std::memcpy(glb.data() + 20 + new_json_length,
+                            original.data() + rest_offset, rest_size);
+            }
+
+            auto buffer = fastgltf::GltfDataBuffer::FromBytes(
+                glb.data(), glb.size());
+            if (buffer.error() != fastgltf::Error::None) {
+                throw std::runtime_error("Failed to create sanitized GLB buffer");
+            }
+
+            fastgltf::Parser parser;
+            return parser.loadGltf(buffer.get(), path.parent_path(), options);
+        }
+
+        /**
+         * Parses a glTF/glb for the GS loader. Sanitizes extensionsRequired
+         * if it contains KHR_gaussian_splatting; otherwise uses the normal path.
+         */
+        fastgltf::Expected<fastgltf::Asset> parse_gltf_for_gs(
+            const std::filesystem::path &path,
+            const nlohmann::json &gltf_json,
+            const fastgltf::Options options) {
+
+            if (!needs_sanitization(gltf_json)) {
+                return gltf_utils::parse_gltf(path, options);
+            }
+
+            spdlog::info("Sanitizing extensionsRequired for fastgltf compatibility");
+            auto sanitized = sanitize_extensions_required(gltf_json);
+
+            std::ifstream file(path, std::ios::binary);
+            if (!file.is_open()) {
+                throw std::runtime_error("Failed to open: " + path.string());
+            }
+            uint32_t magic = 0;
+            file.read(reinterpret_cast<char *>(&magic), sizeof(magic));
+
+            if (magic == kGlbMagic) {
+                return parse_sanitized_glb(path, sanitized, options);
+            }
+            return parse_sanitized_gltf(path, sanitized, options);
         }
 
         /**
@@ -358,7 +542,14 @@ namespace himalaya::app::gaussian_splat_loader {
         }
 
         // Parse with fastgltf for attribute data
-        auto gltf_expected = gltf_utils::parse_gltf(path, fastgltf::Options::LoadExternalBuffers);
+        fastgltf::Expected<fastgltf::Asset> gltf_expected(fastgltf::Error::None);
+        try {
+            gltf_expected = parse_gltf_for_gs(
+                path, gltf_json, fastgltf::Options::LoadExternalBuffers);
+        } catch (const std::exception &e) {
+            spdlog::error("Failed to parse glTF: {}", e.what());
+            return std::nullopt;
+        }
         if (gltf_expected.error() != fastgltf::Error::None) {
             spdlog::error("Failed to parse glTF: {}",
                           fastgltf::getErrorMessage(gltf_expected.error()));
