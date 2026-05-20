@@ -35,15 +35,24 @@ namespace himalaya::app::gaussian_splat_loader {
          * parse with nlohmann/json is needed for KHR_gaussian_splatting metadata.
          */
         nlohmann::json parse_gltf_json(const std::filesystem::path &path) {
-            std::ifstream file(path, std::ios::binary);
+            std::ifstream file(path, std::ios::binary | std::ios::ate);
             if (!file.is_open()) {
                 throw std::runtime_error("Failed to open: " + path.string());
             }
+            const auto file_size = static_cast<size_t>(file.tellg());
+            file.seekg(0);
 
             uint32_t magic = 0;
-            file.read(reinterpret_cast<char *>(&magic), sizeof(magic));
+            if (file_size >= sizeof(magic)) {
+                file.read(reinterpret_cast<char *>(&magic), sizeof(magic));
+            }
 
             if (magic == kGlbMagic) {
+                if (file_size < 20) {
+                    throw std::runtime_error(
+                        "GLB too small: " + std::to_string(file_size) + " bytes");
+                }
+
                 file.seekg(12);
 
                 uint32_t chunk_length = 0;
@@ -55,9 +64,15 @@ namespace himalaya::app::gaussian_splat_loader {
                 if (chunk_type != kGlbJsonChunkType) {
                     throw std::runtime_error("GLB first chunk is not JSON");
                 }
+                if (20 + static_cast<size_t>(chunk_length) > file_size) {
+                    throw std::runtime_error("GLB JSON chunk extends past file end");
+                }
 
                 std::string json_data(chunk_length, '\0');
                 file.read(json_data.data(), static_cast<std::streamsize>(chunk_length));
+                if (!file) {
+                    throw std::runtime_error("Failed to read GLB JSON chunk");
+                }
                 return nlohmann::json::parse(json_data);
             }
 
