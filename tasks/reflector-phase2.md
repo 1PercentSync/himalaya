@@ -46,7 +46,7 @@
 
 ## Step 1：PLY 转换器
 
-- [ ] 创建 `framework/include/himalaya/framework/ply_converter.h`
+- [x] 创建 `framework/include/himalaya/framework/ply_converter.h`
 - [ ] 创建 `framework/src/ply_converter.cpp`
 - [ ] 实现 PLY 解析（tinyply 读取 position、rotation、scale、opacity、SH 系数）
 - [ ] 实现激活函数（sigmoid opacity、exp scale）
