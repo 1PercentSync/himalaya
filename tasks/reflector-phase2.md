@@ -29,6 +29,7 @@
 | 16 | 多 primitive 支持 | 支持，GaussianSplatScene 包含 vector&lt;GaussianSplatPrimitive&gt; |
 | 17 | 加载入口 | 双入口（PT/GS），用户显式选择模式，各 loader 自行检测数据，不做自动路由 |
 | 18 | extensionsRequired 兼容 | GS loader 消毒 JSON 后传给 fastgltf（fastgltf 不认识 KHR_gaussian_splatting，会拒绝 extensionsRequired） |
+| 19 | UI 集成 | 两个独立文件选择器（PT Scene + GS Scene），RenderMode 切换与文件选择无关，两场景可同时加载 |
 
 ---
 

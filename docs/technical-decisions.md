@@ -640,7 +640,7 @@ GS loader 自身实现了 KHR_gaussian_splatting 支持（extension metadata 由
 
 ### 加载入口
 
-渲染器有两个独立加载入口，由用户显式选择模式，各入口自行处理数据：
+渲染器有两个独立加载入口，各入口自行处理数据，两个场景可同时加载：
 
 | 入口 | 行为 |
 |------|------|
@@ -648,6 +648,25 @@ GS loader 自身实现了 KHR_gaussian_splatting 支持（extension metadata 由
 | GS 入口（GaussianSplatLoader） | 加载 GS primitive；无 GS primitive 时警告 |
 
 两个入口可以加载同一文件或不同文件。`.ply` 文件经 PLY 转换器转为缓存 .gltf 后由 GS 入口加载。
+
+### UI 集成
+
+DebugUI 的 Scene 面板下有两个独立文件选择器：
+
+| 选择器 | Filter | 持久化字段 |
+|--------|--------|-----------|
+| PT Scene（现有） | `*.gltf;*.glb` | `config.scene_path` |
+| GS Scene（新增） | `*.gltf;*.glb;*.ply` | `config.gs_scene_path` |
+
+RenderMode 切换（PT / GS）与文件选择无关——两个场景可独立加载和卸载，RenderMode 仅控制每帧走哪条渲染路径。
+
+### 相机初始化
+
+加载新场景时根据当前活跃的 bounds 定位相机：
+
+- 仅 PT 场景：使用 `SceneLoader::scene_bounds()`
+- 仅 GS 场景：使用 `GaussianSplatScene::scene_bounds`
+- 两者都有：使用最后加载/切换的那个场景的 bounds
 
 ### 错误处理
 
