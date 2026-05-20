@@ -6,9 +6,7 @@
 #include <himalaya/app/gltf_utils.h>
 
 #include <fastgltf/types.hpp>
-#include <spdlog/spdlog.h>
 
-#include <algorithm>
 #include <limits>
 #include <stdexcept>
 
@@ -42,9 +40,4 @@ namespace himalaya::app::gltf_utils {
         return {new_min, new_max};
     }
 
-    bool has_gaussian_splatting(const fastgltf::Asset &asset) {
-        return std::ranges::any_of(asset.extensionsUsed, [](const auto &ext) {
-            return ext == "KHR_gaussian_splatting";
-        });
-    }
 } // namespace himalaya::app::gltf_utils

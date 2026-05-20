@@ -37,11 +37,4 @@ namespace himalaya::app::gltf_utils {
      */
     framework::AABB transform_aabb(const framework::AABB &local, const glm::mat4 &transform);
 
-    /**
-     * @brief Checks whether a parsed glTF asset uses the KHR_gaussian_splatting extension.
-     *
-     * @param asset Parsed fastgltf asset.
-     * @return true if extensionsUsed contains "KHR_gaussian_splatting".
-     */
-    bool has_gaussian_splatting(const fastgltf::Asset &asset);
 } // namespace himalaya::app::gltf_utils
