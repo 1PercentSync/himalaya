@@ -6,6 +6,7 @@
 #include <himalaya/app/application.h>
 
 #include <himalaya/app/gaussian_splat_loader.h>
+#include <himalaya/framework/ply_converter.h>
 #include <himalaya/framework/scene_data.h>
 #include <himalaya/rhi/commands.h>
 
@@ -179,7 +180,43 @@ namespace himalaya::app {
         gs_scene_.reset();
 
         if (!path.empty()) {
-            auto result = gaussian_splat_loader::load(path);
+            std::filesystem::path gltf_path = path;
+
+            // PLY auto-conversion: convert to cached glTF first
+            if (gltf_path.extension() == ".ply") {
+                try {
+                    gltf_path = framework::convert_ply_to_gltf(path);
+                } catch (const std::exception &e) {
+                    error_message_ = "PLY conversion failed: " + std::string(e.what());
+                    config_.gs_scene_path = path;
+                    save_config(config_);
+                    return;
+                }
+            }
+
+            auto result = gaussian_splat_loader::load(gltf_path);
+
+            // Cache corruption: delete cached file and retry conversion
+            if (!result && gltf_path != std::filesystem::path(path)) {
+                spdlog::warn("Cached glTF load failed, retrying conversion: {}", path);
+                std::error_code ec;
+                std::filesystem::remove(gltf_path, ec);
+                // Also remove the companion .bin
+                auto bin_path = gltf_path;
+                bin_path.replace_extension(".bin");
+                std::filesystem::remove(bin_path, ec);
+
+                try {
+                    gltf_path = framework::convert_ply_to_gltf(path);
+                    result = gaussian_splat_loader::load(gltf_path);
+                } catch (const std::exception &e) {
+                    error_message_ = "PLY conversion failed: " + std::string(e.what());
+                    config_.gs_scene_path = path;
+                    save_config(config_);
+                    return;
+                }
+            }
+
             if (!result) {
                 error_message_ = "Failed to load GS scene: " + path;
             } else {
