@@ -82,7 +82,7 @@ namespace himalaya::framework {
      */
     enum class RenderMode : uint8_t {
         PathTracing,        ///< RT path-traced reference view with accumulation.
-        GaussianSplatting,  ///< Gaussian splatting render path (Phase 2).
+        GaussianSplatting,  ///< Gaussian splatting render path (Phase 3).
     };
 
     /**
