@@ -9,7 +9,7 @@
 | Phase | 主题 | 状态 |
 |-------|------|------|
 | 1 | 管线精简 | 完成 |
-| 2 | Gaussian Splatting 数据管线 | 待规划 |
+| 2 | Gaussian Splatting 数据管线 | 已规划 |
 | 3 | Gaussian Splatting 渲染 | 待规划 |
 | 4 | 渲染增强与离屏输出 | 待规划 |
 | 5 | MCP 协议集成 | 待规划 |

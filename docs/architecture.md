@@ -163,3 +163,50 @@ ImGui 面板 + 配置结构体，运行时热调整。
 | 全局数据 | 相机矩阵、曝光值、IBL 索引与旋转 | 每帧一次 | 全局 uniform buffer |
 | 材质数据 | PBR 参数、纹理 index | 加载时一次 | 全局 SSBO，通过 material index 读取 |
 | Per-draw 数据 | 模型矩阵、材质 index | 每次绘制 | push constant |
+
+---
+
+## Gaussian Splatting 数据管线
+
+### 概述
+
+GS 数据管线独立于 PT 管线，负责将 3D Gaussian Splatting 数据从文件加载到 CPU 端 SoA 数据结构。GPU buffer 创建和渲染在 Phase 3 实现。
+
+支持两种输入：glTF（`KHR_gaussian_splatting` 扩展）和 PLY（通过内部转换为 glTF）。
+
+### 模块结构
+
+```
+Application 打开文件
+    │
+    ├─ .ply ──→ PLY 转换器 (framework) ──→ 缓存 .gltf
+    │                                          │
+    └─ .gltf/.glb ─────────────────────────────┤
+                                                ▼
+                                    gltf_utils::parse_gltf()
+                                    gltf_utils::has_gaussian_splatting()
+                                                │
+                                    ┌───────────┴───────────┐
+                                    ▼                       ▼
+                            GaussianSplatLoader       SceneLoader
+                            (GS primitive)            (Mesh primitive)
+                                    │
+                                    ▼
+                            GaussianSplatData (CPU, SoA)
+```
+
+### gltf_utils（App 层共享）
+
+从 `SceneLoader` 提取的公用函数：
+
+- `parse_gltf()` — fastgltf 文件解析（.gltf / .glb），返回 `Asset` + `base_dir`
+- `has_gaussian_splatting()` — 检查 `extensionsUsed` 是否包含 `KHR_gaussian_splatting`
+- `transform_aabb()` — 将 local AABB 通过变换矩阵转换到 world space
+
+### PLY 转换器（Framework 层）
+
+将 INRIA 3DGS PLY 文件转换为符合 `KHR_gaussian_splatting` 规范的 .gltf + .bin。处理激活函数（sigmoid / exp）、坐标系转换（COLMAP → glTF）、四元数重排（wxyz → xyzw）。转换结果缓存到 `%TEMP%\himalaya\gaussians\`。
+
+### GaussianSplatLoader（App 层）
+
+从 glTF 加载 GS 数据。使用 fastgltf 读取 attribute accessor，nlohmann/json 二次解析提取 extension 元数据。输出 CPU 端 `GaussianSplatScene`（包含一个或多个 `GaussianSplatPrimitive`，各自 SoA 布局，按实际 SH degree 分配）。

@@ -8,12 +8,12 @@
 
 - **项目**：Himalaya — 基于 Vulkan 1.4 的渲染器
 - **分支**：`reflector` — Path Tracing + Gaussian Splatting
-- **Phase**：Phase 1 — 管线精简（移除光栅化和烘焙管线）
-- **进度**：Phase 1 全部完成（Step 0-8，含审查后清理）
+- **Phase**：Phase 2 — Gaussian Splatting 数据管线
+- **进度**：Phase 2 规划完成，待开始实现
 
 ### 下一个任务
 
-Phase 2：Gaussian Splatting
+Phase 2 Step 0：基础设施（tinyply 集成、gltf_utils 提取）
 
 ---
 
@@ -24,10 +24,10 @@ CLAUDE.md 已自动加载，以下为额外必读：
 | 文档 | 说明 |
 |------|------|
 | `docs/roadmap.md` | Reflector 分支 phase 概览与顺序 |
-| `docs/current-phase.md` | Phase 1 精简范围与步骤概述 |
-| `tasks/reflector-phase1.md` | Phase 1 任务清单（复选框进度跟踪） |
-| `docs/architecture.md` | 渲染器架构与设计理念（四层结构、RG、Pass 可插拔性） |
-| `docs/technical-decisions.md` | 技术选型与决策（RT、PT、OIDN、采样、材质等） |
+| `docs/current-phase.md` | Phase 2 数据管线范围与步骤概述 |
+| `tasks/reflector-phase2.md` | Phase 2 任务清单（复选框进度跟踪） |
+| `docs/architecture.md` | 渲染器架构与设计理念（含 GS 数据管线） |
+| `docs/technical-decisions.md` | 技术选型与决策（含 GS 第 20-22 节） |
 
 ---
 

@@ -544,3 +544,159 @@ NRC（Neural Radiance Cache）替代 SHaRC、DLSS Ray Reconstruction 替代 NRD�
 ### 算法统一
 
 ReSTIR PT（GRIS 框架）对完整光传输路径做重采样，统一替代 ReSTIR DI + GI。
+
+---
+
+## 20. Gaussian Splatting 数据管线
+
+### 模块架构
+
+| 模块 | 层级 | 职责 |
+|------|------|------|
+| `GaussianSplatLoader` | App | 从 glTF 加载 GS 数据到 CPU 端 SoA 结构 |
+| `gltf_utils` | App | 共享 glTF 解析函数（`parse_gltf`、`has_gaussian_splatting`、`transform_aabb`），供 SceneLoader 和 GaussianSplatLoader 共用 |
+| `GaussianSplatScene` / `GaussianSplatPrimitive` | Framework | GS 数据结构定义（SoA 布局） |
+| PLY 转换器 | Framework | PLY → .gltf 转换，仅供渲染器内部调用 |
+
+### CPU 数据结构
+
+SoA 布局。主流 GS 渲染实现（compute sort + tile-based rendering）按属性分 buffer 送入 GPU，SoA 是天然匹配的布局。GPU sort 操作排 `(depth_key, index)` 对，通过 index 间接访问各属性 buffer。
+
+```
+GaussianSplatPrimitive              // 单个 GS primitive
+├── positions[]                     // vec3, local space
+├── rotations[]                     // quat (xyzw), 椭球朝向
+├── scales[]                        // vec3, 三轴缩放（线性正值）
+├── opacities[]                     // float, 0~1
+├── sh_coefs_0[]                    // vec3, degree 0（必选）
+├── sh_coefs_1[3][]                 // vec3 ×3, degree 1（可选）
+├── sh_coefs_2[5][]                 // vec3 ×5, degree 2（可选）
+├── sh_coefs_3[7][]                 // vec3 ×7, degree 3（可选）
+├── transform                       // mat4, node 世界变换
+├── bounds                           // AABB, 从 positions 计算
+└── metadata
+    ├── kernel                       // "ellipse"
+    ├── color_space                  // "srgb_rec709_display" / "lin_rec709_display"
+    ├── projection                   // "perspective"
+    ├── sorting_method               // "cameraDistance"
+    ├── max_sh_degree                // 0-3
+    └── splat_count
+
+GaussianSplatScene                  // 场景级容器
+├── vector<GaussianSplatPrimitive>  // 一个或多个 primitive（各自有独立 transform/metadata）
+└── scene_bounds                    // 所有 primitive 的 AABB 并集
+```
+
+### 数据加载策略
+
+| 策略 | 选择 | 理由 |
+|------|------|------|
+| Component type | 统一转 float | fastgltf `iterateAccessor` 内置类型转换，shader 端统一 float |
+| SH 存储 | 按实际 degree 分配 | spec 保证同一 primitive 内 SH degree 统一，按需分配避免浪费 |
+| Scale / Rotation | 保留原始值 | 不预计算 covariance，保留运行时变换能力 |
+| Node transform | 保留矩阵，GPU 实时应用 | 保留运行时移动/变换能力 |
+| Color space | 原样保留 SH 系数 + 记录元数据 | SH 系数不能直接做 color space 转换，需先求值再转换 |
+
+### Extension JSON 提取
+
+fastgltf 的 `Primitive` 不暴露 extension JSON。使用 nlohmann/json 对 glTF JSON 做二次解析，提取 `kernel`、`colorSpace`、`projection`、`sortingMethod`。
+
+对 .gltf 文件直接解析 JSON。对 .glb 文件需先提取 JSON chunk：
+
+```
+.glb 二进制布局：
+偏移 0-3:   magic (0x46546C67 = "glTF")
+偏移 4-7:   version (2)
+偏移 8-11:  total length
+偏移 12-15: chunk 0 length (JSON 数据字节数)
+偏移 16-19: chunk 0 type (0x4E4F534A = "JSON")
+偏移 20..20+chunk0Length-1: JSON 数据
+（后续可选 BIN chunk，结构相同：8 字节 header + data）
+```
+
+提取步骤：跳过 12 字节 glb header → 读 4 字节 chunk length → 验证 4 字节 chunk type 为 JSON → 读 length 字节 JSON 数据 → nlohmann/json 解析。
+
+### 文件路由
+
+| 输入 | 路径 |
+|------|------|
+| `.ply` | PLY 转换器 → 缓存 .gltf → `GaussianSplatLoader` |
+| `.gltf` / `.glb` | fastgltf 解析 → 检查 `extensionsUsed` 有无 `KHR_gaussian_splatting` → 有则 `GaussianSplatLoader`，无则 `SceneLoader` |
+
+有 GS 时只加载 GS primitive，忽略同文件中的 mesh primitive。
+
+### 错误处理
+
+| 场景 | 处理 |
+|------|------|
+| PLY 缺少必要属性 | 报错，加载失败 |
+| PLY 转换失败 | 不缓存，报错，加载失败 |
+| glTF primitive `kernel` 非 `"ellipse"` | Warning，跳过该 primitive |
+| glTF primitive 缺少必要 GS attribute | 报错，加载失败 |
+| glTF 无任何 GS primitive | 报错，加载失败 |
+| 缓存文件损坏（GaussianSplatLoader 加载缓存 .gltf 失败） | 删除缓存文件，重新转换 |
+
+---
+
+## 21. PLY 转换器
+
+### 解析
+
+tinyply（`third_party/tinyply/` 源码编译集成）。仅支持 INRIA 3DGS 格式（pre-sigmoid opacity、log-scale、wxyz 四元数）。其他训练框架的格式变体后续按需适配。
+
+### 数据转换
+
+| 步骤 | 操作 |
+|------|------|
+| 激活函数 | `opacity = sigmoid(raw_opacity)`，`scale = exp(raw_scale)` |
+| 坐标系 | COLMAP → glTF：position `(x, -y, -z)`，Y/Z 取反 |
+| 四元数 | wxyz → xyzw（glTF 顺序），同时 Y/Z 分量取反 |
+| SH 系数 | 见下方 SH 坐标系翻转表 |
+
+### SH 坐标系翻转规则
+
+COLMAP→glTF 坐标变换 `(x, y, z) → (x, -y, -z)` 下，将替换代入每个 SH 基函数的方向因子（见 spec 附录 A），方向因子符号变化的系数需要取反。
+
+**原理**：SH 系数存储的是训练空间（COLMAP）下的球谐展开。坐标系变换后，view direction 在新空间中的 y/z 分量符号相反。为使 SH 求值结果不变，需要翻转那些在 y→-y, z→-z 代入后改变符号的基函数对应的系数。
+
+| Degree | Coef 索引 | 方向因子 | 代入 (x,-y,-z) 后 | 翻转 |
+|--------|-----------|----------|-------------------|------|
+| 0 | 0 | 常数 | 不变 | 否 |
+| 1 | 0 (m=-1) | y | -y → 变号 | **是** |
+| 1 | 1 (m=0) | z | -z → 变号 | **是** |
+| 1 | 2 (m=1) | x | x → 不变 | 否 |
+| 2 | 0 (m=-2) | xy | x·(-y) → 变号 | **是** |
+| 2 | 1 (m=-1) | yz | (-y)·(-z) → 不变 | 否 |
+| 2 | 2 (m=0) | 2z²-x²-y² | z²=z², y²=y² → 不变 | 否 |
+| 2 | 3 (m=1) | xz | x·(-z) → 变号 | **是** |
+| 2 | 4 (m=2) | x²-y² | y²=y² → 不变 | 否 |
+| 3 | 0 (m=-3) | y(3x²-y²) | (-y)(3x²-y²) → 变号 | **是** |
+| 3 | 1 (m=-2) | xyz | x·(-y)·(-z) → 不变 | 否 |
+| 3 | 2 (m=-1) | y(4z²-x²-y²) | (-y)(4z²-x²-y²) → 变号 | **是** |
+| 3 | 3 (m=0) | z(2z²-3x²-3y²) | (-z)(2z²-3x²-3y²) → 变号 | **是** |
+| 3 | 4 (m=1) | x(4z²-x²-y²) | x(4z²-x²-y²) → 不变 | 否 |
+| 3 | 5 (m=2) | z(x²-y²) | (-z)(x²-y²) → 变号 | **是** |
+| 3 | 6 (m=3) | x(x²-3y²) | x(x²-3y²) → 不变 | 否 |
+
+### 输出
+
+nlohmann/json 手动构造 glTF JSON + binary buffer，输出 .gltf + .bin 文件。不使用 fastgltf exporter（无法注入自定义 extension JSON）。
+
+### 缓存
+
+复用 `cache.h` 基础设施。PLY 文件 XXH3_128 content hash 作为 key，缓存目录 `%TEMP%\himalaya\gaussians\`。
+
+---
+
+## 22. Gaussian Splatting 渲染方案（Phase 3 方向）
+
+> 以下为 Phase 3 的技术方向预选，非 Phase 2 范围。
+
+### Compute Tile-Based Rendering
+
+纯 compute 软光栅方案：compute 投影 + GPU radix sort → tile binning（按屏幕 tile 分配 splat）→ 每个 tile 一个 workgroup 前到后 alpha blend → `imageStore` 写输出。
+
+### 选型理由
+
+- **Early-out**：per-tile 前到后遍历，transmittance 趋近零时跳过剩余 splat。室内场景像素覆盖密集（10-30 个 splat 填满，但 100+ 个 splat 覆盖），避免大量无效 fragment 执行
+- **全 compute 控制力强**：排序、culling、blending 全部可定制
