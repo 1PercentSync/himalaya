@@ -120,10 +120,11 @@ namespace himalaya::app {
         // Camera: use GS bounds if available, otherwise PT bounds
         if (gs_scene_) {
             auto_position_camera(gs_scene_->scene_bounds);
+            camera_controller_.set_focus_target(&gs_scene_->scene_bounds);
         } else {
             auto_position_camera(scene_loader_.scene_bounds());
+            camera_controller_.set_focus_target(&scene_loader_.scene_bounds());
         }
-        camera_controller_.set_focus_target(&scene_loader_.scene_bounds());
     }
 
     void Application::auto_position_camera(const framework::AABB &bounds) {
@@ -182,6 +183,7 @@ namespace himalaya::app {
 
     void Application::switch_gs_scene(const std::string &path) {
         gs_scene_.reset();
+        camera_controller_.set_focus_target(&scene_loader_.scene_bounds());
 
         if (!path.empty()) {
             std::filesystem::path gltf_path = path;
@@ -230,6 +232,7 @@ namespace himalaya::app {
                              path, gs_scene_->primitives.size());
 
                 auto_position_camera(gs_scene_->scene_bounds);
+                camera_controller_.set_focus_target(&gs_scene_->scene_bounds);
             }
         }
 
