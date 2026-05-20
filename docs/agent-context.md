@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的渲染器
 - **分支**：`reflector` — Path Tracing + Gaussian Splatting
 - **Phase**：Phase 2 — Gaussian Splatting 数据管线
-- **进度**：Phase 2 Step 2 进行中（文件框架 + CMake 已完成，开始实现 extension JSON 提取）
+- **进度**：Phase 2 Step 2 完成，Step 3 开始
 
 ### 下一个任务
 
-Phase 2 Step 2：实现 extension JSON 提取（nlohmann/json 解析 .gltf JSON 或 .glb JSON chunk）
+Phase 2 Step 3：Application 集成（双入口加载、PLY 自动转换、GS 相机初始化）
 
 ---
 
