@@ -34,11 +34,11 @@
 
 - [x] 集成 tinyply 到 `third_party/tinyply/`（源码 + CMakeLists.txt）
 - [x] 更新顶层 `CMakeLists.txt`（add_subdirectory tinyply）
-- [ ] 创建 `app/include/himalaya/app/gltf_utils.h` 和 `app/src/gltf_utils.cpp`
-- [ ] 将 `SceneLoader::load()` 中的 glTF 文件解析逻辑提取为 `gltf_utils::parse_gltf` 函数
-- [ ] 将 `scene_loader.cpp` 匿名 namespace 中的 `transform_aabb` 提取到 gltf_utils
-- [ ] 添加 `has_gaussian_splatting` 函数到 gltf_utils
-- [ ] 修改 `SceneLoader` 调用 gltf_utils 中的共享函数
+- [x] 创建 `app/include/himalaya/app/gltf_utils.h` 和 `app/src/gltf_utils.cpp`
+- [x] 将 `SceneLoader::load()` 中的 glTF 文件解析逻辑提取为 `gltf_utils::parse_gltf` 函数
+- [x] 将 `scene_loader.cpp` 匿名 namespace 中的 `transform_aabb` 提取到 gltf_utils
+- [x] 添加 `has_gaussian_splatting` 函数到 gltf_utils
+- [x] 修改 `SceneLoader` 调用 gltf_utils 中的共享函数
 - [ ] 更新 `CLAUDE.md` 第三方库表（添加 tinyply）
 - [ ] 修正 `scene_data.h` 中 `RenderMode::GaussianSplatting` 注释（Phase 2 → Phase 3）
 - [ ] 编译验证
