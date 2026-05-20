@@ -39,8 +39,8 @@
 - [x] 将 `scene_loader.cpp` 匿名 namespace 中的 `transform_aabb` 提取到 gltf_utils
 - [x] 添加 `has_gaussian_splatting` 函数到 gltf_utils
 - [x] 修改 `SceneLoader` 调用 gltf_utils 中的共享函数
-- [ ] 更新 `CLAUDE.md` 第三方库表（添加 tinyply）
-- [ ] 修正 `scene_data.h` 中 `RenderMode::GaussianSplatting` 注释（Phase 2 → Phase 3）
+- [x] 更新 `CLAUDE.md` 第三方库表（添加 tinyply）
+- [x] 修正 `scene_data.h` 中 `RenderMode::GaussianSplatting` 注释（Phase 2 → Phase 3）
 - [ ] 编译验证
 
 ## Step 1：PLY 转换器

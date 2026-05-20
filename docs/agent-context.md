@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的渲染器
 - **分支**：`reflector` — Path Tracing + Gaussian Splatting
 - **Phase**：Phase 2 — Gaussian Splatting 数据管线
-- **进度**：Phase 2 Step 0 进行中（tinyply 已集成，gltf_utils 已提取，待收尾）
+- **进度**：Phase 2 Step 0 进行中（待编译验证）
 
 ### 下一个任务
 
-Phase 2 Step 0：收尾（CLAUDE.md 更新 tinyply、scene_data.h 注释修正、编译验证）
+Phase 2 Step 0：编译验证 → Step 1 开始
 
 ---
 
