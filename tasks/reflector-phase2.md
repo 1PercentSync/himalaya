@@ -24,7 +24,7 @@
 | 11 | .gltf 输出 | nlohmann/json 手写，输出 .gltf + .bin |
 | 12 | 坐标系转换 | 转换器中完成（COLMAP → glTF） |
 | 13 | 缓存策略 | cache.h 基础设施，XXH3_128，`%TEMP%\himalaya\gaussians\` |
-| 14 | 转换器位置 | Framework 层，仅内部调用，不做独立 CLI |
+| 14 | 转换器位置 | Framework 层；同时通过 CLI 参数暴露为命令行转换模式 |
 | 15 | Phase 2 输出边界 | 只交付 CPU 端数据，GPU upload 留给 Phase 3 |
 | 16 | 多 primitive 支持 | 支持，GaussianSplatScene 包含 vector&lt;GaussianSplatPrimitive&gt; |
 | 17 | 加载入口 | 双入口（PT/GS），用户显式选择模式，各 loader 自行检测数据，不做自动路由 |
@@ -78,4 +78,12 @@
 - [ ] 实现双入口加载（PT 入口加载 mesh，GS 入口加载 GS；.ply 经转换后由 GS 入口加载）
 - [ ] 实现 PLY 自动转换（加载 .ply 时调用转换器，使用缓存路径）
 - [ ] 实现 GS 场景的相机初始化（从 GaussianSplatData::bounds）
+- [ ] 编译验证
+
+## Step 4：CLI 转换模式
+
+- [ ] 通过 vcpkg 引入 CLI11
+- [ ] 更新 `app/CMakeLists.txt`（链接 CLI11）
+- [ ] 实现命令行参数解析（无参数 → GUI 渲染器；转换参数 → CLI PLY→glTF 转换）
+- [ ] 更新 `CLAUDE.md` 第三方库表（添加 CLI11）
 - [ ] 编译验证

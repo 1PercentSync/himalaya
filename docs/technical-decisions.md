@@ -688,6 +688,10 @@ nlohmann/json 手动构造 glTF JSON + binary buffer，输出 .gltf + .bin 文�
 
 复用 `cache.h` 基础设施。PLY 文件 XXH3_128 content hash 作为 key，缓存目录 `%TEMP%\himalaya\gaussians\`。
 
+### CLI 转换模式
+
+通过 CLI11（vcpkg）实现命令行参数解析。无参数启动 = 当前 GUI 渲染器；附加转换参数时作为 CLI PLY→glTF 转换器运行，不启动窗口和 Vulkan。
+
 ---
 
 ## 22. Gaussian Splatting 渲染方案（Phase 3 方向）
