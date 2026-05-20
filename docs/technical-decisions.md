@@ -554,7 +554,7 @@ ReSTIR PT（GRIS 框架）对完整光传输路径做重采样，统一替代 Re
 | 模块 | 层级 | 职责 |
 |------|------|------|
 | `GaussianSplatLoader` | App | 从 glTF 加载 GS 数据到 CPU 端 SoA 结构 |
-| `gltf_utils` | App | 共享 glTF 解析函数（`parse_gltf`、`has_gaussian_splatting`、`transform_aabb`），供 SceneLoader 和 GaussianSplatLoader 共用 |
+| `gltf_utils` | App | 共享 glTF 解析函数（`parse_gltf`、`transform_aabb`），供 SceneLoader 和 GaussianSplatLoader 共用 |
 | `GaussianSplatScene` / `GaussianSplatPrimitive` | Framework | GS 数据结构定义（SoA 布局） |
 | PLY 转换器 | Framework | PLY → .gltf 转换，仅供渲染器内部调用 |
 
@@ -616,14 +616,16 @@ fastgltf 的 `Primitive` 不暴露 extension JSON。使用 nlohmann/json 对 glT
 
 提取步骤：跳过 12 字节 glb header → 读 4 字节 chunk length → 验证 4 字节 chunk type 为 JSON → 读 length 字节 JSON 数据 → nlohmann/json 解析。
 
-### 文件路由
+### 加载入口
 
-| 输入 | 路径 |
+渲染器有两个独立加载入口，由用户显式选择模式，各入口自行处理数据：
+
+| 入口 | 行为 |
 |------|------|
-| `.ply` | PLY 转换器 → 缓存 .gltf → `GaussianSplatLoader` |
-| `.gltf` / `.glb` | fastgltf 解析 → 检查 `extensionsUsed` 有无 `KHR_gaussian_splatting` → 有则 `GaussianSplatLoader`，无则 `SceneLoader` |
+| PT 入口（SceneLoader） | 加载 mesh primitive；无 mesh 时保持现有行为（警告） |
+| GS 入口（GaussianSplatLoader） | 加载 GS primitive；无 GS primitive 时警告 |
 
-有 GS 时只加载 GS primitive，忽略同文件中的 mesh primitive。
+两个入口可以加载同一文件或不同文件。`.ply` 文件经 PLY 转换器转为缓存 .gltf 后由 GS 入口加载。
 
 ### 错误处理
 

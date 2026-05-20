@@ -27,6 +27,7 @@
 | 14 | 转换器位置 | Framework 层，仅内部调用，不做独立 CLI |
 | 15 | Phase 2 输出边界 | 只交付 CPU 端数据，GPU upload 留给 Phase 3 |
 | 16 | 多 primitive 支持 | 支持，GaussianSplatScene 包含 vector&lt;GaussianSplatPrimitive&gt; |
+| 17 | 加载入口 | 双入口（PT/GS），用户显式选择模式，各 loader 自行检测数据，不做自动路由 |
 
 ---
 
@@ -37,7 +38,7 @@
 - [x] 创建 `app/include/himalaya/app/gltf_utils.h` 和 `app/src/gltf_utils.cpp`
 - [x] 将 `SceneLoader::load()` 中的 glTF 文件解析逻辑提取为 `gltf_utils::parse_gltf` 函数
 - [x] 将 `scene_loader.cpp` 匿名 namespace 中的 `transform_aabb` 提取到 gltf_utils
-- [x] 添加 `has_gaussian_splatting` 函数到 gltf_utils
+- [x] ~~添加 `has_gaussian_splatting` 函数到 gltf_utils~~（设计变更：移除，各 loader 自行检测）
 - [x] 修改 `SceneLoader` 调用 gltf_utils 中的共享函数
 - [x] 更新 `CLAUDE.md` 第三方库表（添加 tinyply）
 - [x] 修正 `scene_data.h` 中 `RenderMode::GaussianSplatting` 注释（Phase 2 → Phase 3）
@@ -74,7 +75,7 @@
 
 ## Step 3：Application 集成
 
-- [ ] 实现文件路由（.ply → 转换 → GS loader；.gltf/.glb → 检查 extensionsUsed → 选择 loader）
+- [ ] 实现双入口加载（PT 入口加载 mesh，GS 入口加载 GS；.ply 经转换后由 GS 入口加载）
 - [ ] 实现 PLY 自动转换（加载 .ply 时调用转换器，使用缓存路径）
 - [ ] 实现 GS 场景的相机初始化（从 GaussianSplatData::bounds）
 - [ ] 编译验证
