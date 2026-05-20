@@ -8,6 +8,7 @@
 #include <himalaya/framework/cache.h>
 
 #include <himalaya/tinyply/tinyply.h>
+#include <glm/glm.hpp>
 #include <nlohmann/json.hpp>
 #include <spdlog/spdlog.h>
 
@@ -47,7 +48,8 @@ namespace himalaya::framework {
         }
 
         const auto gltf_path = cache_path("gaussians", hash, ".gltf");
-        if (std::filesystem::exists(gltf_path)) {
+        const auto bin_path = cache_path("gaussians", hash, ".bin");
+        if (std::filesystem::exists(gltf_path) && std::filesystem::exists(bin_path)) {
             spdlog::info("PLY cache hit: {}", gltf_path.string());
             return gltf_path;
         }
@@ -69,10 +71,16 @@ namespace himalaya::framework {
         // Total f_rest count determines SH degree:
         //   0 → degree 0, 9 → degree 1, 24 → degree 2, 45 → degree 3
         uint32_t detect_sh_degree(const uint32_t f_rest_count) {
-            if (f_rest_count >= 45) { return 3; }
-            if (f_rest_count >= 24) { return 2; }
-            if (f_rest_count >= 9) { return 1; }
-            return 0;
+            switch (f_rest_count) {
+                case 0: return 0;
+                case 9: return 1;
+                case 24: return 2;
+                case 45: return 3;
+                default:
+                    throw std::runtime_error(
+                        "Invalid f_rest property count: " + std::to_string(f_rest_count)
+                        + " (expected 0, 9, 24, or 45)");
+            }
         }
 
         std::vector<float> extract_floats(const std::shared_ptr<tinyply::PlyData> &pd,
@@ -220,8 +228,178 @@ namespace himalaya::framework {
             }
         }
 
-        void write_gltf(const PlyGaussianData &, const std::filesystem::path &) {
-            // TODO: Step 1 item 8
+        struct BufferViewEntry {
+            size_t offset;
+            size_t length;
+        };
+
+        BufferViewEntry append_to_buffer(std::vector<uint8_t> &buffer,
+                                         const float *data, const size_t float_count) {
+            const auto offset = buffer.size();
+            const auto byte_count = float_count * sizeof(float);
+            buffer.resize(buffer.size() + byte_count);
+            std::memcpy(buffer.data() + offset, data, byte_count);
+            return {offset, byte_count};
+        }
+
+        // Transposes one SH coefficient from INRIA channel-first layout to glTF
+        // per-coefficient VEC3 (R,G,B) and appends to the binary buffer.
+        BufferViewEntry append_sh_coef(std::vector<uint8_t> &buffer,
+                                       const std::vector<float> &sh_rest,
+                                       const uint32_t count,
+                                       const uint32_t rest_per_channel,
+                                       const uint32_t coef_index) {
+            const size_t total_rest = static_cast<size_t>(rest_per_channel) * 3;
+            std::vector<float> transposed(static_cast<size_t>(count) * 3);
+            for (uint32_t i = 0; i < count; ++i) {
+                const size_t src_base = static_cast<size_t>(i) * total_rest;
+                transposed[i * 3 + 0] = sh_rest[src_base + 0 * rest_per_channel + coef_index];
+                transposed[i * 3 + 1] = sh_rest[src_base + 1 * rest_per_channel + coef_index];
+                transposed[i * 3 + 2] = sh_rest[src_base + 2 * rest_per_channel + coef_index];
+            }
+            return append_to_buffer(buffer, transposed.data(), transposed.size());
+        }
+
+        void write_gltf(const PlyGaussianData &data, const std::filesystem::path &gltf_path) {
+            using json = nlohmann::json;
+
+            std::vector<uint8_t> bin_buffer;
+            std::vector<BufferViewEntry> views;
+            json accessors = json::array();
+            json attributes = json::object();
+
+            auto add_accessor = [&](const std::string &attr_name,
+                                    const std::string &type,
+                                    const uint32_t component_type,
+                                    const BufferViewEntry &bv,
+                                    const json &min_val = nullptr,
+                                    const json &max_val = nullptr) {
+                const auto idx = static_cast<uint32_t>(accessors.size());
+                json acc = {
+                    {"bufferView", idx},
+                    {"componentType", component_type},
+                    {"count", data.count},
+                    {"type", type}
+                };
+                if (!min_val.is_null()) { acc["min"] = min_val; }
+                if (!max_val.is_null()) { acc["max"] = max_val; }
+                accessors.push_back(acc);
+                views.push_back(bv);
+                attributes[attr_name] = idx;
+            };
+
+            constexpr uint32_t kFloat = 5126;
+
+            // POSITION — compute min/max for glTF spec requirement
+            {
+                glm::vec3 pos_min(std::numeric_limits<float>::max());
+                glm::vec3 pos_max(std::numeric_limits<float>::lowest());
+                for (uint32_t i = 0; i < data.count; ++i) {
+                    for (int c = 0; c < 3; ++c) {
+                        const float v = data.positions[i * 3 + c];
+                        if (v < pos_min[c]) { pos_min[c] = v; }
+                        if (v > pos_max[c]) { pos_max[c] = v; }
+                    }
+                }
+                auto bv = append_to_buffer(bin_buffer, data.positions.data(), data.positions.size());
+                add_accessor("POSITION", "VEC3", kFloat, bv,
+                             {pos_min.x, pos_min.y, pos_min.z},
+                             {pos_max.x, pos_max.y, pos_max.z});
+            }
+
+            // ROTATION
+            add_accessor("KHR_gaussian_splatting:ROTATION", "VEC4", kFloat,
+                         append_to_buffer(bin_buffer, data.rotations.data(), data.rotations.size()));
+
+            // SCALE
+            add_accessor("KHR_gaussian_splatting:SCALE", "VEC3", kFloat,
+                         append_to_buffer(bin_buffer, data.scales.data(), data.scales.size()));
+
+            // OPACITY
+            add_accessor("KHR_gaussian_splatting:OPACITY", "SCALAR", kFloat,
+                         append_to_buffer(bin_buffer, data.opacities.data(), data.opacities.size()));
+
+            // SH DEGREE 0
+            add_accessor("KHR_gaussian_splatting:SH_DEGREE_0_COEF_0", "VEC3", kFloat,
+                         append_to_buffer(bin_buffer, data.sh_dc.data(), data.sh_dc.size()));
+
+            // SH higher degrees — transpose from INRIA channel-first to per-coefficient VEC3
+            if (data.sh_degree >= 1) {
+                const uint32_t rpc = (data.sh_degree + 1) * (data.sh_degree + 1) - 1;
+
+                // Degree 1: 3 coefficients (rest indices 0-2)
+                for (uint32_t c = 0; c < 3; ++c) {
+                    auto name = "KHR_gaussian_splatting:SH_DEGREE_1_COEF_" + std::to_string(c);
+                    add_accessor(name, "VEC3", kFloat,
+                                 append_sh_coef(bin_buffer, data.sh_rest, data.count, rpc, c));
+                }
+
+                if (data.sh_degree >= 2) {
+                    for (uint32_t c = 0; c < 5; ++c) {
+                        auto name = "KHR_gaussian_splatting:SH_DEGREE_2_COEF_" + std::to_string(c);
+                        add_accessor(name, "VEC3", kFloat,
+                                     append_sh_coef(bin_buffer, data.sh_rest, data.count, rpc, 3 + c));
+                    }
+                }
+
+                if (data.sh_degree >= 3) {
+                    for (uint32_t c = 0; c < 7; ++c) {
+                        auto name = "KHR_gaussian_splatting:SH_DEGREE_3_COEF_" + std::to_string(c);
+                        add_accessor(name, "VEC3", kFloat,
+                                     append_sh_coef(bin_buffer, data.sh_rest, data.count, rpc, 8 + c));
+                    }
+                }
+            }
+
+            // Build buffer views JSON
+            json buffer_views = json::array();
+            for (const auto &[offset, length] : views) {
+                buffer_views.push_back({
+                    {"buffer", 0},
+                    {"byteOffset", offset},
+                    {"byteLength", length}
+                });
+            }
+
+            // Build complete glTF JSON
+            const auto bin_filename = gltf_path.stem().string() + ".bin";
+
+            json gltf = {
+                {"asset", {{"version", "2.0"}, {"generator", "himalaya"}}},
+                {"extensionsUsed", {"KHR_gaussian_splatting"}},
+                {"buffers", {{{"uri", bin_filename}, {"byteLength", bin_buffer.size()}}}},
+                {"bufferViews", buffer_views},
+                {"accessors", accessors},
+                {"meshes", {{
+                    {"primitives", {{
+                        {"mode", 0},
+                        {"attributes", attributes},
+                        {"extensions", {
+                            {"KHR_gaussian_splatting", {
+                                {"kernel", "ellipse"},
+                                {"colorSpace", "srgb_rec709_display"}
+                            }}
+                        }}
+                    }}}
+                }}},
+                {"nodes", {{{"mesh", 0}}}},
+                {"scenes", {{{"nodes", {0}}}}},
+                {"scene", 0}
+            };
+
+            // Write .gltf JSON
+            const auto json_str = gltf.dump(2);
+            if (!atomic_write_file(gltf_path,
+                                   json_str.data(), json_str.size())) {
+                throw std::runtime_error("Failed to write glTF file: " + gltf_path.string());
+            }
+
+            // Write .bin
+            const auto bin_path = gltf_path.parent_path() / bin_filename;
+            if (!atomic_write_file(bin_path,
+                                   bin_buffer.data(), bin_buffer.size())) {
+                throw std::runtime_error("Failed to write binary buffer: " + bin_path.string());
+            }
         }
     }
 } // namespace himalaya::framework
