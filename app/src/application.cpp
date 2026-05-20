@@ -117,8 +117,8 @@ namespace himalaya::app {
             switch_gs_scene(config_.gs_scene_path);
         }
 
-        // Camera: use GS bounds if available, otherwise PT bounds
-        if (gs_scene_) {
+        // Camera: position based on current render mode
+        if (!pt_mode_ && gs_scene_) {
             auto_position_camera(gs_scene_->scene_bounds);
             camera_controller_.set_focus_target(&gs_scene_->scene_bounds);
         } else {
@@ -174,8 +174,10 @@ namespace himalaya::app {
             }
         }
 
-        auto_position_camera(scene_loader_.scene_bounds());
-        camera_controller_.set_focus_target(&scene_loader_.scene_bounds());
+        if (pt_mode_) {
+            auto_position_camera(scene_loader_.scene_bounds());
+            camera_controller_.set_focus_target(&scene_loader_.scene_bounds());
+        }
 
         config_.scene_path = path;
         save_config(config_);
@@ -234,8 +236,10 @@ namespace himalaya::app {
                 spdlog::info("Loaded GS scene: {} ({} primitives)",
                              path, gs_scene_->primitives.size());
 
-                auto_position_camera(gs_scene_->scene_bounds);
-                camera_controller_.set_focus_target(&gs_scene_->scene_bounds);
+                if (!pt_mode_) {
+                    auto_position_camera(gs_scene_->scene_bounds);
+                    camera_controller_.set_focus_target(&gs_scene_->scene_bounds);
+                }
             }
         }
 
