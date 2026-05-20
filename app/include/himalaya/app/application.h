@@ -178,12 +178,14 @@ namespace himalaya::app {
         void update_drag_input();
 
         /**
-         * @brief Positions the camera to overlook the current scene.
+         * @brief Positions the camera to overlook the given bounds.
          *
-         * Sets yaw=0, pitch=-45 degrees, and computes position from scene AABB
-         * using compute_focus_position(). No-op if the scene AABB is degenerate.
+         * Sets yaw=0, pitch=-45 degrees, and computes position from AABB
+         * using compute_focus_position(). No-op if the AABB is degenerate.
+         *
+         * @param bounds Scene AABB to focus on.
          */
-        void auto_position_camera();
+        void auto_position_camera(const framework::AABB &bounds);
 
         // --- Runtime scene/environment switching ---
 

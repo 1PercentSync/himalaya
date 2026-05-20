@@ -117,12 +117,16 @@ namespace himalaya::app {
             switch_gs_scene(config_.gs_scene_path);
         }
 
-        auto_position_camera();
+        // Camera: use GS bounds if available, otherwise PT bounds
+        if (gs_scene_) {
+            auto_position_camera(gs_scene_->scene_bounds);
+        } else {
+            auto_position_camera(scene_loader_.scene_bounds());
+        }
         camera_controller_.set_focus_target(&scene_loader_.scene_bounds());
     }
 
-    void Application::auto_position_camera() {
-        const auto &bounds = scene_loader_.scene_bounds();
+    void Application::auto_position_camera(const framework::AABB &bounds) {
         const float diagonal = glm::length(bounds.max - bounds.min);
 
         constexpr float kEpsilon = 1e-4f;
@@ -169,7 +173,7 @@ namespace himalaya::app {
             }
         }
 
-        auto_position_camera();
+        auto_position_camera(scene_loader_.scene_bounds());
         camera_controller_.set_focus_target(&scene_loader_.scene_bounds());
 
         config_.scene_path = path;
@@ -224,6 +228,8 @@ namespace himalaya::app {
                 gs_scene_ = std::move(result);
                 spdlog::info("Loaded GS scene: {} ({} primitives)",
                              path, gs_scene_->primitives.size());
+
+                auto_position_camera(gs_scene_->scene_bounds);
             }
         }
 
