@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的渲染器
 - **分支**：`reflector` — Path Tracing + Gaussian Splatting
 - **Phase**：Phase 2 — Gaussian Splatting 数据管线
-- **进度**：Phase 2 Step 3 进行中，双入口加载完成，PLY 自动转换待实现
+- **进度**：Phase 2 Step 3 进行中，双入口加载 + PLY 自动转换完成，相机初始化待实现
 
 ### 下一个任务
 
-Phase 2 Step 3：PLY 自动转换（加载 .ply 时调用转换器，使用缓存路径）
+Phase 2 Step 3：GS 场景的相机初始化（从 GaussianSplatScene::scene_bounds）
 
 ---
 

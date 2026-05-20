@@ -79,7 +79,7 @@
 ## Step 3：Application 集成
 
 - [x] 实现双入口加载（PT 入口加载 mesh，GS 入口加载 GS；.ply 经转换后由 GS 入口加载）
-- [ ] 实现 PLY 自动转换（加载 .ply 时调用转换器，使用缓存路径）
+- [x] 实现 PLY 自动转换（加载 .ply 时调用转换器，使用缓存路径）
 - [ ] 实现 GS 场景的相机初始化（从 GaussianSplatData::bounds）
 - [ ] 编译验证
 
