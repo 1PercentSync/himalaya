@@ -41,28 +41,17 @@ namespace himalaya::framework {
         void write_gltf(const PlyGaussianData &data, const std::filesystem::path &gltf_path);
     }
 
-    std::filesystem::path convert_ply_to_gltf(const std::filesystem::path &ply_path) {
-        const auto hash = content_hash(ply_path);
-        if (hash.empty()) {
-            throw std::runtime_error("Failed to hash PLY file: " + ply_path.string());
-        }
-
-        const auto gltf_path = cache_path("gaussians", hash, ".gltf");
-        const auto bin_path = cache_path("gaussians", hash, ".bin");
-        if (std::filesystem::exists(gltf_path) && std::filesystem::exists(bin_path)) {
-            spdlog::info("PLY cache hit: {}", gltf_path.string());
-            return gltf_path;
-        }
-
+    void convert_ply_to_gltf(const std::filesystem::path &ply_path,
+                              const std::filesystem::path &output_path) {
         spdlog::info("Converting PLY: {}", ply_path.string());
 
         auto data = parse_ply(ply_path);
         apply_activations(data);
         transform_to_gltf_coords(data);
-        write_gltf(data, gltf_path);
+        write_gltf(data, output_path);
 
-        spdlog::info("PLY converted: {} gaussians, SH degree {}", data.count, data.sh_degree);
-        return gltf_path;
+        spdlog::info("PLY converted: {} gaussians, SH degree {}, output: {}",
+                     data.count, data.sh_degree, output_path.string());
     }
 
     namespace {

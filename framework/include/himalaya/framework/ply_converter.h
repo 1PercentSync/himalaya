@@ -15,14 +15,15 @@ namespace himalaya::framework {
     /**
      * @brief Converts an INRIA 3DGS PLY file to KHR_gaussian_splatting glTF.
      *
-     * On first call for a given PLY file, parses the PLY, applies activation
-     * functions (sigmoid opacity, exp scale), transforms from COLMAP to glTF
-     * coordinate system, and writes .gltf + .bin to the cache directory.
-     * Subsequent calls with the same file content return the cached path.
+     * Parses the PLY, applies activation functions (sigmoid opacity, exp scale),
+     * transforms from COLMAP to glTF coordinate system, and writes .gltf + .bin
+     * to the specified output path. The companion .bin file is written alongside
+     * the .gltf with the same stem name.
      *
-     * @param ply_path Path to the source .ply file.
-     * @return Path to the generated (or cached) .gltf file.
+     * @param ply_path    Path to the source .ply file.
+     * @param output_path Path for the output .gltf file.
      * @throws std::runtime_error on parse or write failure.
      */
-    std::filesystem::path convert_ply_to_gltf(const std::filesystem::path &ply_path);
+    void convert_ply_to_gltf(const std::filesystem::path &ply_path,
+                              const std::filesystem::path &output_path);
 } // namespace himalaya::framework

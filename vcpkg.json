@@ -36,5 +36,8 @@
   }, {
     "name" : "xxhash",
     "version>=" : "0.8.3"
+  }, {
+    "name" : "cli11",
+    "version>=" : "2.6.2"
   } ]
 }

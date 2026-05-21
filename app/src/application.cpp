@@ -6,6 +6,7 @@
 #include <himalaya/app/application.h>
 
 #include <himalaya/app/gaussian_splat_loader.h>
+#include <himalaya/framework/cache.h>
 #include <himalaya/framework/ply_converter.h>
 #include <himalaya/framework/scene_data.h>
 #include <himalaya/rhi/commands.h>
@@ -193,7 +194,18 @@ namespace himalaya::app {
             // PLY auto-conversion: convert to cached glTF first
             if (gltf_path.extension() == ".ply") {
                 try {
-                    gltf_path = framework::convert_ply_to_gltf(path);
+                    const auto hash = framework::content_hash(gltf_path);
+                    if (hash.empty()) {
+                        throw std::runtime_error("Failed to hash PLY file");
+                    }
+                    auto cached = framework::cache_path("gaussians", hash, ".gltf");
+                    auto cached_bin = framework::cache_path("gaussians", hash, ".bin");
+                    if (!std::filesystem::exists(cached) || !std::filesystem::exists(cached_bin)) {
+                        framework::convert_ply_to_gltf(gltf_path, cached);
+                    } else {
+                        spdlog::info("PLY cache hit: {}", cached.string());
+                    }
+                    gltf_path = cached;
                 } catch (const std::exception &e) {
                     spdlog::error("PLY conversion failed: {}: {}", path, e.what());
                     error_message_ = "PLY conversion failed: " + std::string(e.what());
@@ -210,13 +222,12 @@ namespace himalaya::app {
                 spdlog::warn("Cached glTF load failed, retrying conversion: {}", path);
                 std::error_code ec;
                 std::filesystem::remove(gltf_path, ec);
-                // Also remove the companion .bin
                 auto bin_path = gltf_path;
                 bin_path.replace_extension(".bin");
                 std::filesystem::remove(bin_path, ec);
 
                 try {
-                    gltf_path = framework::convert_ply_to_gltf(path);
+                    framework::convert_ply_to_gltf(path, gltf_path);
                     result = gaussian_splat_loader::load(gltf_path);
                 } catch (const std::exception &e) {
                     spdlog::error("PLY conversion failed (retry): {}: {}", path, e.what());
