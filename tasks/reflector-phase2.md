@@ -85,8 +85,8 @@
 
 ## Step 4：CLI 转换模式
 
-- [ ] 通过 vcpkg 引入 CLI11
-- [ ] 更新 `app/CMakeLists.txt`（链接 CLI11）
-- [ ] 实现命令行参数解析（无参数 → GUI 渲染器；转换参数 → CLI PLY→glTF 转换）
-- [ ] 更新 `CLAUDE.md` 第三方库表（添加 CLI11）
-- [ ] 编译验证
+- [x] 通过 vcpkg 引入 CLI11
+- [x] 更新 `app/CMakeLists.txt`（链接 CLI11）
+- [x] 实现命令行参数解析（无参数 → GUI 渲染器；转换参数 → CLI PLY→glTF 转换）
+- [x] 更新 `CLAUDE.md` 第三方库表（添加 CLI11）
+- [x] 编译验证

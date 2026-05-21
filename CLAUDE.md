@@ -213,6 +213,7 @@ vcpkg 有端口的库通过 `vcpkg.json` 管理。vcpkg 无端口的库放入 `t
 | bc7e.ispc | BC7 纹理压缩（ISPC SIMD，需要 ISPC 编译器） |
 | rgbcx | BC4/BC5 纹理压缩 |
 | tinyply | PLY 网格文件解析 |
+| CLI11 | 命令行参数解析 |
 
 ---
 
