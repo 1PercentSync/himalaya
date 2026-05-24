@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的渲染器
 - **分支**：`reflector` — Path Tracing + Gaussian Splatting
 - **Phase**：Phase 3 — Gaussian Splatting 渲染
-- **进度**：Step 5.5 已完成 PresentPass / Swapchain 色彩方案回退、shader 内 GS 色彩空间处理、Projection 多 SH group barrier、sort prepare clamp、RadixSort 规模保护、tile entry generation 与 entry capacity；待继续 entry 双排序 / gather / range build
+- **进度**：Step 5.5 已完成 PresentPass / Swapchain 色彩方案回退、shader 内 GS 色彩空间处理、Projection 多 SH group barrier、sort prepare clamp、RadixSort 规模保护、tile entry generation、entry capacity、entry 双排序、gather 与 range build；待继续 GS runtime stats delayed readback
 
 ### 下一个任务
 
-Step 5.5：用现有 32-bit stable RadixSort 执行两次排序（depth 后 tile-id），新增 gather pass 与 tile range build pass
+Step 5.5：增加 GS runtime stats GPU buffer 与 per-frame delayed readback buffer，缓存 visible splats、entry requested/written/dropped、invalid entries、sort clamped，并暴露 warning/log 指标
 
 ---
 

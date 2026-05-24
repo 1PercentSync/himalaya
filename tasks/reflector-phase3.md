@@ -146,9 +146,9 @@
 - [x] 明确 RadixSort 当前最大可排序 entry 数（`16 * 1024 * 1024`）并在 C++ 侧保护 scan `chunk_count <= 256` 假设
 - [x] 将 Tile Binning 重构为 tile entry 生成：写入 `entry_depth_keys[]`、`entry_tile_ids[]`、`entry_splat_ids[]`、`entry_indices[]`
 - [x] 实现 entry capacity 策略：`min(max_splat_count * 16, 16 * 1024 * 1024)`；容量不足时安全丢弃并累计 dropped count
-- [ ] 用现有 32-bit stable RadixSort 执行两次排序：先按 depth，再按 tile-id 稳定排序
-- [ ] 新增 gather pass：depth-sorted entry index → tile sort key/value
-- [ ] 新增 tile range build pass：从 sorted tile ids 生成 `tile_offsets[]` / `tile_counts[]`，替代原 `gs_tile_scan.comp` prefix-sum 流程
+- [x] 用现有 32-bit stable RadixSort 执行两次排序：先按 depth，再按 tile-id 稳定排序
+- [x] 新增 gather pass：depth-sorted entry index → tile sort key/value
+- [x] 新增 tile range build pass：从 sorted tile ids 生成 `tile_offsets[]` / `tile_counts[]`，替代原 `gs_tile_scan.comp` prefix-sum 流程
 - [ ] 增加 GS runtime stats GPU buffer 与 per-frame delayed readback buffer，缓存 visible splats、entry requested/written/dropped、invalid entries、sort clamped
 - [ ] Debug/log 中暴露可控退化指标；`GsColorSpace::Unknown` 在 GS 模式按 warning + `LinRec709Display` fallback 处理
 - [ ] 编译验证
