@@ -48,10 +48,12 @@ layout(set = 3, binding = 3) buffer EntryCountBuffer {
 };
 
 layout(set = 3, binding = 4) buffer EntryStatsBuffer {
+    uint stats_visible_splats;
     uint entry_requested_count;
     uint entry_written_count;
     uint entry_dropped_count;
     uint invalid_entry_count;
+    uint sort_clamped;
 };
 
 layout(set = 3, binding = 5) writeonly buffer EntryDepthKeyBuffer {

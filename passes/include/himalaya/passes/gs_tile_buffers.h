@@ -17,6 +17,20 @@
 
 namespace himalaya::passes {
     /**
+     * @brief Runtime statistics produced by the GS tile-entry pipeline.
+     */
+    struct GsRuntimeStats {
+        uint32_t visible_splats = 0;    ///< Visible splats reported by projection.
+        uint32_t entry_requested = 0;   ///< Total tile entries requested before capacity clipping.
+        uint32_t entry_written = 0;     ///< Tile entries successfully written.
+        uint32_t entry_dropped = 0;     ///< Tile entries dropped due to capacity limits.
+        uint32_t invalid_entries = 0;   ///< Invalid splat or tile entries detected by shaders.
+        uint32_t sort_clamped = 0;      ///< Non-zero when sorting consumed a clamped element range.
+    };
+
+    static_assert(sizeof(GsRuntimeStats) == 24, "GsRuntimeStats must match shader std430 uint layout");
+
+    /**
      * @brief Owns GPU buffers produced and consumed by the GS tile-entry pipeline.
      *
      * The tile range buffers are sized by the current render target tile grid.
@@ -78,7 +92,7 @@ namespace himalaya::passes {
             const uint64_t tile_buffer_size = static_cast<uint64_t>(tile_count_) * sizeof(uint32_t);
             const uint64_t entry_buffer_size = static_cast<uint64_t>(entry_capacity_) * sizeof(uint32_t);
             const uint64_t entry_counter_buffer_size = sizeof(uint32_t);
-            const uint64_t entry_stats_buffer_size = 4u * sizeof(uint32_t);
+            const uint64_t entry_stats_buffer_size = sizeof(GsRuntimeStats);
 
             const rhi::BufferDesc tile_buffer_desc{
                 .size = tile_buffer_size,
@@ -108,7 +122,7 @@ namespace himalaya::passes {
 
             entry_stats_buffer_ = rm_->create_buffer({
                 .size = entry_stats_buffer_size,
-                .usage = rhi::BufferUsage::StorageBuffer | rhi::BufferUsage::TransferDst,
+                .usage = rhi::BufferUsage::StorageBuffer | rhi::BufferUsage::TransferDst | rhi::BufferUsage::TransferSrc,
                 .memory = rhi::MemoryUsage::GpuOnly,
             }, "GS Entry Stats SSBO");
 
@@ -183,7 +197,7 @@ namespace himalaya::passes {
             return entry_count_buffer_;
         }
 
-        /** @brief Buffer containing entry generation counters: requested, written, dropped, invalid. */
+        /** @brief Buffer containing runtime stats copied back to CPU with delayed readback. */
         [[nodiscard]] rhi::BufferHandle entry_stats_buffer() const {
             return entry_stats_buffer_;
         }
@@ -282,7 +296,7 @@ namespace himalaya::passes {
         /** @brief Buffer containing the number of successfully written entries. */
         rhi::BufferHandle entry_count_buffer_;
 
-        /** @brief Buffer containing entry generation counters. */
+        /** @brief Buffer containing runtime stats copied back to CPU with delayed readback. */
         rhi::BufferHandle entry_stats_buffer_;
 
         /** @brief Maximum visible splat capacity. */

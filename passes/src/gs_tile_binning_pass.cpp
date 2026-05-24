@@ -13,6 +13,8 @@
 #include <himalaya/rhi/shader.h>
 
 #include <array>
+#include <cstddef>
+#include <cstring>
 #include <span>
 
 #include <spdlog/spdlog.h>
@@ -98,6 +100,14 @@ namespace himalaya::passes {
         sc_ = &sc;
 
         tile_buffers_.setup(rm);
+        for (uint32_t i = 0; i < rhi::kMaxFramesInFlight; ++i) {
+            stats_readback_buffers_[i] = rm_->create_buffer({
+                .size = sizeof(GsRuntimeStats),
+                .usage = rhi::BufferUsage::TransferDst,
+                .memory = rhi::MemoryUsage::GpuToCpu,
+            }, "GS Runtime Stats Readback");
+        }
+
         depth_sorter_.setup(ctx, rm, dm, sc);
         tile_sorter_.setup(ctx, rm, dm, sc);
         create_descriptor_layouts();
@@ -119,6 +129,8 @@ namespace himalaya::passes {
                                    const uint32_t max_splat_count,
                                    const uint32_t screen_width,
                                    const uint32_t screen_height) {
+        consume_delayed_stats(frame_ctx.frame_index);
+
         if (max_splat_count == 0 ||
             entry_pipeline_.pipeline == VK_NULL_HANDLE ||
             gather_pipeline_.pipeline == VK_NULL_HANDLE ||
@@ -176,6 +188,29 @@ namespace himalaya::passes {
         vkCmdFillBuffer(cmd.handle(), entry_stats.buffer, 0, entry_stats.desc.size, 0u);
         vkCmdFillBuffer(cmd.handle(), tile_offsets.buffer, 0, tile_offsets.desc.size, 0u);
         vkCmdFillBuffer(cmd.handle(), tile_counts.buffer, 0, tile_counts.desc.size, 0u);
+        buffer_barrier(cmd,
+                       visible_counter_buffer,
+                       compute_stage,
+                       storage_write,
+                       transfer_stage,
+                       VK_ACCESS_2_TRANSFER_READ_BIT);
+        {
+            VkBufferCopy visible_copy{};
+            visible_copy.srcOffset = 0;
+            visible_copy.dstOffset = offsetof(GsRuntimeStats, visible_splats);
+            visible_copy.size = sizeof(uint32_t);
+            vkCmdCopyBuffer(cmd.handle(),
+                            rm_->get_buffer(visible_counter_buffer).buffer,
+                            entry_stats.buffer,
+                            1,
+                            &visible_copy);
+        }
+        buffer_barrier(cmd,
+                       visible_counter_buffer,
+                       transfer_stage,
+                       VK_ACCESS_2_TRANSFER_READ_BIT,
+                       compute_stage,
+                       storage_read);
         buffer_barrier(cmd,
                        tile_buffers_.entry_count_buffer(),
                        transfer_stage,
@@ -304,6 +339,7 @@ namespace himalaya::passes {
             vkCmdDispatchIndirect(cmd.handle(), indirect_dispatch.buffer, 0);
         }
         barrier_range_outputs_to_compute_read(cmd);
+        record_stats_readback(cmd, frame_ctx.frame_index);
     }
 
     void GsTileBinningPass::rebuild_pipelines() {
@@ -314,6 +350,7 @@ namespace himalaya::passes {
 
     void GsTileBinningPass::destroy() {
         tile_buffers_.destroy();
+        destroy_readback_buffers();
         depth_sorter_.destroy();
         tile_sorter_.destroy();
         destroy_pipelines();
@@ -342,6 +379,14 @@ namespace himalaya::passes {
 
     rhi::BufferHandle GsTileBinningPass::sorted_entry_indices_buffer() const {
         return tile_sorter_.sorted_value_buffer();
+    }
+
+    bool GsTileBinningPass::has_runtime_stats() const {
+        return has_runtime_stats_;
+    }
+
+    const GsRuntimeStats &GsTileBinningPass::runtime_stats() const {
+        return runtime_stats_;
     }
 
     void GsTileBinningPass::create_descriptor_layouts() {
@@ -563,5 +608,99 @@ namespace himalaya::passes {
                        storage_write,
                        compute_stage,
                        storage_read | storage_write);
+    }
+
+    void GsTileBinningPass::consume_delayed_stats(const uint32_t frame_index) {
+        if (frame_index >= stats_readback_buffers_.size() ||
+            !stats_readback_valid_[frame_index] ||
+            !stats_readback_buffers_[frame_index].valid()) {
+            return;
+        }
+
+        const auto &readback = rm_->get_buffer(stats_readback_buffers_[frame_index]);
+        if (readback.allocation_info.pMappedData == nullptr) {
+            return;
+        }
+
+        VK_CHECK(vmaInvalidateAllocation(ctx_->allocator, readback.allocation, 0, VK_WHOLE_SIZE));
+        std::memcpy(&runtime_stats_, readback.allocation_info.pMappedData, sizeof(GsRuntimeStats));
+        if (runtime_stats_.visible_splats > tile_buffers_.max_splat_count() ||
+            runtime_stats_.entry_written > tile_buffers_.entry_capacity()) {
+            runtime_stats_.sort_clamped = 1;
+        }
+        has_runtime_stats_ = true;
+        log_runtime_stats_warnings();
+    }
+
+    void GsTileBinningPass::record_stats_readback(const rhi::CommandBuffer &cmd,
+                                                  const uint32_t frame_index) {
+        if (frame_index >= stats_readback_buffers_.size() ||
+            !stats_readback_buffers_[frame_index].valid() ||
+            !tile_buffers_.entry_stats_buffer().valid()) {
+            return;
+        }
+
+        const auto &stats = rm_->get_buffer(tile_buffers_.entry_stats_buffer());
+        const auto &readback = rm_->get_buffer(stats_readback_buffers_[frame_index]);
+
+        buffer_barrier(cmd,
+                       tile_buffers_.entry_stats_buffer(),
+                       VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+                       VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+                       VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+                       VK_ACCESS_2_TRANSFER_READ_BIT);
+
+        VkBufferCopy copy{};
+        copy.srcOffset = 0;
+        copy.dstOffset = 0;
+        copy.size = sizeof(GsRuntimeStats);
+        vkCmdCopyBuffer(cmd.handle(), stats.buffer, readback.buffer, 1, &copy);
+
+        stats_readback_valid_[frame_index] = true;
+    }
+
+    void GsTileBinningPass::destroy_readback_buffers() {
+        if (rm_ == nullptr) {
+            stats_readback_valid_.fill(false);
+            return;
+        }
+
+        for (auto &buffer : stats_readback_buffers_) {
+            if (buffer.valid()) {
+                rm_->destroy_buffer(buffer);
+                buffer = {};
+            }
+        }
+        stats_readback_valid_.fill(false);
+        has_runtime_stats_ = false;
+        runtime_stats_ = {};
+    }
+
+    void GsTileBinningPass::log_runtime_stats_warnings() {
+        if (!has_runtime_stats_) {
+            return;
+        }
+
+        if (runtime_stats_.entry_dropped > 0 && !warned_entry_dropped_) {
+            spdlog::warn("GS tile entries dropped: requested={}, written={}, dropped={}, capacity={}",
+                         runtime_stats_.entry_requested,
+                         runtime_stats_.entry_written,
+                         runtime_stats_.entry_dropped,
+                         tile_buffers_.entry_capacity());
+            warned_entry_dropped_ = true;
+        }
+
+        if (runtime_stats_.invalid_entries > 0 && !warned_invalid_entries_) {
+            spdlog::warn("GS invalid tile entries detected: invalid_entries={}", runtime_stats_.invalid_entries);
+            warned_invalid_entries_ = true;
+        }
+
+        if (runtime_stats_.sort_clamped > 0 && !warned_sort_clamped_) {
+            spdlog::warn("GS sort input was clamped: visible_splats={}, entry_written={}, entry_capacity={}",
+                         runtime_stats_.visible_splats,
+                         runtime_stats_.entry_written,
+                         tile_buffers_.entry_capacity());
+            warned_sort_clamped_ = true;
+        }
     }
 } // namespace himalaya::passes

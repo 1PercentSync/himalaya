@@ -119,7 +119,7 @@ namespace himalaya::passes {
 
         visible_counter_buffer_ = rm_->create_buffer({
             .size = sizeof(uint32_t),
-            .usage = rhi::BufferUsage::StorageBuffer | rhi::BufferUsage::TransferDst,
+            .usage = rhi::BufferUsage::StorageBuffer | rhi::BufferUsage::TransferDst | rhi::BufferUsage::TransferSrc,
             .memory = rhi::MemoryUsage::GpuOnly,
         }, "GS Visible Counter SSBO");
 

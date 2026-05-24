@@ -7,11 +7,13 @@
 
 #include <himalaya/framework/radix_sort.h>
 #include <himalaya/passes/gs_tile_buffers.h>
+#include <himalaya/rhi/context.h>
 #include <himalaya/rhi/pipeline.h>
 #include <himalaya/rhi/types.h>
 
 #include <vulkan/vulkan.h>
 
+#include <array>
 #include <cstdint>
 
 namespace himalaya::rhi {
@@ -114,6 +116,12 @@ namespace himalaya::passes {
         /** @brief Final sorted entry indices after tile-id stable sort. */
         [[nodiscard]] rhi::BufferHandle sorted_entry_indices_buffer() const;
 
+        /** @brief Returns true after at least one delayed stats readback completed. */
+        [[nodiscard]] bool has_runtime_stats() const;
+
+        /** @brief Latest delayed runtime statistics read back from the GPU. */
+        [[nodiscard]] const GsRuntimeStats &runtime_stats() const;
+
     private:
         /** @brief Creates Set 3 push descriptor layouts. */
         void create_descriptor_layouts();
@@ -140,6 +148,19 @@ namespace himalaya::passes {
 
         /** @brief Inserts barriers for tile range outputs consumed by tile rendering. */
         void barrier_range_outputs_to_compute_read(const rhi::CommandBuffer &cmd) const;
+
+        /** @brief Reads the stats buffer copied into this frame's readback buffer on an older frame. */
+        void consume_delayed_stats(uint32_t frame_index);
+
+        /** @brief Records async GPU-to-CPU stats readback for the current frame. */
+        void record_stats_readback(const rhi::CommandBuffer &cmd,
+                                   uint32_t frame_index);
+
+        /** @brief Destroys all per-frame stats readback buffers. */
+        void destroy_readback_buffers();
+
+        /** @brief Logs warning-level diagnostics for controllable degradation counters. */
+        void log_runtime_stats_warnings();
 
         /** @brief Vulkan context. */
         rhi::Context *ctx_ = nullptr;
@@ -179,5 +200,26 @@ namespace himalaya::passes {
 
         /** @brief Owned tile-entry buffers. */
         GsTileBuffers tile_buffers_;
+
+        /** @brief Per-frame GPU-to-CPU readback buffers for delayed stats reads. */
+        std::array<rhi::BufferHandle, rhi::kMaxFramesInFlight> stats_readback_buffers_{};
+
+        /** @brief Whether each stats readback buffer has received at least one GPU copy. */
+        std::array<bool, rhi::kMaxFramesInFlight> stats_readback_valid_{};
+
+        /** @brief Latest delayed runtime statistics visible to CPU/UI/logging. */
+        GsRuntimeStats runtime_stats_{};
+
+        /** @brief True after runtime_stats_ has been populated from a delayed readback. */
+        bool has_runtime_stats_ = false;
+
+        /** @brief One-shot warning guard for dropped entry diagnostics. */
+        bool warned_entry_dropped_ = false;
+
+        /** @brief One-shot warning guard for invalid entry diagnostics. */
+        bool warned_invalid_entries_ = false;
+
+        /** @brief One-shot warning guard for sort clamp diagnostics. */
+        bool warned_sort_clamped_ = false;
     };
 } // namespace himalaya::passes
