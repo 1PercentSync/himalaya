@@ -1,0 +1,59 @@
+#version 460
+
+/**
+ * @file gs_sort_histogram.comp
+ * @brief Builds per-workgroup digit histograms for GS radix sort.
+ *
+ * Each workgroup processes one contiguous block of keys. The output histogram
+ * is stored as a digit-major 2D table: histogram[digit * block_count + block].
+ * Later scan stages prefix-sum this table to produce stable scatter offsets.
+ */
+
+layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+
+const uint kRadixBits = 8u;
+const uint kRadixSize = 1u << kRadixBits;
+const uint kRadixMask = kRadixSize - 1u;
+
+layout(push_constant) uniform PC {
+    uint element_count;
+    uint pass_index;
+    uint block_count;
+} pc;
+
+layout(set = 3, binding = 0) readonly buffer KeyBuffer {
+    uint keys[];
+};
+
+layout(set = 3, binding = 1) writeonly buffer HistogramBuffer {
+    uint histogram[];
+};
+
+shared uint shared_histogram[kRadixSize];
+
+/**
+ * @brief Returns the 8-bit radix digit handled by the current pass.
+ */
+uint extract_digit(uint key) {
+    const uint shift = pc.pass_index * kRadixBits;
+    return (key >> shift) & kRadixMask;
+}
+
+void main() {
+    const uint local_index = gl_LocalInvocationID.x;
+    const uint block_index = gl_WorkGroupID.x;
+    const uint global_index = block_index * gl_WorkGroupSize.x + local_index;
+
+    shared_histogram[local_index] = 0u;
+    barrier();
+
+    if (global_index < pc.element_count) {
+        const uint digit = extract_digit(keys[global_index]);
+        atomicAdd(shared_histogram[digit], 1u);
+    }
+    barrier();
+
+    if (block_index < pc.block_count) {
+        histogram[local_index * pc.block_count + block_index] = shared_histogram[local_index];
+    }
+}
