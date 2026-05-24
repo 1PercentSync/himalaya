@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的渲染器
 - **分支**：`reflector` — Path Tracing + Gaussian Splatting
 - **Phase**：Phase 3 — Gaussian Splatting 渲染
-- **进度**：Step 4 第七小项完成：已实现 RadixSort ping-pong buffer 与 histogram/scan buffer 分配
+- **进度**：Step 4 第八小项完成：已实现 4-pass radix sort 编排
 
 ### 下一个任务
 
-Step 4：实现 4-pass 编排（每 pass 处理 8 bit，循环：histogram → scan → scatter）
+Step 4：实现 `record()`：录制到 command buffer，阶段间插入 buffer barrier
 
 ---
 
