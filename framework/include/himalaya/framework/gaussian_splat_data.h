@@ -42,6 +42,45 @@ namespace himalaya::framework {
     };
 
     /**
+     * @brief Core attributes of a single Gaussian splat, packed for GPU mapping.
+     *
+     * Layout matches std430 rules for direct GPU buffer upload:
+     *   - position: offset 0,  12 bytes (vec3)
+     *   - _pad0:    offset 12, 4 bytes  (alignment padding for vec4 rotation)
+     *   - rotation: offset 16, 16 bytes (vec4 quaternion xyzw)
+     *   - scale:    offset 32, 12 bytes (vec3)
+     *   - opacity:  offset 44, 4 bytes  (float)
+     *   - Total: 48 bytes, alignas(16)
+     */
+    struct alignas(16) GaussianSplatCore {
+        /** @brief Splat center in local space. */
+        glm::vec3 position;
+
+        /** @brief Explicit padding to align rotation at 16-byte boundary. */
+        float _pad0;
+
+        /** @brief Unit quaternion orientation (x, y, z, w). */
+        glm::vec4 rotation;
+
+        /** @brief Three-axis scale (linear, positive). */
+        glm::vec3 scale;
+
+        /** @brief Opacity value [0, 1]. */
+        float opacity;
+    };
+
+    static_assert(sizeof(GaussianSplatCore) == 48,
+                  "GaussianSplatCore must be 48 bytes (std430 layout)");
+    static_assert(offsetof(GaussianSplatCore, position) == 0,
+                  "position must be at offset 0");
+    static_assert(offsetof(GaussianSplatCore, rotation) == 16,
+                  "rotation must be at offset 16 (16-byte aligned)");
+    static_assert(offsetof(GaussianSplatCore, scale) == 32,
+                  "scale must be at offset 32");
+    static_assert(offsetof(GaussianSplatCore, opacity) == 44,
+                  "opacity must be at offset 44");
+
+    /**
      * @brief A single Gaussian Splatting primitive (SoA layout).
      *
      * Stores splat data from one glTF mesh primitive with
