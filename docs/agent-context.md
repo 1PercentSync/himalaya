@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的渲染器
 - **分支**：`reflector` — Path Tracing + Gaussian Splatting
 - **Phase**：Phase 3 — Gaussian Splatting 渲染
-- **进度**：Step 4 第五小项完成：已创建 `shaders/gs/gs_sort_scatter.comp`
+- **进度**：Step 4 第六小项完成：已创建 `framework/include/himalaya/framework/radix_sort.h` 和 `framework/src/radix_sort.cpp`
 
 ### 下一个任务
 
-Step 4：创建 `framework/include/himalaya/framework/radix_sort.h` 和 `framework/src/radix_sort.cpp`
+Step 4：实现 ping-pong buffer 管理（key[2] + value[2] + histogram）
 
 ---
 

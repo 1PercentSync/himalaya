@@ -100,7 +100,7 @@
 - [x] 创建 `shaders/gs/gs_sort_histogram.comp`（per-workgroup digit 频率统计）
 - [x] 创建 `shaders/gs/gs_sort_scan.comp`（prefix sum，多级 scan）
 - [x] 创建 `shaders/gs/gs_sort_scatter.comp`（按 prefix sum 结果稳定 scatter key+value）
-- [ ] 创建 `framework/include/himalaya/framework/radix_sort.h` 和 `framework/src/radix_sort.cpp`
+- [x] 创建 `framework/include/himalaya/framework/radix_sort.h` 和 `framework/src/radix_sort.cpp`
 - [ ] 实现 ping-pong buffer 管理（key[2] + value[2] + histogram）
 - [ ] 实现 4-pass 编排（每 pass 处理 8 bit，循环：histogram → scan → scatter）
 - [ ] 实现 `record()`：录制到 command buffer，阶段间插入 buffer barrier
