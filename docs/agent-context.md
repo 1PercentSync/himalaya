@@ -24,7 +24,9 @@ CLAUDE.md 已自动加载，以下为额外必读：
 | 文档 | 说明 |
 |------|------|
 | `docs/roadmap.md` | Reflector 分支 phase 概览与顺序 |
-| `docs/architecture.md` | 渲染器架构与设计理念（含 GS 数据管线） |
+| `docs/current-phase.md` | Phase 3 GS 渲染范围与步骤概述 |
+| `tasks/reflector-phase3.md` | Phase 3 任务清单（复选框进度跟踪） |
+| `docs/architecture.md` | 渲染器架构与设计理念（含 GS 数据管线 + 渲染管线） |
 | `docs/technical-decisions.md` | 技术选型与决策（含 GS 第 20-23 节） |
 
 ---

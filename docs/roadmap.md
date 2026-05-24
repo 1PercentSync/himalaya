@@ -32,9 +32,13 @@ PLY → glTF 转换工具 + GS 场景加载。
 
 ## Phase 3：Gaussian Splatting 渲染
 
-实现 Gaussian Splatting 的实时渲染。
+Compute Tile-Based Rendering 实时渲染管线。
 
-具体渲染方案（compute + raster splatting、纯 compute 等）待 Phase 2 完成后研究确定。
+- **四阶段 compute 管线**：Projection+Culling → GPU Radix Sort → Tile Binning → Tile Rendering（16×16 tile，前到后 alpha blend + early termination）
+- **PresentPass 重构**：原 TonemappingPass 泛化，支持 PT tonemapping 和 GS passthrough 双模式，SRGB/UNORM view 切换控制 gamma
+- **Mip Splatting**：投影阶段 3D 频率限制 + 2D mip filter 抗锯齿
+
+详见 `current-phase.md` 和 `tasks/reflector-phase3.md`。
 
 ## Phase 4：渲染增强与离屏输出
 

@@ -209,4 +209,50 @@ Application 打开文件
 
 ### GaussianSplatLoader（App 层）
 
-从 glTF 加载 GS 数据。使用 fastgltf 读取 attribute accessor，nlohmann/json 二次解析提取 extension 元数据。输出 CPU 端 `GaussianSplatScene`（包含一个或多个 `GaussianSplatPrimitive`，各自 SoA 布局，按实际 SH degree 分配）。
+从 glTF 加载 GS 数据。使用 fastgltf 读取 attribute accessor，nlohmann/json 二次解析提取 extension 元数据。输出 CPU 端 `GaussianSplatScene`（包含一个或多个 `GaussianSplatPrimitive`，核心属性为打包 struct `GaussianSplatCore`，SH 系数按实际 degree 独立分配）。
+
+---
+
+## Gaussian Splatting 渲染管线
+
+### 概述
+
+GS 渲染采用 Compute Tile-Based Rendering（纯 compute 软光栅），四阶段 compute 管线：Projection+Culling → Radix Sort → Tile Binning → Tile Rendering。输出到与 PT 共享的 color buffer，通过 PresentPass 输出到 swapchain。
+
+### 数据流
+
+```
+GaussianSplatScene (CPU)
+    │ upload (场景加载时)
+    ▼
+GPU: CoreAttributes SSBO + SH SSBO[degree]
+    │
+    ├─ Projection+Culling (compute) ──→ 2D attrs + RGB + depth key
+    │                                        │
+    ├─ Radix Sort (compute, 4 pass) ─────────┤
+    │                                        │
+    ├─ Tile Binning (compute) ───────────────┤
+    │                                        │
+    └─ Tile Rendering (compute, 16×16) ──→ color buffer
+                                                │
+                                          PresentPass → swapchain
+```
+
+### 模块分层
+
+| 模块 | 层级 | 职责 |
+|------|------|------|
+| GS GPU Buffer 管理 | Framework | GPU SSBO 创建、上传、销毁 |
+| RadixSort | Framework | 通用 32-bit key+value GPU radix sort |
+| GS Projection Pass | Passes | 投影 + 剔除 + SH 求值 + Mip Splatting |
+| GS Tile Binning Pass | Passes | per-tile splat 列表构建 |
+| GS Tile Rendering Pass | Passes | 前到后 alpha blend → imageStore |
+| PresentPass | Passes | color buffer → swapchain（原 TonemappingPass） |
+
+### 多 Primitive 合并
+
+多个 `GaussianSplatPrimitive` 的核心属性（position 应用 transform 后）合并为一个 GPU buffer。SH 系数按 degree 分组，投影 pass 按组 dispatch（push constant 传入 offset/count/degree）。后续排序和渲染阶段统一处理，不区分来源 primitive。
+
+### PresentPass（原 TonemappingPass）
+
+统一的 color buffer → swapchain 输出 pass。根据 RenderMode 选择处理路径：PT 走 exposure + tonemapping，GS 走 passthrough。通过 swapchain image 的 SRGB/UNORM view 切换控制硬件 gamma 行为。

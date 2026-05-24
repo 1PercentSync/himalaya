@@ -735,15 +735,134 @@ nlohmann/json 手动构造 glTF JSON + binary buffer，输出 .gltf + .bin 文�
 
 ---
 
-## 22. Gaussian Splatting 渲染方案（Phase 3 方向）
+## 22. Gaussian Splatting 渲染
 
-> 以下为 Phase 3 的技术方向预选，非 Phase 2 范围。
+### 渲染管线架构
 
-### Compute Tile-Based Rendering
+**Compute Tile-Based Rendering**（纯 compute 软光栅）。选型理由：
 
-纯 compute 软光栅方案：compute 投影 + GPU radix sort → tile binning（按屏幕 tile 分配 splat）→ 每个 tile 一个 workgroup 前到后 alpha blend → `imageStore` 写输出。
-
-### 选型理由
-
-- **Early-out**：per-tile 前到后遍历，transmittance 趋近零时跳过剩余 splat。室内场景像素覆盖密集（10-30 个 splat 填满，但 100+ 个 splat 覆盖），避免大量无效 fragment 执行
+- **Early-out**：per-tile 前到后遍历，transmittance 趋近零时跳过剩余 splat，避免密集场景的大量无效计算
 - **全 compute 控制力强**：排序、culling、blending 全部可定制
+- 3DGS 领域事实标准方案，有充分的开源实现和文献资料
+
+### 四阶段 Compute 管线
+
+```
+Projection + Culling → Radix Sort → Tile Binning → Tile Rendering
+```
+
+| 阶段 | 输入 | 输出 |
+|------|------|------|
+| Projection + Culling | 原始 splat 数据（GPU buffer） | 可见 splat 的 2D 属性 + RGB + depth key |
+| Radix Sort | depth key + splat index | 按深度排序的 key-value 对 |
+| Tile Binning | 排序后的 splat + 2D 覆盖范围 | per-tile (offset, count) 表 |
+| Tile Rendering | per-tile splat 列表 + 2D 属性 + RGB | color buffer 像素输出 |
+
+### GPU 排序
+
+自行实现 GPU Radix Sort。32-bit key（depth）+ 32-bit value（index）分离方案。
+
+| 特性 | 选择 | 理由 |
+|------|------|------|
+| 算法 | Radix Sort | 百万级 splat 下性能可预测，O(n·k) |
+| Key 位宽 | 32-bit depth + 32-bit value 分离 | 4 个 pass（每 pass 8 bit），depth 精度无损，index 范围无限制 |
+| 替代方案排除 | 64-bit key 需 8 pass，带宽翻倍；32-bit 混合 key 的 index 范围受限 | — |
+
+Tile ID 不编码进排序 key（高分辨率下与 depth 共享 32 bit 精度不足），通过独立的 Tile Binning 阶段建立 per-tile 列表。
+
+### Tile Binning
+
+全局深度排序后，binning 阶段将每个 splat 映射到其覆盖的 tile：
+
+1. 第一遍：统计每个 tile 的 splat 数量（atomicAdd）
+2. Prefix sum：计算 per-tile 偏移
+3. 第二遍：按偏移将 splat index scatter 到 per-tile 区域
+
+由于遍历全局有序数组，每个 tile 内的 splat 自然保持深度有序。
+
+### Tile 大小
+
+16×16（256 threads/workgroup）。原始 3DGS 论文和主流实现的标准选择，GPU occupancy 良好。
+
+### SH 求值
+
+投影阶段 per-splat 一次。用 `normalize(camera_pos - splat_center)` 作为方向求值 SH，结果 RGB 写入中间 buffer。后续 tile rendering 只读 RGB。
+
+SH 低频特性决定 per-splat 一次求值在视觉上几乎无差别，性能优势显著（尤其 SH degree 3 时 192 bytes 系数只读一次）。
+
+### 多 Primitive 处理
+
+核心属性合并 + SH 按 degree 分组 dispatch。
+
+- 各 primitive 的 `GaussianSplatCore`（position/rotation/scale/opacity）合并为一个大 GPU buffer，position 上传时应用各自的 node transform 转到世界空间
+- SH 系数按 degree 分组：同 degree 的 primitive 拼接成一个 SH buffer，投影 pass 按组 dispatch（push constant 传入 `splat_offset, splat_count, sh_degree`）
+- 投影结果（2D 属性 + RGB）写入统一输出 buffer，后续 sort → binning → rendering 不关心 SH degree
+
+spec 保证同一 primitive 内 SH degree 统一（SH 由 primitive 的 attribute 定义），不同 primitive 之间可以有不同 degree。
+
+### GPU 数据布局
+
+混合方案：核心属性打包 + SH 独立。
+
+**CPU 端数据结构同步修改**：`GaussianSplatPrimitive` 中原有的 4 个独立 vector（positions/rotations/scales/opacities）替换为 `vector<GaussianSplatCore>`。SH 系数保持独立 vector 不变。上传时核心属性直接 memcpy，SH 按 degree 分组 memcpy。
+
+```
+GaussianSplatCore {              // 打包 struct，GPU 直接映射
+    vec3  position;              // 12 bytes
+    vec4  rotation;              // 16 bytes
+    vec3  scale;                 // 12 bytes
+    float opacity;               // 4 bytes
+};                               // = 44 bytes（考虑 std430 对齐）
+```
+
+### 颜色空间处理
+
+GS 渲染侧原样输出 SH 求值结果，不做颜色空间转换。gamma 转换由 PresentPass 通过 swapchain image view 格式切换控制（见第 23 节）。
+
+- `srgb_rec709_display`：SH 结果已是 sRGB 非线性值，PresentPass 用 UNORM view 直通输出
+- `lin_rec709_display`：SH 结果是线性值，PresentPass 用 SRGB view 输出（硬件自动 linear → sRGB）
+
+### 抗锯齿
+
+直接实现 Mip Splatting（Yu et al. 2024）。两部分改动均在投影 compute shader 中：
+
+1. **3D 频率限制**：根据 splat 到相机距离和像素大小计算采样率，将 scale 各轴 clamp 到最小阈值（`scale_filtered = max(scale, min_threshold)`），防止 sub-pixel Gaussian 产生锯齿
+2. **2D Mip Filter**：投影得到 2D covariance 后，加各向同性滤波核（`cov2d_filtered = cov2d + filter_size * I`）
+
+不需要新 pass、新 buffer、新数据结构，改动约 10-20 行 shader 代码。
+
+### 输出目标
+
+GS 渲染写入与 PT 共享的 color buffer（R16G16B16A16F），复用 PresentPass 输出到 swapchain。背景色为纯黑（`vec4(0)`）。
+
+### Descriptor 绑定
+
+Push Descriptor（Set 3），与现有 compute/RT pass 模式一致。GS buffer 数量（核心属性、SH、sort buffer、tile buffer、output image）在 Push Descriptor 限制内。
+
+---
+
+## 23. PresentPass
+
+### 重构背景
+
+原 TonemappingPass 承担 HDR buffer → swapchain 的最终输出。GS 引入后，渲染结果不一定是 HDR 线性值——GS 输出 display-referred 颜色，不需要 tonemapping。重命名为 PresentPass，职责泛化为"根据渲染模式将 color buffer 准备为 swapchain 可输出的格式"。
+
+### 模式分支
+
+通过 push constant 传入 `uint mode`，shader 根据 mode 选择处理路径：
+
+| 模式 | 来源 | 处理 |
+|------|------|------|
+| PT | 线性 HDR | exposure 调节 + ACES tone curve |
+| GS | display-referred | passthrough（直接输出） |
+
+### 硬件 Gamma 控制
+
+Swapchain image 创建两个 VkImageView：
+
+| View | 格式 | 效果 | 使用场景 |
+|------|------|------|---------|
+| SRGB view | `VK_FORMAT_B8G8R8A8_SRGB` | 硬件自动 linear → sRGB | PT 输出 / GS `lin_rec709_display` |
+| UNORM view | `VK_FORMAT_B8G8R8A8_UNORM` | 直通，不做 gamma | GS `srgb_rec709_display` |
+
+PresentPass 在 `record()` 时根据 RenderMode 和 color_space 元数据选择 view 作为 color attachment。shader 代码无需关心 gamma 转换。
