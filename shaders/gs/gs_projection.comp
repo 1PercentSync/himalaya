@@ -18,6 +18,7 @@ const uint kTileSizePixels = 16u;
 const float kTileSize = float(kTileSizePixels);
 const float kEllipseRadiusSigma = 3.0;
 const float kMinCovarianceEigenvalue = 1.0e-6;
+const float kMipSplattingFilterSize = 0.3;
 const float kMipSplattingScaleFactor = 0.8493218002880191; // sqrt(1 / (2 * ln(2)))
 
 const float kShC0 = 0.2820947917738781;
@@ -348,7 +349,10 @@ void main() {
     const vec3 filtered_scale = apply_mip_splatting_3d_filter(core.scale, camera_distance);
 
     const mat3 cov3d = build_covariance_3d(core.rotation, filtered_scale);
-    const mat2 cov2d = project_covariance_2d(cov3d, view_pos);
+    // Mip Splatting 2D filter adds an isotropic low-pass kernel in pixel space.
+    const mat2 cov2d = project_covariance_2d(cov3d, view_pos) +
+                       mat2(vec2(kMipSplattingFilterSize, 0.0),
+                            vec2(0.0, kMipSplattingFilterSize));
 
     vec2 axis_u;
     vec2 axis_v;
