@@ -65,7 +65,7 @@
 
 ## Step 2：GPU Buffer 上传
 
-- [ ] 创建 `framework/include/himalaya/framework/gs_gpu_data.h`（GS GPU buffer 管理类，持有 core SSBO + SH SSBO handles）
+- [x] 创建 `framework/include/himalaya/framework/gs_gpu_data.h`（GS GPU buffer 管理类，持有 core SSBO + SH SSBO handles）
 - [ ] 创建 `framework/src/gs_gpu_data.cpp`
 - [ ] 实现 `upload()`：staging → device local 上传核心属性（多 primitive 合并，position 应用 transform）
 - [ ] 实现 SH 上传：按 degree 分组，同 degree 的 primitive SH 数据拼接为一个 SSBO

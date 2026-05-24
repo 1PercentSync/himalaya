@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-创建 `framework/include/himalaya/framework/gs_gpu_data.h` 头文件
+创建 `framework/src/gs_gpu_data.cpp` 实现文件
 
 ---
 
