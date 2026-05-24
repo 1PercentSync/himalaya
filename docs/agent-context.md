@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的渲染器
 - **分支**：`reflector` — Path Tracing + Gaussian Splatting
 - **Phase**：Phase 3 — Gaussian Splatting 渲染
-- **进度**：Step 3 第二小项（SH 求值 degree 0-3）完成，待实现 Mip Splatting 3D 频率限制
+- **进度**：Step 3 第三小项（Mip Splatting 3D 频率限制）完成，待实现 2D mip filter
 
 ### 下一个任务
 
-Step 3：实现 Mip Splatting 3D 频率限制（scale clamp to min_threshold）
+Step 3：实现 Mip Splatting 2D mip filter（cov2d += 0.3 * I）
 
 ---
 
