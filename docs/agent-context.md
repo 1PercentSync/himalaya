@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的渲染器
 - **分支**：`reflector` — Path Tracing + Gaussian Splatting
 - **Phase**：Phase 3 — Gaussian Splatting 渲染
-- **进度**：Step 1（PresentPass 重构）进行中（9/10）
+- **进度**：Step 1（PresentPass 重构）完成，待开始 Step 2
 
 ### 下一个任务
 
-Step 1：PresentPass 重构（TonemappingPass 改名 + mode 分支 + UNORM view）
+Step 2：GPU Buffer 上传（gs_gpu_data 类 + core SSBO + SH SSBO）
 
 ---
 
