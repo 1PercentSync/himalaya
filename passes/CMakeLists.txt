@@ -1,7 +1,7 @@
 add_library(himalaya_passes STATIC)
 
 target_sources(himalaya_passes PRIVATE
-        src/tonemapping_pass.cpp
+        src/present_pass.cpp
         src/reference_view_pass.cpp
 )
 
