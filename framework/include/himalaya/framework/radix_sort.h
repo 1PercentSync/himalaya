@@ -135,6 +135,21 @@ namespace himalaya::framework {
         /** @brief Destroys all owned GPU buffers. */
         void destroy_buffers();
 
+        /** @brief Inserts a whole-buffer compute-to-compute barrier for one buffer. */
+        void buffer_barrier(const rhi::CommandBuffer &cmd,
+                            rhi::BufferHandle buffer,
+                            VkPipelineStageFlags2 src_stage,
+                            VkAccessFlags2 src_access,
+                            VkPipelineStageFlags2 dst_stage,
+                            VkAccessFlags2 dst_access) const;
+
+        /** @brief Inserts one barrier covering all sort temporary buffers. */
+        void barrier_sort_buffers(const rhi::CommandBuffer &cmd,
+                                  VkPipelineStageFlags2 src_stage,
+                                  VkAccessFlags2 src_access,
+                                  VkPipelineStageFlags2 dst_stage,
+                                  VkAccessFlags2 dst_access) const;
+
         /** @brief Vulkan context. */
         rhi::Context *ctx_ = nullptr;
 
