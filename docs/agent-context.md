@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的渲染器
 - **分支**：`reflector` — Path Tracing + Gaussian Splatting
 - **Phase**：Phase 3 — Gaussian Splatting 渲染
-- **进度**：Step 4 第八小项完成：已实现 4-pass radix sort 编排
+- **进度**：Step 4（GPU Radix Sort）完成并编译通过，待开始 Step 5
 
 ### 下一个任务
 
-Step 4：实现 `record()`：录制到 command buffer，阶段间插入 buffer barrier
+Step 5：创建 `shaders/gs/gs_tile_count.comp`（每个可见 splat 遍历其覆盖 tile，atomicAdd 每 tile 计数）
 
 ---
 
