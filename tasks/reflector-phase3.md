@@ -182,12 +182,12 @@
 
 ## Step 5.9：RenderMode Flow Cleanup
 
-- [ ] `RenderInput` 新增 `framework::RenderMode render_mode`
-- [ ] `Application::render()` 将 `pt_mode_` bool 转换为 `RenderMode` 传入 Renderer（checked=PT，unchecked=GS）
-- [ ] `Renderer::render()` 根据 `input.render_mode` 分发；GS 路径完成前仍 fallback 到 imgui-only / 黑屏路径
-- [ ] DebugUI 保留 `Path Tracing` checkbox；GS 完成前 checkbox disabled，不允许取消勾选
-- [ ] 更新 UI tooltip 文案，移除过时的 “coming in Phase 2”
-- [ ] 编译验证
+- [x] `RenderInput` 新增 `framework::RenderMode render_mode`
+- [x] `Application::render()` 将 `pt_mode_` bool 转换为 `RenderMode` 传入 Renderer（checked=PT，unchecked=GS）
+- [x] `Renderer::render()` 根据 `input.render_mode` 分发；GS 路径完成前仍 fallback 到 imgui-only / 黑屏路径
+- [x] DebugUI 保留 `Path Tracing` checkbox；GS 完成前 checkbox disabled，不允许取消勾选
+- [x] 更新 UI tooltip 文案，移除过时的 “coming in Phase 2”
+- [x] 编译验证
 
 ## Step 6：Tile Rendering + 集成
 

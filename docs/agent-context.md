@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的渲染器
 - **分支**：`reflector` — Path Tracing + Gaussian Splatting
 - **Phase**：Phase 3 — Gaussian Splatting 渲染
-- **进度**：Step 5.8 已完成并通过用户在 CLion 中的编译验证；待开始 Step 5.9（RenderMode flow cleanup）
+- **进度**：Step 5.9 已完成并通过用户在 CLion 中的编译验证；待开始 Step 6（Tile Rendering + 集成）
 
 ### 下一个任务
 
-Step 5.9：`RenderInput` 新增 `framework::RenderMode render_mode`，清理 Application → Renderer 的 RenderMode 流转
+Step 6：创建 `shaders/gs/gs_tile_render.comp` 和 `GsTileRenderPass`，实现 GS tile rendering 并接入 Renderer
 
 ---
 
