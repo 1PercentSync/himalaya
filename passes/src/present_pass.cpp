@@ -78,7 +78,13 @@ namespace himalaya::passes {
         const auto set_layouts = dm_->get_graphics_set_layouts();
         desc.descriptor_set_layouts = {set_layouts.begin(), set_layouts.end()};
 
-        // No push constants needed for presentation
+        // Push constant: uint mode (0=PT tonemapping, 1=GS passthrough)
+        const VkPushConstantRange push_range{
+            .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+            .offset = 0,
+            .size = sizeof(PushConstants),
+        };
+        desc.push_constant_ranges = {push_range};
 
         pipeline_ = rhi::create_graphics_pipeline(ctx_->device, desc);
 

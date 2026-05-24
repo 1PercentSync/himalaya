@@ -34,6 +34,15 @@ namespace himalaya::passes {
     class PresentPass {
     public:
         /**
+         * @brief Push constant layout shared between C++ and shader.
+         *
+         * Matches layout(push_constant) uniform PC in present.frag.
+         */
+        struct PushConstants {
+            uint32_t mode; ///< 0 = PT (tonemapping), 1 = GS (passthrough)
+        };
+
+        /**
          * @brief One-time initialization: compile shaders, create pipeline, store service pointers.
          *
          * @param ctx              Vulkan context.
