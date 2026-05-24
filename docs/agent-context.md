@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的渲染器
 - **分支**：`reflector` — Path Tracing + Gaussian Splatting
 - **Phase**：Phase 3 — Gaussian Splatting 渲染
-- **进度**：Step 5.5 代码实现项已完成；待用户在 CLion 中进行编译验证
+- **进度**：Step 5.5 已完成并通过用户在 CLion 中的编译验证；待开始 Step 5.6（GS Covariance GPU Layout + Node Transform 修正）
 
 ### 下一个任务
 
-Step 5.5：编译验证（由用户在 CLion 中执行；Agent 禁止执行 cmake/build/run）
+Step 5.6：保留 CPU `GaussianSplatCore` 布局，新增 GPU 专用 core layout（position + opacity + world covariance 3×3）及 layout static_assert
 
 ---
 
