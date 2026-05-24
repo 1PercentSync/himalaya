@@ -1,0 +1,169 @@
+#version 460
+
+/**
+ * @file gs_sort_scan.comp
+ * @brief Multi-stage prefix scan for GS radix sort histograms.
+ *
+ * The histogram stage produces a digit-major table:
+ *   histogram[digit * block_count + block]
+ *
+ * This shader is invoked in multiple uniform modes:
+ *   0. Per-digit chunk scan of histogram counts.
+ *   1. Per-digit scan of chunk sums and extraction of digit totals.
+ *   2. Final combine: add scanned chunk offsets to scanned histogram chunks.
+ *   3. Scan digit totals to produce global per-digit base offsets.
+ *
+ * The resulting scanned histogram and digit offsets let the scatter stage place
+ * elements stably at:
+ *   digit_offsets[digit] + scanned_histogram[digit, block] + local_rank
+ */
+
+layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+
+const uint kRadixSize = 256u;
+const uint kModeScanHistogramChunks = 0u;
+const uint kModeScanChunkSums = 1u;
+const uint kModeAddChunkOffsets = 2u;
+const uint kModeScanDigitOffsets = 3u;
+
+layout(push_constant) uniform PC {
+    uint mode;
+    uint block_count;
+    uint chunk_count;
+    uint _padding;
+} pc;
+
+layout(set = 3, binding = 0) readonly buffer HistogramBuffer {
+    uint histogram[];
+};
+
+layout(set = 3, binding = 1) buffer ScannedHistogramBuffer {
+    uint scanned_histogram[];
+};
+
+layout(set = 3, binding = 2) buffer ChunkSumsBuffer {
+    uint chunk_sums[];
+};
+
+layout(set = 3, binding = 3) buffer DigitOffsetsBuffer {
+    uint digit_offsets[];
+};
+
+shared uint shared_values[kRadixSize];
+
+/**
+ * @brief Performs an in-workgroup inclusive scan over shared_values[].
+ */
+void inclusive_scan_shared() {
+    const uint local_index = gl_LocalInvocationID.x;
+
+    for (uint offset = 1u; offset < kRadixSize; offset <<= 1u) {
+        uint addend = 0u;
+        if (local_index >= offset) {
+            addend = shared_values[local_index - offset];
+        }
+
+        barrier();
+        shared_values[local_index] += addend;
+        barrier();
+    }
+}
+
+/**
+ * @brief Scans one 256-entry chunk of one digit's per-block histogram.
+ */
+void scan_histogram_chunk() {
+    const uint digit = gl_WorkGroupID.x;
+    const uint chunk = gl_WorkGroupID.y;
+    const uint local_index = gl_LocalInvocationID.x;
+    const uint block = chunk * kRadixSize + local_index;
+    const uint table_index = digit * pc.block_count + block;
+    const bool valid = digit < kRadixSize && block < pc.block_count;
+
+    const uint value = valid ? histogram[table_index] : 0u;
+    shared_values[local_index] = value;
+    barrier();
+
+    inclusive_scan_shared();
+
+    if (valid) {
+        scanned_histogram[table_index] = shared_values[local_index] - value;
+    }
+
+    if (local_index == kRadixSize - 1u && digit < kRadixSize && chunk < pc.chunk_count) {
+        chunk_sums[digit * pc.chunk_count + chunk] = shared_values[local_index];
+    }
+}
+
+/**
+ * @brief Scans the chunk sums for one digit and stores that digit's total count.
+ *
+ * This mode assumes chunk_count <= 256, which covers the intended million-splat
+ * range with 256-key blocks. Larger inputs can recursively apply the same scan
+ * structure if needed later.
+ */
+void scan_chunk_sums() {
+    const uint digit = gl_WorkGroupID.x;
+    const uint local_index = gl_LocalInvocationID.x;
+    const bool valid = digit < kRadixSize && local_index < pc.chunk_count;
+    const uint index = digit * pc.chunk_count + local_index;
+
+    const uint value = valid ? chunk_sums[index] : 0u;
+    shared_values[local_index] = value;
+    barrier();
+
+    inclusive_scan_shared();
+
+    if (valid) {
+        chunk_sums[index] = shared_values[local_index] - value;
+    }
+
+    if (local_index == kRadixSize - 1u && digit < kRadixSize) {
+        digit_offsets[digit] = shared_values[local_index];
+    }
+}
+
+/**
+ * @brief Adds scanned chunk offsets to each scanned histogram chunk.
+ */
+void add_chunk_offsets() {
+    const uint digit = gl_WorkGroupID.x;
+    const uint chunk = gl_WorkGroupID.y;
+    const uint local_index = gl_LocalInvocationID.x;
+    const uint block = chunk * kRadixSize + local_index;
+
+    if (digit >= kRadixSize || chunk >= pc.chunk_count || block >= pc.block_count) {
+        return;
+    }
+
+    const uint table_index = digit * pc.block_count + block;
+    const uint chunk_offset = chunk_sums[digit * pc.chunk_count + chunk];
+    scanned_histogram[table_index] += chunk_offset;
+}
+
+/**
+ * @brief Scans digit totals into global per-digit base offsets.
+ */
+void scan_digit_offsets() {
+    const uint local_index = gl_LocalInvocationID.x;
+    const uint value = digit_offsets[local_index];
+
+    shared_values[local_index] = value;
+    barrier();
+
+    inclusive_scan_shared();
+
+    digit_offsets[local_index] = shared_values[local_index] - value;
+}
+
+void main() {
+    if (pc.mode == kModeScanHistogramChunks) {
+        scan_histogram_chunk();
+    } else if (pc.mode == kModeScanChunkSums) {
+        scan_chunk_sums();
+    } else if (pc.mode == kModeAddChunkOffsets) {
+        add_chunk_offsets();
+    } else if (pc.mode == kModeScanDigitOffsets) {
+        scan_digit_offsets();
+    }
+}
