@@ -5,9 +5,9 @@
  * @brief Gaussian Splatting projection and culling pass.
  *
  * Projects world-space 3D Gaussians to screen-space ellipses. This shader
- * performs center frustum checks, constructs the 3D covariance from rotation
- * and scale, projects it to a 2D covariance in pixel space, and decomposes the
- * 2D covariance into principal axes for later tile binning and rendering.
+ * performs center frustum checks, reads precomputed world covariance, projects
+ * it to a 2D covariance in pixel space, and decomposes the 2D covariance into
+ * principal axes for later tile binning and rendering.
  */
 
 #include "common/bindings.glsl"
@@ -32,16 +32,19 @@ const float kShC3_2 = 0.4570457994644657;
 const float kShC3_3 = 0.3731763325901154;
 const float kShC3_4 = 1.445305721320277;
 
-/** Core splat attributes. Matches GaussianSplatCore in gaussian_splat_data.h. */
+/** GPU core splat attributes. Matches GaussianSplatGpuCore in gaussian_splat_data.h. */
 struct GSSplatCore {
     vec3 position;
-    float _pad0;
-    vec4 rotation;
-    vec3 scale;
     float opacity;
+    vec3 cov0;
+    float _pad0;
+    vec3 cov1;
+    float _pad1;
+    vec3 cov2;
+    float _pad2;
 };
 
-/** Projected 2D splat attributes. Matches GSSplatData2D planned layout. */
+/** Projected 2D splat attributes. Matches GSSplatData2D in gaussian_splat_data.h. */
 struct GSSplatData2D {
     vec2 center;
     vec2 axis_u;
@@ -159,58 +162,21 @@ vec3 evaluate_sh(uint local_splat_index, uint sh_degree, vec3 direction) {
 }
 
 /**
- * Converts a xyzw quaternion to a 3x3 rotation matrix.
+ * Applies Mip Splatting's 3D frequency limit as an isotropic covariance
+ * lower-bound approximation in world space.
  */
-mat3 quat_to_mat3(vec4 q) {
-    q = normalize(q);
-
-    const float x = q.x;
-    const float y = q.y;
-    const float z = q.z;
-    const float w = q.w;
-
-    const float xx = x * x;
-    const float yy = y * y;
-    const float zz = z * z;
-    const float xy = x * y;
-    const float xz = x * z;
-    const float yz = y * z;
-    const float wx = w * x;
-    const float wy = w * y;
-    const float wz = w * z;
-
-    return mat3(
-        vec3(1.0 - 2.0 * (yy + zz), 2.0 * (xy + wz),       2.0 * (xz - wy)),
-        vec3(2.0 * (xy - wz),       1.0 - 2.0 * (xx + zz), 2.0 * (yz + wx)),
-        vec3(2.0 * (xz + wy),       2.0 * (yz - wx),       1.0 - 2.0 * (xx + yy))
-    );
-}
-
-/**
- * Applies Mip Splatting's 3D frequency limit by clamping each Gaussian axis
- * to the pixel footprint size at the splat distance.
- */
-vec3 apply_mip_splatting_3d_filter(vec3 scale, float camera_distance) {
+mat3 apply_mip_splatting_3d_filter(mat3 cov_world, float camera_distance) {
     const float tan_half_fov_y = 1.0 / global.projection[1][1];
     const float pixel_size_at_splat =
         (2.0 * tan_half_fov_y * camera_distance) / float(pc.screen_height);
     const float min_threshold = pixel_size_at_splat * kMipSplattingScaleFactor;
+    const float min_variance = min_threshold * min_threshold;
 
-    return max(scale, vec3(min_threshold));
-}
-
-/**
- * Builds the world-space 3D covariance matrix from orientation and scale.
- */
-mat3 build_covariance_3d(vec4 rotation, vec3 scale) {
-    const mat3 r = quat_to_mat3(rotation);
-    const vec3 variance = scale * scale;
-
-    return r * mat3(
-        vec3(variance.x, 0.0, 0.0),
-        vec3(0.0, variance.y, 0.0),
-        vec3(0.0, 0.0, variance.z)
-    ) * transpose(r);
+    return cov_world + mat3(
+        vec3(min_variance, 0.0, 0.0),
+        vec3(0.0, min_variance, 0.0),
+        vec3(0.0, 0.0, min_variance)
+    );
 }
 
 /**
@@ -358,11 +324,11 @@ void main() {
 
     const vec3 camera_position = global.camera_position_and_exposure.xyz;
     const float camera_distance = length(core.position - camera_position);
-    const vec3 filtered_scale = apply_mip_splatting_3d_filter(core.scale, camera_distance);
 
-    const mat3 cov3d = build_covariance_3d(core.rotation, filtered_scale);
+    const mat3 cov_world = mat3(core.cov0, core.cov1, core.cov2);
+    const mat3 filtered_cov_world = apply_mip_splatting_3d_filter(cov_world, camera_distance);
     // Mip Splatting 2D filter adds an isotropic low-pass kernel in pixel space.
-    const mat2 cov2d = project_covariance_2d(cov3d, view_pos) +
+    const mat2 cov2d = project_covariance_2d(filtered_cov_world, view_pos) +
                        mat2(vec2(kMipSplattingFilterSize, 0.0),
                             vec2(0.0, kMipSplattingFilterSize));
 

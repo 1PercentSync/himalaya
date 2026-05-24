@@ -6,11 +6,57 @@
 #include <himalaya/framework/gs_gpu_data.h>
 #include <himalaya/rhi/resources.h>
 
+#include <glm/gtc/quaternion.hpp>
+
 #include <string>
 
 #include <spdlog/spdlog.h>
 
 namespace himalaya::framework {
+    namespace {
+        /**
+         * @brief Builds a 3x3 rotation matrix from a CPU-side xyzw quaternion.
+         */
+        glm::mat3 rotation_matrix_from_xyzw(const glm::vec4 &rotation) {
+            const glm::quat q = glm::normalize(glm::quat(rotation.w, rotation.x, rotation.y, rotation.z));
+            return glm::mat3_cast(q);
+        }
+
+        /**
+         * @brief Builds local Gaussian covariance from local rotation and scale.
+         */
+        glm::mat3 build_local_covariance(const GaussianSplatCore &core) {
+            const glm::mat3 r = rotation_matrix_from_xyzw(core.rotation);
+            const glm::vec3 variance = core.scale * core.scale;
+            const glm::mat3 s2{
+                glm::vec3(variance.x, 0.0f, 0.0f),
+                glm::vec3(0.0f, variance.y, 0.0f),
+                glm::vec3(0.0f, 0.0f, variance.z),
+            };
+
+            return r * s2 * glm::transpose(r);
+        }
+
+        /**
+         * @brief Converts one CPU core into the render-time GPU core layout.
+         */
+        GaussianSplatGpuCore build_gpu_core(const GaussianSplatPrimitive &prim,
+                                            const GaussianSplatCore &core) {
+            const glm::vec4 world_pos = prim.transform * glm::vec4(core.position, 1.0f);
+            const glm::mat3 node_linear = glm::mat3(prim.transform);
+            const glm::mat3 local_cov = build_local_covariance(core);
+            const glm::mat3 world_cov = node_linear * local_cov * glm::transpose(node_linear);
+
+            GaussianSplatGpuCore gpu_core{};
+            gpu_core.position = glm::vec3(world_pos);
+            gpu_core.opacity = core.opacity;
+            gpu_core.cov0 = world_cov[0];
+            gpu_core.cov1 = world_cov[1];
+            gpu_core.cov2 = world_cov[2];
+            return gpu_core;
+        }
+    } // namespace
+
     // ---- Cumulative SH coefficient counts per max SH degree ----
     // degree 0: 1 group (sh_coefs_0)
     // degree 1: 1 + 3 = 4 groups
@@ -68,12 +114,12 @@ namespace himalaya::framework {
             }
         }
 
-        // ---- Build merged core attributes array ----
-        // Positions are transformed from local to world space using each
-        // primitive's node transform. Splats are ordered by max_sh_degree
-        // so each ShGroup maps to a contiguous range.
+        // ---- Build merged GPU core attributes array ----
+        // Positions and covariance are transformed from local to world space
+        // using each primitive's node transform. Splats are ordered by
+        // max_sh_degree so each ShGroup maps to a contiguous range.
 
-        std::vector<GaussianSplatCore> combined_cores;
+        std::vector<GaussianSplatGpuCore> combined_cores;
         sh_groups_.clear();
 
         for (uint32_t degree = 0; degree < 4; ++degree) {
@@ -87,11 +133,7 @@ namespace himalaya::framework {
 
             for (const auto *prim : degree_primitives[degree]) {
                 for (const auto &core : prim->cores) {
-                    GaussianSplatCore transformed = core;
-                    // Apply node transform to position (local → world space)
-                    const glm::vec4 world_pos = prim->transform * glm::vec4(core.position, 1.0f);
-                    transformed.position = glm::vec3(world_pos);
-                    combined_cores.push_back(transformed);
+                    combined_cores.push_back(build_gpu_core(*prim, core));
                 }
             }
 
@@ -103,7 +145,7 @@ namespace himalaya::framework {
 
         // ---- Create and upload core SSBO ----
         {
-            const auto core_size = static_cast<uint64_t>(combined_cores.size()) * sizeof(GaussianSplatCore);
+            const auto core_size = static_cast<uint64_t>(combined_cores.size()) * sizeof(GaussianSplatGpuCore);
             core_buffer_ = rm_->create_buffer({
                 .size = core_size,
                 .usage = rhi::BufferUsage::StorageBuffer | rhi::BufferUsage::TransferDst,

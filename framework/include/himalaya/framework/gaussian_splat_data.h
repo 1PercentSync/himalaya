@@ -2,7 +2,7 @@
 
 /**
  * @file gaussian_splat_data.h
- * @brief Gaussian Splatting CPU-side data structures (SoA layout).
+ * @brief Gaussian Splatting CPU and GPU data structures.
  */
 
 #include <himalaya/framework/scene_data.h>
@@ -43,9 +43,14 @@ namespace himalaya::framework {
     };
 
     /**
-     * @brief Core attributes of a single Gaussian splat, packed for GPU mapping.
+     * @brief CPU-side source attributes of a single Gaussian splat.
      *
-     * Layout matches std430 rules for direct GPU buffer upload:
+     * This layout preserves the glTF KHR_gaussian_splatting source semantics:
+     * center position, local orientation, local scale, and opacity. It is not
+     * the render-time GPU layout; GsGpuData converts it to GaussianSplatGpuCore
+     * during scene upload so node transforms can affect both position and shape.
+     *
+     * Layout:
      *   - position: offset 0,  12 bytes (vec3)
      *   - _pad0:    offset 12, 4 bytes  (alignment padding for vec4 rotation)
      *   - rotation: offset 16, 16 bytes (vec4 quaternion xyzw)
@@ -82,6 +87,63 @@ namespace himalaya::framework {
                   "opacity must be at offset 44");
 
     /**
+     * @brief GPU-side render core for one Gaussian splat.
+     *
+     * Stores the world-space center and world covariance matrix produced from
+     * CPU rotation/scale plus the primitive node transform. The covariance is
+     * stored as three column vectors to match GLM/GLSL column-major matrices.
+     *
+     * Layout matches std430 rules and shaders/gs/gs_projection.comp:
+     *   - position: offset 0,  12 bytes (vec3 world center)
+     *   - opacity:  offset 12, 4 bytes  (float)
+     *   - cov0:     offset 16, 12 bytes (covariance column 0)
+     *   - _pad0:    offset 28, 4 bytes
+     *   - cov1:     offset 32, 12 bytes (covariance column 1)
+     *   - _pad1:    offset 44, 4 bytes
+     *   - cov2:     offset 48, 12 bytes (covariance column 2)
+     *   - _pad2:    offset 60, 4 bytes
+     *   - Total: 64 bytes, alignas(16)
+     */
+    struct alignas(16) GaussianSplatGpuCore {
+        /** @brief Splat center in world space. */
+        glm::vec3 position;
+
+        /** @brief Opacity value [0, 1]. */
+        float opacity;
+
+        /** @brief First column of the world-space covariance matrix. */
+        glm::vec3 cov0;
+
+        /** @brief Explicit padding for std430-compatible 16-byte stride. */
+        float _pad0;
+
+        /** @brief Second column of the world-space covariance matrix. */
+        glm::vec3 cov1;
+
+        /** @brief Explicit padding for std430-compatible 16-byte stride. */
+        float _pad1;
+
+        /** @brief Third column of the world-space covariance matrix. */
+        glm::vec3 cov2;
+
+        /** @brief Explicit padding for std430-compatible 16-byte stride. */
+        float _pad2;
+    };
+
+    static_assert(sizeof(GaussianSplatGpuCore) == 64,
+                  "GaussianSplatGpuCore must be 64 bytes (std430 layout)");
+    static_assert(offsetof(GaussianSplatGpuCore, position) == 0,
+                  "GPU position must be at offset 0");
+    static_assert(offsetof(GaussianSplatGpuCore, opacity) == 12,
+                  "GPU opacity must be at offset 12");
+    static_assert(offsetof(GaussianSplatGpuCore, cov0) == 16,
+                  "GPU cov0 must be at offset 16");
+    static_assert(offsetof(GaussianSplatGpuCore, cov1) == 32,
+                  "GPU cov1 must be at offset 32");
+    static_assert(offsetof(GaussianSplatGpuCore, cov2) == 48,
+                  "GPU cov2 must be at offset 48");
+
+    /**
      * @brief Projected 2D data for one visible Gaussian splat.
      *
      * Layout matches std430 rules and shaders/gs/gs_projection.comp:
@@ -111,7 +173,7 @@ namespace himalaya::framework {
         /** @brief SH-evaluated RGB color for the visible splat. */
         glm::vec3 color;
 
-        /** @brief Base opacity value copied from GaussianSplatCore. */
+        /** @brief Base opacity value copied from GaussianSplatGpuCore. */
         float alpha;
 
         /** @brief Inclusive minimum covered tile coordinate. */
@@ -143,12 +205,12 @@ namespace himalaya::framework {
      *
      * Stores splat data from one glTF mesh primitive with
      * KHR_gaussian_splatting extension. Core attributes (position,
-     * rotation, scale, opacity) are packed into GaussianSplatCore
-     * for direct GPU mapping. SH coefficients remain in separate
-     * arrays grouped by degree.
+     * rotation, scale, opacity) are packed into GaussianSplatCore.
+     * Upload converts them into GaussianSplatGpuCore for rendering. SH
+     * coefficients remain in separate arrays grouped by degree.
      */
     struct GaussianSplatPrimitive {
-        /** @brief Core attributes of all splats in this primitive (GPU-mappable layout). */
+        /** @brief CPU-side source core attributes of all splats in this primitive. */
         std::vector<GaussianSplatCore> cores;
 
         /** @brief SH degree 0 coefficients (1 per splat, always present). */

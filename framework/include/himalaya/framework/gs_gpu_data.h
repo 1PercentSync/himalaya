@@ -4,7 +4,7 @@
  * @file gs_gpu_data.h
  * @brief Gaussian Splatting GPU buffer management (Framework layer).
  *
- * Owns the GPU SSBOs for GS scene data: a merged core attributes buffer
+ * Owns the GPU SSBOs for GS scene data: a merged world-space GPU core buffer
  * and per-max-SH-degree coefficient buffers. Upload happens once at scene
  * load time via staging; destroy() releases all GPU resources.
  */
@@ -24,9 +24,9 @@ namespace himalaya::framework {
     /**
      * @brief Manages GPU buffers for Gaussian Splatting scene data.
      *
-     * Owns the core attributes SSBO (merged from all primitives, positions
-     * transformed to world space) and per-max-SH-degree SSBOs (cumulative
-     * coefficients up to the declared degree).
+     * Owns the GPU core SSBO (merged from all primitives, with positions and
+     * covariance transformed to world space) and per-max-SH-degree SSBOs
+     * (cumulative coefficients up to the declared degree).
      *
      * Also records dispatch grouping metadata so the projection pass can
      * issue one dispatch per (sh_degree, splat range) group.
@@ -62,10 +62,11 @@ namespace himalaya::framework {
         /**
          * @brief Uploads GS scene data to GPU.
          *
-         * Allocates GpuOnly SSBOs and uploads via staging. Merges core
-         * attributes from all primitives, applying each primitive's node
-         * transform to positions. Groups SH coefficients by max_sh_degree
-         * with cumulative coefficient layout.
+         * Allocates GpuOnly SSBOs and uploads via staging. Converts CPU
+         * core attributes into GPU cores by transforming positions to world
+         * space and folding local rotation/scale plus node linear transform
+         * into a world covariance matrix. Groups SH coefficients by
+         * max_sh_degree with cumulative coefficient layout.
          *
          * Must be called within begin_immediate() / end_immediate() scope.
          * Safe to call multiple times (destroys previous buffers first).
@@ -81,7 +82,7 @@ namespace himalaya::framework {
 
         // ---- Accessors ----
 
-        /** @brief Handle to the merged core attributes SSBO. */
+        /** @brief Handle to the merged GPU core attributes SSBO. */
         [[nodiscard]] rhi::BufferHandle core_buffer() const;
 
         /**
@@ -101,7 +102,7 @@ namespace himalaya::framework {
         /** @brief Resource manager (non-owning). */
         rhi::ResourceManager *rm_ = nullptr;
 
-        /** @brief Merged core attributes buffer (StorageBuffer | TransferDst, GpuOnly). */
+        /** @brief Merged GPU core buffer (StorageBuffer | TransferDst, GpuOnly). */
         rhi::BufferHandle core_buffer_;
 
         /**
