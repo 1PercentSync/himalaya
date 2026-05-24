@@ -149,8 +149,8 @@
 - [x] 用现有 32-bit stable RadixSort 执行两次排序：先按 depth，再按 tile-id 稳定排序
 - [x] 新增 gather pass：depth-sorted entry index → tile sort key/value
 - [x] 新增 tile range build pass：从 sorted tile ids 生成 `tile_offsets[]` / `tile_counts[]`，替代原 `gs_tile_scan.comp` prefix-sum 流程
-- [ ] 增加 GS runtime stats GPU buffer 与 per-frame delayed readback buffer，缓存 visible splats、entry requested/written/dropped、invalid entries、sort clamped
-- [ ] Debug/log 中暴露可控退化指标；`GsColorSpace::Unknown` 在 GS 模式按 warning + `LinRec709Display` fallback 处理
+- [x] 增加 GS runtime stats GPU buffer 与 per-frame delayed readback buffer，缓存 visible splats、entry requested/written/dropped、invalid entries、sort clamped
+- [x] Debug/log 中暴露可控退化指标；`GsColorSpace::Unknown` 在 GS 模式按 warning + `LinRec709Display` fallback 处理
 - [ ] 编译验证
 
 ## Step 5.6：GS Covariance GPU Layout + Node Transform 修正
