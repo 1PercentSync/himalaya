@@ -89,12 +89,12 @@ namespace himalaya::framework {
      * @brief Gaussian Splatting color space metadata.
      *
      * Recorded from the GS scene's extension JSON and used by PresentPass
-     * to select the correct swapchain image view for hardware gamma control.
+     * to convert GS display-referred colors to linear swapchain output.
      */
     enum class GsColorSpace : uint8_t {
-        Unknown,              ///< PT mode or no GS data loaded — irrelevant.
-        SrgbRec709Display,    ///< SH values are sRGB nonlinear. Use UNORM view (no hardware conversion).
-        LinRec709Display,     ///< SH values are linear. Use SRGB view (hardware linear→sRGB).
+        Unknown,              ///< PT mode or no GS data loaded; GS mode falls back to linear with a warning.
+        SrgbRec709Display,    ///< SH values are sRGB nonlinear; shader decodes to linear before SRGB output.
+        LinRec709Display,     ///< SH values are linear; shader writes directly to SRGB output.
     };
 
     /**

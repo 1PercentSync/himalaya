@@ -40,7 +40,8 @@ namespace himalaya::passes {
          * Matches layout(push_constant) uniform PC in present.frag.
          */
         struct PushConstants {
-            uint32_t mode; ///< 0 = PT (tonemapping), 1 = GS (passthrough)
+            uint32_t mode;           ///< 0 = PT (tonemapping), 1 = GS (display-referred output).
+            uint32_t gs_color_space; ///< 0 = unknown, 1 = sRGB Rec.709 display, 2 = linear Rec.709 display.
         };
 
         /**
@@ -50,7 +51,7 @@ namespace himalaya::passes {
          * @param rm               Resource manager.
          * @param dm               Descriptor manager (for Set 2 hdr_color binding).
          * @param sc               Shader compiler.
-         * @param swapchain        Swapchain for accessing SRGB/UNORM image views.
+         * @param swapchain        Swapchain for accessing SRGB image views.
          * @param swapchain_format Swapchain surface format (pipeline color attachment format).
          */
         void setup(rhi::Context &ctx,
@@ -102,7 +103,7 @@ namespace himalaya::passes {
         /** @brief Shader compiler. */
         rhi::ShaderCompiler *sc_ = nullptr;
 
-        /** @brief Swapchain for accessing SRGB/UNORM image views. */
+        /** @brief Swapchain for accessing SRGB image views. */
         rhi::Swapchain *swapchain_ = nullptr;
 
         // ---- Configuration ----

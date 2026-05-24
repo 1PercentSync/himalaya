@@ -81,9 +81,6 @@ namespace himalaya::rhi {
         /** @brief One image view per swapchain image (SRGB format). */
         std::vector<VkImageView> image_views;
 
-        /** @brief One UNORM image view per swapchain image (for GS srgb_rec709_display passthrough). */
-        std::vector<VkImageView> unorm_image_views;
-
         /**
          * @brief One render-finished semaphore per swapchain image.
          *

@@ -57,7 +57,7 @@ namespace himalaya::framework {
         /** @brief Current rendering mode (PT or GS). */
         RenderMode render_mode = RenderMode::PathTracing;
 
-        /** @brief GS color space for hardware gamma view selection (ignored by PT). */
+        /** @brief GS color space for PresentPass shader conversion (ignored by PT). */
         GsColorSpace gs_color_space = GsColorSpace::Unknown;
     };
 } // namespace himalaya::framework

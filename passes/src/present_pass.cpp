@@ -82,7 +82,7 @@ namespace himalaya::passes {
         const auto set_layouts = dm_->get_graphics_set_layouts();
         desc.descriptor_set_layouts = {set_layouts.begin(), set_layouts.end()};
 
-        // Push constant: uint mode (0=PT tonemapping, 1=GS passthrough)
+        // Push constants: mode + GS color-space metadata.
         const VkPushConstantRange push_range{
             .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
             .offset = 0,
@@ -117,17 +117,11 @@ namespace himalaya::passes {
         rg.add_pass("Present", resources,
                     [this, &rg, &ctx](const rhi::CommandBuffer &cmd) {
                         // View is fetched from Swapchain directly (not via RG/RM) because
-                        // RM stores one view per image, but we need SRGB or UNORM variants.
-                        // RG still tracks the swapchain image for barrier management.
-                        VkImageView swapchain_view = VK_NULL_HANDLE;
-                        if (ctx.render_mode == framework::RenderMode::GaussianSplatting &&
-                            ctx.gs_color_space == framework::GsColorSpace::SrgbRec709Display) {
-                            swapchain_view = swapchain_->unorm_image_views[ctx.image_index];
-                        } else {
-                            swapchain_view = swapchain_->image_views[ctx.image_index];
-                        }
+                        // swapchain image views are owned by the swapchain. RG still tracks
+                        // the swapchain image for barrier management.
+                        const VkImageView swapchain_view = swapchain_->image_views[ctx.image_index];
 
-                        // Color attachment: swapchain image (SRGB or UNORM view)
+                        // Color attachment: swapchain image (SRGB view)
                         const auto &swapchain_image = rm_->get_image(rg.get_image(ctx.swapchain));
                         const VkExtent2D render_extent{
                             swapchain_image.desc.width, swapchain_image.desc.height
@@ -158,9 +152,21 @@ namespace himalaya::passes {
                         };
                         cmd.bind_descriptor_sets(pipeline_.layout, 0, sets.data(), static_cast<uint32_t>(sets.size()));
 
-                        // Push constant: select processing mode
+                        // Push constant: select processing mode and GS color-space handling.
+                        framework::GsColorSpace gs_color_space = ctx.gs_color_space;
+                        if (ctx.render_mode == framework::RenderMode::GaussianSplatting &&
+                            gs_color_space == framework::GsColorSpace::Unknown) {
+                            static bool warned_unknown_gs_color_space = false;
+                            if (!warned_unknown_gs_color_space) {
+                                spdlog::warn("PresentPass: GS color space is unknown; falling back to linear Rec.709 display");
+                                warned_unknown_gs_color_space = true;
+                            }
+                            gs_color_space = framework::GsColorSpace::LinRec709Display;
+                        }
+
                         const PushConstants pc{
                             .mode = (ctx.render_mode == framework::RenderMode::GaussianSplatting) ? 1u : 0u,
+                            .gs_color_space = static_cast<uint32_t>(gs_color_space),
                         };
                         cmd.push_constants(pipeline_.layout, VK_SHADER_STAGE_FRAGMENT_BIT, &pc, sizeof(pc));
 

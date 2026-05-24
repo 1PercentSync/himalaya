@@ -26,12 +26,8 @@ namespace himalaya::rhi {
         for (const auto view: image_views) {
             vkDestroyImageView(context.device, view, nullptr);
         }
-        for (const auto view: unorm_image_views) {
-            vkDestroyImageView(context.device, view, nullptr);
-        }
         render_finished_semaphores.clear();
         image_views.clear();
-        unorm_image_views.clear();
         images.clear();
 
         // ReSharper disable once CppLocalVariableMayBeConst
@@ -88,28 +84,8 @@ namespace himalaya::rhi {
             image_count = capabilities.maxImageCount;
         }
 
-        // Derive UNORM counterpart of the SRGB surface format for mutable format view.
-        // The swapchain image is always created with the SRGB format; the UNORM view
-        // allows PresentPass to bypass hardware gamma conversion for GS passthrough.
-        VkFormat unorm_format = VK_FORMAT_UNDEFINED;
-        switch (format) {
-            case VK_FORMAT_B8G8R8A8_SRGB:  unorm_format = VK_FORMAT_B8G8R8A8_UNORM;  break;
-            case VK_FORMAT_R8G8B8A8_SRGB:  unorm_format = VK_FORMAT_R8G8B8A8_UNORM;  break;
-            default:
-                spdlog::error("Unsupported swapchain format for mutable format: {}", static_cast<int>(format));
-                std::abort();
-        }
-
-        const VkFormat compatible_formats[] = {format, unorm_format};
-        VkImageFormatListCreateInfo format_list{};
-        format_list.sType = VK_STRUCTURE_TYPE_IMAGE_FORMAT_LIST_CREATE_INFO;
-        format_list.viewFormatCount = 2;
-        format_list.pViewFormats = compatible_formats;
-
         VkSwapchainCreateInfoKHR create_info{};
         create_info.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
-        create_info.pNext = &format_list;
-        create_info.flags = VK_SWAPCHAIN_CREATE_MUTABLE_FORMAT_BIT_KHR;
         create_info.surface = context.surface;
         create_info.minImageCount = image_count;
         create_info.imageFormat = format;
@@ -155,9 +131,6 @@ namespace himalaya::rhi {
             vkDestroySemaphore(device, sem, nullptr);
         }
         for (const auto view: image_views) {
-            vkDestroyImageView(device, view, nullptr);
-        }
-        for (const auto view: unorm_image_views) {
             vkDestroyImageView(device, view, nullptr);
         }
         vkDestroySwapchainKHR(device, swapchain, nullptr);
@@ -244,38 +217,24 @@ namespace himalaya::rhi {
         };
     }
 
-    // Creates a 2D color image view for each swapchain image (both SRGB and UNORM).
+    // Creates a 2D SRGB color image view for each swapchain image.
     // ReSharper disable once CppParameterMayBeConst
     void Swapchain::create_image_views(VkDevice device) {
         image_views.resize(images.size());
-        unorm_image_views.resize(images.size());
-
-        // Derive UNORM counterpart format for view creation
-        VkFormat unorm_format = VK_FORMAT_UNDEFINED;
-        switch (format) {
-            case VK_FORMAT_B8G8R8A8_SRGB:  unorm_format = VK_FORMAT_B8G8R8A8_UNORM;  break;
-            case VK_FORMAT_R8G8B8A8_SRGB:  unorm_format = VK_FORMAT_R8G8B8A8_UNORM;  break;
-            default: std::abort(); // Already validated in create_resources()
-        }
 
         for (size_t i = 0; i < images.size(); ++i) {
             VkImageViewCreateInfo view_info{};
             view_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
             view_info.image = images[i];
             view_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+            view_info.format = format;
             view_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
             view_info.subresourceRange.baseMipLevel = 0;
             view_info.subresourceRange.levelCount = 1;
             view_info.subresourceRange.baseArrayLayer = 0;
             view_info.subresourceRange.layerCount = 1;
 
-            // SRGB view (format = swapchain format)
-            view_info.format = format;
             VK_CHECK(vkCreateImageView(device, &view_info, nullptr, &image_views[i]));
-
-            // UNORM view (same image, different format interpretation)
-            view_info.format = unorm_format;
-            VK_CHECK(vkCreateImageView(device, &view_info, nullptr, &unorm_image_views[i]));
         }
     }
 } // namespace himalaya::rhi
