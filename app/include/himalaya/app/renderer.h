@@ -16,6 +16,9 @@
 #include <himalaya/framework/scene_data.h>
 #include <himalaya/framework/texture.h>
 #include <himalaya/rhi/acceleration_structure.h>
+#include <himalaya/passes/gs_projection_pass.h>
+#include <himalaya/passes/gs_tile_binning_pass.h>
+#include <himalaya/passes/gs_tile_render_pass.h>
 #include <himalaya/passes/reference_view_pass.h>
 #include <himalaya/passes/present_pass.h>
 #include <himalaya/rhi/context.h>
@@ -24,6 +27,7 @@
 #include <chrono>
 #include <cstdint>
 #include <span>
+#include <string>
 #include <vector>
 
 namespace himalaya::rhi {
@@ -254,6 +258,12 @@ namespace himalaya::app {
         /** @brief Returns the number of currently uploaded GS splats. */
         [[nodiscard]] uint32_t gs_splat_count() const;
 
+        /** @brief Returns true after GS runtime stats have been read back at least once. */
+        [[nodiscard]] bool gs_has_runtime_stats() const;
+
+        /** @brief Returns latest delayed GS runtime stats. */
+        [[nodiscard]] const passes::GsRuntimeStats &gs_runtime_stats() const;
+
     private:
         // --- Subsystem references (non-owning, set during init) ---
 
@@ -289,6 +299,15 @@ namespace himalaya::app {
         /** @brief Uploaded Gaussian Splatting scene GPU buffers. */
         framework::GsGpuData gs_gpu_data_{};
 
+        /** @brief GS projection and culling pass. */
+        passes::GsProjectionPass gs_projection_pass_{};
+
+        /** @brief GS tile entry generation, sorting, and range build pass. */
+        passes::GsTileBinningPass gs_tile_binning_pass_{};
+
+        /** @brief GS tile rendering pass. */
+        passes::GsTileRenderPass gs_tile_render_pass_{};
+
         /** @brief PT reference view pass (RT pipeline dispatch + accumulation). */
         passes::ReferenceViewPass reference_view_pass_{};
 
@@ -315,6 +334,9 @@ namespace himalaya::app {
 
         /** @brief Denoised output buffer (RGBA32F, Relative 1.0x, TransferDst | Sampled); created when rt_supported. */
         framework::RGManagedHandle managed_denoised_;
+
+        /** @brief GS color buffer (R16G16B16A16F, Relative 1.0x, Storage | Sampled). */
+        framework::RGManagedHandle managed_gs_color_;
 
         /** @brief OIDN asynchronous denoiser instance (reference view). */
         framework::Denoiser denoiser_{};
@@ -378,6 +400,9 @@ namespace himalaya::app {
         /** @brief Cached LOD max level from previous PT frame (change detection → reset). */
         uint32_t prev_lod_max_level_ = 4;
 
+        /** @brief Color space metadata for the currently uploaded GS scene. */
+        framework::GsColorSpace gs_color_space_ = framework::GsColorSpace::Unknown;
+
         /** @brief Cached indirect intensity from previous PT frame (change detection → reset). */
         float prev_indirect_intensity_ = 1.0f;
 
@@ -439,6 +464,11 @@ namespace himalaya::app {
          * @brief Path tracing render path: Reference View Pass + Present + ImGui.
          */
         void render_path_tracing(rhi::CommandBuffer &cmd, const RenderInput &input);
+
+        /**
+         * @brief Gaussian Splatting render path: projection, tile entry pipeline, tile render, present, ImGui.
+         */
+        void render_gaussian_splatting(rhi::CommandBuffer &cmd, const RenderInput &input);
 
         /**
          * @brief Fallback render path: ImGui only (no scene / no RT).

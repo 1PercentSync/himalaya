@@ -97,6 +97,19 @@ namespace himalaya::app {
         shader_compiler_.set_cache_category("shader_debug");
 #endif
 
+        managed_gs_color_ = render_graph_.create_managed_image(
+            "GS Color", {
+                .size_mode = framework::RGSizeMode::Relative,
+                .width_scale = 1.0f,
+                .height_scale = 1.0f,
+                .width = 0,
+                .height = 0,
+                .format = rhi::Format::R16G16B16A16Sfloat,
+                .usage = rhi::ImageUsage::Storage | rhi::ImageUsage::Sampled,
+                .sample_count = 1,
+                .mip_levels = 1,
+            }, false);
+
         // --- GlobalUBO buffers (per-frame, CpuToGpu) ---
         constexpr const char *kGlobalUboNames[] = {"Global UBO [Frame 0]", "Global UBO [Frame 1]"};
         static_assert(std::size(kGlobalUboNames) == rhi::kMaxFramesInFlight);
@@ -206,6 +219,9 @@ namespace himalaya::app {
 
         // --- Pass setup ---
         present_pass_.setup(*ctx_, *resource_manager_, *descriptor_manager_, shader_compiler_, *swapchain_, swapchain_->format);
+        gs_projection_pass_.setup(*ctx_, *resource_manager_, *descriptor_manager_, shader_compiler_);
+        gs_tile_binning_pass_.setup(*ctx_, *resource_manager_, *descriptor_manager_, shader_compiler_);
+        gs_tile_render_pass_.setup(*ctx_, *resource_manager_, *descriptor_manager_, shader_compiler_);
 
         if (ctx_->rt_supported) {
             reference_view_pass_.setup(*ctx_, *resource_manager_, *descriptor_manager_,
@@ -215,6 +231,9 @@ namespace himalaya::app {
 
     void Renderer::destroy() {
         destroy_gs_scene();
+        gs_tile_render_pass_.destroy();
+        gs_tile_binning_pass_.destroy();
+        gs_projection_pass_.destroy();
         emissive_light_builder_.destroy();
         scene_as_builder_.destroy();
         as_manager_.destroy();
@@ -254,6 +273,9 @@ namespace himalaya::app {
         }
         if (managed_denoised_.valid()) {
             render_graph_.destroy_managed_image(managed_denoised_);
+        }
+        if (managed_gs_color_.valid()) {
+            render_graph_.destroy_managed_image(managed_gs_color_);
         }
         denoiser_.destroy();
         unregister_swapchain_images();
@@ -315,12 +337,39 @@ namespace himalaya::app {
 
     // ---- GS scene data ----
 
+    namespace {
+        framework::GsColorSpace parse_gs_color_space(const std::string &color_space) {
+            if (color_space == "srgb_rec709_display") {
+                return framework::GsColorSpace::SrgbRec709Display;
+            }
+            if (color_space == "lin_rec709_display") {
+                return framework::GsColorSpace::LinRec709Display;
+            }
+            return framework::GsColorSpace::Unknown;
+        }
+    }
+
     void Renderer::upload_gs_scene(const framework::GaussianSplatScene &scene) {
         gs_gpu_data_.upload(scene);
+        gs_color_space_ = framework::GsColorSpace::Unknown;
+        for (const auto &primitive : scene.primitives) {
+            const auto primitive_color_space = parse_gs_color_space(primitive.metadata.color_space);
+            if (primitive_color_space == framework::GsColorSpace::Unknown) {
+                spdlog::warn("Unknown GS color space: {}", primitive.metadata.color_space);
+                continue;
+            }
+            if (gs_color_space_ == framework::GsColorSpace::Unknown) {
+                gs_color_space_ = primitive_color_space;
+            } else if (gs_color_space_ != primitive_color_space) {
+                spdlog::warn("Mixed GS color spaces detected; using the first valid primitive color space");
+                break;
+            }
+        }
     }
 
     void Renderer::destroy_gs_scene() {
         gs_gpu_data_.destroy();
+        gs_color_space_ = framework::GsColorSpace::Unknown;
     }
 
     // ---- Environment reload ----
@@ -345,6 +394,9 @@ namespace himalaya::app {
         vkQueueWaitIdle(ctx_->graphics_queue);
 
         present_pass_.rebuild_pipelines();
+        gs_projection_pass_.rebuild_pipelines();
+        gs_tile_binning_pass_.rebuild_pipelines();
+        gs_tile_render_pass_.rebuild_pipelines();
         if (ctx_->rt_supported) {
             reference_view_pass_.rebuild_pipelines();
         }
@@ -361,6 +413,8 @@ namespace himalaya::app {
     void Renderer::on_swapchain_recreated() {
         register_swapchain_images();
         render_graph_.set_reference_resolution(swapchain_->extent);
+
+        gs_tile_binning_pass_.on_resize(swapchain_->extent.width, swapchain_->extent.height);
 
         if (ctx_->rt_supported) {
             denoiser_.on_resize(*resource_manager_,

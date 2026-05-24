@@ -1,0 +1,121 @@
+#version 460
+
+/**
+ * @file gs_tile_render.comp
+ * @brief Renders sorted Gaussian Splatting tile entries into the GS color image.
+ *
+ * Each 16x16 workgroup shades one screen-space tile. Entries in a tile are
+ * already sorted front-to-back, so each pixel can alpha-composite in order and
+ * stop once transmittance becomes visually negligible.
+ */
+
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+const float kAlphaTerminationThreshold = 1.0 / 255.0;
+const float kMinAxisLengthSquared = 1.0e-8;
+
+/** Projected 2D splat attributes. Matches GSSplatData2D in gaussian_splat_data.h. */
+struct GSSplatData2D {
+    vec2 center;
+    vec2 axis_u;
+    vec2 axis_v;
+    vec2 _pad0;
+    vec3 color;
+    float alpha;
+    uvec2 tile_min;
+    uvec2 tile_max;
+};
+
+layout(push_constant) uniform PC {
+    uint tile_count_x;
+    uint tile_count_y;
+} pc;
+
+layout(set = 3, binding = 0) readonly buffer Splat2DBuffer {
+    GSSplatData2D splats_2d[];
+};
+
+layout(set = 3, binding = 1) readonly buffer EntrySplatIdBuffer {
+    uint entry_splat_ids[];
+};
+
+layout(set = 3, binding = 2) readonly buffer SortedEntryIndexBuffer {
+    uint sorted_entry_indices[];
+};
+
+layout(set = 3, binding = 3) readonly buffer TileOffsetBuffer {
+    uint tile_offsets[];
+};
+
+layout(set = 3, binding = 4) readonly buffer TileCountBuffer {
+    uint tile_counts[];
+};
+
+layout(set = 3, binding = 5, rgba16f) writeonly uniform image2D gs_color_image;
+
+/**
+ * @brief Evaluates a projected 2D Gaussian at the pixel center.
+ *
+ * axis_u / axis_v store the 3-sigma support vectors from projection. The
+ * normalized ellipse radius is therefore one at the 3-sigma boundary, and the
+ * Mahalanobis distance is 9 * radius^2.
+ */
+float evaluate_alpha(GSSplatData2D splat, vec2 pixel_center) {
+    const vec2 delta = pixel_center - splat.center;
+    const float len_u2 = dot(splat.axis_u, splat.axis_u);
+    const float len_v2 = dot(splat.axis_v, splat.axis_v);
+    if (len_u2 <= kMinAxisLengthSquared || len_v2 <= kMinAxisLengthSquared) {
+        return 0.0;
+    }
+
+    const float u = dot(delta, splat.axis_u) / len_u2;
+    const float v = dot(delta, splat.axis_v) / len_v2;
+    const float radius2 = u * u + v * v;
+    if (radius2 > 1.0) {
+        return 0.0;
+    }
+
+    const float mahalanobis2 = 9.0 * radius2;
+    return clamp(splat.alpha * exp(-0.5 * mahalanobis2), 0.0, 1.0);
+}
+
+void main() {
+    const ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+    const ivec2 image_size = imageSize(gs_color_image);
+    if (pixel.x >= image_size.x || pixel.y >= image_size.y) {
+        return;
+    }
+
+    const uint tile_x = gl_WorkGroupID.x;
+    const uint tile_y = gl_WorkGroupID.y;
+    const uint tile_id = tile_y * pc.tile_count_x + tile_x;
+
+    vec3 accum_color = vec3(0.0);
+    float transmittance = 1.0;
+
+    if (tile_x < pc.tile_count_x && tile_y < pc.tile_count_y) {
+        const uint begin = tile_offsets[tile_id];
+        const uint count = tile_counts[tile_id];
+        const vec2 sample_pos = vec2(pixel) + vec2(0.5);
+
+        for (uint i = 0u; i < count; ++i) {
+            const uint sorted_index = begin + i;
+            const uint entry_index = sorted_entry_indices[sorted_index];
+            const uint splat_index = entry_splat_ids[entry_index];
+            const GSSplatData2D splat = splats_2d[splat_index];
+
+            const float alpha = evaluate_alpha(splat, sample_pos);
+            if (alpha <= 0.0) {
+                continue;
+            }
+
+            accum_color += transmittance * alpha * splat.color;
+            transmittance *= (1.0 - alpha);
+            if (transmittance < kAlphaTerminationThreshold) {
+                break;
+            }
+        }
+    }
+
+    imageStore(gs_color_image, pixel, vec4(accum_color, 1.0 - transmittance));
+}

@@ -61,6 +61,10 @@ namespace himalaya::passes {
         consume_delayed_stats(frame_ctx.frame_index);
 
         if (max_splat_count == 0 ||
+            !projected_splat_buffer.valid() ||
+            !depth_key_buffer.valid() ||
+            !visible_counter_buffer.valid() ||
+            !indirect_dispatch_buffer.valid() ||
             entry_pipeline_.pipeline == VK_NULL_HANDLE ||
             gather_pipeline_.pipeline == VK_NULL_HANDLE ||
             range_pipeline_.pipeline == VK_NULL_HANDLE) {
@@ -182,7 +186,8 @@ namespace himalaya::passes {
                 .tile_count_y = tile_buffers_.tile_count_y(),
             };
             cmd.push_constants(entry_pipeline_.layout, VK_SHADER_STAGE_COMPUTE_BIT, &pc, sizeof(pc));
-            vkCmdDispatchIndirect(cmd.handle(), indirect_dispatch.buffer, 0);
+            const uint32_t group_count = (max_splat_count + kWorkgroupSize - 1u) / kWorkgroupSize;
+            cmd.dispatch(group_count, 1, 1);
         }
         barrier_entry_outputs_to_compute_read(cmd);
 
@@ -250,6 +255,13 @@ namespace himalaya::passes {
         }
         barrier_range_outputs_to_compute_read(cmd);
         record_stats_readback(cmd, frame_ctx.frame_index);
+    }
+
+    void GsTileBinningPass::on_resize(const uint32_t screen_width, const uint32_t screen_height) {
+        if (tile_buffers_.max_splat_count() == 0) {
+            return;
+        }
+        tile_buffers_.ensure_capacity(tile_buffers_.max_splat_count(), screen_width, screen_height);
     }
 
     void GsTileBinningPass::rebuild_pipelines() {

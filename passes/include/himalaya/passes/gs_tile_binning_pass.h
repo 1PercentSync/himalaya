@@ -101,6 +101,14 @@ namespace himalaya::passes {
                     uint32_t screen_width,
                     uint32_t screen_height);
 
+        /**
+         * @brief Rebuilds screen-size-dependent tile buffers after swapchain resize.
+         *
+         * The splat/entry capacity is preserved; tile range buffers are resized
+         * to match the new viewport. Safe to call before any GS scene is loaded.
+         */
+        void on_resize(uint32_t screen_width, uint32_t screen_height);
+
         /** @brief Rebuilds compute pipelines from disk shaders. */
         void rebuild_pipelines();
 

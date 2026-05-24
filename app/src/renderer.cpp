@@ -5,10 +5,12 @@
 
 #include <himalaya/app/renderer.h>
 
+#include <himalaya/framework/frame_context.h>
 #include <himalaya/framework/imgui_backend.h>
 #include <himalaya/framework/render_graph.h>
 #include <himalaya/framework/scene_data.h>
 #include <himalaya/rhi/commands.h>
+#include <himalaya/rhi/descriptors.h>
 #include <himalaya/rhi/resources.h>
 #include <himalaya/rhi/swapchain.h>
 
@@ -63,14 +65,103 @@ namespace himalaya::app {
                 }
                 break;
             case framework::RenderMode::GaussianSplatting:
-                // GS tile rendering is integrated in Step 6. Until then,
-                // explicitly route GS requests to the same black ImGui-only
-                // fallback used for unavailable render paths.
-                render_imgui_only(cmd, input);
+                if (gs_gpu_data_.total_splat_count() > 0) {
+                    render_gaussian_splatting(cmd, input);
+                } else {
+                    render_imgui_only(cmd, input);
+                }
                 break;
         }
 
         ++frame_counter_;
+    }
+
+    void Renderer::render_gaussian_splatting(rhi::CommandBuffer &cmd, const RenderInput &input) {
+        render_graph_.clear();
+
+        const auto swapchain_image = render_graph_.import_image(
+            "Swapchain",
+            swapchain_image_handles_[input.image_index],
+            VK_IMAGE_LAYOUT_UNDEFINED,
+            VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+        const auto gs_color_resource = render_graph_.use_managed_image(
+            managed_gs_color_, VK_IMAGE_LAYOUT_UNDEFINED, false);
+
+        framework::FrameContext frame_ctx{};
+        frame_ctx.swapchain = swapchain_image;
+        frame_ctx.hdr_color = gs_color_resource;
+        frame_ctx.frame_index = input.frame_index;
+        frame_ctx.frame_number = frame_counter_;
+        frame_ctx.image_index = input.image_index;
+        frame_ctx.render_mode = framework::RenderMode::GaussianSplatting;
+        frame_ctx.gs_color_space = gs_color_space_;
+
+        const auto gs_color_backing = render_graph_.get_managed_backing_image(managed_gs_color_);
+        descriptor_manager_->update_render_target(input.frame_index, 0, gs_color_backing, default_sampler_);
+
+        const std::array gs_compute_resources = {
+            framework::RGResourceUsage{
+                gs_color_resource,
+                framework::RGAccessType::Write,
+                framework::RGStage::Compute,
+            },
+        };
+        render_graph_.add_pass("GS Compute Pipeline", gs_compute_resources,
+                               [this, &frame_ctx](const rhi::CommandBuffer &pass_cmd) {
+                                   gs_projection_pass_.record(pass_cmd,
+                                                              frame_ctx,
+                                                              gs_gpu_data_,
+                                                              swapchain_->extent.width,
+                                                              swapchain_->extent.height);
+                                   gs_tile_binning_pass_.record(pass_cmd,
+                                                                frame_ctx,
+                                                                gs_projection_pass_.projected_splat_buffer(),
+                                                                gs_projection_pass_.depth_key_buffer(),
+                                                                gs_projection_pass_.visible_counter_buffer(),
+                                                                gs_projection_pass_.indirect_dispatch_buffer(),
+                                                                gs_projection_pass_.max_splat_count(),
+                                                                swapchain_->extent.width,
+                                                                swapchain_->extent.height);
+                                   gs_tile_render_pass_.record(pass_cmd,
+                                                               frame_ctx,
+                                                               render_graph_.get_image(frame_ctx.hdr_color),
+                                                               gs_projection_pass_.projected_splat_buffer(),
+                                                               gs_tile_binning_pass_.tile_buffers(),
+                                                               gs_tile_binning_pass_.sorted_entry_indices_buffer());
+                               });
+
+        present_pass_.record(render_graph_, frame_ctx);
+
+        const std::array imgui_resources = {
+            framework::RGResourceUsage{
+                swapchain_image,
+                framework::RGAccessType::ReadWrite,
+                framework::RGStage::ColorAttachment
+            },
+        };
+        render_graph_.add_pass("ImGui", imgui_resources,
+                               [this, &input](const rhi::CommandBuffer &pass_cmd) {
+                                   VkRenderingAttachmentInfo color_attachment{};
+                                   color_attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+                                   color_attachment.imageView = swapchain_->image_views[input.image_index];
+                                   color_attachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+                                   color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+                                   color_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+
+                                   VkRenderingInfo rendering_info{};
+                                   rendering_info.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
+                                   rendering_info.renderArea = {{0, 0}, swapchain_->extent};
+                                   rendering_info.layerCount = 1;
+                                   rendering_info.colorAttachmentCount = 1;
+                                   rendering_info.pColorAttachments = &color_attachment;
+
+                                   pass_cmd.begin_rendering(rendering_info);
+                                   imgui_->render(pass_cmd.handle());
+                                   pass_cmd.end_rendering();
+                               });
+
+        render_graph_.compile();
+        render_graph_.execute(cmd);
     }
 
     void Renderer::render_imgui_only(rhi::CommandBuffer &cmd, const RenderInput &input) {
@@ -197,5 +288,13 @@ namespace himalaya::app {
 
     uint32_t Renderer::gs_splat_count() const {
         return gs_gpu_data_.total_splat_count();
+    }
+
+    bool Renderer::gs_has_runtime_stats() const {
+        return gs_tile_binning_pass_.has_runtime_stats();
+    }
+
+    const passes::GsRuntimeStats &Renderer::gs_runtime_stats() const {
+        return gs_tile_binning_pass_.runtime_stats();
     }
 } // namespace himalaya::app

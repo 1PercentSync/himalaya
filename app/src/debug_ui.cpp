@@ -195,14 +195,11 @@ namespace himalaya::app {
             if (only_fifo) { ImGui::EndDisabled(); }
         }
 
-        // Render mode toggle. Checked = PT, unchecked = GS. Disabled until
-        // the GS tile rendering path is integrated.
+        // Render mode toggle. Checked = PT, unchecked = GS.
         {
-            ImGui::BeginDisabled();
             ImGui::Checkbox("Path Tracing", &ctx.pt_mode);
-            ImGui::EndDisabled();
-            if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
-                ImGui::SetTooltip("Gaussian Splatting mode will be enabled after tile rendering is integrated.");
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("Checked: Path Tracing\nUnchecked: Gaussian Splatting");
             }
         }
 
@@ -442,6 +439,19 @@ namespace himalaya::app {
             ImGui::Text("Instances: %u  Meshes: %u", stats.total_instances, stats.total_meshes);
             ImGui::Text("Materials: %u  Textures: %u", stats.total_materials, stats.total_textures);
             ImGui::Text("Vertices: %u  Triangles: %u", stats.total_vertices, stats.total_triangles);
+            ImGui::Text("GS Splats: %u", ctx.gs_splat_count);
+            if (ctx.gs_has_runtime_stats) {
+                ImGui::Text("GS Visible: %u", ctx.gs_stats.visible_splats);
+                ImGui::Text("GS Entries: requested=%u written=%u dropped=%u",
+                            ctx.gs_stats.entry_requested,
+                            ctx.gs_stats.entry_written,
+                            ctx.gs_stats.entry_dropped);
+                ImGui::Text("GS Diagnostics: invalid=%u sort_clamped=%u",
+                            ctx.gs_stats.invalid_entries,
+                            ctx.gs_stats.sort_clamped);
+            } else {
+                ImGui::TextDisabled("GS runtime stats unavailable");
+            }
         }
 
         // Environment section

@@ -61,6 +61,33 @@ namespace himalaya::app {
         /** @brief Number of PT samples accumulated so far (read-only display). */
         uint32_t pt_sample_count;
 
+        /** @brief Number of currently uploaded GS splats. */
+        uint32_t gs_splat_count;
+
+        /** @brief Whether delayed GS runtime stats are available. */
+        bool gs_has_runtime_stats;
+
+        /** @brief Latest delayed GS runtime stats copied into UI-friendly storage. */
+        struct GsStats {
+            /** @brief Visible splats after projection and culling. */
+            uint32_t visible_splats;
+
+            /** @brief Tile entries requested before capacity clipping. */
+            uint32_t entry_requested;
+
+            /** @brief Tile entries written within capacity. */
+            uint32_t entry_written;
+
+            /** @brief Tile entries dropped due to capacity clipping. */
+            uint32_t entry_dropped;
+
+            /** @brief Invalid entries detected by shaders. */
+            uint32_t invalid_entries;
+
+            /** @brief Non-zero when sort input was clamped. */
+            uint32_t sort_clamped;
+        } gs_stats;
+
         /** @brief Path tracing configuration (mutable — DebugUI modifies fields directly). */
         framework::PTConfig &pt_config;
 

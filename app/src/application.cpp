@@ -358,6 +358,8 @@ namespace himalaya::app {
             total_triangles += mesh.index_count / 3;
         }
 
+        const auto &gs_stats = renderer_.gs_runtime_stats();
+
         // Debug UI
         DebugUIContext ui_ctx{
             .delta_time = delta_time,
@@ -369,6 +371,16 @@ namespace himalaya::app {
             .pt_mode = pt_mode_,
             .rt_supported = context_.rt_supported,
             .pt_sample_count = renderer_.pt_sample_count(),
+            .gs_splat_count = renderer_.gs_splat_count(),
+            .gs_has_runtime_stats = renderer_.gs_has_runtime_stats(),
+            .gs_stats = {
+                .visible_splats = gs_stats.visible_splats,
+                .entry_requested = gs_stats.entry_requested,
+                .entry_written = gs_stats.entry_written,
+                .entry_dropped = gs_stats.entry_dropped,
+                .invalid_entries = gs_stats.invalid_entries,
+                .sort_clamped = gs_stats.sort_clamped,
+            },
             .pt_config = pt_config_,
             .pt_allow_tearing = pt_allow_tearing_,
             .pt_elapsed_time = renderer_.pt_elapsed_time(),
