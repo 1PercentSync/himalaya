@@ -777,6 +777,7 @@ GS shader 文件位于 `shaders/gs/` 目录：
 | `gs_sort_scan.comp` | Prefix sum（scan） |
 | `gs_sort_scatter.comp` | Radix sort scatter |
 | `gs_tile_count.comp` | Per-tile splat 计数 |
+| `gs_tile_scan.comp` | 对 `tile_counts[]` 做 exclusive prefix sum，输出 `tile_offsets[]` |
 | `gs_tile_scatter.comp` | Scatter splat index 到 per-tile 区域 |
 | `gs_tile_render.comp` | Tile rendering（alpha blend + early termination） |
 
@@ -914,12 +915,17 @@ Atomic counter 写入由 projection shader 完成；indirect dispatch buffer（`
 Tile binning 输出：
 
 ```
-tile_offsets[]:  uint32[tile_count]    // 每个 tile 在 tile_splat_ids 中的起始偏移
-tile_counts[]:   uint32[tile_count]    // 每个 tile 的 splat 数量
-tile_splat_ids[]: uint32[]             // 所有 tile 的 splat index 列表（拼接）
+tile_offsets[]:   uint32[tile_count]    // 每个 tile 在 tile_splat_ids 中的起始偏移
+tile_counts[]:    uint32[tile_count]    // 每个 tile 的 splat 数量，保留给 tile rendering 读取
+tile_cursors[]:   uint32[tile_count]    // scatter 阶段临时写游标
+tile_splat_ids[]: uint32[]              // 所有 tile 的 splat index 列表（拼接）
 ```
 
 Tile 索引 = `tile_y * tile_count_x + tile_x`。
+
+`tile_counts[]` 与 `tile_cursors[]` 每帧分别在 count/scatter 前通过 `vkCmdFillBuffer` 清零，与 radix sort 阶段的清零策略保持一致。scatter 阶段使用 `atomicAdd(tile_cursors[tile_id], 1)` 获得 tile 内写入偏移，不修改 `tile_counts[]`，避免破坏后续 tile rendering 需要读取的 splat 数量。
+
+`tile_splat_ids[]` 使用保守容量上限，不做按帧动态重建：容量 = `max_splat_count * kMaxTilesPerSplat`，初始 `kMaxTilesPerSplat = 64`。scatter 写入时计算 `global_index = tile_offsets[tile_id] + local_offset`，若 `global_index` 超出容量则丢弃该条写入。该策略避免 GPU 统计结果 readback 和本帧动态 buffer 分配带来的同步与复杂度；溢出时最多丢弃少量覆盖大量 tile 的 splat，作为当前阶段可接受的视觉退化。
 
 ### 颜色空间处理
 

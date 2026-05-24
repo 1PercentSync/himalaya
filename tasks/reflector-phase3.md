@@ -44,6 +44,10 @@
 | 30 | Step 3 排序输入遗漏修正 | Projection shader 在 `atomicAdd` 得到 `visible_index` 后写入 `depth_keys[visible_index] = floatBitsToUint(camera_distance)` 和 `splat_indices[visible_index] = visible_index`。后续排序后用 `splat_indices[sorted_i]` 索引 `splats_2d[]` |
 | 31 | Sort prepare shader | 新增 `shaders/gs/gs_sort_prepare.comp`，单线程读取 visible counter，写入 `VkDispatchIndirectCommand(ceil(visible_count / workgroup_size), 1, 1)` |
 | 32 | Radix sort scan 结构 | scan 使用多级方案：per-block scan → block-level scan → final combine。histogram 为 `digit × block_count` 二维表，scatter 必须保持稳定以保证 LSD radix sort 正确 |
+| 33 | Tile binning 清零策略 | `tile_counts[]` 与 `tile_cursors[]` 每帧在 count/scatter 前使用 `vkCmdFillBuffer` 清零，与 sort 阶段清零策略一致 |
+| 34 | Tile scatter 写游标 | 新增 `tile_cursors[]` 作为 scatter 阶段 atomic 写游标，`tile_counts[]` 保持不变供 tile rendering 读取 |
+| 35 | tile_splat_ids 容量策略 | 使用保守上限 `max_splat_count * kMaxTilesPerSplat`，初始常量取 64；scatter 中超出容量的写入直接丢弃，不做动态重建 |
+| 36 | Tile prefix sum | 新增独立 `shaders/gs/gs_tile_scan.comp` 做 `tile_counts[]` exclusive prefix sum 输出 `tile_offsets[]`，不复用 radix sort 的 histogram scan shader |
 
 ---
 
@@ -111,9 +115,9 @@
 ## Step 5：Tile Binning
 
 - [ ] 创建 `shaders/gs/gs_tile_count.comp`（每个可见 splat 遍历其覆盖 tile，atomicAdd 每 tile 计数）
-- [ ] 实现 prefix sum 计算 per-tile 偏移（复用 Step 4 的 scan shader 或独立实现）
+- [ ] 创建 `shaders/gs/gs_tile_scan.comp`（对 `tile_counts[]` 做 exclusive prefix sum，输出 `tile_offsets[]`）
 - [ ] 创建 `shaders/gs/gs_tile_scatter.comp`（再次遍历可见 splat，按 offset + atomicAdd 写入 tile_splat_ids）
-- [ ] 创建 tile buffer：`tile_offsets[]`、`tile_counts[]`、`tile_splat_ids[]`（tile 数量依赖屏幕分辨率，resize 时重建）
+- [ ] 创建 tile buffer：`tile_offsets[]`、`tile_counts[]`、`tile_cursors[]`、`tile_splat_ids[]`（tile 数量依赖屏幕分辨率，resize 时重建；`tile_splat_ids` 使用保守容量上限）
 - [ ] 创建 `passes/include/himalaya/passes/gs_tile_binning_pass.h` 和 `passes/src/gs_tile_binning_pass.cpp`
 - [ ] 编译验证
 

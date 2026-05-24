@@ -77,5 +77,5 @@ PresentPass → swapchain
 | 2 | GPU Buffer 上传 | GsGpuData 类（Renderer 持有），core SSBO（position 应用 transform 后合并上传）+ SH SSBO（按 max_sh_degree 分组，累计系数） |
 | 3 | 投影与剔除 | Projection compute pass + SH 求值 + Mip Splatting |
 | 4 | GPU Radix Sort | 先补 Step 3 排序输入写入遗漏，再实现 32-bit key+value radix sort compute |
-| 5 | Tile Binning | per-tile 计数 + prefix sum + scatter |
+| 5 | Tile Binning | per-tile 计数 + 独立 tile scan + scatter（使用 `tile_cursors[]` 写游标与保守容量 `tile_splat_ids[]`） |
 | 6 | Tile Rendering + 集成 | 前到后混合 + Renderer 集成 + DebugUI |
