@@ -11,6 +11,7 @@
  */
 
 #include <himalaya/framework/render_graph.h>
+#include <himalaya/framework/scene_data.h>
 
 #include <cstdint>
 
@@ -49,5 +50,14 @@ namespace himalaya::framework {
 
         /** @brief Monotonically increasing frame counter for temporal noise variation. */
         uint32_t frame_number = 0;
+
+        /** @brief Acquired swapchain image index for selecting the correct VkImageView. */
+        uint32_t image_index = 0;
+
+        /** @brief Current rendering mode (PT or GS). */
+        RenderMode render_mode = RenderMode::PathTracing;
+
+        /** @brief GS color space for hardware gamma view selection (ignored by PT). */
+        GsColorSpace gs_color_space = GsColorSpace::Unknown;
     };
 } // namespace himalaya::framework
