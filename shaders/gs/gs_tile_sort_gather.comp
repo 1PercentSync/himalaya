@@ -1,0 +1,49 @@
+#version 460
+
+/**
+ * @file gs_tile_sort_gather.comp
+ * @brief Converts depth-sorted entry indices into tile-id sort key/value pairs.
+ *
+ * The first stable radix sort orders entries by depth and outputs entry indices
+ * as values. This shader gathers each depth-sorted entry's tile id as the key
+ * for the second stable sort, while preserving the original entry index as the
+ * value. The second sort groups by tile id and keeps depth order within a tile.
+ */
+
+layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+
+layout(push_constant) uniform PC {
+    uint max_entry_count;
+} pc;
+
+layout(set = 3, binding = 0) readonly buffer EntryTileIdBuffer {
+    uint entry_tile_ids[];
+};
+
+layout(set = 3, binding = 1) readonly buffer DepthSortedEntryIndexBuffer {
+    uint depth_sorted_entry_indices[];
+};
+
+layout(set = 3, binding = 2) readonly buffer EntryCountBuffer {
+    uint entry_count;
+};
+
+layout(set = 3, binding = 3) writeonly buffer TileSortKeyBuffer {
+    uint tile_sort_keys[];
+};
+
+layout(set = 3, binding = 4) writeonly buffer TileSortValueBuffer {
+    uint tile_sort_values[];
+};
+
+void main() {
+    const uint sorted_index = gl_GlobalInvocationID.x;
+    const uint active_count = min(entry_count, pc.max_entry_count);
+    if (sorted_index >= active_count) {
+        return;
+    }
+
+    const uint entry_index = depth_sorted_entry_indices[sorted_index];
+    tile_sort_keys[sorted_index] = entry_tile_ids[entry_index];
+    tile_sort_values[sorted_index] = entry_index;
+}

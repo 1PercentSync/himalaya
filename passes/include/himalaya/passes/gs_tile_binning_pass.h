@@ -5,6 +5,7 @@
  * @brief Gaussian Splatting tile-entry compute pass.
  */
 
+#include <himalaya/framework/radix_sort.h>
 #include <himalaya/passes/gs_tile_buffers.h>
 #include <himalaya/rhi/pipeline.h>
 #include <himalaya/rhi/types.h>
@@ -29,12 +30,12 @@ namespace himalaya::passes {
     /**
      * @brief Generates bounded per-tile entries from projected visible splats.
      *
-     * The pass records the tile-entry generation stage into an existing command
-     * buffer. Later Step 5.5 items sort these entries and build per-tile ranges.
+     * The pass records tile-entry generation, depth sort, tile-id gather, tile-id
+     * stable sort, and tile range build into an existing command buffer.
      */
     class GsTileBinningPass {
     public:
-        /** @brief Workgroup size used by tile-entry generation. */
+        /** @brief Workgroup size used by tile-entry generation and range helpers. */
         static constexpr uint32_t kWorkgroupSize = 256;
 
         /**
@@ -47,7 +48,22 @@ namespace himalaya::passes {
             uint32_t tile_count_y;    ///< Number of tiles along Y.
         };
 
-        /** @brief One-time initialization: create descriptor layout and pipeline. */
+        /**
+         * @brief Push constant layout shared with gs_tile_sort_gather.comp.
+         */
+        struct GatherPushConstants {
+            uint32_t max_entry_count; ///< Maximum tile-entry capacity.
+        };
+
+        /**
+         * @brief Push constant layout shared with gs_tile_range.comp.
+         */
+        struct RangePushConstants {
+            uint32_t max_entry_count; ///< Maximum tile-entry capacity.
+            uint32_t tile_count;      ///< Total number of tiles in the render target.
+        };
+
+        /** @brief One-time initialization: create descriptor layouts, pipelines, and sorters. */
         void setup(rhi::Context &ctx,
                    rhi::ResourceManager &rm,
                    rhi::DescriptorManager &dm,
@@ -83,23 +99,29 @@ namespace himalaya::passes {
                     uint32_t screen_width,
                     uint32_t screen_height);
 
-        /** @brief Rebuilds compute pipeline from disk shader. */
+        /** @brief Rebuilds compute pipelines from disk shaders. */
         void rebuild_pipelines();
 
-        /** @brief Destroys pipeline, descriptor layout, and owned buffers. */
+        /** @brief Destroys pipelines, descriptor layouts, sorters, and owned buffers. */
         void destroy();
 
         /** @brief Tile-entry buffer storage owned by this pass. */
         [[nodiscard]] const GsTileBuffers &tile_buffers() const;
 
+        /** @brief Final sorted tile IDs after tile-id stable sort. */
+        [[nodiscard]] rhi::BufferHandle sorted_tile_ids_buffer() const;
+
+        /** @brief Final sorted entry indices after tile-id stable sort. */
+        [[nodiscard]] rhi::BufferHandle sorted_entry_indices_buffer() const;
+
     private:
-        /** @brief Creates Set 3 push descriptor layout. */
+        /** @brief Creates Set 3 push descriptor layouts. */
         void create_descriptor_layouts();
 
-        /** @brief Creates or recreates compute pipeline. */
+        /** @brief Creates or recreates compute pipelines. */
         void create_pipelines();
 
-        /** @brief Destroys compute pipeline. */
+        /** @brief Destroys compute pipelines. */
         void destroy_pipelines();
 
         /** @brief Inserts a whole-buffer memory barrier. */
@@ -112,6 +134,12 @@ namespace himalaya::passes {
 
         /** @brief Inserts barriers for tile-entry outputs consumed by later compute stages. */
         void barrier_entry_outputs_to_compute_read(const rhi::CommandBuffer &cmd) const;
+
+        /** @brief Inserts barriers for gather outputs consumed by tile-id sort. */
+        void barrier_gather_outputs_to_compute_read(const rhi::CommandBuffer &cmd) const;
+
+        /** @brief Inserts barriers for tile range outputs consumed by tile rendering. */
+        void barrier_range_outputs_to_compute_read(const rhi::CommandBuffer &cmd) const;
 
         /** @brief Vulkan context. */
         rhi::Context *ctx_ = nullptr;
@@ -128,8 +156,26 @@ namespace himalaya::passes {
         /** @brief Push descriptor layout for gs_tile_entry.comp. */
         VkDescriptorSetLayout entry_set3_layout_ = VK_NULL_HANDLE;
 
+        /** @brief Push descriptor layout for gs_tile_sort_gather.comp. */
+        VkDescriptorSetLayout gather_set3_layout_ = VK_NULL_HANDLE;
+
+        /** @brief Push descriptor layout for gs_tile_range.comp. */
+        VkDescriptorSetLayout range_set3_layout_ = VK_NULL_HANDLE;
+
         /** @brief Compute pipeline for gs_tile_entry.comp. */
         rhi::Pipeline entry_pipeline_{};
+
+        /** @brief Compute pipeline for gs_tile_sort_gather.comp. */
+        rhi::Pipeline gather_pipeline_{};
+
+        /** @brief Compute pipeline for gs_tile_range.comp. */
+        rhi::Pipeline range_pipeline_{};
+
+        /** @brief Stable radix sort for entry depth keys. */
+        framework::RadixSort depth_sorter_;
+
+        /** @brief Stable radix sort for tile IDs after depth-key ordering. */
+        framework::RadixSort tile_sorter_;
 
         /** @brief Owned tile-entry buffers. */
         GsTileBuffers tile_buffers_;

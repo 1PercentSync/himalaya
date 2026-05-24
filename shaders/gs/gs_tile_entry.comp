@@ -43,26 +43,30 @@ layout(set = 3, binding = 2) readonly buffer VisibleCounterBuffer {
     uint visible_splat_count;
 };
 
-layout(set = 3, binding = 3) buffer EntryStatsBuffer {
+layout(set = 3, binding = 3) buffer EntryCountBuffer {
+    uint entry_count;
+};
+
+layout(set = 3, binding = 4) buffer EntryStatsBuffer {
     uint entry_requested_count;
     uint entry_written_count;
     uint entry_dropped_count;
     uint invalid_entry_count;
 };
 
-layout(set = 3, binding = 4) writeonly buffer EntryDepthKeyBuffer {
+layout(set = 3, binding = 5) writeonly buffer EntryDepthKeyBuffer {
     uint entry_depth_keys[];
 };
 
-layout(set = 3, binding = 5) writeonly buffer EntryTileIdBuffer {
+layout(set = 3, binding = 6) writeonly buffer EntryTileIdBuffer {
     uint entry_tile_ids[];
 };
 
-layout(set = 3, binding = 6) writeonly buffer EntrySplatIdBuffer {
+layout(set = 3, binding = 7) writeonly buffer EntrySplatIdBuffer {
     uint entry_splat_ids[];
 };
 
-layout(set = 3, binding = 7) writeonly buffer EntryIndexBuffer {
+layout(set = 3, binding = 8) writeonly buffer EntryIndexBuffer {
     uint entry_indices[];
 };
 
@@ -104,7 +108,8 @@ void main() {
                 continue;
             }
 
-            const uint write_index = atomicAdd(entry_written_count, 1u);
+            const uint write_index = atomicAdd(entry_count, 1u);
+            atomicAdd(entry_written_count, 1u);
             entry_depth_keys[write_index] = depth_key;
             entry_tile_ids[write_index] = tile_id(uvec2(tile_x, tile_y));
             entry_splat_ids[write_index] = splat_index;

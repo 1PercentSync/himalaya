@@ -77,6 +77,7 @@ namespace himalaya::passes {
 
             const uint64_t tile_buffer_size = static_cast<uint64_t>(tile_count_) * sizeof(uint32_t);
             const uint64_t entry_buffer_size = static_cast<uint64_t>(entry_capacity_) * sizeof(uint32_t);
+            const uint64_t entry_counter_buffer_size = sizeof(uint32_t);
             const uint64_t entry_stats_buffer_size = 4u * sizeof(uint32_t);
 
             const rhi::BufferDesc tile_buffer_desc{
@@ -96,6 +97,14 @@ namespace himalaya::passes {
             entry_tile_ids_buffer_ = rm_->create_buffer(entry_buffer_desc, "GS Entry Tile IDs SSBO");
             entry_splat_ids_buffer_ = rm_->create_buffer(entry_buffer_desc, "GS Entry Splat IDs SSBO");
             entry_indices_buffer_ = rm_->create_buffer(entry_buffer_desc, "GS Entry Indices SSBO");
+            tile_sort_keys_buffer_ = rm_->create_buffer(entry_buffer_desc, "GS Tile Sort Keys SSBO");
+            tile_sort_values_buffer_ = rm_->create_buffer(entry_buffer_desc, "GS Tile Sort Values SSBO");
+
+            entry_count_buffer_ = rm_->create_buffer({
+                .size = entry_counter_buffer_size,
+                .usage = rhi::BufferUsage::StorageBuffer | rhi::BufferUsage::TransferDst,
+                .memory = rhi::MemoryUsage::GpuOnly,
+            }, "GS Entry Count SSBO");
 
             entry_stats_buffer_ = rm_->create_buffer({
                 .size = entry_stats_buffer_size,
@@ -122,6 +131,9 @@ namespace himalaya::passes {
             destroy_buffer(entry_tile_ids_buffer_);
             destroy_buffer(entry_splat_ids_buffer_);
             destroy_buffer(entry_indices_buffer_);
+            destroy_buffer(tile_sort_keys_buffer_);
+            destroy_buffer(tile_sort_values_buffer_);
+            destroy_buffer(entry_count_buffer_);
             destroy_buffer(entry_stats_buffer_);
             reset_capacity();
         }
@@ -154,6 +166,21 @@ namespace himalaya::passes {
         /** @brief Buffer containing generated entry identity indices. */
         [[nodiscard]] rhi::BufferHandle entry_indices_buffer() const {
             return entry_indices_buffer_;
+        }
+
+        /** @brief Buffer containing tile-id sort keys gathered in depth-sorted order. */
+        [[nodiscard]] rhi::BufferHandle tile_sort_keys_buffer() const {
+            return tile_sort_keys_buffer_;
+        }
+
+        /** @brief Buffer containing entry indices gathered in depth-sorted order. */
+        [[nodiscard]] rhi::BufferHandle tile_sort_values_buffer() const {
+            return tile_sort_values_buffer_;
+        }
+
+        /** @brief Buffer containing the written entry count for indirect sorting. */
+        [[nodiscard]] rhi::BufferHandle entry_count_buffer() const {
+            return entry_count_buffer_;
         }
 
         /** @brief Buffer containing entry generation counters: requested, written, dropped, invalid. */
@@ -245,6 +272,15 @@ namespace himalaya::passes {
 
         /** @brief Buffer containing identity entry indices, one per written entry. */
         rhi::BufferHandle entry_indices_buffer_;
+
+        /** @brief Buffer containing tile-id sort keys gathered in depth-sorted order. */
+        rhi::BufferHandle tile_sort_keys_buffer_;
+
+        /** @brief Buffer containing entry indices gathered in depth-sorted order. */
+        rhi::BufferHandle tile_sort_values_buffer_;
+
+        /** @brief Buffer containing the number of successfully written entries. */
+        rhi::BufferHandle entry_count_buffer_;
 
         /** @brief Buffer containing entry generation counters. */
         rhi::BufferHandle entry_stats_buffer_;
