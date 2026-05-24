@@ -57,7 +57,7 @@
 - [x] 修改 Swapchain 创建：添加 `VK_SWAPCHAIN_CREATE_MUTABLE_FORMAT_BIT_KHR` + `VkImageFormatListCreateInfo`（SRGB + UNORM 兼容格式列表）
 - [x] 为每个 swapchain image 创建额外的 UNORM VkImageView（Renderer 或 Swapchain 层管理）
 - [x] `FrameContext` 新增 `gs_color_space` 字段
-- [ ] `record()` 根据 RenderMode 和 `gs_color_space` 选择 SRGB/UNORM view 作为 color attachment
+- [x] `record()` 根据 RenderMode 和 `gs_color_space` 选择 SRGB/UNORM view 作为 color attachment
 - [ ] 编译验证
 
 ## Step 2：GPU Buffer 上传
