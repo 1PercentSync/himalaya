@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的渲染器
 - **分支**：`reflector` — Path Tracing + Gaussian Splatting
 - **Phase**：Phase 3 — Gaussian Splatting 渲染
-- **进度**：Step 5.9 已完成并通过用户在 CLion 中的编译验证；待开始 Step 6（Tile Rendering + 集成）
+- **进度**：Step 6 已完成并通过用户在 CLion 中的编译验证；待开始 Step 6.5（GS performance review）
 
 ### 下一个任务
 
-Step 6：创建 `shaders/gs/gs_tile_render.comp` 和 `GsTileRenderPass`，实现 GS tile rendering 并接入 Renderer
+Step 6.5：Profiling 完整 GS pipeline GPU 时间，检查 RadixSort stable scatter 与 entry capacity 是否需要优化
 
 ---
 

@@ -191,16 +191,16 @@
 
 ## Step 6：Tile Rendering + 集成
 
-- [ ] 创建 `shaders/gs/gs_tile_render.comp`（16×16 workgroup，前到后 alpha blend，transmittance < 1/255 early termination）
-- [ ] 实现 2D Gaussian 求值（从椭圆主轴计算 Mahalanobis distance，3σ 截断）
-- [ ] 实现 imageStore 写入 GS color buffer（背景初始化为黑色）
-- [ ] 创建 `passes/include/himalaya/passes/gs_tile_render_pass.h` 和 `passes/src/gs_tile_render_pass.cpp`
-- [ ] 创建 GS managed color buffer（R16G16B16A16F, Storage + Sampled, 屏幕尺寸）
-- [ ] 在 Renderer 中实现 `render_gaussian_splatting()`：Projection → tile entry generation/sort/range build → tile render 录制在单个 RG pass 内，阶段间手动 `vkCmdPipelineBarrier2`
-- [ ] Renderer::render() 在 GS 模式且 GS scene 已上传时走 `render_gaussian_splatting()`；无 GS scene 时走 imgui-only fallback
-- [ ] GS pass 实现 `on_resize()`（重建屏幕尺寸相关 buffer）
-- [ ] DebugUI 解锁 `Path Tracing` checkbox，显示 GS splat count 与 runtime stats
-- [ ] 编译验证
+- [x] 创建 `shaders/gs/gs_tile_render.comp`（16×16 workgroup，前到后 alpha blend，transmittance < 1/255 early termination）
+- [x] 实现 2D Gaussian 求值（从椭圆主轴计算 Mahalanobis distance，3σ 截断）
+- [x] 实现 imageStore 写入 GS color buffer（背景初始化为黑色）
+- [x] 创建 `passes/include/himalaya/passes/gs_tile_render_pass.h` 和 `passes/src/gs_tile_render_pass.cpp`
+- [x] 创建 GS managed color buffer（R16G16B16A16F, Storage + Sampled, 屏幕尺寸）
+- [x] 在 Renderer 中实现 `render_gaussian_splatting()`：Projection → tile entry generation/sort/range build → tile render 录制在单个 RG pass 内，阶段间手动 `vkCmdPipelineBarrier2`
+- [x] Renderer::render() 在 GS 模式且 GS scene 已上传时走 `render_gaussian_splatting()`；无 GS scene 时走 imgui-only fallback
+- [x] GS pass 实现 `on_resize()`（重建屏幕尺寸相关 buffer）
+- [x] DebugUI 解锁 `Path Tracing` checkbox，显示 GS splat count 与 runtime stats
+- [x] 编译验证
 
 ## Step 6.5：GS Performance Review
 
