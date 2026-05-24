@@ -155,12 +155,12 @@
 
 ## Step 5.6：GS Covariance GPU Layout + Node Transform 修正
 
-- [ ] 保留 CPU `GaussianSplatCore` 布局，新增 GPU 专用 core layout（position + opacity + world covariance 3×3）及 layout static_assert
-- [ ] `GsGpuData::upload()` 中计算 local covariance：`R * S² * Rᵀ`
-- [ ] `GsGpuData::upload()` 中将 node linear transform 合入 covariance：`M * C_local * Mᵀ`，position 继续变换到 world space
-- [ ] 更新 `gs_projection.comp`：直接读取 world covariance，不再从 rotation/scale 重建 covariance
-- [ ] 将 Mip Splatting 3D filter 适配为 covariance lower-bound 近似：`cov_world += min_variance * I`
-- [ ] 编译验证
+- [x] 保留 CPU `GaussianSplatCore` 布局，新增 GPU 专用 core layout（position + opacity + world covariance 3×3）及 layout static_assert
+- [x] `GsGpuData::upload()` 中计算 local covariance：`R * S² * Rᵀ`
+- [x] `GsGpuData::upload()` 中将 node linear transform 合入 covariance：`M * C_local * Mᵀ`，position 继续变换到 world space
+- [x] 更新 `gs_projection.comp`：直接读取 world covariance，不再从 rotation/scale 重建 covariance
+- [x] 将 Mip Splatting 3D filter 适配为 covariance lower-bound 近似：`cov_world += min_variance * I`
+- [x] 编译验证
 
 ## Step 5.7：GsGpuData 接入 Renderer
 
