@@ -1,9 +1,9 @@
 /**
- * @file tonemapping_pass.cpp
- * @brief TonemappingPass implementation — pipeline creation and per-frame recording.
+ * @file present_pass.cpp
+ * @brief PresentPass implementation — pipeline creation and per-frame recording.
  */
 
-#include <himalaya/passes/tonemapping_pass.h>
+#include <himalaya/passes/present_pass.h>
 
 #include <himalaya/framework/frame_context.h>
 #include <himalaya/framework/render_graph.h>
@@ -20,7 +20,7 @@
 namespace himalaya::passes {
     // ---- Init / Destroy ----
 
-    void TonemappingPass::setup(rhi::Context &ctx,
+    void PresentPass::setup(rhi::Context &ctx,
                                 rhi::ResourceManager &rm,
                                 rhi::DescriptorManager &dm,
                                 rhi::ShaderCompiler &sc,
@@ -34,26 +34,26 @@ namespace himalaya::passes {
         create_pipelines();
     }
 
-    void TonemappingPass::rebuild_pipelines() {
+    void PresentPass::rebuild_pipelines() {
         create_pipelines();
     }
 
-    void TonemappingPass::destroy() const {
+    void PresentPass::destroy() const {
         pipeline_.destroy(ctx_->device);
     }
 
     // ---- Pipeline creation ----
 
-    void TonemappingPass::create_pipelines() {
+    void PresentPass::create_pipelines() {
         // Compile shaders first — if compilation fails, keep the old pipeline
         // intact so the renderer can continue with the previous working shaders.
         const auto vert_spirv = sc_->compile_from_file("fullscreen.vert",
                                                        rhi::ShaderStage::Vertex);
-        const auto frag_spirv = sc_->compile_from_file("tonemapping.frag",
+        const auto frag_spirv = sc_->compile_from_file("present.frag",
                                                        rhi::ShaderStage::Fragment);
 
         if (vert_spirv.empty() || frag_spirv.empty()) {
-            spdlog::warn("TonemappingPass: shader compilation failed, keeping previous pipeline");
+            spdlog::warn("PresentPass: shader compilation failed, keeping previous pipeline");
             return;
         }
 
@@ -78,7 +78,7 @@ namespace himalaya::passes {
         const auto set_layouts = dm_->get_graphics_set_layouts();
         desc.descriptor_set_layouts = {set_layouts.begin(), set_layouts.end()};
 
-        // No push constants needed for tonemapping
+        // No push constants needed for presentation
 
         pipeline_ = rhi::create_graphics_pipeline(ctx_->device, desc);
 
@@ -88,7 +88,7 @@ namespace himalaya::passes {
 
     // ---- Per-frame recording ----
 
-    void TonemappingPass::record(framework::RenderGraph &rg,
+    void PresentPass::record(framework::RenderGraph &rg,
                                  const framework::FrameContext &ctx) const {
         // Read hdr_color (Fragment sampler), write swapchain (ColorAttachment).
         const std::array resources = {
@@ -104,7 +104,7 @@ namespace himalaya::passes {
             },
         };
 
-        rg.add_pass("Tonemapping", resources,
+        rg.add_pass("Present", resources,
                     [this, &rg, &ctx](const rhi::CommandBuffer &cmd) {
                         // Color attachment: swapchain image
                         const auto swapchain_handle = rg.get_image(ctx.swapchain);

@@ -1,12 +1,11 @@
 #pragma once
 
 /**
- * @file tonemapping_pass.h
- * @brief TonemappingPass: fullscreen post-processing pass (Layer 2).
+ * @file present_pass.h
+ * @brief PresentPass: fullscreen presentation pass (Layer 2).
  *
- * Reads the current HDR presentation source (raw PT accumulation or denoised
- * output via Set 2 binding 0) and writes the tonemapped result to the
- * swapchain image.
+ * Reads the current presentation source (PT accumulation / denoised output
+ * or GS color buffer via Set 2 binding 0) and writes to the swapchain image.
  */
 
 #include <himalaya/rhi/pipeline.h>
@@ -27,12 +26,12 @@ namespace himalaya::framework {
 
 namespace himalaya::passes {
     /**
-     * @brief Tonemapping pass — fullscreen fragment shader reading HDR color.
+     * @brief Presentation pass — fullscreen fragment shader writing to swapchain.
      *
      * Non-MSAA pass: no on_sample_count_changed(). Swapchain format is
      * provided at setup() time (physical device negotiation result).
      */
-    class TonemappingPass {
+    class PresentPass {
     public:
         /**
          * @brief One-time initialization: compile shaders, create pipeline, store service pointers.
@@ -98,7 +97,7 @@ namespace himalaya::passes {
 
         // ---- Owned resources ----
 
-        /** @brief Tonemapping fullscreen pipeline. */
+        /** @brief Presentation fullscreen pipeline. */
         rhi::Pipeline pipeline_;
     };
 } // namespace himalaya::passes
