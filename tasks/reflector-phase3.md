@@ -34,6 +34,9 @@
 | 20 | GsColorSpace 枚举位置 | `scene_data.h`，与 `RenderMode` 同级（均为渲染配置枚举，`FrameContext` 不定义枚举） |
 | 21 | UNORM ImageView 存储 | `Swapchain` 类，`unorm_image_views` 与 `image_views` 平行管理（同一批 VkImage、同一生命周期） |
 | 22 | Step 1 暂不改 Application/RenderInput | FrameContext 新增 `render_mode` / `gs_color_space`，`render_path_tracing()` 中填写默认值（PathTracing / Unknown），完整流转留待 Step 6 |
+| 23 | GsGpuData 类持有者 | `framework/` 层定义类，`app/` 层 Renderer 持有实例，与 MaterialSystem / IBL 模式一致 |
+| 24 | GPU Buffer debug name | `"GS Core SSBO"`、`"GS SH Degree N SSBO"`（N=0..3），与现有命名风格一致（如 `"GeometryInfo SSBO"`）|
+| 25 | upload() 参数 | 直接收 `const GaussianSplatScene&`，与 `build_scene_rt()` 收 `span<const Mesh>` 同理 |
 
 ---
 

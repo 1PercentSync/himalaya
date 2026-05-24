@@ -74,7 +74,7 @@ PresentPass → swapchain
 |------|------|------|
 | 0 | 数据结构重构 | GaussianSplatCore 打包 struct，修改 loader 适配 |
 | 1 | PresentPass 重构 | TonemappingPass 改名，加 mode 分支 + UNORM view |
-| 2 | GPU Buffer 上传 | GS 数据的 GPU SSBO 创建与上传 |
+| 2 | GPU Buffer 上传 | GsGpuData 类（Renderer 持有），core SSBO（position 应用 transform 后合并上传）+ SH SSBO（按 max_sh_degree 分组，累计系数） |
 | 3 | 投影与剔除 | Projection compute pass + SH 求值 + Mip Splatting |
 | 4 | GPU Radix Sort | 32-bit key+value radix sort compute 实现 |
 | 5 | Tile Binning | per-tile 计数 + prefix sum + scatter |
