@@ -84,8 +84,28 @@ namespace himalaya::rhi {
             image_count = capabilities.maxImageCount;
         }
 
+        // Derive UNORM counterpart of the SRGB surface format for mutable format view.
+        // The swapchain image is always created with the SRGB format; the UNORM view
+        // allows PresentPass to bypass hardware gamma conversion for GS passthrough.
+        VkFormat unorm_format = VK_FORMAT_UNDEFINED;
+        switch (format) {
+            case VK_FORMAT_B8G8R8A8_SRGB:  unorm_format = VK_FORMAT_B8G8R8A8_UNORM;  break;
+            case VK_FORMAT_R8G8B8A8_SRGB:  unorm_format = VK_FORMAT_R8G8B8A8_UNORM;  break;
+            default:
+                spdlog::error("Unsupported swapchain format for mutable format: {}", static_cast<int>(format));
+                std::abort();
+        }
+
+        const VkFormat compatible_formats[] = {format, unorm_format};
+        VkImageFormatListCreateInfo format_list{};
+        format_list.sType = VK_STRUCTURE_TYPE_IMAGE_FORMAT_LIST_CREATE_INFO;
+        format_list.viewFormatCount = 2;
+        format_list.pViewFormats = compatible_formats;
+
         VkSwapchainCreateInfoKHR create_info{};
         create_info.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+        create_info.pNext = &format_list;
+        create_info.flags = VK_SWAPCHAIN_CREATE_MUTABLE_FORMAT_BIT_KHR;
         create_info.surface = context.surface;
         create_info.minImageCount = image_count;
         create_info.imageFormat = format;
