@@ -41,6 +41,9 @@
 | 27 | 投影输出 + counter buffer 持有者 | GsProjectionPass 持有（投影输出 SSBO + depth key/value buffer + counter buffer + indirect dispatch buffer），与 ReferenceViewPass 持有 accumulation 资源模式一致 |
 | 28 | Indirect dispatch 填写时机 | Step 3 只写 atomic counter，不做 count→dispatch struct 转换。Indirect buffer 在 Step 3 创建但不填充；填充留到 Step 4（sort 编排开头加一个小 compute dispatch）|
 | 29 | Projection workgroup size | 256，与 radix sort 独立（sort 的 workgroup 是 sort 自己的实现细节）。dispatch = `ceil(total_splat_count / 256)` |
+| 30 | Step 3 排序输入遗漏修正 | Projection shader 在 `atomicAdd` 得到 `visible_index` 后写入 `depth_keys[visible_index] = floatBitsToUint(camera_distance)` 和 `splat_indices[visible_index] = visible_index`。后续排序后用 `splat_indices[sorted_i]` 索引 `splats_2d[]` |
+| 31 | Sort prepare shader | 新增 `shaders/gs/gs_sort_prepare.comp`，单线程读取 visible counter，写入 `VkDispatchIndirectCommand(ceil(visible_count / workgroup_size), 1, 1)` |
+| 32 | Radix sort scan 结构 | scan 使用多级方案：per-block scan → block-level scan → final combine。histogram 为 `digit × block_count` 二维表，scatter 必须保持稳定以保证 LSD radix sort 正确 |
 
 ---
 
@@ -92,9 +95,11 @@
 
 ## Step 4：GPU Radix Sort
 
+- [ ] 修正 Step 3 遗漏：Projection shader 写入排序输入 `depth_keys[]` 和 `splat_indices[]`，其中 value 使用 `visible_index`
+- [ ] 创建 `shaders/gs/gs_sort_prepare.comp`（visible counter → `VkDispatchIndirectCommand`）
 - [ ] 创建 `shaders/gs/gs_sort_histogram.comp`（per-workgroup digit 频率统计）
-- [ ] 创建 `shaders/gs/gs_sort_scan.comp`（prefix sum）
-- [ ] 创建 `shaders/gs/gs_sort_scatter.comp`（按 prefix sum 结果 scatter key+value）
+- [ ] 创建 `shaders/gs/gs_sort_scan.comp`（prefix sum，多级 scan）
+- [ ] 创建 `shaders/gs/gs_sort_scatter.comp`（按 prefix sum 结果稳定 scatter key+value）
 - [ ] 创建 `framework/include/himalaya/framework/radix_sort.h` 和 `framework/src/radix_sort.cpp`
 - [ ] 实现 ping-pong buffer 管理（key[2] + value[2] + histogram）
 - [ ] 实现 4-pass 编排（每 pass 处理 8 bit，循环：histogram → scan → scatter）

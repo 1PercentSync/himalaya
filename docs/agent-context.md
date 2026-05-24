@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的渲染器
 - **分支**：`reflector` — Path Tracing + Gaussian Splatting
 - **Phase**：Phase 3 — Gaussian Splatting 渲染
-- **进度**：Step 3（投影与剔除 Pass）完成并编译通过，待开始 Step 4
+- **进度**：Step 3（投影与剔除 Pass）完成并编译通过；已发现排序输入写入遗漏，作为 Step 4 第一小项先修正
 
 ### 下一个任务
 
-Step 4：创建 `shaders/gs/gs_sort_histogram.comp`（per-workgroup digit 频率统计）
+Step 4 第一小项：修正 Step 3 遗漏，Projection shader 写入 `depth_keys[]` 和 `splat_indices[]`
 
 ---
 

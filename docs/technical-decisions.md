@@ -762,7 +762,9 @@ Projection + Culling → Radix Sort → Tile Binning → Tile Rendering
 
 ### 可见 Splat 数量
 
-投影 pass 剔除不可见 splat 后，可见数量是动态的。投影 shader 使用 atomic counter 写入可见 splat 数。indirect dispatch buffer（`VkDispatchIndirectCommand`）由 GsProjectionPass 在 Step 3 创建，但不在 Step 3 填充；填充由 sort pass（Step 4）开头的一个小 compute dispatch 完成——读取 counter 值并转换为 dispatch struct。counter buffer 和 indirect dispatch buffer 均由 GsProjectionPass 持有。
+投影 pass 剔除不可见 splat 后，可见数量是动态的。投影 shader 使用 atomic counter 写入可见 splat 数。indirect dispatch buffer（`VkDispatchIndirectCommand`）由 GsProjectionPass 在 Step 3 创建，但不在 Step 3 填充；填充由 sort pass（Step 4）开头的 `gs_sort_prepare.comp` 完成——单线程读取 counter 值并写入 `VkDispatchIndirectCommand(ceil(visible_count / workgroup_size), 1, 1)`。counter buffer 和 indirect dispatch buffer 均由 GsProjectionPass 持有。
+
+Projection shader 在 `atomicAdd` 得到 `visible_index` 后同步写入 radix sort 的初始输入：`depth_keys[visible_index] = floatBitsToUint(camera_distance)`，`splat_indices[visible_index] = visible_index`。value 使用可见 splat 的紧凑索引，因为排序后通过 `splat_indices[sorted_i]` 索引 `splats_2d[]`。
 
 ### Shader 文件组织
 
@@ -797,6 +799,8 @@ Tile ID 不编码进排序 key（高分辨率下与 depth 共享 32 bit 精度�
 #### 排序 Buffer
 
 Key 和 value 各需两个 buffer（ping-pong 交替读写）。每 pass 从源 buffer 读取，按 digit scatter 到目标 buffer，下一 pass 交换源和目标。4 pass 后结果在目标 buffer 中。
+
+Radix sort 的 prefix sum 使用多级 scan：per-block scan → block-level scan → final combine。百万 splat 场景下 block 数约为数千级，histogram 视为 `digit × block_count` 二维表。scatter 必须保持稳定，否则 4-pass LSD radix sort 结果不正确。
 
 ```
 key_buffers[2]:   uint32[] × 2    // ping-pong
