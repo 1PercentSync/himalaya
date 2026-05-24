@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的渲染器
 - **分支**：`reflector` — Path Tracing + Gaussian Splatting
 - **Phase**：Phase 3 — Gaussian Splatting 渲染
-- **进度**：Step 5 完成后完成审查决策与文档更新；待开始 Step 5.5（Correctness Fixes + Tile Entry Pipeline）
+- **进度**：Step 5.5 已完成 PresentPass / Swapchain 色彩方案回退与 shader 内 GS 色彩空间处理；待继续 Projection 多 SH group barrier
 
 ### 下一个任务
 
-Step 5.5：回退 UNORM swapchain view 方案，重构 Tile Binning 为 tile entry pipeline，补 projection barrier、sort prepare clamp、entry capacity/stats delayed readback
+Step 5.5：Projection 多 SH group dispatch 后插入 compute→compute buffer barrier，确保 counter 和 projection 输出对下一组可见
 
 ---
 

@@ -139,8 +139,8 @@
 
 ## Step 5.5：Correctness Fixes + Tile Entry Pipeline
 
-- [ ] 回退 PresentPass / Swapchain 的 UNORM view 方案：删除 mutable swapchain、UNORM image view、SRGB/UNORM view 选择逻辑
-- [ ] 更新 `present.frag` push constant：加入 `gs_color_space`；GS `srgb_rec709_display` 输入先做精确 piecewise sRGB→linear，`lin_rec709_display` 直接输出 linear
+- [x] 回退 PresentPass / Swapchain 的 UNORM view 方案：删除 mutable swapchain、UNORM image view、SRGB/UNORM view 选择逻辑
+- [x] 更新 `present.frag` push constant：加入 `gs_color_space`；GS `srgb_rec709_display` 输入先做精确 piecewise sRGB→linear，`lin_rec709_display` 直接输出 linear
 - [ ] Projection 多 SH group dispatch 后插入 compute→compute buffer barrier，确保 counter 和 projection 输出对下一组可见
 - [ ] `gs_sort_prepare.comp` 增加 `max_element_count` clamp，indirect dispatch 只覆盖 `min(counter, capacity)`
 - [ ] 明确 RadixSort 当前最大可排序 entry 数（`16 * 1024 * 1024`）并在 C++ 侧保护 scan `chunk_count <= 256` 假设
