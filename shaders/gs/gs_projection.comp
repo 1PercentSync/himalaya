@@ -19,6 +19,17 @@ const float kTileSize = float(kTileSizePixels);
 const float kEllipseRadiusSigma = 3.0;
 const float kMinCovarianceEigenvalue = 1.0e-6;
 
+const float kShC0 = 0.2820947917738781;
+const float kShC1 = 0.4886025119029199;
+const float kShC2_0 = 1.092548430592079;
+const float kShC2_1 = 0.3153915652525200;
+const float kShC2_2 = 0.5462742152960395;
+const float kShC3_0 = 0.5900435899266435;
+const float kShC3_1 = 2.890611442640554;
+const float kShC3_2 = 0.4570457994644657;
+const float kShC3_3 = 0.3731763325901154;
+const float kShC3_4 = 1.445305721320277;
+
 /** Core splat attributes. Matches GaussianSplatCore in gaussian_splat_data.h. */
 struct GSSplatCore {
     vec3 position;
@@ -55,6 +66,83 @@ layout(set = 3, binding = 0) readonly buffer CoreBuffer {
 layout(set = 3, binding = 1) writeonly buffer Splat2DBuffer {
     GSSplatData2D splats_2d[];
 };
+
+layout(set = 3, binding = 2) readonly buffer SHBuffer {
+    float sh_data[];
+};
+
+/**
+ * Returns the cumulative SH coefficient count for a max SH degree.
+ */
+uint sh_coef_count(uint sh_degree) {
+    if (sh_degree == 0u) {
+        return 1u;
+    }
+    if (sh_degree == 1u) {
+        return 4u;
+    }
+    if (sh_degree == 2u) {
+        return 9u;
+    }
+    return 16u;
+}
+
+/**
+ * Loads one RGB SH coefficient from the current degree group's packed buffer.
+ *
+ * The CPU packs glm::vec3 coefficients densely as 3 floats (12 bytes), which
+ * cannot be represented as a std430 vec3 array because vec3 array elements have
+ * 16-byte stride. A float buffer preserves the dense layout exactly.
+ */
+vec3 load_sh_coef(uint local_splat_index, uint coef_index, uint coef_count) {
+    const uint base = (local_splat_index * coef_count + coef_index) * 3u;
+    return vec3(sh_data[base + 0u], sh_data[base + 1u], sh_data[base + 2u]);
+}
+
+/**
+ * Evaluates real spherical harmonics degree 0-3 following KHR_gaussian_splatting.
+ */
+vec3 evaluate_sh(uint local_splat_index, uint sh_degree, vec3 direction) {
+    const uint degree = min(sh_degree, 3u);
+    const uint coef_count = sh_coef_count(degree);
+
+    const float x = direction.x;
+    const float y = direction.y;
+    const float z = direction.z;
+    const float xx = x * x;
+    const float yy = y * y;
+    const float zz = z * z;
+
+    vec3 color = load_sh_coef(local_splat_index, 0u, coef_count) * kShC0;
+
+    if (degree >= 1u) {
+        color += load_sh_coef(local_splat_index, 1u, coef_count) * (-kShC1 * y);
+        color += load_sh_coef(local_splat_index, 2u, coef_count) * ( kShC1 * z);
+        color += load_sh_coef(local_splat_index, 3u, coef_count) * (-kShC1 * x);
+    }
+
+    if (degree >= 2u) {
+        color += load_sh_coef(local_splat_index, 4u, coef_count) * ( kShC2_0 * x * y);
+        color += load_sh_coef(local_splat_index, 5u, coef_count) * (-kShC2_0 * y * z);
+        color += load_sh_coef(local_splat_index, 6u, coef_count) * ( kShC2_1 * (2.0 * zz - xx - yy));
+        color += load_sh_coef(local_splat_index, 7u, coef_count) * (-kShC2_0 * x * z);
+        color += load_sh_coef(local_splat_index, 8u, coef_count) * ( kShC2_2 * (xx - yy));
+    }
+
+    if (degree >= 3u) {
+        color += load_sh_coef(local_splat_index,  9u, coef_count) * (-kShC3_0 * y * (3.0 * xx - yy));
+        color += load_sh_coef(local_splat_index, 10u, coef_count) * ( kShC3_1 * x * y * z);
+        color += load_sh_coef(local_splat_index, 11u, coef_count) * (-kShC3_2 * y * (4.0 * zz - xx - yy));
+        color += load_sh_coef(local_splat_index, 12u, coef_count) * ( kShC3_3 * z * (2.0 * zz - 3.0 * xx - 3.0 * yy));
+        color += load_sh_coef(local_splat_index, 13u, coef_count) * (-kShC3_2 * x * (4.0 * zz - xx - yy));
+        color += load_sh_coef(local_splat_index, 14u, coef_count) * ( kShC3_4 * z * (xx - yy));
+        color += load_sh_coef(local_splat_index, 15u, coef_count) * (-kShC3_0 * x * (xx - 3.0 * yy));
+    }
+
+    // 3DGS training applies a 0.5 bias to the SH reconstruction. Negative
+    // colors must be clamped before composition unless an extension says otherwise.
+    return max(color + vec3(0.5), vec3(0.0));
+}
 
 /**
  * Converts a xyzw quaternion to a 3x3 rotation matrix.
@@ -254,12 +342,18 @@ void main() {
         return;
     }
 
+    const vec3 camera_position = global.camera_position_and_exposure.xyz;
+    // KHR_gaussian_splatting defines SH lighting direction as the normalized
+    // vector from the camera position to the splat mean in global space.
+    const vec3 view_direction = normalize(core.position - camera_position);
+    const vec3 color = evaluate_sh(local_index, pc.sh_degree, view_direction);
+
     GSSplatData2D projected;
     projected.center = center;
     projected.axis_u = axis_u;
     projected.axis_v = axis_v;
     projected._pad0 = vec2(0.0);
-    projected.color = vec3(1.0);
+    projected.color = color;
     projected.alpha = core.opacity;
     projected.tile_min = tile_min;
     projected.tile_max = tile_max;
