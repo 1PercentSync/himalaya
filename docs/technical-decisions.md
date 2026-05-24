@@ -762,7 +762,7 @@ Projection + Culling → Radix Sort → Tile Binning → Tile Rendering
 
 ### 可见 Splat 数量
 
-投影 pass 剔除不可见 splat 后，可见数量是动态的。投影 shader 使用 atomic counter 写入可见 splat 数。后续 sort、binning、rendering 使用 `vkCmdDispatchIndirect`，dispatch 参数由投影 pass 或前一阶段写入 indirect buffer。
+投影 pass 剔除不可见 splat 后，可见数量是动态的。投影 shader 使用 atomic counter 写入可见 splat 数。indirect dispatch buffer（`VkDispatchIndirectCommand`）的填充由 sort pass（Step 4）开头的一个小 compute dispatch 完成——读取 counter 值并转换为 dispatch struct。counter buffer 和 indirect dispatch buffer 均由 GsProjectionPass 持有。
 
 ### Shader 文件组织
 
@@ -885,20 +885,27 @@ SH Buffer (degree N):
 投影 pass 输出每个可见 splat 的 2D 渲染数据：
 
 ```
-GSSplatData2D {                  // 投影输出，per visible splat（std430）
-    vec2  center;                // 屏幕空间中心（像素坐标）
-    vec2  axis_u;                // 2D 椭圆主轴 u（含长度）
-    vec2  axis_v;                // 2D 椭圆主轴 v（含长度）
-    vec3  color;                 // SH 求值后 RGB
-    float alpha;                 // opacity × 椭球中心 Gaussian 值
-    uint  tile_min_x;            // 覆盖的 tile 范围（AABB）
-    uint  tile_min_y;
-    uint  tile_max_x;
-    uint  tile_max_y;
-};
+GSSplatData2D {                  // 投影输出，per visible splat（std430，64 bytes）
+    vec2  center;                // offset 0,  8 bytes — 屏幕空间中心（像素坐标）
+    vec2  axis_u;                // offset 8,  8 bytes — 2D 椭圆主轴 u（含长度）
+    vec2  axis_v;                // offset 16, 8 bytes — 2D 椭圆主轴 v（含长度）
+    // 8 bytes padding          // vec3 alignment=16 → color 必须在 offset 32
+    vec3  color;                 // offset 32, 12 bytes — SH 求值后 RGB
+    float alpha;                 // offset 44, 4 bytes — opacity × 椭球中心 Gaussian 值
+    uvec2 tile_min;              // offset 48, 8 bytes — 覆盖 tile 最小索引 (x, y)
+    uvec2 tile_max;              // offset 56, 8 bytes — 覆盖 tile 最大索引 (x, y)
+};                               // = 64 bytes, alignment = 16
 ```
 
 2D covariance 矩阵分解为两个主轴向量（含长度），避免渲染阶段重新做特征值分解。Tile 覆盖范围用于 binning 阶段的 tile 分配。
+
+GLSL 中 `tile_min` / `tile_max` 使用 `uvec2`（非 4 个独立 `uint`），节省 offset 计算且与 tile binning 阶段索引方式一致。64 bytes/splat，百万 splat = 64 MB，在显存预算内。
+
+C++ 端结构体与 `static_assert` 定义在 `framework/include/himalaya/framework/gaussian_splat_data.h`，与 `GaussianSplatCore` 同级。投影输出 buffer 由 GsProjectionPass 持有（含 counter buffer + indirect dispatch buffer），与 ReferenceViewPass 持有 accumulation 资源模式一致。
+
+Projection pass dispatch 每 workgroup 256 个 splat（`ceil(total_splat_count / 256)`），与后续 sort 的 workgroup size 独立。
+
+Atomic counter 写入由 projection shader 完成；indirect dispatch buffer（`VkDispatchIndirectCommand`）的填充留到 Step 4（sort 编排开头加一个小 compute dispatch 把 counter 值转换为 dispatch struct）。两个 buffer 均由 GsProjectionPass 持有。
 
 Tile binning 输出：
 

@@ -37,6 +37,10 @@
 | 23 | GsGpuData 类持有者 | `framework/` 层定义类，`app/` 层 Renderer 持有实例，与 MaterialSystem / IBL 模式一致 |
 | 24 | GPU Buffer debug name | `"GS Core SSBO"`、`"GS SH Degree N SSBO"`（N=0..3），与现有命名风格一致（如 `"GeometryInfo SSBO"`）|
 | 25 | upload() 参数 | 直接收 `const GaussianSplatScene&`，与 `build_scene_rt()` 收 `span<const Mesh>` 同理 |
+| 26 | GSSplatData2D 布局 | 64 bytes/splat（std430），定义在 `gaussian_splat_data.h`。vec3 alignment=16 导致 8 bytes padding，不可消除但可接受 |
+| 27 | 投影输出 + counter buffer 持有者 | GsProjectionPass 持有（投影输出 SSBO + counter buffer + indirect dispatch buffer），与 ReferenceViewPass 持有 accumulation 资源模式一致 |
+| 28 | Indirect dispatch 填写时机 | Step 3 只写 atomic counter，不做 count→dispatch struct 转换。Indirect buffer 的填充留到 Step 4（sort 编排开头加一个小 compute dispatch）|
+| 29 | Projection workgroup size | 256，与 radix sort 独立（sort 的 workgroup 是 sort 自己的实现细节）。dispatch = `ceil(total_splat_count / 256)` |
 
 ---
 
