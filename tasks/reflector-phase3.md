@@ -96,7 +96,7 @@
 ## Step 4：GPU Radix Sort
 
 - [x] 修正 Step 3 遗漏：Projection shader 写入排序输入 `depth_keys[]` 和 `splat_indices[]`，其中 value 使用 `visible_index`
-- [ ] 创建 `shaders/gs/gs_sort_prepare.comp`（visible counter → `VkDispatchIndirectCommand`）
+- [x] 创建 `shaders/gs/gs_sort_prepare.comp`（visible counter → `VkDispatchIndirectCommand`）
 - [ ] 创建 `shaders/gs/gs_sort_histogram.comp`（per-workgroup digit 频率统计）
 - [ ] 创建 `shaders/gs/gs_sort_scan.comp`（prefix sum，多级 scan）
 - [ ] 创建 `shaders/gs/gs_sort_scatter.comp`（按 prefix sum 结果稳定 scatter key+value）
