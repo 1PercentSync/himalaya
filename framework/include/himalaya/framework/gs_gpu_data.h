@@ -48,9 +48,9 @@ namespace himalaya::framework {
          * via push constant (splat_offset, splat_count, sh_degree).
          */
         struct ShGroup {
-            uint32_t splat_offset; ///< Splat index offset into the core buffer (also used to index the SH buffer).
+            uint32_t splat_offset; ///< Global splat index offset into the merged core/output buffers.
             uint32_t splat_count;  ///< Number of splats in this group.
-            uint32_t sh_degree;    ///< Max SH degree for this group (0-3). Determines SH buffer stride.
+            uint32_t sh_degree;    ///< Max SH degree for this group (0-3). Selects the matching SH buffer and stride.
         };
 
         /**
