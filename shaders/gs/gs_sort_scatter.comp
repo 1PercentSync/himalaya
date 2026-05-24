@@ -1,0 +1,93 @@
+#version 460
+
+/**
+ * @file gs_sort_scatter.comp
+ * @brief Stable scatter stage for GS radix sort.
+ *
+ * Reads source key/value arrays and writes destination key/value arrays using
+ * the scanned per-block histogram plus global digit offsets. Stability is
+ * preserved by computing each element's local rank among preceding elements in
+ * the same workgroup block with the same radix digit.
+ */
+
+layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+
+const uint kRadixBits = 8u;
+const uint kRadixSize = 1u << kRadixBits;
+const uint kRadixMask = kRadixSize - 1u;
+
+layout(push_constant) uniform PC {
+    uint element_count;
+    uint pass_index;
+    uint block_count;
+} pc;
+
+layout(set = 3, binding = 0) readonly buffer SrcKeyBuffer {
+    uint src_keys[];
+};
+
+layout(set = 3, binding = 1) readonly buffer SrcValueBuffer {
+    uint src_values[];
+};
+
+layout(set = 3, binding = 2) writeonly buffer DstKeyBuffer {
+    uint dst_keys[];
+};
+
+layout(set = 3, binding = 3) writeonly buffer DstValueBuffer {
+    uint dst_values[];
+};
+
+layout(set = 3, binding = 4) readonly buffer ScannedHistogramBuffer {
+    uint scanned_histogram[];
+};
+
+layout(set = 3, binding = 5) readonly buffer DigitOffsetsBuffer {
+    uint digit_offsets[];
+};
+
+shared uint shared_digits[kRadixSize];
+
+/**
+ * @brief Returns the 8-bit radix digit handled by the current pass.
+ */
+uint extract_digit(uint key) {
+    const uint shift = pc.pass_index * kRadixBits;
+    return (key >> shift) & kRadixMask;
+}
+
+void main() {
+    const uint local_index = gl_LocalInvocationID.x;
+    const uint block_index = gl_WorkGroupID.x;
+    const uint global_index = block_index * gl_WorkGroupSize.x + local_index;
+    const bool valid = global_index < pc.element_count;
+
+    uint key = 0u;
+    uint value = 0u;
+    uint digit = 0u;
+
+    if (valid) {
+        key = src_keys[global_index];
+        value = src_values[global_index];
+        digit = extract_digit(key);
+    }
+
+    shared_digits[local_index] = valid ? digit : kRadixSize;
+    barrier();
+
+    uint local_rank = 0u;
+    if (valid) {
+        for (uint i = 0u; i < local_index; ++i) {
+            if (shared_digits[i] == digit) {
+                ++local_rank;
+            }
+        }
+
+        const uint digit_base = digit_offsets[digit];
+        const uint block_base = scanned_histogram[digit * pc.block_count + block_index];
+        const uint dst_index = digit_base + block_base + local_rank;
+
+        dst_keys[dst_index] = key;
+        dst_values[dst_index] = value;
+    }
+}
