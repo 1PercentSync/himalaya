@@ -142,8 +142,8 @@
 - [x] 回退 PresentPass / Swapchain 的 UNORM view 方案：删除 mutable swapchain、UNORM image view、SRGB/UNORM view 选择逻辑
 - [x] 更新 `present.frag` push constant：加入 `gs_color_space`；GS `srgb_rec709_display` 输入先做精确 piecewise sRGB→linear，`lin_rec709_display` 直接输出 linear
 - [x] Projection 多 SH group dispatch 后插入 compute→compute buffer barrier，确保 counter 和 projection 输出对下一组可见
-- [ ] `gs_sort_prepare.comp` 增加 `max_element_count` clamp，indirect dispatch 只覆盖 `min(counter, capacity)`
-- [ ] 明确 RadixSort 当前最大可排序 entry 数（`16 * 1024 * 1024`）并在 C++ 侧保护 scan `chunk_count <= 256` 假设
+- [x] `gs_sort_prepare.comp` 增加 `max_element_count` clamp，indirect dispatch 只覆盖 `min(counter, capacity)`
+- [x] 明确 RadixSort 当前最大可排序 entry 数（`16 * 1024 * 1024`）并在 C++ 侧保护 scan `chunk_count <= 256` 假设
 - [ ] 将 Tile Binning 重构为 tile entry 生成：写入 `entry_depth_keys[]`、`entry_tile_ids[]`、`entry_splat_ids[]`、`entry_indices[]`
 - [ ] 实现 entry capacity 策略：`min(max_splat_count * 16, 16 * 1024 * 1024)`；容量不足时安全丢弃并累计 dropped count
 - [ ] 用现有 32-bit stable RadixSort 执行两次排序：先按 depth，再按 tile-id 稳定排序
