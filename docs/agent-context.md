@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的渲染器
 - **分支**：`reflector` — Path Tracing + Gaussian Splatting
 - **Phase**：Phase 3 — Gaussian Splatting 渲染
-- **进度**：Step 5（Tile Binning）已完成 tile count/scan/scatter shader 与 tile buffer，待创建 GsTileBinningPass
+- **进度**：Step 5（Tile Binning）已完成 tile count/scan/scatter shader、tile buffer 与 GsTileBinningPass，待记录编译验证
 
 ### 下一个任务
 
-Step 5：创建 `passes/include/himalaya/passes/gs_tile_binning_pass.h` 和 `passes/src/gs_tile_binning_pass.cpp`
+Step 5：编译验证
 
 ---
 
