@@ -73,6 +73,10 @@ layout(set = 3, binding = 2) readonly buffer SHBuffer {
     float sh_data[];
 };
 
+layout(set = 3, binding = 3) buffer VisibleCounterBuffer {
+    uint visible_splat_count;
+};
+
 /**
  * Returns the cumulative SH coefficient count for a max SH degree.
  */
@@ -379,7 +383,6 @@ void main() {
     projected.tile_min = tile_min;
     projected.tile_max = tile_max;
 
-    // Temporary un-compacted write. A later Step 3 item will replace this with
-    // atomic-counter compaction and visible splat indexing.
-    splats_2d[splat_index] = projected;
+    const uint visible_index = atomicAdd(visible_splat_count, 1u);
+    splats_2d[visible_index] = projected;
 }
