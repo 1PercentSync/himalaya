@@ -132,14 +132,6 @@ namespace himalaya::passes {
         /** @brief Destroys compute pipelines. */
         void destroy_pipelines();
 
-        /** @brief Inserts a whole-buffer memory barrier. */
-        void buffer_barrier(const rhi::CommandBuffer &cmd,
-                            rhi::BufferHandle buffer,
-                            VkPipelineStageFlags2 src_stage,
-                            VkAccessFlags2 src_access,
-                            VkPipelineStageFlags2 dst_stage,
-                            VkAccessFlags2 dst_access) const;
-
         /** @brief Inserts barriers for tile-entry outputs consumed by later compute stages. */
         void barrier_entry_outputs_to_compute_read(const rhi::CommandBuffer &cmd) const;
 

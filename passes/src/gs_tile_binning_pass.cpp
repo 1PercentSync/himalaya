@@ -7,89 +7,18 @@
 
 #include <himalaya/framework/frame_context.h>
 #include <himalaya/rhi/commands.h>
+#include <himalaya/rhi/compute_utils.h>
 #include <himalaya/rhi/context.h>
 #include <himalaya/rhi/descriptors.h>
 #include <himalaya/rhi/resources.h>
-#include <himalaya/rhi/shader.h>
 
 #include <array>
 #include <cstddef>
 #include <cstring>
-#include <span>
 
 #include <spdlog/spdlog.h>
 
 namespace himalaya::passes {
-    namespace {
-        /**
-         * @brief Creates one storage-buffer descriptor layout binding.
-         */
-        constexpr VkDescriptorSetLayoutBinding storage_binding(const uint32_t binding) {
-            return VkDescriptorSetLayoutBinding{
-                .binding = binding,
-                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-                .descriptorCount = 1,
-                .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
-            };
-        }
-
-        /**
-         * @brief Creates a push descriptor layout from storage-buffer bindings.
-         */
-        VkDescriptorSetLayout create_push_storage_layout(
-            rhi::Context &ctx,
-            const std::span<const VkDescriptorSetLayoutBinding> bindings) {
-            VkDescriptorSetLayoutCreateInfo layout_ci{};
-            layout_ci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-            layout_ci.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT;
-            layout_ci.bindingCount = static_cast<uint32_t>(bindings.size());
-            layout_ci.pBindings = bindings.data();
-
-            VkDescriptorSetLayout layout = VK_NULL_HANDLE;
-            VK_CHECK(vkCreateDescriptorSetLayout(ctx.device, &layout_ci, nullptr, &layout));
-            return layout;
-        }
-
-        /**
-         * @brief Resolves a BufferHandle to a full-range descriptor info.
-         */
-        VkDescriptorBufferInfo buffer_info(const rhi::ResourceManager &rm, const rhi::BufferHandle handle) {
-            const auto &buffer = rm.get_buffer(handle);
-            return VkDescriptorBufferInfo{
-                .buffer = buffer.buffer,
-                .offset = 0,
-                .range = buffer.desc.size,
-            };
-        }
-
-        /**
-         * @brief Creates one compute pipeline from a shader file and Set 3 layout.
-         */
-        rhi::Pipeline create_tile_pipeline(rhi::Context &ctx,
-                                           rhi::DescriptorManager &dm,
-                                           rhi::ShaderCompiler &sc,
-                                           const char *shader_path,
-                                           const VkDescriptorSetLayout set3_layout,
-                                           const std::span<const VkPushConstantRange> push_ranges) {
-            const auto spirv = sc.compile_from_file(shader_path, rhi::ShaderStage::Compute);
-            if (spirv.empty()) {
-                return {};
-            }
-
-            const auto shader_module = rhi::create_shader_module(ctx.device, spirv);
-            const auto set_layouts = dm.get_dispatch_set_layouts(set3_layout);
-            const rhi::ComputePipelineDesc desc{
-                .compute_shader = shader_module,
-                .descriptor_set_layouts = set_layouts,
-                .push_constant_ranges = {push_ranges.begin(), push_ranges.end()},
-            };
-            auto pipeline = rhi::create_compute_pipeline(ctx.device, desc);
-            vkDestroyShaderModule(ctx.device, shader_module, nullptr);
-
-            return pipeline;
-        }
-    } // namespace
-
     void GsTileBinningPass::setup(rhi::Context &ctx,
                                   rhi::ResourceManager &rm,
                                   rhi::DescriptorManager &dm,
@@ -147,31 +76,6 @@ namespace himalaya::passes {
             return;
         }
 
-        const auto bind_global_sets = [&](const rhi::Pipeline &pipeline) {
-            const std::array sets = {
-                dm_->get_set0(frame_ctx.frame_index),
-                dm_->get_set1(),
-                dm_->get_set2(frame_ctx.frame_index),
-            };
-            cmd.bind_compute_descriptor_sets(pipeline.layout, 0, sets.data(), static_cast<uint32_t>(sets.size()));
-        };
-
-        const auto push_buffers = [&](const rhi::Pipeline &pipeline,
-                                      const std::span<const VkDescriptorBufferInfo> infos) {
-            std::array<VkWriteDescriptorSet, 9> writes{};
-            for (uint32_t i = 0; i < infos.size(); ++i) {
-                writes[i] = VkWriteDescriptorSet{
-                    .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-                    .dstBinding = i,
-                    .descriptorCount = 1,
-                    .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-                    .pBufferInfo = &infos[i],
-                };
-            }
-            cmd.push_compute_descriptor_set(pipeline.layout, 3,
-                                            std::span<const VkWriteDescriptorSet>(writes.data(), infos.size()));
-        };
-
         const auto storage_read = VK_ACCESS_2_SHADER_STORAGE_READ_BIT;
         const auto storage_write = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT;
         const auto transfer_write = VK_ACCESS_2_TRANSFER_WRITE_BIT;
@@ -188,12 +92,13 @@ namespace himalaya::passes {
         vkCmdFillBuffer(cmd.handle(), entry_stats.buffer, 0, entry_stats.desc.size, 0u);
         vkCmdFillBuffer(cmd.handle(), tile_offsets.buffer, 0, tile_offsets.desc.size, 0u);
         vkCmdFillBuffer(cmd.handle(), tile_counts.buffer, 0, tile_counts.desc.size, 0u);
-        buffer_barrier(cmd,
-                       visible_counter_buffer,
-                       compute_stage,
-                       storage_write,
-                       transfer_stage,
-                       VK_ACCESS_2_TRANSFER_READ_BIT);
+        rhi::buffer_barrier(cmd,
+                            *rm_,
+                            visible_counter_buffer,
+                            compute_stage,
+                            storage_write,
+                            transfer_stage,
+                            VK_ACCESS_2_TRANSFER_READ_BIT);
         {
             VkBufferCopy visible_copy{};
             visible_copy.srcOffset = 0;
@@ -205,53 +110,58 @@ namespace himalaya::passes {
                             1,
                             &visible_copy);
         }
-        buffer_barrier(cmd,
-                       visible_counter_buffer,
-                       transfer_stage,
-                       VK_ACCESS_2_TRANSFER_READ_BIT,
-                       compute_stage,
-                       storage_read);
-        buffer_barrier(cmd,
-                       tile_buffers_.entry_count_buffer(),
-                       transfer_stage,
-                       transfer_write,
-                       compute_stage,
-                       storage_read | storage_write);
-        buffer_barrier(cmd,
-                       tile_buffers_.entry_stats_buffer(),
-                       transfer_stage,
-                       transfer_write,
-                       compute_stage,
-                       storage_read | storage_write);
-        buffer_barrier(cmd,
-                       tile_buffers_.tile_offsets_buffer(),
-                       transfer_stage,
-                       transfer_write,
-                       compute_stage,
-                       storage_read | storage_write);
-        buffer_barrier(cmd,
-                       tile_buffers_.tile_counts_buffer(),
-                       transfer_stage,
-                       transfer_write,
-                       compute_stage,
-                       storage_read | storage_write);
+        rhi::buffer_barrier(cmd,
+                            *rm_,
+                            visible_counter_buffer,
+                            transfer_stage,
+                            VK_ACCESS_2_TRANSFER_READ_BIT,
+                            compute_stage,
+                            storage_read);
+        rhi::buffer_barrier(cmd,
+                            *rm_,
+                            tile_buffers_.entry_count_buffer(),
+                            transfer_stage,
+                            transfer_write,
+                            compute_stage,
+                            storage_read | storage_write);
+        rhi::buffer_barrier(cmd,
+                            *rm_,
+                            tile_buffers_.entry_stats_buffer(),
+                            transfer_stage,
+                            transfer_write,
+                            compute_stage,
+                            storage_read | storage_write);
+        rhi::buffer_barrier(cmd,
+                            *rm_,
+                            tile_buffers_.tile_offsets_buffer(),
+                            transfer_stage,
+                            transfer_write,
+                            compute_stage,
+                            storage_read | storage_write);
+        rhi::buffer_barrier(cmd,
+                            *rm_,
+                            tile_buffers_.tile_counts_buffer(),
+                            transfer_stage,
+                            transfer_write,
+                            compute_stage,
+                            storage_read | storage_write);
 
-        const auto projected_info = buffer_info(*rm_, projected_splat_buffer);
-        const auto depth_key_info = buffer_info(*rm_, depth_key_buffer);
-        const auto visible_counter_info = buffer_info(*rm_, visible_counter_buffer);
-        const auto entry_count_info = buffer_info(*rm_, tile_buffers_.entry_count_buffer());
-        const auto entry_stats_info = buffer_info(*rm_, tile_buffers_.entry_stats_buffer());
-        const auto entry_depth_keys_info = buffer_info(*rm_, tile_buffers_.entry_depth_keys_buffer());
-        const auto entry_tile_ids_info = buffer_info(*rm_, tile_buffers_.entry_tile_ids_buffer());
-        const auto entry_splat_ids_info = buffer_info(*rm_, tile_buffers_.entry_splat_ids_buffer());
-        const auto entry_indices_info = buffer_info(*rm_, tile_buffers_.entry_indices_buffer());
-        const auto tile_sort_keys_info = buffer_info(*rm_, tile_buffers_.tile_sort_keys_buffer());
-        const auto tile_sort_values_info = buffer_info(*rm_, tile_buffers_.tile_sort_values_buffer());
-        const auto tile_offsets_info = buffer_info(*rm_, tile_buffers_.tile_offsets_buffer());
-        const auto tile_counts_info = buffer_info(*rm_, tile_buffers_.tile_counts_buffer());
+        const auto projected_info = rhi::storage_buffer_info(*rm_, projected_splat_buffer);
+        const auto depth_key_info = rhi::storage_buffer_info(*rm_, depth_key_buffer);
+        const auto visible_counter_info = rhi::storage_buffer_info(*rm_, visible_counter_buffer);
+        const auto entry_count_info = rhi::storage_buffer_info(*rm_, tile_buffers_.entry_count_buffer());
+        const auto entry_stats_info = rhi::storage_buffer_info(*rm_, tile_buffers_.entry_stats_buffer());
+        const auto entry_depth_keys_info = rhi::storage_buffer_info(*rm_, tile_buffers_.entry_depth_keys_buffer());
+        const auto entry_tile_ids_info = rhi::storage_buffer_info(*rm_, tile_buffers_.entry_tile_ids_buffer());
+        const auto entry_splat_ids_info = rhi::storage_buffer_info(*rm_, tile_buffers_.entry_splat_ids_buffer());
+        const auto entry_indices_info = rhi::storage_buffer_info(*rm_, tile_buffers_.entry_indices_buffer());
+        const auto tile_sort_keys_info = rhi::storage_buffer_info(*rm_, tile_buffers_.tile_sort_keys_buffer());
+        const auto tile_sort_values_info = rhi::storage_buffer_info(*rm_, tile_buffers_.tile_sort_values_buffer());
+        const auto tile_offsets_info = rhi::storage_buffer_info(*rm_, tile_buffers_.tile_offsets_buffer());
+        const auto tile_counts_info = rhi::storage_buffer_info(*rm_, tile_buffers_.tile_counts_buffer());
 
         cmd.bind_compute_pipeline(entry_pipeline_);
-        bind_global_sets(entry_pipeline_);
+        rhi::bind_dispatch_descriptor_sets(cmd, *dm_, entry_pipeline_, frame_ctx.frame_index);
         {
             const std::array infos = {
                 projected_info,
@@ -264,7 +174,7 @@ namespace himalaya::passes {
                 entry_splat_ids_info,
                 entry_indices_info,
             };
-            push_buffers(entry_pipeline_, infos);
+            rhi::push_storage_buffers(cmd, entry_pipeline_, infos);
             const EntryPushConstants pc{
                 .max_splat_count = max_splat_count,
                 .entry_capacity = tile_buffers_.entry_capacity(),
@@ -287,10 +197,10 @@ namespace himalaya::passes {
         if (!depth_sorted_entries.valid()) {
             return;
         }
-        const auto depth_sorted_entries_info = buffer_info(*rm_, depth_sorted_entries);
+        const auto depth_sorted_entries_info = rhi::storage_buffer_info(*rm_, depth_sorted_entries);
 
         cmd.bind_compute_pipeline(gather_pipeline_);
-        bind_global_sets(gather_pipeline_);
+        rhi::bind_dispatch_descriptor_sets(cmd, *dm_, gather_pipeline_, frame_ctx.frame_index);
         {
             const std::array infos = {
                 entry_tile_ids_info,
@@ -299,7 +209,7 @@ namespace himalaya::passes {
                 tile_sort_keys_info,
                 tile_sort_values_info,
             };
-            push_buffers(gather_pipeline_, infos);
+            rhi::push_storage_buffers(cmd, gather_pipeline_, infos);
             const GatherPushConstants pc{
                 .max_entry_count = tile_buffers_.entry_capacity(),
             };
@@ -319,9 +229,9 @@ namespace himalaya::passes {
             return;
         }
 
-        const auto sorted_tile_ids_info = buffer_info(*rm_, tile_sorter_.sorted_key_buffer());
+        const auto sorted_tile_ids_info = rhi::storage_buffer_info(*rm_, tile_sorter_.sorted_key_buffer());
         cmd.bind_compute_pipeline(range_pipeline_);
-        bind_global_sets(range_pipeline_);
+        rhi::bind_dispatch_descriptor_sets(cmd, *dm_, range_pipeline_, frame_ctx.frame_index);
         {
             const std::array infos = {
                 sorted_tile_ids_info,
@@ -330,7 +240,7 @@ namespace himalaya::passes {
                 tile_counts_info,
                 entry_stats_info,
             };
-            push_buffers(range_pipeline_, infos);
+            rhi::push_storage_buffers(cmd, range_pipeline_, infos);
             const RangePushConstants pc{
                 .max_entry_count = tile_buffers_.entry_capacity(),
                 .tile_count = tile_buffers_.tile_count(),
@@ -391,35 +301,35 @@ namespace himalaya::passes {
 
     void GsTileBinningPass::create_descriptor_layouts() {
         const std::array entry_bindings = {
-            storage_binding(0),
-            storage_binding(1),
-            storage_binding(2),
-            storage_binding(3),
-            storage_binding(4),
-            storage_binding(5),
-            storage_binding(6),
-            storage_binding(7),
-            storage_binding(8),
+            rhi::storage_buffer_binding(0),
+            rhi::storage_buffer_binding(1),
+            rhi::storage_buffer_binding(2),
+            rhi::storage_buffer_binding(3),
+            rhi::storage_buffer_binding(4),
+            rhi::storage_buffer_binding(5),
+            rhi::storage_buffer_binding(6),
+            rhi::storage_buffer_binding(7),
+            rhi::storage_buffer_binding(8),
         };
-        entry_set3_layout_ = create_push_storage_layout(*ctx_, entry_bindings);
+        entry_set3_layout_ = rhi::create_push_storage_descriptor_set_layout(*ctx_, entry_bindings);
 
         const std::array gather_bindings = {
-            storage_binding(0),
-            storage_binding(1),
-            storage_binding(2),
-            storage_binding(3),
-            storage_binding(4),
+            rhi::storage_buffer_binding(0),
+            rhi::storage_buffer_binding(1),
+            rhi::storage_buffer_binding(2),
+            rhi::storage_buffer_binding(3),
+            rhi::storage_buffer_binding(4),
         };
-        gather_set3_layout_ = create_push_storage_layout(*ctx_, gather_bindings);
+        gather_set3_layout_ = rhi::create_push_storage_descriptor_set_layout(*ctx_, gather_bindings);
 
         const std::array range_bindings = {
-            storage_binding(0),
-            storage_binding(1),
-            storage_binding(2),
-            storage_binding(3),
-            storage_binding(4),
+            rhi::storage_buffer_binding(0),
+            rhi::storage_buffer_binding(1),
+            rhi::storage_buffer_binding(2),
+            rhi::storage_buffer_binding(3),
+            rhi::storage_buffer_binding(4),
         };
-        range_set3_layout_ = create_push_storage_layout(*ctx_, range_bindings);
+        range_set3_layout_ = rhi::create_push_storage_descriptor_set_layout(*ctx_, range_bindings);
     }
 
     void GsTileBinningPass::create_pipelines() {
@@ -445,18 +355,18 @@ namespace himalaya::passes {
             },
         };
 
-        auto entry_pipeline = create_tile_pipeline(*ctx_, *dm_, *sc_,
-                                                   "gs/gs_tile_entry.comp",
-                                                   entry_set3_layout_,
-                                                   entry_push_ranges);
-        auto gather_pipeline = create_tile_pipeline(*ctx_, *dm_, *sc_,
-                                                    "gs/gs_tile_sort_gather.comp",
-                                                    gather_set3_layout_,
-                                                    gather_push_ranges);
-        auto range_pipeline = create_tile_pipeline(*ctx_, *dm_, *sc_,
-                                                   "gs/gs_tile_range.comp",
-                                                   range_set3_layout_,
-                                                   range_push_ranges);
+        auto entry_pipeline = rhi::create_compute_pipeline_from_file(*ctx_, *dm_, *sc_,
+                                                                     "gs/gs_tile_entry.comp",
+                                                                     entry_set3_layout_,
+                                                                     entry_push_ranges);
+        auto gather_pipeline = rhi::create_compute_pipeline_from_file(*ctx_, *dm_, *sc_,
+                                                                      "gs/gs_tile_sort_gather.comp",
+                                                                      gather_set3_layout_,
+                                                                      gather_push_ranges);
+        auto range_pipeline = rhi::create_compute_pipeline_from_file(*ctx_, *dm_, *sc_,
+                                                                     "gs/gs_tile_range.comp",
+                                                                     range_set3_layout_,
+                                                                     range_push_ranges);
 
         if (entry_pipeline.pipeline == VK_NULL_HANDLE ||
             gather_pipeline.pipeline == VK_NULL_HANDLE ||
@@ -495,75 +405,53 @@ namespace himalaya::passes {
         }
     }
 
-    void GsTileBinningPass::buffer_barrier(const rhi::CommandBuffer &cmd,
-                                           const rhi::BufferHandle buffer,
-                                           const VkPipelineStageFlags2 src_stage,
-                                           const VkAccessFlags2 src_access,
-                                           const VkPipelineStageFlags2 dst_stage,
-                                           const VkAccessFlags2 dst_access) const {
-        if (!buffer.valid()) {
-            return;
-        }
-
-        const auto &resolved = rm_->get_buffer(buffer);
-        VkBufferMemoryBarrier2 barrier{};
-        barrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2;
-        barrier.srcStageMask = src_stage;
-        barrier.srcAccessMask = src_access;
-        barrier.dstStageMask = dst_stage;
-        barrier.dstAccessMask = dst_access;
-        barrier.buffer = resolved.buffer;
-        barrier.offset = 0;
-        barrier.size = resolved.desc.size;
-
-        VkDependencyInfo dep{};
-        dep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-        dep.bufferMemoryBarrierCount = 1;
-        dep.pBufferMemoryBarriers = &barrier;
-        cmd.pipeline_barrier(dep);
-    }
-
     void GsTileBinningPass::barrier_entry_outputs_to_compute_read(const rhi::CommandBuffer &cmd) const {
         const auto compute_stage = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
         const auto storage_read = VK_ACCESS_2_SHADER_STORAGE_READ_BIT;
         const auto storage_write = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT;
 
-        buffer_barrier(cmd,
-                       tile_buffers_.entry_count_buffer(),
-                       compute_stage,
-                       storage_write,
-                       compute_stage,
-                       storage_read | storage_write);
-        buffer_barrier(cmd,
-                       tile_buffers_.entry_stats_buffer(),
-                       compute_stage,
-                       storage_write,
-                       compute_stage,
-                       storage_read | storage_write);
-        buffer_barrier(cmd,
-                       tile_buffers_.entry_depth_keys_buffer(),
-                       compute_stage,
-                       storage_write,
-                       compute_stage,
-                       storage_read);
-        buffer_barrier(cmd,
-                       tile_buffers_.entry_tile_ids_buffer(),
-                       compute_stage,
-                       storage_write,
-                       compute_stage,
-                       storage_read);
-        buffer_barrier(cmd,
-                       tile_buffers_.entry_splat_ids_buffer(),
-                       compute_stage,
-                       storage_write,
-                       compute_stage,
-                       storage_read);
-        buffer_barrier(cmd,
-                       tile_buffers_.entry_indices_buffer(),
-                       compute_stage,
-                       storage_write,
-                       compute_stage,
-                       storage_read);
+        rhi::buffer_barrier(cmd,
+                            *rm_,
+                            tile_buffers_.entry_count_buffer(),
+                            compute_stage,
+                            storage_write,
+                            compute_stage,
+                            storage_read | storage_write);
+        rhi::buffer_barrier(cmd,
+                            *rm_,
+                            tile_buffers_.entry_stats_buffer(),
+                            compute_stage,
+                            storage_write,
+                            compute_stage,
+                            storage_read | storage_write);
+        rhi::buffer_barrier(cmd,
+                            *rm_,
+                            tile_buffers_.entry_depth_keys_buffer(),
+                            compute_stage,
+                            storage_write,
+                            compute_stage,
+                            storage_read);
+        rhi::buffer_barrier(cmd,
+                            *rm_,
+                            tile_buffers_.entry_tile_ids_buffer(),
+                            compute_stage,
+                            storage_write,
+                            compute_stage,
+                            storage_read);
+        rhi::buffer_barrier(cmd,
+                            *rm_,
+                            tile_buffers_.entry_splat_ids_buffer(),
+                            compute_stage,
+                            storage_write,
+                            compute_stage,
+                            storage_read);
+        rhi::buffer_barrier(cmd,
+                            *rm_,
+                            tile_buffers_.entry_indices_buffer(),
+                            compute_stage,
+                            storage_write,
+                            compute_stage,
+                            storage_read);
     }
 
     void GsTileBinningPass::barrier_gather_outputs_to_compute_read(const rhi::CommandBuffer &cmd) const {
@@ -571,18 +459,20 @@ namespace himalaya::passes {
         const auto storage_read = VK_ACCESS_2_SHADER_STORAGE_READ_BIT;
         const auto storage_write = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT;
 
-        buffer_barrier(cmd,
-                       tile_buffers_.tile_sort_keys_buffer(),
-                       compute_stage,
-                       storage_write,
-                       compute_stage,
-                       storage_read);
-        buffer_barrier(cmd,
-                       tile_buffers_.tile_sort_values_buffer(),
-                       compute_stage,
-                       storage_write,
-                       compute_stage,
-                       storage_read);
+        rhi::buffer_barrier(cmd,
+                            *rm_,
+                            tile_buffers_.tile_sort_keys_buffer(),
+                            compute_stage,
+                            storage_write,
+                            compute_stage,
+                            storage_read);
+        rhi::buffer_barrier(cmd,
+                            *rm_,
+                            tile_buffers_.tile_sort_values_buffer(),
+                            compute_stage,
+                            storage_write,
+                            compute_stage,
+                            storage_read);
     }
 
     void GsTileBinningPass::barrier_range_outputs_to_compute_read(const rhi::CommandBuffer &cmd) const {
@@ -590,24 +480,27 @@ namespace himalaya::passes {
         const auto storage_read = VK_ACCESS_2_SHADER_STORAGE_READ_BIT;
         const auto storage_write = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT;
 
-        buffer_barrier(cmd,
-                       tile_buffers_.tile_offsets_buffer(),
-                       compute_stage,
-                       storage_write,
-                       compute_stage,
-                       storage_read);
-        buffer_barrier(cmd,
-                       tile_buffers_.tile_counts_buffer(),
-                       compute_stage,
-                       storage_write,
-                       compute_stage,
-                       storage_read);
-        buffer_barrier(cmd,
-                       tile_buffers_.entry_stats_buffer(),
-                       compute_stage,
-                       storage_write,
-                       compute_stage,
-                       storage_read | storage_write);
+        rhi::buffer_barrier(cmd,
+                            *rm_,
+                            tile_buffers_.tile_offsets_buffer(),
+                            compute_stage,
+                            storage_write,
+                            compute_stage,
+                            storage_read);
+        rhi::buffer_barrier(cmd,
+                            *rm_,
+                            tile_buffers_.tile_counts_buffer(),
+                            compute_stage,
+                            storage_write,
+                            compute_stage,
+                            storage_read);
+        rhi::buffer_barrier(cmd,
+                            *rm_,
+                            tile_buffers_.entry_stats_buffer(),
+                            compute_stage,
+                            storage_write,
+                            compute_stage,
+                            storage_read | storage_write);
     }
 
     void GsTileBinningPass::consume_delayed_stats(const uint32_t frame_index) {
@@ -643,12 +536,13 @@ namespace himalaya::passes {
         const auto &stats = rm_->get_buffer(tile_buffers_.entry_stats_buffer());
         const auto &readback = rm_->get_buffer(stats_readback_buffers_[frame_index]);
 
-        buffer_barrier(cmd,
-                       tile_buffers_.entry_stats_buffer(),
-                       VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-                       VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
-                       VK_PIPELINE_STAGE_2_TRANSFER_BIT,
-                       VK_ACCESS_2_TRANSFER_READ_BIT);
+        rhi::buffer_barrier(cmd,
+                            *rm_,
+                            tile_buffers_.entry_stats_buffer(),
+                            VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+                            VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+                            VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+                            VK_ACCESS_2_TRANSFER_READ_BIT);
 
         VkBufferCopy copy{};
         copy.srcOffset = 0;

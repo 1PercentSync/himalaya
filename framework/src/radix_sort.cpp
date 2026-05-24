@@ -7,34 +7,17 @@
 
 #include <himalaya/framework/frame_context.h>
 #include <himalaya/rhi/commands.h>
+#include <himalaya/rhi/compute_utils.h>
 #include <himalaya/rhi/context.h>
 #include <himalaya/rhi/descriptors.h>
 #include <himalaya/rhi/resources.h>
-#include <himalaya/rhi/shader.h>
 
 #include <array>
-#include <span>
 
 #include <spdlog/spdlog.h>
 
 namespace himalaya::framework {
     namespace {
-        /**
-         * @brief Creates a push descriptor layout from storage-buffer bindings.
-         */
-        VkDescriptorSetLayout create_push_storage_layout(rhi::Context &ctx,
-                                                         const std::span<const VkDescriptorSetLayoutBinding> bindings) {
-            VkDescriptorSetLayoutCreateInfo layout_ci{};
-            layout_ci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-            layout_ci.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT;
-            layout_ci.bindingCount = static_cast<uint32_t>(bindings.size());
-            layout_ci.pBindings = bindings.data();
-
-            VkDescriptorSetLayout layout = VK_NULL_HANDLE;
-            VK_CHECK(vkCreateDescriptorSetLayout(ctx.device, &layout_ci, nullptr, &layout));
-            return layout;
-        }
-
         /** @brief Scan shader execution modes. */
         enum class ScanMode : uint32_t {
             ScanHistogramChunks = 0,
@@ -42,30 +25,6 @@ namespace himalaya::framework {
             AddChunkOffsets = 2,
             ScanDigitOffsets = 3,
         };
-
-        /**
-         * @brief Creates one storage-buffer descriptor layout binding.
-         */
-        constexpr VkDescriptorSetLayoutBinding storage_binding(const uint32_t binding) {
-            return VkDescriptorSetLayoutBinding{
-                .binding = binding,
-                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-                .descriptorCount = 1,
-                .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
-            };
-        }
-
-        /**
-         * @brief Resolves a BufferHandle to a full-range descriptor info.
-         */
-        VkDescriptorBufferInfo buffer_info(const rhi::ResourceManager &rm, const rhi::BufferHandle handle) {
-            const auto &buffer = rm.get_buffer(handle);
-            return VkDescriptorBufferInfo{
-                .buffer = buffer.buffer,
-                .offset = 0,
-                .range = buffer.desc.size,
-            };
-        }
 
         /**
          * @brief Clamps sort capacity to the current scan implementation limit.
@@ -86,32 +45,6 @@ namespace himalaya::framework {
             return RadixSort::kMaxSortableElements;
         }
 
-        /**
-         * @brief Creates one compute pipeline from a shader file and Set 3 layout.
-         */
-        rhi::Pipeline create_sort_pipeline(rhi::Context &ctx,
-                                           rhi::DescriptorManager &dm,
-                                           rhi::ShaderCompiler &sc,
-                                           const char *shader_path,
-                                           const VkDescriptorSetLayout set3_layout,
-                                           const std::span<const VkPushConstantRange> push_ranges) {
-            const auto spirv = sc.compile_from_file(shader_path, rhi::ShaderStage::Compute);
-            if (spirv.empty()) {
-                return {};
-            }
-
-            const auto shader_module = rhi::create_shader_module(ctx.device, spirv);
-            const auto set_layouts = dm.get_dispatch_set_layouts(set3_layout);
-            const rhi::ComputePipelineDesc desc{
-                .compute_shader = shader_module,
-                .descriptor_set_layouts = set_layouts,
-                .push_constant_ranges = {push_ranges.begin(), push_ranges.end()},
-            };
-            auto pipeline = rhi::create_compute_pipeline(ctx.device, desc);
-            vkDestroyShaderModule(ctx.device, shader_module, nullptr);
-
-            return pipeline;
-        }
     } // namespace
 
     void RadixSort::setup(rhi::Context &ctx,
@@ -220,31 +153,6 @@ namespace himalaya::framework {
             return;
         }
 
-        const auto bind_global_sets = [&](const rhi::Pipeline &pipeline) {
-            const std::array sets = {
-                dm_->get_set0(frame_ctx.frame_index),
-                dm_->get_set1(),
-                dm_->get_set2(frame_ctx.frame_index),
-            };
-            cmd.bind_compute_descriptor_sets(pipeline.layout, 0, sets.data(), static_cast<uint32_t>(sets.size()));
-        };
-
-        const auto push_buffers = [&](const rhi::Pipeline &pipeline,
-                                      const std::span<const VkDescriptorBufferInfo> infos) {
-            std::array<VkWriteDescriptorSet, 8> writes{};
-            for (uint32_t i = 0; i < infos.size(); ++i) {
-                writes[i] = VkWriteDescriptorSet{
-                    .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-                    .dstBinding = i,
-                    .descriptorCount = 1,
-                    .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-                    .pBufferInfo = &infos[i],
-                };
-            }
-            cmd.push_compute_descriptor_set(pipeline.layout, 3,
-                                            std::span<const VkWriteDescriptorSet>(writes.data(), infos.size()));
-        };
-
         const auto &indirect_dispatch = rm_->get_buffer(indirect_dispatch_buffer);
 
         const auto storage_read = VK_ACCESS_2_SHADER_STORAGE_READ_BIT;
@@ -255,18 +163,18 @@ namespace himalaya::framework {
         const auto transfer_stage = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
         const auto indirect_stage = VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT;
 
-        const auto visible_counter_info = buffer_info(*rm_, visible_counter_buffer);
-        const auto indirect_dispatch_info = buffer_info(*rm_, indirect_dispatch_buffer);
-        const auto histogram_info = buffer_info(*rm_, histogram_buffer_);
-        const auto scanned_histogram_info = buffer_info(*rm_, scanned_histogram_buffer_);
-        const auto chunk_sums_info = buffer_info(*rm_, chunk_sums_buffer_);
-        const auto digit_offsets_info = buffer_info(*rm_, digit_offsets_buffer_);
+        const auto visible_counter_info = rhi::storage_buffer_info(*rm_, visible_counter_buffer);
+        const auto indirect_dispatch_info = rhi::storage_buffer_info(*rm_, indirect_dispatch_buffer);
+        const auto histogram_info = rhi::storage_buffer_info(*rm_, histogram_buffer_);
+        const auto scanned_histogram_info = rhi::storage_buffer_info(*rm_, scanned_histogram_buffer_);
+        const auto chunk_sums_info = rhi::storage_buffer_info(*rm_, chunk_sums_buffer_);
+        const auto digit_offsets_info = rhi::storage_buffer_info(*rm_, digit_offsets_buffer_);
 
         cmd.bind_compute_pipeline(prepare_pipeline_);
-        bind_global_sets(prepare_pipeline_);
+        rhi::bind_dispatch_descriptor_sets(cmd, *dm_, prepare_pipeline_, frame_ctx.frame_index);
         {
             const std::array infos = {visible_counter_info, indirect_dispatch_info};
-            push_buffers(prepare_pipeline_, infos);
+            rhi::push_storage_buffers(cmd, prepare_pipeline_, infos);
             const PreparePushConstants pc{
                 .workgroup_size = kWorkgroupSize,
                 .max_element_count = max_element_count_,
@@ -274,12 +182,13 @@ namespace himalaya::framework {
             cmd.push_constants(prepare_pipeline_.layout, VK_SHADER_STAGE_COMPUTE_BIT, &pc, sizeof(pc));
             cmd.dispatch(1, 1, 1);
         }
-        buffer_barrier(cmd,
-                       indirect_dispatch_buffer,
-                       compute_stage,
-                       storage_write,
-                       indirect_stage,
-                       indirect_read);
+        rhi::buffer_barrier(cmd,
+                            *rm_,
+                            indirect_dispatch_buffer,
+                            compute_stage,
+                            storage_write,
+                            indirect_stage,
+                            indirect_read);
 
         for (uint32_t pass_index = 0; pass_index < kPassCount; ++pass_index) {
             const rhi::BufferHandle src_key_buffer = (pass_index == 0) ? input_key_buffer : key_buffers_[(pass_index - 1u) & 1u];
@@ -288,10 +197,10 @@ namespace himalaya::framework {
             const rhi::BufferHandle dst_key_buffer = key_buffers_[dst_index];
             const rhi::BufferHandle dst_value_buffer = value_buffers_[dst_index];
 
-            const auto src_key_info = buffer_info(*rm_, src_key_buffer);
-            const auto src_value_info = buffer_info(*rm_, src_value_buffer);
-            const auto dst_key_info = buffer_info(*rm_, dst_key_buffer);
-            const auto dst_value_info = buffer_info(*rm_, dst_value_buffer);
+            const auto src_key_info = rhi::storage_buffer_info(*rm_, src_key_buffer);
+            const auto src_value_info = rhi::storage_buffer_info(*rm_, src_value_buffer);
+            const auto dst_key_info = rhi::storage_buffer_info(*rm_, dst_key_buffer);
+            const auto dst_value_info = rhi::storage_buffer_info(*rm_, dst_value_buffer);
 
             const auto &histogram_buffer = rm_->get_buffer(histogram_buffer_);
             const auto &scanned_histogram_buffer = rm_->get_buffer(scanned_histogram_buffer_);
@@ -308,10 +217,10 @@ namespace himalaya::framework {
                                  storage_read | storage_write);
 
             cmd.bind_compute_pipeline(histogram_pipeline_);
-            bind_global_sets(histogram_pipeline_);
+            rhi::bind_dispatch_descriptor_sets(cmd, *dm_, histogram_pipeline_, frame_ctx.frame_index);
             {
                 const std::array infos = {src_key_info, histogram_info, visible_counter_info};
-                push_buffers(histogram_pipeline_, infos);
+                rhi::push_storage_buffers(cmd, histogram_pipeline_, infos);
                 const HistogramPushConstants pc{
                     .element_count = max_element_count_,
                     .pass_index = pass_index,
@@ -320,15 +229,16 @@ namespace himalaya::framework {
                 cmd.push_constants(histogram_pipeline_.layout, VK_SHADER_STAGE_COMPUTE_BIT, &pc, sizeof(pc));
                 vkCmdDispatchIndirect(cmd.handle(), indirect_dispatch.buffer, 0);
             }
-            buffer_barrier(cmd,
-                           histogram_buffer_,
-                           compute_stage,
-                           storage_write,
-                           compute_stage,
-                           storage_read);
+            rhi::buffer_barrier(cmd,
+                                *rm_,
+                                histogram_buffer_,
+                                compute_stage,
+                                storage_write,
+                                compute_stage,
+                                storage_read);
 
             cmd.bind_compute_pipeline(scan_pipeline_);
-            bind_global_sets(scan_pipeline_);
+            rhi::bind_dispatch_descriptor_sets(cmd, *dm_, scan_pipeline_, frame_ctx.frame_index);
             {
                 const std::array infos = {
                     histogram_info,
@@ -336,7 +246,7 @@ namespace himalaya::framework {
                     chunk_sums_info,
                     digit_offsets_info,
                 };
-                push_buffers(scan_pipeline_, infos);
+                rhi::push_storage_buffers(cmd, scan_pipeline_, infos);
 
                 ScanPushConstants pc{
                     .mode = static_cast<uint32_t>(ScanMode::ScanHistogramChunks),
@@ -346,12 +256,13 @@ namespace himalaya::framework {
                 };
                 cmd.push_constants(scan_pipeline_.layout, VK_SHADER_STAGE_COMPUTE_BIT, &pc, sizeof(pc));
                 cmd.dispatch(kRadixSize, chunk_count_, 1);
-                buffer_barrier(cmd,
-                               chunk_sums_buffer_,
-                               compute_stage,
-                               storage_write,
-                               compute_stage,
-                               storage_read | storage_write);
+                rhi::buffer_barrier(cmd,
+                                    *rm_,
+                                    chunk_sums_buffer_,
+                                    compute_stage,
+                                    storage_write,
+                                    compute_stage,
+                                    storage_read | storage_write);
 
                 pc.mode = static_cast<uint32_t>(ScanMode::ScanChunkSums);
                 cmd.push_constants(scan_pipeline_.layout, VK_SHADER_STAGE_COMPUTE_BIT, &pc, sizeof(pc));
@@ -365,12 +276,13 @@ namespace himalaya::framework {
                 pc.mode = static_cast<uint32_t>(ScanMode::AddChunkOffsets);
                 cmd.push_constants(scan_pipeline_.layout, VK_SHADER_STAGE_COMPUTE_BIT, &pc, sizeof(pc));
                 cmd.dispatch(kRadixSize, chunk_count_, 1);
-                buffer_barrier(cmd,
-                               digit_offsets_buffer_,
-                               compute_stage,
-                               storage_write,
-                               compute_stage,
-                               storage_read | storage_write);
+                rhi::buffer_barrier(cmd,
+                                    *rm_,
+                                    digit_offsets_buffer_,
+                                    compute_stage,
+                                    storage_write,
+                                    compute_stage,
+                                    storage_read | storage_write);
 
                 pc.mode = static_cast<uint32_t>(ScanMode::ScanDigitOffsets);
                 cmd.push_constants(scan_pipeline_.layout, VK_SHADER_STAGE_COMPUTE_BIT, &pc, sizeof(pc));
@@ -383,7 +295,7 @@ namespace himalaya::framework {
                                  storage_read | storage_write);
 
             cmd.bind_compute_pipeline(scatter_pipeline_);
-            bind_global_sets(scatter_pipeline_);
+            rhi::bind_dispatch_descriptor_sets(cmd, *dm_, scatter_pipeline_, frame_ctx.frame_index);
             {
                 const std::array infos = {
                     src_key_info,
@@ -394,7 +306,7 @@ namespace himalaya::framework {
                     digit_offsets_info,
                     visible_counter_info,
                 };
-                push_buffers(scatter_pipeline_, infos);
+                rhi::push_storage_buffers(cmd, scatter_pipeline_, infos);
                 const ScatterPushConstants pc{
                     .element_count = max_element_count_,
                     .pass_index = pass_index,
@@ -403,18 +315,20 @@ namespace himalaya::framework {
                 cmd.push_constants(scatter_pipeline_.layout, VK_SHADER_STAGE_COMPUTE_BIT, &pc, sizeof(pc));
                 vkCmdDispatchIndirect(cmd.handle(), indirect_dispatch.buffer, 0);
             }
-            buffer_barrier(cmd,
-                           dst_key_buffer,
-                           compute_stage,
-                           storage_write,
-                           compute_stage,
-                           storage_read);
-            buffer_barrier(cmd,
-                           dst_value_buffer,
-                           compute_stage,
-                           storage_write,
-                           compute_stage,
-                           storage_read);
+            rhi::buffer_barrier(cmd,
+                                *rm_,
+                                dst_key_buffer,
+                                compute_stage,
+                                storage_write,
+                                compute_stage,
+                                storage_read);
+            rhi::buffer_barrier(cmd,
+                                *rm_,
+                                dst_value_buffer,
+                                compute_stage,
+                                storage_write,
+                                compute_stage,
+                                storage_read);
 
             output_buffer_index_ = dst_index;
         }
@@ -460,36 +374,36 @@ namespace himalaya::framework {
 
     void RadixSort::create_descriptor_layouts() {
         const std::array prepare_bindings = {
-            storage_binding(0),
-            storage_binding(1),
+            rhi::storage_buffer_binding(0),
+            rhi::storage_buffer_binding(1),
         };
-        prepare_set3_layout_ = create_push_storage_layout(*ctx_, prepare_bindings);
+        prepare_set3_layout_ = rhi::create_push_storage_descriptor_set_layout(*ctx_, prepare_bindings);
 
         const std::array histogram_bindings = {
-            storage_binding(0),
-            storage_binding(1),
-            storage_binding(2),
+            rhi::storage_buffer_binding(0),
+            rhi::storage_buffer_binding(1),
+            rhi::storage_buffer_binding(2),
         };
-        histogram_set3_layout_ = create_push_storage_layout(*ctx_, histogram_bindings);
+        histogram_set3_layout_ = rhi::create_push_storage_descriptor_set_layout(*ctx_, histogram_bindings);
 
         const std::array scan_bindings = {
-            storage_binding(0),
-            storage_binding(1),
-            storage_binding(2),
-            storage_binding(3),
+            rhi::storage_buffer_binding(0),
+            rhi::storage_buffer_binding(1),
+            rhi::storage_buffer_binding(2),
+            rhi::storage_buffer_binding(3),
         };
-        scan_set3_layout_ = create_push_storage_layout(*ctx_, scan_bindings);
+        scan_set3_layout_ = rhi::create_push_storage_descriptor_set_layout(*ctx_, scan_bindings);
 
         const std::array scatter_bindings = {
-            storage_binding(0),
-            storage_binding(1),
-            storage_binding(2),
-            storage_binding(3),
-            storage_binding(4),
-            storage_binding(5),
-            storage_binding(6),
+            rhi::storage_buffer_binding(0),
+            rhi::storage_buffer_binding(1),
+            rhi::storage_buffer_binding(2),
+            rhi::storage_buffer_binding(3),
+            rhi::storage_buffer_binding(4),
+            rhi::storage_buffer_binding(5),
+            rhi::storage_buffer_binding(6),
         };
-        scatter_set3_layout_ = create_push_storage_layout(*ctx_, scatter_bindings);
+        scatter_set3_layout_ = rhi::create_push_storage_descriptor_set_layout(*ctx_, scatter_bindings);
     }
 
     void RadixSort::create_pipelines() {
@@ -522,22 +436,22 @@ namespace himalaya::framework {
             },
         };
 
-        auto prepare_pipeline = create_sort_pipeline(*ctx_, *dm_, *sc_,
-                                                     "gs/gs_sort_prepare.comp",
-                                                     prepare_set3_layout_,
-                                                     prepare_push_ranges);
-        auto histogram_pipeline = create_sort_pipeline(*ctx_, *dm_, *sc_,
-                                                       "gs/gs_sort_histogram.comp",
-                                                       histogram_set3_layout_,
-                                                       histogram_push_ranges);
-        auto scan_pipeline = create_sort_pipeline(*ctx_, *dm_, *sc_,
-                                                  "gs/gs_sort_scan.comp",
-                                                  scan_set3_layout_,
-                                                  scan_push_ranges);
-        auto scatter_pipeline = create_sort_pipeline(*ctx_, *dm_, *sc_,
-                                                     "gs/gs_sort_scatter.comp",
-                                                     scatter_set3_layout_,
-                                                     scatter_push_ranges);
+        auto prepare_pipeline = rhi::create_compute_pipeline_from_file(*ctx_, *dm_, *sc_,
+                                                                       "gs/gs_sort_prepare.comp",
+                                                                       prepare_set3_layout_,
+                                                                       prepare_push_ranges);
+        auto histogram_pipeline = rhi::create_compute_pipeline_from_file(*ctx_, *dm_, *sc_,
+                                                                         "gs/gs_sort_histogram.comp",
+                                                                         histogram_set3_layout_,
+                                                                         histogram_push_ranges);
+        auto scan_pipeline = rhi::create_compute_pipeline_from_file(*ctx_, *dm_, *sc_,
+                                                                    "gs/gs_sort_scan.comp",
+                                                                    scan_set3_layout_,
+                                                                    scan_push_ranges);
+        auto scatter_pipeline = rhi::create_compute_pipeline_from_file(*ctx_, *dm_, *sc_,
+                                                                       "gs/gs_sort_scatter.comp",
+                                                                       scatter_set3_layout_,
+                                                                       scatter_push_ranges);
 
         if (prepare_pipeline.pipeline == VK_NULL_HANDLE ||
             histogram_pipeline.pipeline == VK_NULL_HANDLE ||
@@ -585,43 +499,18 @@ namespace himalaya::framework {
         }
     }
 
-    void RadixSort::buffer_barrier(const rhi::CommandBuffer &cmd,
-                                   const rhi::BufferHandle buffer,
-                                   const VkPipelineStageFlags2 src_stage,
-                                   const VkAccessFlags2 src_access,
-                                   const VkPipelineStageFlags2 dst_stage,
-                                   const VkAccessFlags2 dst_access) const {
-        if (!buffer.valid()) {
-            return;
-        }
-
-        const auto &resolved = rm_->get_buffer(buffer);
-        VkBufferMemoryBarrier2 barrier{};
-        barrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2;
-        barrier.srcStageMask = src_stage;
-        barrier.srcAccessMask = src_access;
-        barrier.dstStageMask = dst_stage;
-        barrier.dstAccessMask = dst_access;
-        barrier.buffer = resolved.buffer;
-        barrier.offset = 0;
-        barrier.size = resolved.desc.size;
-
-        VkDependencyInfo dep{};
-        dep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-        dep.bufferMemoryBarrierCount = 1;
-        dep.pBufferMemoryBarriers = &barrier;
-        cmd.pipeline_barrier(dep);
-    }
-
     void RadixSort::barrier_sort_buffers(const rhi::CommandBuffer &cmd,
                                          const VkPipelineStageFlags2 src_stage,
                                          const VkAccessFlags2 src_access,
                                          const VkPipelineStageFlags2 dst_stage,
                                          const VkAccessFlags2 dst_access) const {
-        buffer_barrier(cmd, histogram_buffer_, src_stage, src_access, dst_stage, dst_access);
-        buffer_barrier(cmd, scanned_histogram_buffer_, src_stage, src_access, dst_stage, dst_access);
-        buffer_barrier(cmd, chunk_sums_buffer_, src_stage, src_access, dst_stage, dst_access);
-        buffer_barrier(cmd, digit_offsets_buffer_, src_stage, src_access, dst_stage, dst_access);
+        const std::array buffers = {
+            histogram_buffer_,
+            scanned_histogram_buffer_,
+            chunk_sums_buffer_,
+            digit_offsets_buffer_,
+        };
+        rhi::buffer_barriers(cmd, *rm_, buffers, src_stage, src_access, dst_stage, dst_access);
     }
 
     void RadixSort::destroy_buffers() {

@@ -9,10 +9,10 @@
 #include <himalaya/framework/gaussian_splat_data.h>
 #include <himalaya/framework/gs_gpu_data.h>
 #include <himalaya/rhi/commands.h>
+#include <himalaya/rhi/compute_utils.h>
 #include <himalaya/rhi/context.h>
 #include <himalaya/rhi/descriptors.h>
 #include <himalaya/rhi/resources.h>
-#include <himalaya/rhi/shader.h>
 
 #include <array>
 
@@ -33,51 +33,14 @@ namespace himalaya::passes {
         sc_ = &sc;
 
         const std::array bindings = {
-            VkDescriptorSetLayoutBinding{
-                .binding = 0,
-                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-                .descriptorCount = 1,
-                .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
-            },
-            VkDescriptorSetLayoutBinding{
-                .binding = 1,
-                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-                .descriptorCount = 1,
-                .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
-            },
-            VkDescriptorSetLayoutBinding{
-                .binding = 2,
-                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-                .descriptorCount = 1,
-                .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
-            },
-            VkDescriptorSetLayoutBinding{
-                .binding = 3,
-                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-                .descriptorCount = 1,
-                .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
-            },
-            VkDescriptorSetLayoutBinding{
-                .binding = 4,
-                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-                .descriptorCount = 1,
-                .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
-            },
-            VkDescriptorSetLayoutBinding{
-                .binding = 5,
-                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-                .descriptorCount = 1,
-                .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
-            },
+            rhi::storage_buffer_binding(0),
+            rhi::storage_buffer_binding(1),
+            rhi::storage_buffer_binding(2),
+            rhi::storage_buffer_binding(3),
+            rhi::storage_buffer_binding(4),
+            rhi::storage_buffer_binding(5),
         };
-
-        VkDescriptorSetLayoutCreateInfo layout_ci{};
-        layout_ci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-        layout_ci.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT;
-        layout_ci.bindingCount = static_cast<uint32_t>(bindings.size());
-        layout_ci.pBindings = bindings.data();
-
-        VK_CHECK(vkCreateDescriptorSetLayout(ctx_->device, &layout_ci, nullptr, &set3_layout_));
+        set3_layout_ = rhi::create_push_storage_descriptor_set_layout(*ctx_, bindings);
 
         create_pipeline();
     }
@@ -150,47 +113,24 @@ namespace himalaya::passes {
 
         const auto &counter = rm_->get_buffer(visible_counter_buffer_);
         vkCmdFillBuffer(cmd.handle(), counter.buffer, 0, sizeof(uint32_t), 0u);
-        barrier_counter_clear_to_compute(cmd);
+        rhi::buffer_barrier(cmd,
+                            *rm_,
+                            visible_counter_buffer_,
+                            VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+                            VK_ACCESS_2_TRANSFER_WRITE_BIT,
+                            VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+                            VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+                            0,
+                            sizeof(uint32_t));
 
         cmd.bind_compute_pipeline(pipeline_);
+        rhi::bind_dispatch_descriptor_sets(cmd, *dm_, pipeline_, frame_ctx.frame_index);
 
-        const std::array sets = {
-            dm_->get_set0(frame_ctx.frame_index),
-            dm_->get_set1(),
-            dm_->get_set2(frame_ctx.frame_index),
-        };
-        cmd.bind_compute_descriptor_sets(pipeline_.layout, 0, sets.data(), static_cast<uint32_t>(sets.size()));
-
-        const auto &core_buffer = rm_->get_buffer(gs_data.core_buffer());
-        const auto &projected_buffer = rm_->get_buffer(projected_splat_buffer_);
-        const auto &depth_key_buffer = rm_->get_buffer(depth_key_buffer_);
-        const auto &splat_index_buffer = rm_->get_buffer(splat_index_buffer_);
-
-        VkDescriptorBufferInfo core_info{
-            .buffer = core_buffer.buffer,
-            .offset = 0,
-            .range = core_buffer.desc.size,
-        };
-        VkDescriptorBufferInfo projected_info{
-            .buffer = projected_buffer.buffer,
-            .offset = 0,
-            .range = projected_buffer.desc.size,
-        };
-        VkDescriptorBufferInfo counter_info{
-            .buffer = counter.buffer,
-            .offset = 0,
-            .range = counter.desc.size,
-        };
-        VkDescriptorBufferInfo depth_key_info{
-            .buffer = depth_key_buffer.buffer,
-            .offset = 0,
-            .range = depth_key_buffer.desc.size,
-        };
-        VkDescriptorBufferInfo splat_index_info{
-            .buffer = splat_index_buffer.buffer,
-            .offset = 0,
-            .range = splat_index_buffer.desc.size,
-        };
+        const auto core_info = rhi::storage_buffer_info(*rm_, gs_data.core_buffer());
+        const auto projected_info = rhi::storage_buffer_info(*rm_, projected_splat_buffer_);
+        const auto counter_info = rhi::storage_buffer_info(*rm_, visible_counter_buffer_);
+        const auto depth_key_info = rhi::storage_buffer_info(*rm_, depth_key_buffer_);
+        const auto splat_index_info = rhi::storage_buffer_info(*rm_, splat_index_buffer_);
 
         for (const auto &group : gs_data.sh_groups()) {
             const auto sh_buffer_handle = gs_data.sh_buffer(group.sh_degree);
@@ -198,58 +138,16 @@ namespace himalaya::passes {
                 continue;
             }
 
-            const auto &sh_buffer = rm_->get_buffer(sh_buffer_handle);
-            VkDescriptorBufferInfo sh_info{
-                .buffer = sh_buffer.buffer,
-                .offset = 0,
-                .range = sh_buffer.desc.size,
+            const auto sh_info = rhi::storage_buffer_info(*rm_, sh_buffer_handle);
+            const std::array infos = {
+                core_info,
+                projected_info,
+                sh_info,
+                counter_info,
+                depth_key_info,
+                splat_index_info,
             };
-
-            const std::array<VkWriteDescriptorSet, 6> writes = {{
-                {
-                    .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-                    .dstBinding = 0,
-                    .descriptorCount = 1,
-                    .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-                    .pBufferInfo = &core_info,
-                },
-                {
-                    .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-                    .dstBinding = 1,
-                    .descriptorCount = 1,
-                    .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-                    .pBufferInfo = &projected_info,
-                },
-                {
-                    .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-                    .dstBinding = 2,
-                    .descriptorCount = 1,
-                    .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-                    .pBufferInfo = &sh_info,
-                },
-                {
-                    .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-                    .dstBinding = 3,
-                    .descriptorCount = 1,
-                    .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-                    .pBufferInfo = &counter_info,
-                },
-                {
-                    .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-                    .dstBinding = 4,
-                    .descriptorCount = 1,
-                    .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-                    .pBufferInfo = &depth_key_info,
-                },
-                {
-                    .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-                    .dstBinding = 5,
-                    .descriptorCount = 1,
-                    .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-                    .pBufferInfo = &splat_index_info,
-                },
-            }};
-            cmd.push_compute_descriptor_set(pipeline_.layout, 3, writes);
+            rhi::push_storage_buffers(cmd, pipeline_, infos);
 
             const PushConstants pc{
                 .splat_offset = group.splat_offset,
@@ -267,7 +165,19 @@ namespace himalaya::passes {
             // Projection dispatch groups share the visible counter and compacted
             // output buffers. Make each group visible to the next group and to
             // downstream GS stages recorded after projection.
-            barrier_projection_outputs_to_compute(cmd);
+            const std::array projection_outputs = {
+                visible_counter_buffer_,
+                projected_splat_buffer_,
+                depth_key_buffer_,
+                splat_index_buffer_,
+            };
+            rhi::buffer_barriers(cmd,
+                                 *rm_,
+                                 projection_outputs,
+                                 VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+                                 VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+                                 VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+                                 VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
         }
     }
 
@@ -314,8 +224,19 @@ namespace himalaya::passes {
     }
 
     void GsProjectionPass::create_pipeline() {
-        const auto spirv = sc_->compile_from_file("gs/gs_projection.comp", rhi::ShaderStage::Compute);
-        if (spirv.empty()) {
+        const std::array push_ranges = {
+            VkPushConstantRange{
+                .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+                .offset = 0,
+                .size = sizeof(PushConstants),
+            },
+        };
+
+        auto pipeline = rhi::create_compute_pipeline_from_file(*ctx_, *dm_, *sc_,
+                                                               "gs/gs_projection.comp",
+                                                               set3_layout_,
+                                                               push_ranges);
+        if (pipeline.pipeline == VK_NULL_HANDLE) {
             spdlog::warn("GsProjectionPass: shader compilation failed, keeping previous pipeline");
             return;
         }
@@ -323,24 +244,7 @@ namespace himalaya::passes {
         if (pipeline_.pipeline != VK_NULL_HANDLE) {
             pipeline_.destroy(ctx_->device);
         }
-
-        const auto shader_module = rhi::create_shader_module(ctx_->device, spirv);
-        const auto set_layouts = dm_->get_dispatch_set_layouts(set3_layout_);
-
-        const VkPushConstantRange push_range{
-            .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
-            .offset = 0,
-            .size = sizeof(PushConstants),
-        };
-
-        const rhi::ComputePipelineDesc desc{
-            .compute_shader = shader_module,
-            .descriptor_set_layouts = set_layouts,
-            .push_constant_ranges = {push_range},
-        };
-        pipeline_ = rhi::create_compute_pipeline(ctx_->device, desc);
-
-        vkDestroyShaderModule(ctx_->device, shader_module, nullptr);
+        pipeline_ = pipeline;
     }
 
     void GsProjectionPass::destroy_buffers() {
@@ -368,54 +272,4 @@ namespace himalaya::passes {
         max_splat_count_ = 0;
     }
 
-    void GsProjectionPass::barrier_counter_clear_to_compute(const rhi::CommandBuffer &cmd) const {
-        const auto &counter = rm_->get_buffer(visible_counter_buffer_);
-
-        VkBufferMemoryBarrier2 counter_barrier{};
-        counter_barrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2;
-        counter_barrier.srcStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
-        counter_barrier.srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
-        counter_barrier.dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
-        counter_barrier.dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT;
-        counter_barrier.buffer = counter.buffer;
-        counter_barrier.offset = 0;
-        counter_barrier.size = sizeof(uint32_t);
-
-        VkDependencyInfo dep{};
-        dep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-        dep.bufferMemoryBarrierCount = 1;
-        dep.pBufferMemoryBarriers = &counter_barrier;
-        cmd.pipeline_barrier(dep);
-    }
-
-    void GsProjectionPass::barrier_projection_outputs_to_compute(const rhi::CommandBuffer &cmd) const {
-        const auto make_barrier = [this](const rhi::BufferHandle handle) {
-            const auto &buffer = rm_->get_buffer(handle);
-
-            VkBufferMemoryBarrier2 barrier{};
-            barrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2;
-            barrier.srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
-            barrier.srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT;
-            barrier.dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
-            barrier.dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT;
-            barrier.buffer = buffer.buffer;
-            barrier.offset = 0;
-            barrier.size = buffer.desc.size;
-
-            return barrier;
-        };
-
-        const std::array barriers = {
-            make_barrier(visible_counter_buffer_),
-            make_barrier(projected_splat_buffer_),
-            make_barrier(depth_key_buffer_),
-            make_barrier(splat_index_buffer_),
-        };
-
-        VkDependencyInfo dep{};
-        dep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-        dep.bufferMemoryBarrierCount = static_cast<uint32_t>(barriers.size());
-        dep.pBufferMemoryBarriers = barriers.data();
-        cmd.pipeline_barrier(dep);
-    }
 } // namespace himalaya::passes

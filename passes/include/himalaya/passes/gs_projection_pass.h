@@ -112,12 +112,6 @@ namespace himalaya::passes {
         /** @brief Destroys only owned GPU buffers. */
         void destroy_buffers();
 
-        /** @brief Inserts a transfer-write to compute-read/write barrier for the visible counter. */
-        void barrier_counter_clear_to_compute(const rhi::CommandBuffer &cmd) const;
-
-        /** @brief Inserts a compute-write to compute-read/write barrier for projection shared outputs. */
-        void barrier_projection_outputs_to_compute(const rhi::CommandBuffer &cmd) const;
-
         // ---- Service pointers ----
 
         /** @brief Vulkan context. */
