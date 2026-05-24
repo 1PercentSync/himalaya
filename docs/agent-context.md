@@ -8,12 +8,12 @@
 
 - **项目**：Himalaya — 基于 Vulkan 1.4 的渲染器
 - **分支**：`reflector` — Path Tracing + Gaussian Splatting
-- **Phase**：Phase 2 — Gaussian Splatting 数据管线
-- **进度**：Phase 2 全部完成（Step 0-4 全部通过编译验证和运行测试）
+- **Phase**：Phase 3 — Gaussian Splatting 渲染
+- **进度**：Phase 3 技术决策完成，待规划任务清单
 
 ### 下一个任务
 
-Phase 3 准备（待规划）
+创建 Phase 3 计划文档和任务清单
 
 ---
 
@@ -24,10 +24,8 @@ CLAUDE.md 已自动加载，以下为额外必读：
 | 文档 | 说明 |
 |------|------|
 | `docs/roadmap.md` | Reflector 分支 phase 概览与顺序 |
-| `docs/current-phase.md` | Phase 2 数据管线范围与步骤概述 |
-| `tasks/reflector-phase2.md` | Phase 2 任务清单（复选框进度跟踪） |
 | `docs/architecture.md` | 渲染器架构与设计理念（含 GS 数据管线） |
-| `docs/technical-decisions.md` | 技术选型与决策（含 GS 第 20-22 节） |
+| `docs/technical-decisions.md` | 技术选型与决策（含 GS 第 20-23 节） |
 
 ---
 
@@ -35,6 +33,8 @@ CLAUDE.md 已自动加载，以下为额外必读：
 
 | 文档 | 说明 |
 |------|------|
+| `docs/archive/reflector-phase2-plan.md` | Reflector Phase 2 数据管线范围与步骤（原 current-phase.md） |
+| `tasks/archive/reflector-phase2.md` | Reflector Phase 2 任务清单（原 tasks/reflector-phase2.md） |
 | `docs/archive/reflector-phase1-plan.md` | Reflector Phase 1 精简范围与步骤（原 current-phase.md） |
 | `tasks/archive/reflector-phase1.md` | Reflector Phase 1 任务清单（原 tasks/reflector-phase1.md） |
 | `docs/archive/m1-phase8.5-plan.md` | M1 阶段八点五实现步骤（原 current-phase.md） |
