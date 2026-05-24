@@ -164,12 +164,12 @@
 
 ## Step 5.7：GsGpuData 接入 Renderer
 
-- [ ] Renderer 持有 `framework::GsGpuData`，在 init/destroy 中初始化和销毁
-- [ ] 新增 `Renderer::upload_gs_scene(const GaussianSplatScene&)` 与 `Renderer::destroy_gs_scene()`
-- [ ] 新增 `Renderer::gs_splat_count()` 只读 accessor，供 DebugUI / stats 使用
-- [ ] `Application::switch_gs_scene()` 在成功加载 CPU GS scene 后通过 immediate scope 上传 GPU 数据
-- [ ] 切换或清空 GS scene 前销毁旧 GS GPU 数据，Renderer::destroy() 兜底销毁
-- [ ] 编译验证
+- [x] Renderer 持有 `framework::GsGpuData`，在 init/destroy 中初始化和销毁
+- [x] 新增 `Renderer::upload_gs_scene(const GaussianSplatScene&)` 与 `Renderer::destroy_gs_scene()`
+- [x] 新增 `Renderer::gs_splat_count()` 只读 accessor，供 DebugUI / stats 使用
+- [x] `Application::switch_gs_scene()` 在成功加载 CPU GS scene 后通过 immediate scope 上传 GPU 数据
+- [x] 切换或清空 GS scene 前销毁旧 GS GPU 数据，Renderer::destroy() 兜底销毁
+- [x] 编译验证
 
 ## Step 5.8：RHI Compute Utility Refactor
 

@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的渲染器
 - **分支**：`reflector` — Path Tracing + Gaussian Splatting
 - **Phase**：Phase 3 — Gaussian Splatting 渲染
-- **进度**：Step 5.6 已完成并通过用户在 CLion 中的编译验证；待开始 Step 5.7（GsGpuData 接入 Renderer）
+- **进度**：Step 5.7 已完成并通过用户在 CLion 中的编译验证；待开始 Step 5.8（RHI compute utility refactor）
 
 ### 下一个任务
 
-Step 5.7：Renderer 持有 `framework::GsGpuData`，在 init/destroy 中初始化和销毁
+Step 5.8：新增 `rhi/include/himalaya/rhi/compute_utils.h` 和 `rhi/src/compute_utils.cpp`，抽取重复 compute Vulkan helper
 
 ---
 
