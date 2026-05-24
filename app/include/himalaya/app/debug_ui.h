@@ -52,7 +52,7 @@ namespace himalaya::app {
 
         // --- Render mode ---
 
-        /** @brief PT mode active (mutable — future: checkbox toggles PT vs GS). */
+        /** @brief PT mode active (checked = PT, unchecked = GS; disabled until GS rendering is complete). */
         bool& pt_mode;
 
         /** @brief Whether RT hardware is available. */

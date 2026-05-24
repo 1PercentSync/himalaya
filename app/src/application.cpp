@@ -440,7 +440,7 @@ namespace himalaya::app {
 
         // ---- Effective present mode (user preference + PT tearing override) ----
         rhi::PresentMode effective = user_present_mode_;
-        if (pt_allow_tearing_) {
+        if (pt_mode_ && pt_allow_tearing_) {
             effective = rhi::PresentMode::Immediate;
         }
         if (effective != swapchain_.present_mode) {
@@ -463,6 +463,9 @@ namespace himalaya::app {
             .image_index = image_index_,
             .frame_index = context_.frame_index,
             .camera = camera_,
+            .render_mode = pt_mode_
+                ? framework::RenderMode::PathTracing
+                : framework::RenderMode::GaussianSplatting,
             .indirect_intensity = indirect_intensity_,
             .exposure = std::pow(2.0f, ev_),
             .ibl_rotation_sin = std::sin(ibl_yaw_),

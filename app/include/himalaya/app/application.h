@@ -109,7 +109,7 @@ namespace himalaya::app {
         /** @brief IBL horizontal rotation angle in radians (left-click drag controlled). */
         float ibl_yaw_ = 0.0f;
 
-        /** @brief PT mode active (always true; future: toggleable for PT vs GS). */
+        /** @brief PT mode active; false requests Gaussian Splatting. UI keeps this disabled until GS rendering is complete. */
         bool pt_mode_ = true;
 
         /** @brief Path tracing configuration parameters. */

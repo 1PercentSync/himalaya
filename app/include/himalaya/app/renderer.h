@@ -57,6 +57,9 @@ namespace himalaya::app {
         /** @brief Camera state (position, matrices). */
         const framework::Camera &camera;
 
+        /** @brief Requested top-level render mode for this frame. */
+        framework::RenderMode render_mode;
+
         /** @brief Indirect light intensity multiplier. */
         float indirect_intensity;
 
@@ -433,7 +436,7 @@ namespace himalaya::app {
         void fill_common_gpu_data(const RenderInput &input) const;
 
         /**
-         * @brief Path tracing render path: Reference View Pass + Tonemapping + ImGui.
+         * @brief Path tracing render path: Reference View Pass + Present + ImGui.
          */
         void render_path_tracing(rhi::CommandBuffer &cmd, const RenderInput &input);
 

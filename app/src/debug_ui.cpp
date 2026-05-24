@@ -195,13 +195,14 @@ namespace himalaya::app {
             if (only_fifo) { ImGui::EndDisabled(); }
         }
 
-        // Render mode toggle (PT always active; GS placeholder for Phase 2)
+        // Render mode toggle. Checked = PT, unchecked = GS. Disabled until
+        // the GS tile rendering path is integrated.
         {
             ImGui::BeginDisabled();
             ImGui::Checkbox("Path Tracing", &ctx.pt_mode);
             ImGui::EndDisabled();
             if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
-                ImGui::SetTooltip("Gaussian Splatting mode coming in Phase 2");
+                ImGui::SetTooltip("Gaussian Splatting mode will be enabled after tile rendering is integrated.");
             }
         }
 

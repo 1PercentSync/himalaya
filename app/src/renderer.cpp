@@ -54,10 +54,20 @@ namespace himalaya::app {
         pending_semaphore_signal_ = {};
         fill_common_gpu_data(input);
 
-        if (ctx_->rt_supported && scene_as_builder_.tlas_handle().as != VK_NULL_HANDLE) {
-            render_path_tracing(cmd, input);
-        } else {
-            render_imgui_only(cmd, input);
+        switch (input.render_mode) {
+            case framework::RenderMode::PathTracing:
+                if (ctx_->rt_supported && scene_as_builder_.tlas_handle().as != VK_NULL_HANDLE) {
+                    render_path_tracing(cmd, input);
+                } else {
+                    render_imgui_only(cmd, input);
+                }
+                break;
+            case framework::RenderMode::GaussianSplatting:
+                // GS tile rendering is integrated in Step 6. Until then,
+                // explicitly route GS requests to the same black ImGui-only
+                // fallback used for unavailable render paths.
+                render_imgui_only(cmd, input);
+                break;
         }
 
         ++frame_counter_;
