@@ -39,7 +39,7 @@
 - [x] 定义 `GaussianSplatCore` 打包 struct（position + pad + rotation + scale + opacity = 48 bytes），添加 `static_assert` 校验 size 和 offset
 - [x] 将 `GaussianSplatPrimitive` 中 4 个独立 vector 替换为 `vector<GaussianSplatCore>`
 - [x] 修改 `GaussianSplatLoader`：先读入临时 vector，再交织填入 `GaussianSplatCore` 数组
-- [ ] 更新 AABB 计算逻辑（从 `cores[i].position` 读取）
+- [x] 更新 AABB 计算逻辑（从 `cores[i].position` 读取）
 - [ ] 编译验证
 
 > PLY 转换器不需要修改——它输出 glTF 文件（磁盘格式不变），CPU 端打包由 loader 在加载时完成。
