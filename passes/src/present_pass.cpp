@@ -116,9 +116,9 @@ namespace himalaya::passes {
 
         rg.add_pass("Present", resources,
                     [this, &rg, &ctx](const rhi::CommandBuffer &cmd) {
-                        // Choose SRGB or UNORM view based on render mode and GS color space.
-                        // PT always uses SRGB (hardware linear→sRGB conversion after tonemapping).
-                        // GS passthrough: UNORM for already-sRGB data, SRGB for linear data.
+                        // View is fetched from Swapchain directly (not via RG/RM) because
+                        // RM stores one view per image, but we need SRGB or UNORM variants.
+                        // RG still tracks the swapchain image for barrier management.
                         VkImageView swapchain_view = VK_NULL_HANDLE;
                         if (ctx.render_mode == framework::RenderMode::GaussianSplatting &&
                             ctx.gs_color_space == framework::GsColorSpace::SrgbRec709Display) {
