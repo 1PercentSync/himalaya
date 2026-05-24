@@ -18,6 +18,7 @@ const uint kTileSizePixels = 16u;
 const float kTileSize = float(kTileSizePixels);
 const float kEllipseRadiusSigma = 3.0;
 const float kMinCovarianceEigenvalue = 1.0e-6;
+const float kMipSplattingScaleFactor = 0.8493218002880191; // sqrt(1 / (2 * ln(2)))
 
 const float kShC0 = 0.2820947917738781;
 const float kShC1 = 0.4886025119029199;
@@ -170,6 +171,19 @@ mat3 quat_to_mat3(vec4 q) {
         vec3(2.0 * (xy - wz),       1.0 - 2.0 * (xx + zz), 2.0 * (yz + wx)),
         vec3(2.0 * (xz + wy),       2.0 * (yz - wx),       1.0 - 2.0 * (xx + yy))
     );
+}
+
+/**
+ * Applies Mip Splatting's 3D frequency limit by clamping each Gaussian axis
+ * to the pixel footprint size at the splat distance.
+ */
+vec3 apply_mip_splatting_3d_filter(vec3 scale, float camera_distance) {
+    const float tan_half_fov_y = 1.0 / global.projection[1][1];
+    const float pixel_size_at_splat =
+        (2.0 * tan_half_fov_y * camera_distance) / float(pc.screen_height);
+    const float min_threshold = pixel_size_at_splat * kMipSplattingScaleFactor;
+
+    return max(scale, vec3(min_threshold));
 }
 
 /**
@@ -329,7 +343,11 @@ void main() {
         return;
     }
 
-    const mat3 cov3d = build_covariance_3d(core.rotation, core.scale);
+    const vec3 camera_position = global.camera_position_and_exposure.xyz;
+    const float camera_distance = length(core.position - camera_position);
+    const vec3 filtered_scale = apply_mip_splatting_3d_filter(core.scale, camera_distance);
+
+    const mat3 cov3d = build_covariance_3d(core.rotation, filtered_scale);
     const mat2 cov2d = project_covariance_2d(cov3d, view_pos);
 
     vec2 axis_u;
@@ -342,7 +360,6 @@ void main() {
         return;
     }
 
-    const vec3 camera_position = global.camera_position_and_exposure.xyz;
     // KHR_gaussian_splatting defines SH lighting direction as the normalized
     // vector from the camera position to the splat mean in global space.
     const vec3 view_direction = normalize(core.position - camera_position);
