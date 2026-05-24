@@ -111,23 +111,21 @@ namespace himalaya::passes {
     void GsTileBinningPass::record(const rhi::CommandBuffer &cmd,
                                    const framework::FrameContext &frame_ctx,
                                    const rhi::BufferHandle projected_splat_buffer,
-                                   const rhi::BufferHandle sorted_splat_index_buffer,
+                                   const rhi::BufferHandle depth_key_buffer,
                                    const rhi::BufferHandle visible_counter_buffer,
                                    const rhi::BufferHandle indirect_dispatch_buffer,
                                    const uint32_t max_splat_count,
                                    const uint32_t screen_width,
                                    const uint32_t screen_height) {
-        if (max_splat_count == 0 ||
-            count_pipeline_.pipeline == VK_NULL_HANDLE ||
-            scan_pipeline_.pipeline == VK_NULL_HANDLE ||
-            scatter_pipeline_.pipeline == VK_NULL_HANDLE) {
+        if (max_splat_count == 0 || entry_pipeline_.pipeline == VK_NULL_HANDLE) {
             return;
         }
 
         ensure_capacity(max_splat_count, screen_width, screen_height);
-        if (!tile_buffers_.tile_counts_buffer().valid() ||
-            !tile_buffers_.tile_splat_ids_buffer().valid() ||
-            tile_buffers_.tile_count() == 0) {
+        if (!tile_buffers_.entry_depth_keys_buffer().valid() ||
+            !tile_buffers_.entry_stats_buffer().valid() ||
+            tile_buffers_.tile_count() == 0 ||
+            tile_buffers_.entry_capacity() == 0) {
             return;
         }
 
@@ -162,153 +160,67 @@ namespace himalaya::passes {
         const auto compute_stage = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
         const auto transfer_stage = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
 
+        const auto &entry_stats = rm_->get_buffer(tile_buffers_.entry_stats_buffer());
+        const auto &tile_offsets = rm_->get_buffer(tile_buffers_.tile_offsets_buffer());
         const auto &tile_counts = rm_->get_buffer(tile_buffers_.tile_counts_buffer());
-        const auto &tile_cursors = rm_->get_buffer(tile_buffers_.tile_cursors_buffer());
-        const auto &tile_chunk_sums = rm_->get_buffer(tile_buffers_.tile_scan_chunk_sums_buffer());
-        const auto &tile_total_count = rm_->get_buffer(tile_buffers_.tile_total_count_buffer());
         const auto &indirect_dispatch = rm_->get_buffer(indirect_dispatch_buffer);
 
+        vkCmdFillBuffer(cmd.handle(), entry_stats.buffer, 0, entry_stats.desc.size, 0u);
+        vkCmdFillBuffer(cmd.handle(), tile_offsets.buffer, 0, tile_offsets.desc.size, 0u);
         vkCmdFillBuffer(cmd.handle(), tile_counts.buffer, 0, tile_counts.desc.size, 0u);
-        vkCmdFillBuffer(cmd.handle(), tile_chunk_sums.buffer, 0, tile_chunk_sums.desc.size, 0u);
-        vkCmdFillBuffer(cmd.handle(), tile_total_count.buffer, 0, tile_total_count.desc.size, 0u);
+        buffer_barrier(cmd,
+                       tile_buffers_.entry_stats_buffer(),
+                       transfer_stage,
+                       transfer_write,
+                       compute_stage,
+                       storage_read | storage_write);
+        buffer_barrier(cmd,
+                       tile_buffers_.tile_offsets_buffer(),
+                       transfer_stage,
+                       transfer_write,
+                       compute_stage,
+                       storage_read | storage_write);
         buffer_barrier(cmd,
                        tile_buffers_.tile_counts_buffer(),
-                       transfer_stage,
-                       transfer_write,
-                       compute_stage,
-                       storage_read | storage_write);
-        buffer_barrier(cmd,
-                       tile_buffers_.tile_scan_chunk_sums_buffer(),
-                       transfer_stage,
-                       transfer_write,
-                       compute_stage,
-                       storage_read | storage_write);
-        buffer_barrier(cmd,
-                       tile_buffers_.tile_total_count_buffer(),
                        transfer_stage,
                        transfer_write,
                        compute_stage,
                        storage_read | storage_write);
 
         const auto projected_info = buffer_info(*rm_, projected_splat_buffer);
-        const auto sorted_splat_index_info = buffer_info(*rm_, sorted_splat_index_buffer);
+        const auto depth_key_info = buffer_info(*rm_, depth_key_buffer);
         const auto visible_counter_info = buffer_info(*rm_, visible_counter_buffer);
-        const auto tile_offsets_info = buffer_info(*rm_, tile_buffers_.tile_offsets_buffer());
-        const auto tile_counts_info = buffer_info(*rm_, tile_buffers_.tile_counts_buffer());
-        const auto tile_cursors_info = buffer_info(*rm_, tile_buffers_.tile_cursors_buffer());
-        const auto tile_chunk_sums_info = buffer_info(*rm_, tile_buffers_.tile_scan_chunk_sums_buffer());
-        const auto tile_total_count_info = buffer_info(*rm_, tile_buffers_.tile_total_count_buffer());
-        const auto tile_splat_ids_info = buffer_info(*rm_, tile_buffers_.tile_splat_ids_buffer());
+        const auto entry_stats_info = buffer_info(*rm_, tile_buffers_.entry_stats_buffer());
+        const auto entry_depth_keys_info = buffer_info(*rm_, tile_buffers_.entry_depth_keys_buffer());
+        const auto entry_tile_ids_info = buffer_info(*rm_, tile_buffers_.entry_tile_ids_buffer());
+        const auto entry_splat_ids_info = buffer_info(*rm_, tile_buffers_.entry_splat_ids_buffer());
+        const auto entry_indices_info = buffer_info(*rm_, tile_buffers_.entry_indices_buffer());
 
-        cmd.bind_compute_pipeline(count_pipeline_);
-        bind_global_sets(count_pipeline_);
+        cmd.bind_compute_pipeline(entry_pipeline_);
+        bind_global_sets(entry_pipeline_);
         {
             const std::array infos = {
                 projected_info,
-                sorted_splat_index_info,
+                depth_key_info,
                 visible_counter_info,
-                tile_counts_info,
+                entry_stats_info,
+                entry_depth_keys_info,
+                entry_tile_ids_info,
+                entry_splat_ids_info,
+                entry_indices_info,
             };
-            push_buffers(count_pipeline_, infos);
-            const CountPushConstants pc{
+            push_buffers(entry_pipeline_, infos);
+            const EntryPushConstants pc{
                 .max_splat_count = max_splat_count,
+                .entry_capacity = tile_buffers_.entry_capacity(),
                 .tile_count_x = tile_buffers_.tile_count_x(),
                 .tile_count_y = tile_buffers_.tile_count_y(),
-                ._padding = 0,
             };
-            cmd.push_constants(count_pipeline_.layout, VK_SHADER_STAGE_COMPUTE_BIT, &pc, sizeof(pc));
+            cmd.push_constants(entry_pipeline_.layout, VK_SHADER_STAGE_COMPUTE_BIT, &pc, sizeof(pc));
             vkCmdDispatchIndirect(cmd.handle(), indirect_dispatch.buffer, 0);
         }
-        buffer_barrier(cmd,
-                       tile_buffers_.tile_counts_buffer(),
-                       compute_stage,
-                       storage_write,
-                       compute_stage,
-                       storage_read | storage_write);
 
-        cmd.bind_compute_pipeline(scan_pipeline_);
-        bind_global_sets(scan_pipeline_);
-        {
-            const std::array infos = {
-                tile_counts_info,
-                tile_offsets_info,
-                tile_chunk_sums_info,
-                tile_total_count_info,
-            };
-            push_buffers(scan_pipeline_, infos);
-
-            ScanPushConstants pc{
-                .mode = static_cast<uint32_t>(ScanMode::ScanTileChunks),
-                .tile_count = tile_buffers_.tile_count(),
-                .chunk_count = tile_buffers_.scan_chunk_count(),
-                ._padding = 0,
-            };
-            cmd.push_constants(scan_pipeline_.layout, VK_SHADER_STAGE_COMPUTE_BIT, &pc, sizeof(pc));
-            cmd.dispatch(tile_buffers_.scan_chunk_count(), 1, 1);
-            buffer_barrier(cmd,
-                           tile_buffers_.tile_scan_chunk_sums_buffer(),
-                           compute_stage,
-                           storage_write,
-                           compute_stage,
-                           storage_read | storage_write);
-
-            pc.mode = static_cast<uint32_t>(ScanMode::ScanChunkSums);
-            cmd.push_constants(scan_pipeline_.layout, VK_SHADER_STAGE_COMPUTE_BIT, &pc, sizeof(pc));
-            cmd.dispatch(1, 1, 1);
-            buffer_barrier(cmd,
-                           tile_buffers_.tile_scan_chunk_sums_buffer(),
-                           compute_stage,
-                           storage_write,
-                           compute_stage,
-                           storage_read | storage_write);
-            buffer_barrier(cmd,
-                           tile_buffers_.tile_total_count_buffer(),
-                           compute_stage,
-                           storage_write,
-                           compute_stage,
-                           storage_read | storage_write);
-
-            pc.mode = static_cast<uint32_t>(ScanMode::AddChunkOffsets);
-            cmd.push_constants(scan_pipeline_.layout, VK_SHADER_STAGE_COMPUTE_BIT, &pc, sizeof(pc));
-            cmd.dispatch(tile_buffers_.scan_chunk_count(), 1, 1);
-        }
-        buffer_barrier(cmd,
-                       tile_buffers_.tile_offsets_buffer(),
-                       compute_stage,
-                       storage_write,
-                       compute_stage,
-                       storage_read);
-
-        vkCmdFillBuffer(cmd.handle(), tile_cursors.buffer, 0, tile_cursors.desc.size, 0u);
-        buffer_barrier(cmd,
-                       tile_buffers_.tile_cursors_buffer(),
-                       transfer_stage,
-                       transfer_write,
-                       compute_stage,
-                       storage_read | storage_write);
-
-        cmd.bind_compute_pipeline(scatter_pipeline_);
-        bind_global_sets(scatter_pipeline_);
-        {
-            const std::array infos = {
-                projected_info,
-                sorted_splat_index_info,
-                visible_counter_info,
-                tile_offsets_info,
-                tile_cursors_info,
-                tile_splat_ids_info,
-            };
-            push_buffers(scatter_pipeline_, infos);
-            const ScatterPushConstants pc{
-                .max_splat_count = max_splat_count,
-                .tile_count_x = tile_buffers_.tile_count_x(),
-                .tile_count_y = tile_buffers_.tile_count_y(),
-                .tile_splat_id_capacity = tile_buffers_.tile_splat_id_capacity(),
-            };
-            cmd.push_constants(scatter_pipeline_.layout, VK_SHADER_STAGE_COMPUTE_BIT, &pc, sizeof(pc));
-            vkCmdDispatchIndirect(cmd.handle(), indirect_dispatch.buffer, 0);
-        }
-        barrier_tile_outputs_to_compute_read(cmd);
+        barrier_entry_outputs_to_compute_read(cmd);
     }
 
     void GsTileBinningPass::rebuild_pipelines() {
@@ -319,17 +231,9 @@ namespace himalaya::passes {
         tile_buffers_.destroy();
         destroy_pipelines();
 
-        if (count_set3_layout_ != VK_NULL_HANDLE) {
-            vkDestroyDescriptorSetLayout(ctx_->device, count_set3_layout_, nullptr);
-            count_set3_layout_ = VK_NULL_HANDLE;
-        }
-        if (scan_set3_layout_ != VK_NULL_HANDLE) {
-            vkDestroyDescriptorSetLayout(ctx_->device, scan_set3_layout_, nullptr);
-            scan_set3_layout_ = VK_NULL_HANDLE;
-        }
-        if (scatter_set3_layout_ != VK_NULL_HANDLE) {
-            vkDestroyDescriptorSetLayout(ctx_->device, scatter_set3_layout_, nullptr);
-            scatter_set3_layout_ = VK_NULL_HANDLE;
+        if (entry_set3_layout_ != VK_NULL_HANDLE) {
+            vkDestroyDescriptorSetLayout(ctx_->device, entry_set3_layout_, nullptr);
+            entry_set3_layout_ = VK_NULL_HANDLE;
         }
     }
 
@@ -338,103 +242,46 @@ namespace himalaya::passes {
     }
 
     void GsTileBinningPass::create_descriptor_layouts() {
-        const std::array count_bindings = {
-            storage_binding(0),
-            storage_binding(1),
-            storage_binding(2),
-            storage_binding(3),
-        };
-        count_set3_layout_ = create_push_storage_layout(*ctx_, count_bindings);
-
-        const std::array scan_bindings = {
-            storage_binding(0),
-            storage_binding(1),
-            storage_binding(2),
-            storage_binding(3),
-        };
-        scan_set3_layout_ = create_push_storage_layout(*ctx_, scan_bindings);
-
-        const std::array scatter_bindings = {
+        const std::array entry_bindings = {
             storage_binding(0),
             storage_binding(1),
             storage_binding(2),
             storage_binding(3),
             storage_binding(4),
             storage_binding(5),
+            storage_binding(6),
+            storage_binding(7),
         };
-        scatter_set3_layout_ = create_push_storage_layout(*ctx_, scatter_bindings);
+        entry_set3_layout_ = create_push_storage_layout(*ctx_, entry_bindings);
     }
 
     void GsTileBinningPass::create_pipelines() {
-        const std::array count_push_ranges = {
+        const std::array entry_push_ranges = {
             VkPushConstantRange{
                 .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
                 .offset = 0,
-                .size = sizeof(CountPushConstants),
-            },
-        };
-        const std::array scan_push_ranges = {
-            VkPushConstantRange{
-                .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
-                .offset = 0,
-                .size = sizeof(ScanPushConstants),
-            },
-        };
-        const std::array scatter_push_ranges = {
-            VkPushConstantRange{
-                .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
-                .offset = 0,
-                .size = sizeof(ScatterPushConstants),
+                .size = sizeof(EntryPushConstants),
             },
         };
 
-        auto count_pipeline = create_tile_pipeline(*ctx_, *dm_, *sc_,
-                                                   "gs/gs_tile_count.comp",
-                                                   count_set3_layout_,
-                                                   count_push_ranges);
-        auto scan_pipeline = create_tile_pipeline(*ctx_, *dm_, *sc_,
-                                                  "gs/gs_tile_scan.comp",
-                                                  scan_set3_layout_,
-                                                  scan_push_ranges);
-        auto scatter_pipeline = create_tile_pipeline(*ctx_, *dm_, *sc_,
-                                                     "gs/gs_tile_scatter.comp",
-                                                     scatter_set3_layout_,
-                                                     scatter_push_ranges);
+        auto entry_pipeline = create_tile_pipeline(*ctx_, *dm_, *sc_,
+                                                   "gs/gs_tile_entry.comp",
+                                                   entry_set3_layout_,
+                                                   entry_push_ranges);
 
-        if (count_pipeline.pipeline == VK_NULL_HANDLE ||
-            scan_pipeline.pipeline == VK_NULL_HANDLE ||
-            scatter_pipeline.pipeline == VK_NULL_HANDLE) {
-            if (count_pipeline.pipeline != VK_NULL_HANDLE) {
-                count_pipeline.destroy(ctx_->device);
-            }
-            if (scan_pipeline.pipeline != VK_NULL_HANDLE) {
-                scan_pipeline.destroy(ctx_->device);
-            }
-            if (scatter_pipeline.pipeline != VK_NULL_HANDLE) {
-                scatter_pipeline.destroy(ctx_->device);
-            }
-            spdlog::warn("GsTileBinningPass: shader compilation failed, keeping previous pipelines");
+        if (entry_pipeline.pipeline == VK_NULL_HANDLE) {
+            spdlog::warn("GsTileBinningPass: shader compilation failed, keeping previous pipeline");
             return;
         }
 
         destroy_pipelines();
-        count_pipeline_ = count_pipeline;
-        scan_pipeline_ = scan_pipeline;
-        scatter_pipeline_ = scatter_pipeline;
+        entry_pipeline_ = entry_pipeline;
     }
 
     void GsTileBinningPass::destroy_pipelines() {
-        if (count_pipeline_.pipeline != VK_NULL_HANDLE) {
-            count_pipeline_.destroy(ctx_->device);
-            count_pipeline_ = {};
-        }
-        if (scan_pipeline_.pipeline != VK_NULL_HANDLE) {
-            scan_pipeline_.destroy(ctx_->device);
-            scan_pipeline_ = {};
-        }
-        if (scatter_pipeline_.pipeline != VK_NULL_HANDLE) {
-            scatter_pipeline_.destroy(ctx_->device);
-            scatter_pipeline_ = {};
+        if (entry_pipeline_.pipeline != VK_NULL_HANDLE) {
+            entry_pipeline_.destroy(ctx_->device);
+            entry_pipeline_ = {};
         }
     }
 
@@ -466,31 +313,37 @@ namespace himalaya::passes {
         cmd.pipeline_barrier(dep);
     }
 
-    void GsTileBinningPass::barrier_tile_outputs_to_compute_read(const rhi::CommandBuffer &cmd) const {
+    void GsTileBinningPass::barrier_entry_outputs_to_compute_read(const rhi::CommandBuffer &cmd) const {
         const auto compute_stage = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
         const auto storage_read = VK_ACCESS_2_SHADER_STORAGE_READ_BIT;
         const auto storage_write = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT;
 
         buffer_barrier(cmd,
-                       tile_buffers_.tile_counts_buffer(),
+                       tile_buffers_.entry_stats_buffer(),
+                       compute_stage,
+                       storage_write,
+                       compute_stage,
+                       storage_read | storage_write);
+        buffer_barrier(cmd,
+                       tile_buffers_.entry_depth_keys_buffer(),
                        compute_stage,
                        storage_write,
                        compute_stage,
                        storage_read);
         buffer_barrier(cmd,
-                       tile_buffers_.tile_offsets_buffer(),
+                       tile_buffers_.entry_tile_ids_buffer(),
                        compute_stage,
                        storage_write,
                        compute_stage,
                        storage_read);
         buffer_barrier(cmd,
-                       tile_buffers_.tile_cursors_buffer(),
+                       tile_buffers_.entry_splat_ids_buffer(),
                        compute_stage,
                        storage_write,
                        compute_stage,
                        storage_read);
         buffer_barrier(cmd,
-                       tile_buffers_.tile_splat_ids_buffer(),
+                       tile_buffers_.entry_indices_buffer(),
                        compute_stage,
                        storage_write,
                        compute_stage,

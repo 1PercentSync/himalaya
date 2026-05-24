@@ -2,7 +2,7 @@
 
 /**
  * @file gs_tile_binning_pass.h
- * @brief Gaussian Splatting tile-binning compute pass.
+ * @brief Gaussian Splatting tile-entry compute pass.
  */
 
 #include <himalaya/passes/gs_tile_buffers.h>
@@ -27,70 +27,48 @@ namespace himalaya::framework {
 
 namespace himalaya::passes {
     /**
-     * @brief Builds per-tile splat lists from sorted projected splats.
+     * @brief Generates bounded per-tile entries from projected visible splats.
      *
-     * The pass records three compute stages into an existing command buffer:
-     * tile coverage counting, tile-count prefix scan, and tile-list scatter.
-     * It owns all tile-binning output buffers and exposes them for the future
-     * tile-rendering pass.
+     * The pass records the tile-entry generation stage into an existing command
+     * buffer. Later Step 5.5 items sort these entries and build per-tile ranges.
      */
     class GsTileBinningPass {
     public:
-        /** @brief Workgroup size used by all tile-binning shaders. */
+        /** @brief Workgroup size used by tile-entry generation. */
         static constexpr uint32_t kWorkgroupSize = 256;
 
         /**
-         * @brief Push constant layout shared with gs_tile_count.comp.
+         * @brief Push constant layout shared with gs_tile_entry.comp.
          */
-        struct CountPushConstants {
+        struct EntryPushConstants {
             uint32_t max_splat_count; ///< Maximum visible splat capacity.
+            uint32_t entry_capacity;  ///< Maximum number of tile entries that may be written.
             uint32_t tile_count_x;    ///< Number of tiles along X.
             uint32_t tile_count_y;    ///< Number of tiles along Y.
-            uint32_t _padding;        ///< Explicit padding for 16-byte alignment.
         };
 
-        /**
-         * @brief Push constant layout shared with gs_tile_scan.comp.
-         */
-        struct ScanPushConstants {
-            uint32_t mode;        ///< Scan mode selected by record().
-            uint32_t tile_count;  ///< Total number of tiles.
-            uint32_t chunk_count; ///< Number of 256-tile chunks.
-            uint32_t _padding;    ///< Explicit padding for 16-byte alignment.
-        };
-
-        /**
-         * @brief Push constant layout shared with gs_tile_scatter.comp.
-         */
-        struct ScatterPushConstants {
-            uint32_t max_splat_count;        ///< Maximum visible splat capacity.
-            uint32_t tile_count_x;           ///< Number of tiles along X.
-            uint32_t tile_count_y;           ///< Number of tiles along Y.
-            uint32_t tile_splat_id_capacity; ///< Capacity of tile_splat_ids[] in uint entries.
-        };
-
-        /** @brief One-time initialization: create descriptor layouts and pipelines. */
+        /** @brief One-time initialization: create descriptor layout and pipeline. */
         void setup(rhi::Context &ctx,
                    rhi::ResourceManager &rm,
                    rhi::DescriptorManager &dm,
                    rhi::ShaderCompiler &sc);
 
         /**
-         * @brief Ensures tile-binning buffers match the current scene and viewport.
+         * @brief Ensures tile-entry buffers match the current scene and viewport.
          */
         void ensure_capacity(uint32_t max_splat_count,
                              uint32_t screen_width,
                              uint32_t screen_height);
 
         /**
-         * @brief Records count, scan, and scatter commands.
+         * @brief Records tile-entry generation commands.
          *
          * @param cmd                      Command buffer to record into.
          * @param frame_ctx                Per-frame context for global descriptor sets.
          * @param projected_splat_buffer   Compact projected splat data from projection.
-         * @param sorted_splat_index_buffer Sorted value buffer from radix sort.
+         * @param depth_key_buffer         Unsorted depth keys from projection.
          * @param visible_counter_buffer   Atomic visible splat counter from projection.
-         * @param indirect_dispatch_buffer Indirect dispatch buffer prepared by radix sort.
+         * @param indirect_dispatch_buffer Indirect dispatch buffer clamped to visible splat capacity.
          * @param max_splat_count          Maximum visible splat capacity.
          * @param screen_width             Current render target width in pixels.
          * @param screen_height            Current render target height in pixels.
@@ -98,37 +76,30 @@ namespace himalaya::passes {
         void record(const rhi::CommandBuffer &cmd,
                     const framework::FrameContext &frame_ctx,
                     rhi::BufferHandle projected_splat_buffer,
-                    rhi::BufferHandle sorted_splat_index_buffer,
+                    rhi::BufferHandle depth_key_buffer,
                     rhi::BufferHandle visible_counter_buffer,
                     rhi::BufferHandle indirect_dispatch_buffer,
                     uint32_t max_splat_count,
                     uint32_t screen_width,
                     uint32_t screen_height);
 
-        /** @brief Rebuilds compute pipelines from disk shaders. */
+        /** @brief Rebuilds compute pipeline from disk shader. */
         void rebuild_pipelines();
 
-        /** @brief Destroys pipelines, descriptor layouts, and owned buffers. */
+        /** @brief Destroys pipeline, descriptor layout, and owned buffers. */
         void destroy();
 
-        /** @brief Tile-binning buffer storage owned by this pass. */
+        /** @brief Tile-entry buffer storage owned by this pass. */
         [[nodiscard]] const GsTileBuffers &tile_buffers() const;
 
     private:
-        /** @brief Tile scan execution modes. */
-        enum class ScanMode : uint32_t {
-            ScanTileChunks = 0,
-            ScanChunkSums = 1,
-            AddChunkOffsets = 2,
-        };
-
-        /** @brief Creates Set 3 push descriptor layouts. */
+        /** @brief Creates Set 3 push descriptor layout. */
         void create_descriptor_layouts();
 
-        /** @brief Creates or recreates compute pipelines. */
+        /** @brief Creates or recreates compute pipeline. */
         void create_pipelines();
 
-        /** @brief Destroys all compute pipelines. */
+        /** @brief Destroys compute pipeline. */
         void destroy_pipelines();
 
         /** @brief Inserts a whole-buffer memory barrier. */
@@ -139,8 +110,8 @@ namespace himalaya::passes {
                             VkPipelineStageFlags2 dst_stage,
                             VkAccessFlags2 dst_access) const;
 
-        /** @brief Inserts barriers for all tile buffers that may be read by later stages. */
-        void barrier_tile_outputs_to_compute_read(const rhi::CommandBuffer &cmd) const;
+        /** @brief Inserts barriers for tile-entry outputs consumed by later compute stages. */
+        void barrier_entry_outputs_to_compute_read(const rhi::CommandBuffer &cmd) const;
 
         /** @brief Vulkan context. */
         rhi::Context *ctx_ = nullptr;
@@ -154,25 +125,13 @@ namespace himalaya::passes {
         /** @brief Shader compiler. */
         rhi::ShaderCompiler *sc_ = nullptr;
 
-        /** @brief Push descriptor layout for gs_tile_count.comp. */
-        VkDescriptorSetLayout count_set3_layout_ = VK_NULL_HANDLE;
+        /** @brief Push descriptor layout for gs_tile_entry.comp. */
+        VkDescriptorSetLayout entry_set3_layout_ = VK_NULL_HANDLE;
 
-        /** @brief Push descriptor layout for gs_tile_scan.comp. */
-        VkDescriptorSetLayout scan_set3_layout_ = VK_NULL_HANDLE;
+        /** @brief Compute pipeline for gs_tile_entry.comp. */
+        rhi::Pipeline entry_pipeline_{};
 
-        /** @brief Push descriptor layout for gs_tile_scatter.comp. */
-        VkDescriptorSetLayout scatter_set3_layout_ = VK_NULL_HANDLE;
-
-        /** @brief Compute pipeline for gs_tile_count.comp. */
-        rhi::Pipeline count_pipeline_{};
-
-        /** @brief Compute pipeline for gs_tile_scan.comp. */
-        rhi::Pipeline scan_pipeline_{};
-
-        /** @brief Compute pipeline for gs_tile_scatter.comp. */
-        rhi::Pipeline scatter_pipeline_{};
-
-        /** @brief Owned tile-binning buffers. */
+        /** @brief Owned tile-entry buffers. */
         GsTileBuffers tile_buffers_;
     };
 } // namespace himalaya::passes
