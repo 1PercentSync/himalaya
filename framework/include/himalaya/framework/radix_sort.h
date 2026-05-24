@@ -197,6 +197,12 @@ namespace himalaya::framework {
         /** @brief Index of the ping-pong buffer holding the final sorted output. */
         uint32_t output_buffer_index_ = 0;
 
+        /** @brief Number of 256-element blocks covered by the current allocation. */
+        uint32_t block_count_ = 0;
+
+        /** @brief Number of 256-block chunks covered by the current histogram scan allocation. */
+        uint32_t chunk_count_ = 0;
+
         /** @brief Maximum element count currently allocated. */
         uint32_t max_element_count_ = 0;
     };

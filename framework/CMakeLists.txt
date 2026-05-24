@@ -20,6 +20,7 @@ target_sources(himalaya_framework PRIVATE
         src/stb_impl.cpp
         src/texture.cpp
         src/ply_converter.cpp
+        src/radix_sort.cpp
 )
 
 target_include_directories(himalaya_framework PUBLIC include)

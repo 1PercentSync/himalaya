@@ -65,9 +65,58 @@ namespace himalaya::framework {
         }
 
         destroy_buffers();
-        max_element_count_ = max_element_count;
 
-        // Buffer allocation is implemented by the ping-pong management task.
+        if (max_element_count == 0) {
+            return;
+        }
+
+        max_element_count_ = max_element_count;
+        block_count_ = (max_element_count_ + kWorkgroupSize - 1u) / kWorkgroupSize;
+        chunk_count_ = (block_count_ + kWorkgroupSize - 1u) / kWorkgroupSize;
+
+        const uint64_t element_buffer_size =
+            static_cast<uint64_t>(max_element_count_) * sizeof(uint32_t);
+        const uint64_t histogram_buffer_size =
+            static_cast<uint64_t>(kRadixSize) * block_count_ * sizeof(uint32_t);
+        const uint64_t chunk_sums_buffer_size =
+            static_cast<uint64_t>(kRadixSize) * chunk_count_ * sizeof(uint32_t);
+        const uint64_t digit_offsets_buffer_size =
+            static_cast<uint64_t>(kRadixSize) * sizeof(uint32_t);
+
+        const rhi::BufferDesc element_desc{
+            .size = element_buffer_size,
+            .usage = rhi::BufferUsage::StorageBuffer,
+            .memory = rhi::MemoryUsage::GpuOnly,
+        };
+        key_buffers_[0] = rm_->create_buffer(element_desc, "GS Sort Key Ping SSBO");
+        key_buffers_[1] = rm_->create_buffer(element_desc, "GS Sort Key Pong SSBO");
+        value_buffers_[0] = rm_->create_buffer(element_desc, "GS Sort Value Ping SSBO");
+        value_buffers_[1] = rm_->create_buffer(element_desc, "GS Sort Value Pong SSBO");
+
+        const rhi::BufferDesc histogram_desc{
+            .size = histogram_buffer_size,
+            .usage = rhi::BufferUsage::StorageBuffer,
+            .memory = rhi::MemoryUsage::GpuOnly,
+        };
+        histogram_buffer_ = rm_->create_buffer(histogram_desc, "GS Sort Histogram SSBO");
+        scanned_histogram_buffer_ = rm_->create_buffer(histogram_desc, "GS Sort Scanned Histogram SSBO");
+
+        chunk_sums_buffer_ = rm_->create_buffer({
+            .size = chunk_sums_buffer_size,
+            .usage = rhi::BufferUsage::StorageBuffer,
+            .memory = rhi::MemoryUsage::GpuOnly,
+        }, "GS Sort Chunk Sums SSBO");
+
+        digit_offsets_buffer_ = rm_->create_buffer({
+            .size = digit_offsets_buffer_size,
+            .usage = rhi::BufferUsage::StorageBuffer,
+            .memory = rhi::MemoryUsage::GpuOnly,
+        }, "GS Sort Digit Offsets SSBO");
+
+        output_buffer_index_ = 0;
+
+        spdlog::info("RadixSort: allocated buffers for {} elements ({} blocks, {} chunks)",
+                     max_element_count_, block_count_, chunk_count_);
     }
 
     void RadixSort::record(const rhi::CommandBuffer &,
@@ -207,6 +256,8 @@ namespace himalaya::framework {
         }
 
         output_buffer_index_ = 0;
+        block_count_ = 0;
+        chunk_count_ = 0;
         max_element_count_ = 0;
     }
 } // namespace himalaya::framework
