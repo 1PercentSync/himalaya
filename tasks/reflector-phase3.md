@@ -31,6 +31,9 @@
 | 17 | Depth key 编码 | camera distance 的 floatBitsToUint，升序 = 前到后 |
 | 18 | Early termination | transmittance < 1/255 |
 | 19 | RenderMode 流转 | Application::render_mode_ 枚举 → RenderInput::render_mode → Renderer 分发 |
+| 20 | GsColorSpace 枚举位置 | `scene_data.h`，与 `RenderMode` 同级（均为渲染配置枚举，`FrameContext` 不定义枚举） |
+| 21 | UNORM ImageView 存储 | `Swapchain` 类，`unorm_image_views` 与 `image_views` 平行管理（同一批 VkImage、同一生命周期） |
+| 22 | Step 1 暂不改 Application/RenderInput | FrameContext 新增 `render_mode` / `gs_color_space`，`render_path_tracing()` 中填写默认值（PathTracing / Unknown），完整流转留待 Step 6 |
 
 ---
 

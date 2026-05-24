@@ -1017,9 +1017,33 @@ PresentPass 在 `record()` 时根据 RenderMode 和 color_space 元数据选择 
 
 这是 RHI 层（Swapchain）的改动。
 
-#### Color Space 传递
+#### GsColorSpace 枚举
 
-`FrameContext` 新增 `gs_color_space` 字段（枚举或 string_view），由 Renderer 从当前加载的 `GaussianSplatScene` 元数据填充。PresentPass 在 `record()` 中读取 `FrameContext::gs_color_space` 选择 view。PT 模式下此字段被忽略。
+定义在 `scene_data.h`，与 `RenderMode` 同级：
+
+```cpp
+enum class GsColorSpace : uint8_t {
+    Unknown,              // PT / no GS loaded
+    SrgbRec709Display,    // srgb_rec709_display → UNORM view
+    LinRec709Display,     // lin_rec709_display → SRGB view
+};
+```
+
+### UNORM ImageView 管理
+
+UNORM views 存储在 `Swapchain` 类中（`unorm_image_views`），与 `image_views`（SRGB）平行管理。同一批 VkImage、同一生命周期，随 swapchain 创建/销毁。PresentPass 通过 swapchain 指针引用。
+
+### View 选择逻辑（C++ 侧）
+
+`FrameContext` 新增 `render_mode`、`image_index`、`gs_color_space` 字段。PresentPass::record() 根据两者组合选择：
+
+| RenderMode | GsColorSpace | 使用的 View |
+|------------|-------------|------------|
+| PathTracing | 任意 | SRGB |
+| GaussianSplatting | SrgbRec709Display | UNORM |
+| GaussianSplatting | LinRec709Display | SRGB |
+
+Step 1 暂不改 Application/RenderInput，FrameContext 中填写默认值（PathTracing / Unknown），完整流转留待 Step 6。
 
 ### DebugUI 控制
 
