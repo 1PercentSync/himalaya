@@ -1,0 +1,42 @@
+#version 460
+
+/**
+ * @file gs_sort_prepare.comp
+ * @brief Prepares indirect dispatch dimensions for Gaussian Splatting radix sort.
+ *
+ * Converts the visible splat counter written by the projection pass into a
+ * VkDispatchIndirectCommand-compatible uint triplet. The sort orchestration
+ * uses the result for indirect histogram/scan/scatter dispatches that operate
+ * on the compacted visible splat range.
+ */
+
+layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
+
+/** Matches VkDispatchIndirectCommand. */
+struct DispatchIndirectCommand {
+    uint group_count_x;
+    uint group_count_y;
+    uint group_count_z;
+};
+
+layout(push_constant) uniform PC {
+    uint workgroup_size;
+} pc;
+
+layout(set = 3, binding = 0) readonly buffer VisibleCounterBuffer {
+    uint visible_splat_count;
+};
+
+layout(set = 3, binding = 1) writeonly buffer IndirectDispatchBuffer {
+    DispatchIndirectCommand dispatch_command;
+};
+
+void main() {
+    const uint safe_workgroup_size = max(pc.workgroup_size, 1u);
+    const uint group_count_x =
+        (visible_splat_count + safe_workgroup_size - 1u) / safe_workgroup_size;
+
+    dispatch_command.group_count_x = group_count_x;
+    dispatch_command.group_count_y = 1u;
+    dispatch_command.group_count_z = 1u;
+}
