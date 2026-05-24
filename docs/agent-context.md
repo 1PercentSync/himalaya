@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的渲染器
 - **分支**：`reflector` — Path Tracing + Gaussian Splatting
 - **Phase**：Phase 3 — Gaussian Splatting 渲染
-- **进度**：Step 5（Tile Binning）已完成 tile count/scan/scatter shader、tile buffer 与 GsTileBinningPass，待记录编译验证
+- **进度**：Step 5（Tile Binning）完成并编译通过，待开始 Step 6
 
 ### 下一个任务
 
-Step 5：编译验证
+Step 6：创建 `shaders/gs/gs_tile_render.comp`（16×16 workgroup，前到后 alpha blend，transmittance < 1/255 early termination）
 
 ---
 

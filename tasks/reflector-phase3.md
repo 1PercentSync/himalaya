@@ -119,7 +119,7 @@
 - [x] 创建 `shaders/gs/gs_tile_scatter.comp`（再次遍历可见 splat，按 offset + atomicAdd 写入 tile_splat_ids）
 - [x] 创建 tile buffer：`tile_offsets[]`、`tile_counts[]`、`tile_cursors[]`、`tile_splat_ids[]`（tile 数量依赖屏幕分辨率，resize 时重建；`tile_splat_ids` 使用保守容量上限）
 - [x] 创建 `passes/include/himalaya/passes/gs_tile_binning_pass.h` 和 `passes/src/gs_tile_binning_pass.cpp`
-- [ ] 编译验证
+- [x] 编译验证
 
 > 输入为 Step 4 排序后的 splat index + Step 3 的 2D 属性（tile 覆盖范围）。
 
