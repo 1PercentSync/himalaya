@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的渲染器
 - **分支**：`reflector` — Path Tracing + Gaussian Splatting
 - **Phase**：Phase 3 — Gaussian Splatting 渲染
-- **进度**：Step 3 第六小项（投影输出中间 buffer 数据布局）完成，待创建 GsProjectionPass 并实现 GPU allocation
+- **进度**：Step 3（投影与剔除 Pass）完成并编译通过，待开始 Step 4
 
 ### 下一个任务
 
-Step 3：创建 `passes/include/himalaya/passes/gs_projection_pass.h` 和 `passes/src/gs_projection_pass.cpp`（包含投影输出/counter/indirect/depth key-value buffer allocation）
+Step 4：创建 `shaders/gs/gs_sort_histogram.comp`（per-workgroup digit 频率统计）
 
 ---
 

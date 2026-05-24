@@ -85,8 +85,8 @@
 - [x] 实现 Mip Splatting 2D mip filter（cov2d += 0.3 * I）
 - [x] 实现 atomic counter 写入可见 splat 数（indirect dispatch buffer 仅创建，填充留到 Step 4）
 - [x] 创建投影输出中间 buffer 数据布局（`GSSplatData2D` 数组 + depth key/value buffer；实际 GPU allocation 放到 `GsProjectionPass`）
-- [ ] 创建 `passes/include/himalaya/passes/gs_projection_pass.h` 和 `passes/src/gs_projection_pass.cpp`
-- [ ] 编译验证
+- [x] 创建 `passes/include/himalaya/passes/gs_projection_pass.h` 和 `passes/src/gs_projection_pass.cpp`
+- [x] 编译验证
 
 > 依赖 Step 2 的 GPU buffer 作为输入。
 
