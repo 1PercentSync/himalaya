@@ -762,7 +762,7 @@ Projection + Culling → Radix Sort → Tile Binning → Tile Rendering
 
 ### 可见 Splat 数量
 
-投影 pass 剔除不可见 splat 后，可见数量是动态的。投影 shader 使用 atomic counter 写入可见 splat 数。indirect dispatch buffer（`VkDispatchIndirectCommand`）的填充由 sort pass（Step 4）开头的一个小 compute dispatch 完成——读取 counter 值并转换为 dispatch struct。counter buffer 和 indirect dispatch buffer 均由 GsProjectionPass 持有。
+投影 pass 剔除不可见 splat 后，可见数量是动态的。投影 shader 使用 atomic counter 写入可见 splat 数。indirect dispatch buffer（`VkDispatchIndirectCommand`）由 GsProjectionPass 在 Step 3 创建，但不在 Step 3 填充；填充由 sort pass（Step 4）开头的一个小 compute dispatch 完成——读取 counter 值并转换为 dispatch struct。counter buffer 和 indirect dispatch buffer 均由 GsProjectionPass 持有。
 
 ### Shader 文件组织
 
@@ -833,8 +833,8 @@ SH 低频特性决定 per-splat 一次求值在视觉上几乎无差别，性能
 核心属性合并 + SH 按 degree 分组 dispatch。
 
 - 各 primitive 的 `GaussianSplatCore`（position/rotation/scale/opacity）合并为一个大 GPU buffer，position 上传时应用各自的 node transform 转到世界空间
-- SH 系数按 degree 分组：同 degree 的 primitive 拼接成一个 SH buffer，投影 pass 按组 dispatch（push constant 传入 `splat_offset, splat_count, sh_degree`）
-- 投影结果（2D 属性 + RGB）写入统一输出 buffer，后续 sort → binning → rendering 不关心 SH degree
+- SH 系数按 degree 分组：同 degree 的 primitive 拼接成一个 SH buffer，投影 pass 按组 dispatch（push constant 传入 `splat_offset, splat_count, sh_degree`）。`splat_offset` 是 merged core/output buffer 的全局偏移；SH buffer 组内从 0 开始按 local index 读取。
+- 投影结果（2D 属性 + RGB）写入统一输出 buffer，同时写入 depth key/value buffer，后续 sort → binning → rendering 不关心 SH degree
 
 spec 保证同一 primitive 内 SH degree 统一（SH 由 primitive 的 attribute 定义），不同 primitive 之间可以有不同 degree。
 
@@ -901,11 +901,11 @@ GSSplatData2D {                  // 投影输出，per visible splat（std430，
 
 GLSL 中 `tile_min` / `tile_max` 使用 `uvec2`（非 4 个独立 `uint`），节省 offset 计算且与 tile binning 阶段索引方式一致。64 bytes/splat，百万 splat = 64 MB，在显存预算内。
 
-C++ 端结构体与 `static_assert` 定义在 `framework/include/himalaya/framework/gaussian_splat_data.h`，与 `GaussianSplatCore` 同级。投影输出 buffer 由 GsProjectionPass 持有（含 counter buffer + indirect dispatch buffer），与 ReferenceViewPass 持有 accumulation 资源模式一致。
+C++ 端结构体与 `static_assert` 定义在 `framework/include/himalaya/framework/gaussian_splat_data.h`，与 `GaussianSplatCore` 同级。投影输出 buffer 由 GsProjectionPass 持有（含 `GSSplatData2D` SSBO、depth key/value buffer、counter buffer + indirect dispatch buffer），与 ReferenceViewPass 持有 accumulation 资源模式一致。
 
 Projection pass dispatch 每 workgroup 256 个 splat（`ceil(total_splat_count / 256)`），与后续 sort 的 workgroup size 独立。
 
-Atomic counter 写入由 projection shader 完成；indirect dispatch buffer（`VkDispatchIndirectCommand`）的填充留到 Step 4（sort 编排开头加一个小 compute dispatch 把 counter 值转换为 dispatch struct）。两个 buffer 均由 GsProjectionPass 持有。
+Atomic counter 写入由 projection shader 完成；indirect dispatch buffer（`VkDispatchIndirectCommand`）由 GsProjectionPass 创建并持有，但填充留到 Step 4（sort 编排开头加一个小 compute dispatch 把 counter 值转换为 dispatch struct）。两个 buffer 均由 GsProjectionPass 持有。
 
 Tile binning 输出：
 
