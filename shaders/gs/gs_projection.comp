@@ -1,0 +1,270 @@
+#version 460
+
+/**
+ * @file gs_projection.comp
+ * @brief Gaussian Splatting projection and culling pass.
+ *
+ * Projects world-space 3D Gaussians to screen-space ellipses. This shader
+ * performs center frustum checks, constructs the 3D covariance from rotation
+ * and scale, projects it to a 2D covariance in pixel space, and decomposes the
+ * 2D covariance into principal axes for later tile binning and rendering.
+ */
+
+#include "common/bindings.glsl"
+
+layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+
+const uint kTileSizePixels = 16u;
+const float kTileSize = float(kTileSizePixels);
+const float kEllipseRadiusSigma = 3.0;
+const float kMinCovarianceEigenvalue = 1.0e-6;
+
+/** Core splat attributes. Matches GaussianSplatCore in gaussian_splat_data.h. */
+struct GSSplatCore {
+    vec3 position;
+    float _pad0;
+    vec4 rotation;
+    vec3 scale;
+    float opacity;
+};
+
+/** Projected 2D splat attributes. Matches GSSplatData2D planned layout. */
+struct GSSplatData2D {
+    vec2 center;
+    vec2 axis_u;
+    vec2 axis_v;
+    vec2 _pad0;
+    vec3 color;
+    float alpha;
+    uvec2 tile_min;
+    uvec2 tile_max;
+};
+
+layout(push_constant) uniform PC {
+    uint splat_offset;
+    uint splat_count;
+    uint sh_degree;
+    uint screen_width;
+    uint screen_height;
+} pc;
+
+layout(set = 3, binding = 0) readonly buffer CoreBuffer {
+    GSSplatCore cores[];
+};
+
+layout(set = 3, binding = 1) writeonly buffer Splat2DBuffer {
+    GSSplatData2D splats_2d[];
+};
+
+/**
+ * Converts a xyzw quaternion to a 3x3 rotation matrix.
+ */
+mat3 quat_to_mat3(vec4 q) {
+    q = normalize(q);
+
+    const float x = q.x;
+    const float y = q.y;
+    const float z = q.z;
+    const float w = q.w;
+
+    const float xx = x * x;
+    const float yy = y * y;
+    const float zz = z * z;
+    const float xy = x * y;
+    const float xz = x * z;
+    const float yz = y * z;
+    const float wx = w * x;
+    const float wy = w * y;
+    const float wz = w * z;
+
+    return mat3(
+        vec3(1.0 - 2.0 * (yy + zz), 2.0 * (xy + wz),       2.0 * (xz - wy)),
+        vec3(2.0 * (xy - wz),       1.0 - 2.0 * (xx + zz), 2.0 * (yz + wx)),
+        vec3(2.0 * (xz + wy),       2.0 * (yz - wx),       1.0 - 2.0 * (xx + yy))
+    );
+}
+
+/**
+ * Builds the world-space 3D covariance matrix from orientation and scale.
+ */
+mat3 build_covariance_3d(vec4 rotation, vec3 scale) {
+    const mat3 r = quat_to_mat3(rotation);
+    const vec3 variance = scale * scale;
+
+    return r * mat3(
+        vec3(variance.x, 0.0, 0.0),
+        vec3(0.0, variance.y, 0.0),
+        vec3(0.0, 0.0, variance.z)
+    ) * transpose(r);
+}
+
+/**
+ * Returns true when the splat center is in front of the camera and inside the
+ * clip-space depth interval. XY edge rejection is deferred until the projected
+ * ellipse bounds are known, avoiding premature culling of large splats whose
+ * centers are outside the viewport.
+ */
+bool project_center(vec3 world_pos, out vec3 view_pos, out vec2 pixel_center) {
+    const vec4 clip = global.view_projection * vec4(world_pos, 1.0);
+    if (clip.w <= 0.0) {
+        return false;
+    }
+
+    const vec3 ndc = clip.xyz / clip.w;
+    if (ndc.z < 0.0 || ndc.z > 1.0) {
+        return false;
+    }
+
+    const vec2 screen_size = vec2(pc.screen_width, pc.screen_height);
+    pixel_center = vec2(
+        (ndc.x * 0.5 + 0.5) * screen_size.x,
+        (0.5 - ndc.y * 0.5) * screen_size.y
+    );
+    view_pos = (global.view * vec4(world_pos, 1.0)).xyz;
+
+    return true;
+}
+
+/**
+ * Projects a world-space 3D covariance matrix into a 2D covariance matrix in
+ * pixel space using the perspective Jacobian at the splat center.
+ */
+mat2 project_covariance_2d(mat3 cov_world, vec3 view_pos) {
+    const mat3 view_linear = mat3(global.view);
+    const mat3 cov_view = view_linear * cov_world * transpose(view_linear);
+
+    const float focal_x = global.projection[0][0];
+    const float focal_y = global.projection[1][1];
+    const float width = float(pc.screen_width);
+    const float height = float(pc.screen_height);
+
+    const float x = view_pos.x;
+    const float y = view_pos.y;
+    const float z = view_pos.z;
+    const float inv_neg_z = 1.0 / max(-z, 1.0e-6);
+    const float inv_z2 = 1.0 / max(z * z, 1.0e-6);
+
+    // Himalaya uses a right-handed view space where the camera looks along -Z.
+    // Therefore clip.w = -z and visible points have z < 0. The pixel mapping is:
+    //   x_px = (0.5 * focal_x * x / -z + 0.5) * width
+    //   y_px = (0.5 - 0.5 * focal_y * y / -z) * height
+    // The signs below are the analytic derivatives of that mapping. In
+    // particular, the Y row includes the screen-space Y flip.
+    const vec3 jac_x = vec3(
+        0.5 * width * focal_x * inv_neg_z,
+        0.0,
+        0.5 * width * focal_x * x * inv_z2
+    );
+    const vec3 jac_y = vec3(
+        0.0,
+        -0.5 * height * focal_y * inv_neg_z,
+        -0.5 * height * focal_y * y * inv_z2
+    );
+
+    const float cov_xx = dot(jac_x, cov_view * jac_x);
+    const float cov_xy = dot(jac_x, cov_view * jac_y);
+    const float cov_yy = dot(jac_y, cov_view * jac_y);
+
+    return mat2(
+        vec2(cov_xx, cov_xy),
+        vec2(cov_xy, cov_yy)
+    );
+}
+
+/**
+ * Decomposes a symmetric 2D covariance matrix into two principal axis vectors.
+ * Axis lengths include the 3-sigma support radius used for tile coverage.
+ */
+void decompose_covariance_2d(mat2 cov2d, out vec2 axis_u, out vec2 axis_v) {
+    const float a = cov2d[0][0];
+    const float b = cov2d[0][1];
+    const float d = cov2d[1][1];
+
+    const float mid = 0.5 * (a + d);
+    const float radius = sqrt(max(0.25 * (a - d) * (a - d) + b * b, 0.0));
+    const float lambda_u = max(mid + radius, kMinCovarianceEigenvalue);
+    const float lambda_v = max(mid - radius, kMinCovarianceEigenvalue);
+
+    vec2 dir_u = vec2(b, lambda_u - a);
+    if (dot(dir_u, dir_u) < 1.0e-10) {
+        dir_u = (a >= d) ? vec2(1.0, 0.0) : vec2(0.0, 1.0);
+    } else {
+        dir_u = normalize(dir_u);
+    }
+
+    const vec2 dir_v = vec2(-dir_u.y, dir_u.x);
+    axis_u = dir_u * (sqrt(lambda_u) * kEllipseRadiusSigma);
+    axis_v = dir_v * (sqrt(lambda_v) * kEllipseRadiusSigma);
+}
+
+/**
+ * Computes the inclusive tile range covered by the projected ellipse.
+ */
+bool compute_tile_range(vec2 center, vec2 axis_u, vec2 axis_v,
+                        out uvec2 tile_min, out uvec2 tile_max) {
+    const vec2 extent = abs(axis_u) + abs(axis_v);
+    const vec2 bbox_min = center - extent;
+    const vec2 bbox_max = center + extent;
+
+    const vec2 screen_size = vec2(pc.screen_width, pc.screen_height);
+    if (bbox_max.x < 0.0 || bbox_max.y < 0.0 ||
+        bbox_min.x >= screen_size.x || bbox_min.y >= screen_size.y) {
+        return false;
+    }
+
+    const uvec2 tile_count = uvec2(
+        (pc.screen_width + kTileSizePixels - 1u) / kTileSizePixels,
+        (pc.screen_height + kTileSizePixels - 1u) / kTileSizePixels
+    );
+
+    const vec2 clamped_min = clamp(bbox_min, vec2(0.0), screen_size - vec2(1.0));
+    const vec2 clamped_max = clamp(bbox_max, vec2(0.0), screen_size - vec2(1.0));
+
+    tile_min = min(uvec2(floor(clamped_min / kTileSize)), tile_count - uvec2(1u));
+    tile_max = min(uvec2(floor(clamped_max / kTileSize)), tile_count - uvec2(1u));
+
+    return true;
+}
+
+void main() {
+    const uint local_index = gl_GlobalInvocationID.x;
+    if (local_index >= pc.splat_count) {
+        return;
+    }
+
+    const uint splat_index = pc.splat_offset + local_index;
+    const GSSplatCore core = cores[splat_index];
+
+    vec3 view_pos;
+    vec2 center;
+    if (!project_center(core.position, view_pos, center)) {
+        return;
+    }
+
+    const mat3 cov3d = build_covariance_3d(core.rotation, core.scale);
+    const mat2 cov2d = project_covariance_2d(cov3d, view_pos);
+
+    vec2 axis_u;
+    vec2 axis_v;
+    decompose_covariance_2d(cov2d, axis_u, axis_v);
+
+    uvec2 tile_min;
+    uvec2 tile_max;
+    if (!compute_tile_range(center, axis_u, axis_v, tile_min, tile_max)) {
+        return;
+    }
+
+    GSSplatData2D projected;
+    projected.center = center;
+    projected.axis_u = axis_u;
+    projected.axis_v = axis_v;
+    projected._pad0 = vec2(0.0);
+    projected.color = vec3(1.0);
+    projected.alpha = core.opacity;
+    projected.tile_min = tile_min;
+    projected.tile_max = tile_max;
+
+    // Temporary un-compacted write. A later Step 3 item will replace this with
+    // atomic-counter compaction and visible splat indexing.
+    splats_2d[splat_index] = projected;
+}
