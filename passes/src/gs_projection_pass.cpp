@@ -263,6 +263,11 @@ namespace himalaya::passes {
             const uint32_t group_count =
                 (group.splat_count + kProjectionWorkgroupSize - 1u) / kProjectionWorkgroupSize;
             cmd.dispatch(group_count, 1, 1);
+
+            // Projection dispatch groups share the visible counter and compacted
+            // output buffers. Make each group visible to the next group and to
+            // downstream GS stages recorded after projection.
+            barrier_projection_outputs_to_compute(cmd);
         }
     }
 
@@ -380,6 +385,37 @@ namespace himalaya::passes {
         dep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
         dep.bufferMemoryBarrierCount = 1;
         dep.pBufferMemoryBarriers = &counter_barrier;
+        cmd.pipeline_barrier(dep);
+    }
+
+    void GsProjectionPass::barrier_projection_outputs_to_compute(const rhi::CommandBuffer &cmd) const {
+        const auto make_barrier = [this](const rhi::BufferHandle handle) {
+            const auto &buffer = rm_->get_buffer(handle);
+
+            VkBufferMemoryBarrier2 barrier{};
+            barrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2;
+            barrier.srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+            barrier.srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT;
+            barrier.dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+            barrier.dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT;
+            barrier.buffer = buffer.buffer;
+            barrier.offset = 0;
+            barrier.size = buffer.desc.size;
+
+            return barrier;
+        };
+
+        const std::array barriers = {
+            make_barrier(visible_counter_buffer_),
+            make_barrier(projected_splat_buffer_),
+            make_barrier(depth_key_buffer_),
+            make_barrier(splat_index_buffer_),
+        };
+
+        VkDependencyInfo dep{};
+        dep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+        dep.bufferMemoryBarrierCount = static_cast<uint32_t>(barriers.size());
+        dep.pBufferMemoryBarriers = barriers.data();
         cmd.pipeline_barrier(dep);
     }
 } // namespace himalaya::passes
