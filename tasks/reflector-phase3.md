@@ -83,7 +83,7 @@
 - [x] 实现 SH 求值（degree 0-3，通过 push constant `sh_degree` 分支）
 - [x] 实现 Mip Splatting 3D 频率限制（scale clamp to min_threshold）
 - [x] 实现 Mip Splatting 2D mip filter（cov2d += 0.3 * I）
-- [ ] 实现 atomic counter 写入可见 splat 数（indirect dispatch buffer 仅创建，填充留到 Step 4）
+- [x] 实现 atomic counter 写入可见 splat 数（indirect dispatch buffer 仅创建，填充留到 Step 4）
 - [ ] 创建投影输出中间 buffer（`GSSplatData2D` 数组 + depth key/value buffer，按最大 splat 数分配）
 - [ ] 创建 `passes/include/himalaya/passes/gs_projection_pass.h` 和 `passes/src/gs_projection_pass.cpp`
 - [ ] 编译验证

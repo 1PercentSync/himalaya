@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的渲染器
 - **分支**：`reflector` — Path Tracing + Gaussian Splatting
 - **Phase**：Phase 3 — Gaussian Splatting 渲染
-- **进度**：Step 3 第四小项（Mip Splatting 2D mip filter）完成，待实现 atomic counter 可见 splat 计数
+- **进度**：Step 3 第五小项（atomic counter 可见 splat 计数）完成，待创建投影输出中间 buffer
 
 ### 下一个任务
 
-Step 3：实现 atomic counter 写入可见 splat 数（indirect dispatch buffer 仅创建，填充留到 Step 4）
+Step 3：创建投影输出中间 buffer（`GSSplatData2D` 数组 + depth key/value buffer，按最大 splat 数分配）
 
 ---
 
