@@ -51,7 +51,7 @@
 
 - [x] 重命名 `TonemappingPass` → `PresentPass`（头文件、源文件、类名）
 - [x] 更新 `Renderer` 中的成员名（`tonemapping_pass_` → `present_pass_`）、include 路径、所有引用
-- [ ] 重命名 shader 文件 `tonemapping.frag` → `present.frag`
+- [x] 重命名 shader 文件 `tonemapping.frag` → `present.frag`
 - [ ] 添加 push constant struct（`uint mode`）和 pipeline layout 中的 push constant range
 - [ ] 更新 shader：根据 mode 分支（PT 走 exposure + ACES，GS 走 passthrough）
 - [ ] 修改 Swapchain 创建：添加 `VK_SWAPCHAIN_CREATE_MUTABLE_FORMAT_BIT_KHR` + `VkImageFormatListCreateInfo`（SRGB + UNORM 兼容格式列表）
