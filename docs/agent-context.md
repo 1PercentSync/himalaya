@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的渲染器
 - **分支**：`reflector` — Path Tracing + Gaussian Splatting
 - **Phase**：Phase 3 — Gaussian Splatting 渲染
-- **进度**：Step 5.5 已完成 PresentPass / Swapchain 色彩方案回退、shader 内 GS 色彩空间处理、Projection 多 SH group barrier、sort prepare clamp 与 RadixSort 规模保护；待重构 Tile Binning 为 tile entry pipeline
+- **进度**：Step 5.5 已完成 PresentPass / Swapchain 色彩方案回退、shader 内 GS 色彩空间处理、Projection 多 SH group barrier、sort prepare clamp、RadixSort 规模保护、tile entry generation 与 entry capacity；待继续 entry 双排序 / gather / range build
 
 ### 下一个任务
 
-Step 5.5：将 Tile Binning 重构为 tile entry 生成，写入 `entry_depth_keys[]`、`entry_tile_ids[]`、`entry_splat_ids[]`、`entry_indices[]`，并实现 entry capacity 策略
+Step 5.5：用现有 32-bit stable RadixSort 执行两次排序（depth 后 tile-id），新增 gather pass 与 tile range build pass
 
 ---
 

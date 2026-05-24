@@ -787,9 +787,6 @@ GS shader 文件位于 `shaders/gs/` 目录：
 | `gs_sort_histogram.comp` | Radix sort 按 digit 统计直方图 |
 | `gs_sort_scan.comp` | Prefix sum（scan） |
 | `gs_sort_scatter.comp` | Radix sort scatter |
-| `gs_tile_count.comp` | 旧 tile count/scan/scatter 方案的计数 shader；Step 5.5 后由 tile entry generation 替代 |
-| `gs_tile_scan.comp` | 旧 tile prefix-sum shader；Step 5.5 后由 sorted entry range build 替代 |
-| `gs_tile_scatter.comp` | 旧 atomic scatter shader；Step 5.5 后由 tile entry generation + stable sort 替代 |
 | `gs_tile_entry.comp` | 生成 per-tile entries（depth key、tile id、splat id、entry index） |
 | `gs_tile_sort_gather.comp` | 将 depth-sorted entry index 转为 tile-id sort key/value |
 | `gs_tile_range.comp` | 从 sorted tile ids 构建 per-tile offsets/counts |
