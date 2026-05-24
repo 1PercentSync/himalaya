@@ -93,6 +93,9 @@ namespace himalaya::app {
         frame_ctx.pt_aux_normal = aux_normal_resource;
         frame_ctx.frame_index = input.frame_index;
         frame_ctx.frame_number = frame_counter_;
+        frame_ctx.image_index = input.image_index;
+        frame_ctx.render_mode = framework::RenderMode::PathTracing;
+        frame_ctx.gs_color_space = framework::GsColorSpace::Unknown;
 
         // --- Clear aux images on first frame after accumulation reset ---
         // Miss rays (sky) never write aux in closesthit, so without this

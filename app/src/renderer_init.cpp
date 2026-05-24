@@ -204,7 +204,7 @@ namespace himalaya::app {
         }
 
         // --- Pass setup ---
-        present_pass_.setup(*ctx_, *resource_manager_, *descriptor_manager_, shader_compiler_, swapchain_->format);
+        present_pass_.setup(*ctx_, *resource_manager_, *descriptor_manager_, shader_compiler_, *swapchain_, swapchain_->format);
 
         if (ctx_->rt_supported) {
             reference_view_pass_.setup(*ctx_, *resource_manager_, *descriptor_manager_,

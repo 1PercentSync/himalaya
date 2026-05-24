@@ -7,11 +7,13 @@
 
 #include <himalaya/framework/frame_context.h>
 #include <himalaya/framework/render_graph.h>
+#include <himalaya/framework/scene_data.h>
 #include <himalaya/rhi/commands.h>
 #include <himalaya/rhi/context.h>
 #include <himalaya/rhi/descriptors.h>
 #include <himalaya/rhi/resources.h>
 #include <himalaya/rhi/shader.h>
+#include <himalaya/rhi/swapchain.h>
 
 #include <array>
 
@@ -21,14 +23,16 @@ namespace himalaya::passes {
     // ---- Init / Destroy ----
 
     void PresentPass::setup(rhi::Context &ctx,
-                                rhi::ResourceManager &rm,
-                                rhi::DescriptorManager &dm,
-                                rhi::ShaderCompiler &sc,
-                                const VkFormat swapchain_format) {
+                            rhi::ResourceManager &rm,
+                            rhi::DescriptorManager &dm,
+                            rhi::ShaderCompiler &sc,
+                            rhi::Swapchain &swapchain,
+                            const VkFormat swapchain_format) {
         ctx_ = &ctx;
         rm_ = &rm;
         dm_ = &dm;
         sc_ = &sc;
+        swapchain_ = &swapchain;
         swapchain_format_ = swapchain_format;
 
         create_pipelines();
@@ -112,19 +116,29 @@ namespace himalaya::passes {
 
         rg.add_pass("Present", resources,
                     [this, &rg, &ctx](const rhi::CommandBuffer &cmd) {
-                        // Color attachment: swapchain image
-                        const auto swapchain_handle = rg.get_image(ctx.swapchain);
-                        VkRenderingAttachmentInfo color_attachment{};
-                        color_attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-                        color_attachment.imageView = rm_->get_image(swapchain_handle).view;
-                        color_attachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-                        color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-                        color_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+                        // Choose SRGB or UNORM view based on render mode and GS color space.
+                        // PT always uses SRGB (hardware linear→sRGB conversion after tonemapping).
+                        // GS passthrough: UNORM for already-sRGB data, SRGB for linear data.
+                        VkImageView swapchain_view = VK_NULL_HANDLE;
+                        if (ctx.render_mode == framework::RenderMode::GaussianSplatting &&
+                            ctx.gs_color_space == framework::GsColorSpace::SrgbRec709Display) {
+                            swapchain_view = swapchain_->unorm_image_views[ctx.image_index];
+                        } else {
+                            swapchain_view = swapchain_->image_views[ctx.image_index];
+                        }
 
-                        const auto &swapchain_image = rm_->get_image(swapchain_handle);
+                        // Color attachment: swapchain image (SRGB or UNORM view)
+                        const auto &swapchain_image = rm_->get_image(rg.get_image(ctx.swapchain));
                         const VkExtent2D render_extent{
                             swapchain_image.desc.width, swapchain_image.desc.height
                         };
+
+                        VkRenderingAttachmentInfo color_attachment{};
+                        color_attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+                        color_attachment.imageView = swapchain_view;
+                        color_attachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+                        color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+                        color_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
 
                         VkRenderingInfo rendering_info{};
                         rendering_info.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
@@ -143,6 +157,12 @@ namespace himalaya::passes {
                             dm_->get_set2(ctx.frame_index),
                         };
                         cmd.bind_descriptor_sets(pipeline_.layout, 0, sets.data(), static_cast<uint32_t>(sets.size()));
+
+                        // Push constant: select processing mode
+                        const PushConstants pc{
+                            .mode = (ctx.render_mode == framework::RenderMode::GaussianSplatting) ? 1u : 0u,
+                        };
+                        cmd.push_constants(pipeline_.layout, VK_SHADER_STAGE_FRAGMENT_BIT, &pc, sizeof(pc));
 
                         // Normal viewport (no Y-flip): fullscreen post-processing
                         // samples a texture, no 3D coordinate convention to fix.

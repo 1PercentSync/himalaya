@@ -17,6 +17,7 @@ namespace himalaya::rhi {
     class ResourceManager;
     class DescriptorManager;
     class ShaderCompiler;
+    class Swapchain;
 } // namespace himalaya::rhi
 
 namespace himalaya::framework {
@@ -49,12 +50,14 @@ namespace himalaya::passes {
          * @param rm               Resource manager.
          * @param dm               Descriptor manager (for Set 2 hdr_color binding).
          * @param sc               Shader compiler.
+         * @param swapchain        Swapchain for accessing SRGB/UNORM image views.
          * @param swapchain_format Swapchain surface format (pipeline color attachment format).
          */
         void setup(rhi::Context &ctx,
                    rhi::ResourceManager &rm,
                    rhi::DescriptorManager &dm,
                    rhi::ShaderCompiler &sc,
+                   rhi::Swapchain &swapchain,
                    VkFormat swapchain_format);
 
         /**
@@ -98,6 +101,9 @@ namespace himalaya::passes {
 
         /** @brief Shader compiler. */
         rhi::ShaderCompiler *sc_ = nullptr;
+
+        /** @brief Swapchain for accessing SRGB/UNORM image views. */
+        rhi::Swapchain *swapchain_ = nullptr;
 
         // ---- Configuration ----
 
