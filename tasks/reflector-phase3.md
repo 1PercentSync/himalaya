@@ -173,12 +173,12 @@
 
 ## Step 5.8：RHI Compute Utility Refactor
 
-- [ ] 新增 `rhi/include/himalaya/rhi/compute_utils.h` 和 `rhi/src/compute_utils.cpp`
-- [ ] 修改 `rhi/CMakeLists.txt`，加入 `src/compute_utils.cpp`
-- [ ] 抽取 storage buffer binding、push descriptor layout、descriptor buffer info、compute pipeline creation、buffer barrier helper
-- [ ] 迁移 `RadixSort` 到 RHI compute utility
-- [ ] 迁移 `GsProjectionPass` / `GsTileBinningPass` 到 RHI compute utility
-- [ ] 编译验证
+- [x] 新增 `rhi/include/himalaya/rhi/compute_utils.h` 和 `rhi/src/compute_utils.cpp`
+- [x] 修改 `rhi/CMakeLists.txt`，加入 `src/compute_utils.cpp`
+- [x] 抽取 storage buffer binding、push descriptor layout、descriptor buffer info、compute pipeline creation、buffer barrier helper
+- [x] 迁移 `RadixSort` 到 RHI compute utility
+- [x] 迁移 `GsProjectionPass` / `GsTileBinningPass` 到 RHI compute utility
+- [x] 编译验证
 
 ## Step 5.9：RenderMode Flow Cleanup
 

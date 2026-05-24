@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的渲染器
 - **分支**：`reflector` — Path Tracing + Gaussian Splatting
 - **Phase**：Phase 3 — Gaussian Splatting 渲染
-- **进度**：Step 5.7 已完成并通过用户在 CLion 中的编译验证；待开始 Step 5.8（RHI compute utility refactor）
+- **进度**：Step 5.8 已完成并通过用户在 CLion 中的编译验证；待开始 Step 5.9（RenderMode flow cleanup）
 
 ### 下一个任务
 
-Step 5.8：新增 `rhi/include/himalaya/rhi/compute_utils.h` 和 `rhi/src/compute_utils.cpp`，抽取重复 compute Vulkan helper
+Step 5.9：`RenderInput` 新增 `framework::RenderMode render_mode`，清理 Application → Renderer 的 RenderMode 流转
 
 ---
 
