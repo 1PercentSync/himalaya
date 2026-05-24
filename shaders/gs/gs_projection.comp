@@ -77,6 +77,14 @@ layout(set = 3, binding = 3) buffer VisibleCounterBuffer {
     uint visible_splat_count;
 };
 
+layout(set = 3, binding = 4) writeonly buffer DepthKeyBuffer {
+    uint depth_keys[];
+};
+
+layout(set = 3, binding = 5) writeonly buffer SplatIndexBuffer {
+    uint splat_indices[];
+};
+
 /**
  * Returns the cumulative SH coefficient count for a max SH degree.
  */
@@ -385,4 +393,6 @@ void main() {
 
     const uint visible_index = atomicAdd(visible_splat_count, 1u);
     splats_2d[visible_index] = projected;
+    depth_keys[visible_index] = floatBitsToUint(camera_distance);
+    splat_indices[visible_index] = visible_index;
 }

@@ -57,6 +57,18 @@ namespace himalaya::passes {
                 .descriptorCount = 1,
                 .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
             },
+            VkDescriptorSetLayoutBinding{
+                .binding = 4,
+                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                .descriptorCount = 1,
+                .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+            },
+            VkDescriptorSetLayoutBinding{
+                .binding = 5,
+                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                .descriptorCount = 1,
+                .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+            },
         };
 
         VkDescriptorSetLayoutCreateInfo layout_ci{};
@@ -151,6 +163,8 @@ namespace himalaya::passes {
 
         const auto &core_buffer = rm_->get_buffer(gs_data.core_buffer());
         const auto &projected_buffer = rm_->get_buffer(projected_splat_buffer_);
+        const auto &depth_key_buffer = rm_->get_buffer(depth_key_buffer_);
+        const auto &splat_index_buffer = rm_->get_buffer(splat_index_buffer_);
 
         VkDescriptorBufferInfo core_info{
             .buffer = core_buffer.buffer,
@@ -167,6 +181,16 @@ namespace himalaya::passes {
             .offset = 0,
             .range = counter.desc.size,
         };
+        VkDescriptorBufferInfo depth_key_info{
+            .buffer = depth_key_buffer.buffer,
+            .offset = 0,
+            .range = depth_key_buffer.desc.size,
+        };
+        VkDescriptorBufferInfo splat_index_info{
+            .buffer = splat_index_buffer.buffer,
+            .offset = 0,
+            .range = splat_index_buffer.desc.size,
+        };
 
         for (const auto &group : gs_data.sh_groups()) {
             const auto sh_buffer_handle = gs_data.sh_buffer(group.sh_degree);
@@ -181,7 +205,7 @@ namespace himalaya::passes {
                 .range = sh_buffer.desc.size,
             };
 
-            const std::array<VkWriteDescriptorSet, 4> writes = {{
+            const std::array<VkWriteDescriptorSet, 6> writes = {{
                 {
                     .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
                     .dstBinding = 0,
@@ -209,6 +233,20 @@ namespace himalaya::passes {
                     .descriptorCount = 1,
                     .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
                     .pBufferInfo = &counter_info,
+                },
+                {
+                    .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                    .dstBinding = 4,
+                    .descriptorCount = 1,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                    .pBufferInfo = &depth_key_info,
+                },
+                {
+                    .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                    .dstBinding = 5,
+                    .descriptorCount = 1,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                    .pBufferInfo = &splat_index_info,
                 },
             }};
             cmd.push_compute_descriptor_set(pipeline_.layout, 3, writes);
