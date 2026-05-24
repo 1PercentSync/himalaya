@@ -2,6 +2,7 @@ add_library(himalaya_passes STATIC)
 
 target_sources(himalaya_passes PRIVATE
         src/gs_projection_pass.cpp
+        src/gs_tile_binning_pass.cpp
         src/present_pass.cpp
         src/reference_view_pass.cpp
 )
