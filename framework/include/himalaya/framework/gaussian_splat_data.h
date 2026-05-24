@@ -81,24 +81,17 @@ namespace himalaya::framework {
                   "opacity must be at offset 44");
 
     /**
-     * @brief A single Gaussian Splatting primitive (SoA layout).
+     * @brief A single Gaussian Splatting primitive.
      *
      * Stores splat data from one glTF mesh primitive with
-     * KHR_gaussian_splatting extension. All per-splat arrays are
-     * parallel with metadata.splat_count elements.
+     * KHR_gaussian_splatting extension. Core attributes (position,
+     * rotation, scale, opacity) are packed into GaussianSplatCore
+     * for direct GPU mapping. SH coefficients remain in separate
+     * arrays grouped by degree.
      */
     struct GaussianSplatPrimitive {
-        /** @brief Splat centers in local space. */
-        std::vector<glm::vec3> positions;
-
-        /** @brief Splat orientations as unit quaternions (x, y, z, w). */
-        std::vector<glm::vec4> rotations;
-
-        /** @brief Three-axis scales (linear, positive). */
-        std::vector<glm::vec3> scales;
-
-        /** @brief Opacity values [0, 1]. */
-        std::vector<float> opacities;
+        /** @brief Core attributes of all splats in this primitive (GPU-mappable layout). */
+        std::vector<GaussianSplatCore> cores;
 
         /** @brief SH degree 0 coefficients (1 per splat, always present). */
         std::vector<glm::vec3> sh_coefs_0;
