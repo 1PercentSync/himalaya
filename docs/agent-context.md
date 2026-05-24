@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的渲染器
 - **分支**：`reflector` — Path Tracing + Gaussian Splatting
 - **Phase**：Phase 3 — Gaussian Splatting 渲染
-- **进度**：Step 4 第三小项完成：已创建 `shaders/gs/gs_sort_histogram.comp`
+- **进度**：Step 4 第四小项完成：已创建 `shaders/gs/gs_sort_scan.comp`
 
 ### 下一个任务
 
-Step 4：创建 `shaders/gs/gs_sort_scan.comp`（prefix sum，多级 scan）
+Step 4：创建 `shaders/gs/gs_sort_scatter.comp`（按 prefix sum 结果稳定 scatter key+value）
 
 ---
 
