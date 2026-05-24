@@ -453,17 +453,24 @@ namespace himalaya::app::gaussian_splat_loader {
             framework::GaussianSplatPrimitive prim;
             meta.splat_count = splat_count;
 
+            // Temporary vectors for interleaved attribute reading.
+            // Core attributes are read into separate buffers, then packed
+            // into GaussianSplatCore structs for GPU-mappable layout.
+            std::vector<glm::vec3> temp_positions(splat_count);
+            std::vector<glm::vec4> temp_rotations(splat_count);
+            std::vector<glm::vec3> temp_scales(splat_count);
+            std::vector<float> temp_opacities(splat_count);
+
             // Read positions and compute local AABB
-            prim.positions.resize(splat_count);
             glm::vec3 local_min(std::numeric_limits<float>::max());
             glm::vec3 local_max(std::numeric_limits<float>::lowest());
 
             {
                 size_t i = 0;
                 for (auto p : fastgltf::iterateAccessor<fastgltf::math::fvec3>(gltf, pos_accessor)) {
-                    prim.positions[i] = {p.x(), p.y(), p.z()};
-                    local_min = glm::min(local_min, prim.positions[i]);
-                    local_max = glm::max(local_max, prim.positions[i]);
+                    temp_positions[i] = {p.x(), p.y(), p.z()};
+                    local_min = glm::min(local_min, temp_positions[i]);
+                    local_max = glm::max(local_max, temp_positions[i]);
                     ++i;
                 }
             }
@@ -484,18 +491,17 @@ namespace himalaya::app::gaussian_splat_loader {
                                              + std::to_string(splat_count) + ", got "
                                              + std::to_string(accessor.count));
                 }
-                prim.rotations.resize(splat_count);
 
                 size_t i = 0;
                 for (auto v : fastgltf::iterateAccessor<fastgltf::math::fvec4>(gltf, accessor)) {
-                    prim.rotations[i] = {v.x(), v.y(), v.z(), v.w()};
+                    temp_rotations[i] = {v.x(), v.y(), v.z(), v.w()};
                     ++i;
                 }
             }
 
             // SCALE (required, VEC3)
             read_vec3_attribute(gltf, primitive, "KHR_gaussian_splatting:SCALE",
-                                prim.scales, splat_count);
+                                temp_scales, splat_count);
 
             // OPACITY (required, SCALAR)
             {
@@ -512,13 +518,22 @@ namespace himalaya::app::gaussian_splat_loader {
                                              + std::to_string(splat_count) + ", got "
                                              + std::to_string(accessor.count));
                 }
-                prim.opacities.resize(splat_count);
 
                 size_t i = 0;
                 for (auto v : fastgltf::iterateAccessor<float>(gltf, accessor)) {
-                    prim.opacities[i] = v;
+                    temp_opacities[i] = v;
                     ++i;
                 }
+            }
+
+            // Interleave temporary vectors into packed GaussianSplatCore array
+            prim.cores.resize(splat_count);
+            for (uint32_t i = 0; i < splat_count; ++i) {
+                prim.cores[i].position = temp_positions[i];
+                prim.cores[i]._pad0 = 0.0f;
+                prim.cores[i].rotation = temp_rotations[i];
+                prim.cores[i].scale = temp_scales[i];
+                prim.cores[i].opacity = temp_opacities[i];
             }
 
             // SH degree 0 (required)
