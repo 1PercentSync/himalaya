@@ -50,11 +50,21 @@ namespace himalaya::framework {
         /** @brief Workgroup size used by the sort shaders. */
         static constexpr uint32_t kWorkgroupSize = 256;
 
+        /** @brief Maximum scan chunks supported by the current single-level chunk-sum scan. */
+        static constexpr uint32_t kMaxScanChunkCount = 256;
+
+        /** @brief Maximum sortable element count supported by the current scan implementation. */
+        static constexpr uint32_t kMaxSortableElements = 16u * 1024u * 1024u;
+
+        static_assert(kMaxSortableElements == kWorkgroupSize * kWorkgroupSize * kMaxScanChunkCount,
+                      "RadixSort scan limit must match workgroup and chunk-count assumptions");
+
         /**
          * @brief Push constant layout for gs_sort_prepare.comp.
          */
         struct PreparePushConstants {
-            uint32_t workgroup_size; ///< Sort workgroup size used to compute indirect group count.
+            uint32_t workgroup_size;     ///< Sort workgroup size used to compute indirect group count.
+            uint32_t max_element_count;  ///< Sort capacity clamp applied to the source counter.
         };
 
         /**

@@ -68,6 +68,25 @@ namespace himalaya::framework {
         }
 
         /**
+         * @brief Clamps sort capacity to the current scan implementation limit.
+         */
+        uint32_t clamp_sort_element_count(const uint32_t requested_count) {
+            if (requested_count <= RadixSort::kMaxSortableElements) {
+                return requested_count;
+            }
+
+            static bool warned = false;
+            if (!warned) {
+                spdlog::warn("RadixSort: requested {} elements exceeds current limit {}; clamping sort capacity",
+                             requested_count,
+                             RadixSort::kMaxSortableElements);
+                warned = true;
+            }
+
+            return RadixSort::kMaxSortableElements;
+        }
+
+        /**
          * @brief Creates one compute pipeline from a shader file and Set 3 layout.
          */
         rhi::Pipeline create_sort_pipeline(rhi::Context &ctx,
@@ -109,19 +128,27 @@ namespace himalaya::framework {
     }
 
     void RadixSort::ensure_capacity(const uint32_t max_element_count) {
-        if (max_element_count == max_element_count_) {
+        const uint32_t clamped_max_element_count = clamp_sort_element_count(max_element_count);
+        if (clamped_max_element_count == max_element_count_) {
             return;
         }
 
         destroy_buffers();
 
-        if (max_element_count == 0) {
+        if (clamped_max_element_count == 0) {
             return;
         }
 
-        max_element_count_ = max_element_count;
+        max_element_count_ = clamped_max_element_count;
         block_count_ = (max_element_count_ + kWorkgroupSize - 1u) / kWorkgroupSize;
         chunk_count_ = (block_count_ + kWorkgroupSize - 1u) / kWorkgroupSize;
+        if (chunk_count_ > kMaxScanChunkCount) {
+            spdlog::error("RadixSort: chunk_count {} exceeds current scan limit {}",
+                          chunk_count_,
+                          kMaxScanChunkCount);
+            destroy_buffers();
+            return;
+        }
 
         const uint64_t element_buffer_size =
             static_cast<uint64_t>(max_element_count_) * sizeof(uint32_t);
@@ -183,7 +210,12 @@ namespace himalaya::framework {
             return;
         }
 
-        ensure_capacity(max_element_count);
+        const uint32_t effective_max_element_count = clamp_sort_element_count(max_element_count);
+        if (effective_max_element_count == 0) {
+            return;
+        }
+
+        ensure_capacity(effective_max_element_count);
         if (!key_buffers_[0].valid() || !value_buffers_[0].valid()) {
             return;
         }
@@ -235,7 +267,10 @@ namespace himalaya::framework {
         {
             const std::array infos = {visible_counter_info, indirect_dispatch_info};
             push_buffers(prepare_pipeline_, infos);
-            constexpr PreparePushConstants pc{.workgroup_size = kWorkgroupSize};
+            const PreparePushConstants pc{
+                .workgroup_size = kWorkgroupSize,
+                .max_element_count = max_element_count_,
+            };
             cmd.push_constants(prepare_pipeline_.layout, VK_SHADER_STAGE_COMPUTE_BIT, &pc, sizeof(pc));
             cmd.dispatch(1, 1, 1);
         }

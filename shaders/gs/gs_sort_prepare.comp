@@ -21,6 +21,7 @@ struct DispatchIndirectCommand {
 
 layout(push_constant) uniform PC {
     uint workgroup_size;
+    uint max_element_count;
 } pc;
 
 layout(set = 3, binding = 0) readonly buffer VisibleCounterBuffer {
@@ -33,8 +34,9 @@ layout(set = 3, binding = 1) writeonly buffer IndirectDispatchBuffer {
 
 void main() {
     const uint safe_workgroup_size = max(pc.workgroup_size, 1u);
+    const uint active_count = min(visible_splat_count, pc.max_element_count);
     const uint group_count_x =
-        (visible_splat_count + safe_workgroup_size - 1u) / safe_workgroup_size;
+        (active_count + safe_workgroup_size - 1u) / safe_workgroup_size;
 
     dispatch_command.group_count_x = group_count_x;
     dispatch_command.group_count_y = 1u;
