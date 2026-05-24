@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的渲染器
 - **分支**：`reflector` — Path Tracing + Gaussian Splatting
 - **Phase**：Phase 3 — Gaussian Splatting 渲染
-- **进度**：Step 5（Tile Binning）已完成 `gs_tile_count.comp` 与 `gs_tile_scan.comp`，待继续 tile scatter
+- **进度**：Step 5（Tile Binning）已完成 tile count/scan/scatter shader，待创建 tile buffer
 
 ### 下一个任务
 
-Step 5：创建 `shaders/gs/gs_tile_scatter.comp`（再次遍历可见 splat，按 offset + atomicAdd 写入 tile_splat_ids）
+Step 5：创建 tile buffer：`tile_offsets[]`、`tile_counts[]`、`tile_cursors[]`、`tile_splat_ids[]`（tile 数量依赖屏幕分辨率，resize 时重建；`tile_splat_ids` 使用保守容量上限）
 
 ---
 
