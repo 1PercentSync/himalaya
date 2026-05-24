@@ -461,20 +461,14 @@ namespace himalaya::app::gaussian_splat_loader {
             std::vector<glm::vec3> temp_scales(splat_count);
             std::vector<float> temp_opacities(splat_count);
 
-            // Read positions and compute local AABB
-            glm::vec3 local_min(std::numeric_limits<float>::max());
-            glm::vec3 local_max(std::numeric_limits<float>::lowest());
-
+            // Read positions
             {
                 size_t i = 0;
                 for (auto p : fastgltf::iterateAccessor<fastgltf::math::fvec3>(gltf, pos_accessor)) {
                     temp_positions[i] = {p.x(), p.y(), p.z()};
-                    local_min = glm::min(local_min, temp_positions[i]);
-                    local_max = glm::max(local_max, temp_positions[i]);
                     ++i;
                 }
             }
-            prim.bounds = {local_min, local_max};
 
             // ROTATION (required, VEC4 xyzw)
             {
@@ -535,6 +529,15 @@ namespace himalaya::app::gaussian_splat_loader {
                 prim.cores[i].scale = temp_scales[i];
                 prim.cores[i].opacity = temp_opacities[i];
             }
+
+            // Compute local-space AABB from packed cores
+            glm::vec3 local_min(std::numeric_limits<float>::max());
+            glm::vec3 local_max(std::numeric_limits<float>::lowest());
+            for (uint32_t i = 0; i < splat_count; ++i) {
+                local_min = glm::min(local_min, prim.cores[i].position);
+                local_max = glm::max(local_max, prim.cores[i].position);
+            }
+            prim.bounds = {local_min, local_max};
 
             // SH degree 0 (required)
             read_vec3_attribute(gltf, primitive, "KHR_gaussian_splatting:SH_DEGREE_0_COEF_0",

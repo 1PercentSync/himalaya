@@ -108,7 +108,7 @@ namespace himalaya::framework {
         /** @brief World transform from the glTF node hierarchy. */
         glm::mat4 transform{1.0f};
 
-        /** @brief Local-space AABB computed from positions. */
+        /** @brief Local-space AABB computed from cores[].position. */
         AABB bounds{};
 
         /** @brief Extension metadata for this primitive. */
