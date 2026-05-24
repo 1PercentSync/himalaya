@@ -93,16 +93,11 @@ namespace himalaya::framework {
 
         /**
          * @brief Ensures owned sort buffers can hold max_element_count entries.
-         *
-         * Buffer allocation is implemented by the ping-pong management task.
          */
         void ensure_capacity(uint32_t max_element_count);
 
         /**
          * @brief Records the complete radix sort into an existing command buffer.
-         *
-         * Full orchestration is implemented by the record() task after buffer
-         * allocation and shader resources are in place.
          */
         void record(const rhi::CommandBuffer &cmd,
                     const FrameContext &frame_ctx,

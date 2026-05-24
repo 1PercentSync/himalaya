@@ -46,6 +46,10 @@ layout(set = 3, binding = 5) readonly buffer DigitOffsetsBuffer {
     uint digit_offsets[];
 };
 
+layout(set = 3, binding = 6) readonly buffer VisibleCounterBuffer {
+    uint visible_splat_count;
+};
+
 shared uint shared_digits[kRadixSize];
 
 /**
@@ -60,7 +64,8 @@ void main() {
     const uint local_index = gl_LocalInvocationID.x;
     const uint block_index = gl_WorkGroupID.x;
     const uint global_index = block_index * gl_WorkGroupSize.x + local_index;
-    const bool valid = global_index < pc.element_count;
+    const uint active_count = min(pc.element_count, visible_splat_count);
+    const bool valid = global_index < active_count;
 
     uint key = 0u;
     uint value = 0u;

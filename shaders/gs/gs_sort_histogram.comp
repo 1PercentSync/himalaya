@@ -29,6 +29,10 @@ layout(set = 3, binding = 1) writeonly buffer HistogramBuffer {
     uint histogram[];
 };
 
+layout(set = 3, binding = 2) readonly buffer VisibleCounterBuffer {
+    uint visible_splat_count;
+};
+
 shared uint shared_histogram[kRadixSize];
 
 /**
@@ -47,7 +51,8 @@ void main() {
     shared_histogram[local_index] = 0u;
     barrier();
 
-    if (global_index < pc.element_count) {
+    const uint active_count = min(pc.element_count, visible_splat_count);
+    if (global_index < active_count) {
         const uint digit = extract_digit(keys[global_index]);
         atomicAdd(shared_histogram[digit], 1u);
     }
