@@ -185,6 +185,9 @@ namespace himalaya::app {
     }
 
     void Application::switch_gs_scene(const std::string &path) {
+        vkQueueWaitIdle(context_.graphics_queue);
+
+        renderer_.destroy_gs_scene();
         gs_scene_.reset();
         camera_controller_.set_focus_target(&scene_loader_.scene_bounds());
 
@@ -244,8 +247,13 @@ namespace himalaya::app {
             } else {
                 error_message_.clear();
                 gs_scene_ = std::move(result);
-                spdlog::info("Loaded GS scene: {} ({} primitives)",
-                             path, gs_scene_->primitives.size());
+
+                context_.begin_immediate();
+                renderer_.upload_gs_scene(*gs_scene_);
+                context_.end_immediate();
+
+                spdlog::info("Loaded GS scene: {} ({} primitives, {} splats)",
+                             path, gs_scene_->primitives.size(), renderer_.gs_splat_count());
 
                 if (!pt_mode_) {
                     auto_position_camera(gs_scene_->scene_bounds);

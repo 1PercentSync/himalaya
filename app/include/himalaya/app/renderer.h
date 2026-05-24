@@ -7,6 +7,7 @@
 
 #include <himalaya/framework/cached_shader_compiler.h>
 #include <himalaya/framework/denoiser.h>
+#include <himalaya/framework/gs_gpu_data.h>
 #include <himalaya/framework/ibl.h>
 #include <himalaya/framework/material_system.h>
 #include <himalaya/framework/render_graph.h>
@@ -152,6 +153,26 @@ namespace himalaya::app {
         void destroy_scene_rt();
 
         /**
+         * @brief Uploads a loaded Gaussian Splatting scene to GPU buffers.
+         *
+         * Must be called within a Context::begin_immediate() / end_immediate()
+         * scope because staging uploads are recorded into the immediate command
+         * buffer. Safe to call multiple times; previous GS GPU data is destroyed
+         * before the new scene is uploaded.
+         *
+         * @param scene Loaded CPU-side Gaussian Splatting scene.
+         */
+        void upload_gs_scene(const framework::GaussianSplatScene &scene);
+
+        /**
+         * @brief Destroys uploaded Gaussian Splatting GPU scene data.
+         *
+         * Called before switching or clearing GS scenes. Renderer::destroy()
+         * also calls this as a safety net.
+         */
+        void destroy_gs_scene();
+
+        /**
          * @brief Recompiles all shaders from disk and rebuilds every pipeline.
          *
          * Waits for GPU idle, then calls rebuild_pipelines() on each pass.
@@ -227,6 +248,9 @@ namespace himalaya::app {
         /** @brief Returns wall-clock duration of the last OIDN filter execution, in seconds. */
         [[nodiscard]] float last_denoise_duration() const;
 
+        /** @brief Returns the number of currently uploaded GS splats. */
+        [[nodiscard]] uint32_t gs_splat_count() const;
+
     private:
         // --- Subsystem references (non-owning, set during init) ---
 
@@ -258,6 +282,9 @@ namespace himalaya::app {
 
         /** @brief IBL precomputation module (cubemaps, BRDF LUT, bindless registration). */
         framework::IBL ibl_{};
+
+        /** @brief Uploaded Gaussian Splatting scene GPU buffers. */
+        framework::GsGpuData gs_gpu_data_{};
 
         /** @brief PT reference view pass (RT pipeline dispatch + accumulation). */
         passes::ReferenceViewPass reference_view_pass_{};

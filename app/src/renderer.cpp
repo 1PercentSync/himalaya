@@ -184,4 +184,8 @@ namespace himalaya::app {
     float Renderer::last_denoise_duration() const {
         return denoiser_.last_denoise_duration();
     }
+
+    uint32_t Renderer::gs_splat_count() const {
+        return gs_gpu_data_.total_splat_count();
+    }
 } // namespace himalaya::app

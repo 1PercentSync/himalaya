@@ -126,6 +126,7 @@ namespace himalaya::app {
                                                              }, "Default Sampler");
 
         material_system_.init(resource_manager_, descriptor_manager_);
+        gs_gpu_data_.init(resource_manager_);
 
         // --- Samplers ---
 
@@ -213,6 +214,7 @@ namespace himalaya::app {
     }
 
     void Renderer::destroy() {
+        destroy_gs_scene();
         emissive_light_builder_.destroy();
         scene_as_builder_.destroy();
         as_manager_.destroy();
@@ -309,6 +311,16 @@ namespace himalaya::app {
         scene_as_builder_.destroy();
         emissive_light_builder_.destroy();
         reference_view_pass_.set_emissive_light_count(0);
+    }
+
+    // ---- GS scene data ----
+
+    void Renderer::upload_gs_scene(const framework::GaussianSplatScene &scene) {
+        gs_gpu_data_.upload(scene);
+    }
+
+    void Renderer::destroy_gs_scene() {
+        gs_gpu_data_.destroy();
     }
 
     // ---- Environment reload ----
