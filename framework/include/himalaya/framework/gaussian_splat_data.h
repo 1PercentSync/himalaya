@@ -10,6 +10,7 @@
 #include <glm/glm.hpp>
 
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -79,6 +80,63 @@ namespace himalaya::framework {
                   "scale must be at offset 32");
     static_assert(offsetof(GaussianSplatCore, opacity) == 44,
                   "opacity must be at offset 44");
+
+    /**
+     * @brief Projected 2D data for one visible Gaussian splat.
+     *
+     * Layout matches std430 rules and shaders/gs/gs_projection.comp:
+     *   - center:   offset 0,  8 bytes (vec2 pixel-space center)
+     *   - axis_u:   offset 8,  8 bytes (principal axis, includes length)
+     *   - axis_v:   offset 16, 8 bytes (principal axis, includes length)
+     *   - _pad0:    offset 24, 8 bytes (align color to 16-byte boundary)
+     *   - color:    offset 32, 12 bytes (SH-evaluated RGB)
+     *   - alpha:    offset 44, 4 bytes (base opacity)
+     *   - tile_min: offset 48, 8 bytes (inclusive tile min)
+     *   - tile_max: offset 56, 8 bytes (inclusive tile max)
+     *   - Total: 64 bytes, alignas(16)
+     */
+    struct alignas(16) GSSplatData2D {
+        /** @brief Screen-space center in pixel coordinates. */
+        glm::vec2 center;
+
+        /** @brief First 2D principal axis vector, including support length. */
+        glm::vec2 axis_u;
+
+        /** @brief Second 2D principal axis vector, including support length. */
+        glm::vec2 axis_v;
+
+        /** @brief Explicit padding so color starts at offset 32. */
+        glm::vec2 _pad0;
+
+        /** @brief SH-evaluated RGB color for the visible splat. */
+        glm::vec3 color;
+
+        /** @brief Base opacity value copied from GaussianSplatCore. */
+        float alpha;
+
+        /** @brief Inclusive minimum covered tile coordinate. */
+        glm::uvec2 tile_min;
+
+        /** @brief Inclusive maximum covered tile coordinate. */
+        glm::uvec2 tile_max;
+    };
+
+    static_assert(sizeof(GSSplatData2D) == 64,
+                  "GSSplatData2D must be 64 bytes (std430 layout)");
+    static_assert(offsetof(GSSplatData2D, center) == 0,
+                  "center must be at offset 0");
+    static_assert(offsetof(GSSplatData2D, axis_u) == 8,
+                  "axis_u must be at offset 8");
+    static_assert(offsetof(GSSplatData2D, axis_v) == 16,
+                  "axis_v must be at offset 16");
+    static_assert(offsetof(GSSplatData2D, color) == 32,
+                  "color must be at offset 32");
+    static_assert(offsetof(GSSplatData2D, alpha) == 44,
+                  "alpha must be at offset 44");
+    static_assert(offsetof(GSSplatData2D, tile_min) == 48,
+                  "tile_min must be at offset 48");
+    static_assert(offsetof(GSSplatData2D, tile_max) == 56,
+                  "tile_max must be at offset 56");
 
     /**
      * @brief A single Gaussian Splatting primitive.
