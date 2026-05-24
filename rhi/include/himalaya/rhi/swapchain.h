@@ -78,8 +78,11 @@ namespace himalaya::rhi {
         /** @brief Swapchain images (owned by the swapchain, not manually destroyed). */
         std::vector<VkImage> images;
 
-        /** @brief One image view per swapchain image. */
+        /** @brief One image view per swapchain image (SRGB format). */
         std::vector<VkImageView> image_views;
+
+        /** @brief One UNORM image view per swapchain image (for GS srgb_rec709_display passthrough). */
+        std::vector<VkImageView> unorm_image_views;
 
         /**
          * @brief One render-finished semaphore per swapchain image.

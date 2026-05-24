@@ -26,8 +26,12 @@ namespace himalaya::rhi {
         for (const auto view: image_views) {
             vkDestroyImageView(context.device, view, nullptr);
         }
+        for (const auto view: unorm_image_views) {
+            vkDestroyImageView(context.device, view, nullptr);
+        }
         render_finished_semaphores.clear();
         image_views.clear();
+        unorm_image_views.clear();
         images.clear();
 
         // ReSharper disable once CppLocalVariableMayBeConst
@@ -153,6 +157,9 @@ namespace himalaya::rhi {
         for (const auto view: image_views) {
             vkDestroyImageView(device, view, nullptr);
         }
+        for (const auto view: unorm_image_views) {
+            vkDestroyImageView(device, view, nullptr);
+        }
         vkDestroySwapchainKHR(device, swapchain, nullptr);
 
         spdlog::info("Swapchain destroyed");
@@ -237,24 +244,38 @@ namespace himalaya::rhi {
         };
     }
 
-    // Creates a 2D color image view for each swapchain image
+    // Creates a 2D color image view for each swapchain image (both SRGB and UNORM).
     // ReSharper disable once CppParameterMayBeConst
     void Swapchain::create_image_views(VkDevice device) {
         image_views.resize(images.size());
+        unorm_image_views.resize(images.size());
+
+        // Derive UNORM counterpart format for view creation
+        VkFormat unorm_format = VK_FORMAT_UNDEFINED;
+        switch (format) {
+            case VK_FORMAT_B8G8R8A8_SRGB:  unorm_format = VK_FORMAT_B8G8R8A8_UNORM;  break;
+            case VK_FORMAT_R8G8R8A8_SRGB:  unorm_format = VK_FORMAT_R8G8R8A8_UNORM;  break;
+            default: std::abort(); // Already validated in create_resources()
+        }
 
         for (size_t i = 0; i < images.size(); ++i) {
             VkImageViewCreateInfo view_info{};
             view_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
             view_info.image = images[i];
             view_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
-            view_info.format = format;
             view_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
             view_info.subresourceRange.baseMipLevel = 0;
             view_info.subresourceRange.levelCount = 1;
             view_info.subresourceRange.baseArrayLayer = 0;
             view_info.subresourceRange.layerCount = 1;
 
+            // SRGB view (format = swapchain format)
+            view_info.format = format;
             VK_CHECK(vkCreateImageView(device, &view_info, nullptr, &image_views[i]));
+
+            // UNORM view (same image, different format interpretation)
+            view_info.format = unorm_format;
+            VK_CHECK(vkCreateImageView(device, &view_info, nullptr, &unorm_image_views[i]));
         }
     }
 } // namespace himalaya::rhi
