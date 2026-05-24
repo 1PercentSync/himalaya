@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的渲染器
 - **分支**：`reflector` — Path Tracing + Gaussian Splatting
 - **Phase**：Phase 3 — Gaussian Splatting 渲染
-- **进度**：Phase 3 规划完成（技术决策 + 任务清单），待开始实现
+- **进度**：Step 0（数据结构重构）完成，待开始 Step 1
 
 ### 下一个任务
 
-Step 0：数据结构重构（GaussianSplatCore 打包 struct）
+Step 1：PresentPass 重构（TonemappingPass 改名 + mode 分支 + UNORM view）
 
 ---
 
