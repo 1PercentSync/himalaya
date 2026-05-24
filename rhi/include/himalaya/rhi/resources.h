@@ -28,6 +28,7 @@ namespace himalaya::rhi {
         TransferDst = 1 << 5,
         ShaderDeviceAddress = 1 << 6,
         AccelStructBuildInput = 1 << 7,
+        IndirectBuffer = 1 << 8,
     };
 
     /** @brief Bitwise OR for BufferUsage flags. */
