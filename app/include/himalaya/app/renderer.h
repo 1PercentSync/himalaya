@@ -16,7 +16,7 @@
 #include <himalaya/framework/texture.h>
 #include <himalaya/rhi/acceleration_structure.h>
 #include <himalaya/passes/reference_view_pass.h>
-#include <himalaya/passes/tonemapping_pass.h>
+#include <himalaya/passes/present_pass.h>
 #include <himalaya/rhi/context.h>
 
 #include <array>
@@ -262,8 +262,8 @@ namespace himalaya::app {
         /** @brief PT reference view pass (RT pipeline dispatch + accumulation). */
         passes::ReferenceViewPass reference_view_pass_{};
 
-        /** @brief Tonemapping pass (reads HDR color, writes swapchain). */
-        passes::TonemappingPass tonemapping_pass_{};
+        /** @brief Presentation pass (reads color buffer, writes swapchain). */
+        passes::PresentPass present_pass_{};
 
         /** @brief Acceleration structure manager (RT, initialized when rt_supported). */
         rhi::AccelerationStructureManager as_manager_{};

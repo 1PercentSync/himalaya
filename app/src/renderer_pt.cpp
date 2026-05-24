@@ -63,7 +63,7 @@ namespace himalaya::app {
         prev_lod_max_level_ = pt.lod_max_level;
         prev_indirect_intensity_ = input.indirect_intensity;
 
-        // Use accumulation buffer as hdr_color for TonemappingPass.
+        // Use accumulation buffer as hdr_color for PresentPass.
         // Preserve content only when there are previous samples to accumulate on.
         // sample_count==0 (first frame or after reset): shader overwrites entirely → UNDEFINED ok.
         // sample_count>0: shader does imageLoad for running average → must preserve.
@@ -314,7 +314,7 @@ namespace himalaya::app {
             pending_semaphore_signal_ = denoiser_.launch_processing();
         }
 
-        tonemapping_pass_.record(render_graph_, frame_ctx);
+        present_pass_.record(render_graph_, frame_ctx);
 
         // --- ImGui pass ---
         const std::array imgui_resources = {

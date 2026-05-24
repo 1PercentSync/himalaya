@@ -204,7 +204,7 @@ namespace himalaya::app {
         }
 
         // --- Pass setup ---
-        tonemapping_pass_.setup(*ctx_, *resource_manager_, *descriptor_manager_, shader_compiler_, swapchain_->format);
+        present_pass_.setup(*ctx_, *resource_manager_, *descriptor_manager_, shader_compiler_, swapchain_->format);
 
         if (ctx_->rt_supported) {
             reference_view_pass_.setup(*ctx_, *resource_manager_, *descriptor_manager_,
@@ -221,7 +221,7 @@ namespace himalaya::app {
         }
         ibl_.destroy();
         material_system_.destroy();
-        tonemapping_pass_.destroy();
+        present_pass_.destroy();
 
         for (const auto ubo: global_ubo_buffers_) {
             resource_manager_->destroy_buffer(ubo);
@@ -332,7 +332,7 @@ namespace himalaya::app {
     void Renderer::reload_shaders() {
         vkQueueWaitIdle(ctx_->graphics_queue);
 
-        tonemapping_pass_.rebuild_pipelines();
+        present_pass_.rebuild_pipelines();
         if (ctx_->rt_supported) {
             reference_view_pass_.rebuild_pipelines();
         }
