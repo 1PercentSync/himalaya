@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的渲染器
 - **分支**：`reflector` — Path Tracing + Gaussian Splatting
 - **Phase**：Phase 3 — Gaussian Splatting 渲染
-- **进度**：Step 2（GPU Buffer 上传）完成，待开始 Step 3
+- **进度**：Step 3 第一小项（创建 gs_projection.comp：视锥剔除 + covariance 投影 + 主轴分解）完成，待实现 SH 求值
 
 ### 下一个任务
 
-Step 3：投影与剔除 Pass（gs_projection.comp + GsProjectionPass）
+Step 3：实现 SH 求值（degree 0-3，通过 push constant `sh_degree` 分支）
 
 ---
 

@@ -79,7 +79,7 @@
 
 ## Step 3：投影与剔除 Pass
 
-- [ ] 创建 `shaders/gs/gs_projection.comp`（视锥剔除 + 3D covariance 构建 + 2D covariance 投影 + 椭圆主轴分解）
+- [x] 创建 `shaders/gs/gs_projection.comp`（视锥剔除 + 3D covariance 构建 + 2D covariance 投影 + 椭圆主轴分解）
 - [ ] 实现 SH 求值（degree 0-3，通过 push constant `sh_degree` 分支）
 - [ ] 实现 Mip Splatting 3D 频率限制（scale clamp to min_threshold）
 - [ ] 实现 Mip Splatting 2D mip filter（cov2d += 0.3 * I）
