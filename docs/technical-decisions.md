@@ -824,7 +824,7 @@ Tile rendering 中，当像素的累积 transmittance 低于阈值时跳过该�
 
 ### SH 求值
 
-投影阶段 per-splat 一次。用 `normalize(camera_pos - splat_center)` 作为方向求值 SH，结果 RGB 写入中间 buffer。后续 tile rendering 只读 RGB。
+投影阶段 per-splat 一次。按 `KHR_gaussian_splatting` 规范，用 `normalize(splat_center - camera_pos)`（从相机位置指向 splat mean 的全局空间方向）作为方向求值 SH，结果 RGB 写入中间 buffer。后续 tile rendering 只读 RGB。
 
 SH 低频特性决定 per-splat 一次求值在视觉上几乎无差别，性能优势显著（尤其 SH degree 3 时 192 bytes 系数只读一次）。
 
