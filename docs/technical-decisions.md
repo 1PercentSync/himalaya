@@ -745,26 +745,37 @@ nlohmann/json 手动构造 glTF JSON + binary buffer，输出 .gltf + .bin 文�
 - **全 compute 控制力强**：排序、culling、blending 全部可定制
 - 3DGS 领域事实标准方案，有充分的开源实现和文献资料
 
-### 四阶段 Compute 管线
+### Compute 管线
 
 ```
-Projection + Culling → Radix Sort → Tile Binning → Tile Rendering
+Projection + Culling
+    → Tile Entry Generation
+    → Stable Radix Sort(depth)
+    → Gather Tile Sort Keys
+    → Stable Radix Sort(tile_id)
+    → Tile Range Build
+    → Tile Rendering
 ```
 
 | 阶段 | 输入 | 输出 |
 |------|------|------|
 | Projection + Culling | 原始 splat 数据（GPU buffer） | 可见 splat 的 2D 属性 + RGB + depth key |
-| Radix Sort | depth key + splat index | 按深度排序的 key-value 对 |
-| Tile Binning | 排序后的 splat + 2D 覆盖范围 | per-tile (offset, count) 表 |
-| Tile Rendering | per-tile splat 列表 + 2D 属性 + RGB | color buffer 像素输出 |
+| Tile Entry Generation | 可见 splat + 2D 覆盖范围 | 每个 covered tile 一条 entry：depth key、tile id、splat id |
+| Stable Radix Sort(depth) | entry depth key + entry index | 按 depth 前到后排序的 entry index |
+| Gather Tile Sort Keys | depth-sorted entry index | tile sort key/value（value 仍为 entry index） |
+| Stable Radix Sort(tile_id) | tile id key + entry index | 按 tile 分组、tile 内保持 depth 顺序的 entry index |
+| Tile Range Build | sorted tile ids | per-tile (offset, count) 表 |
+| Tile Rendering | per-tile entry range + 2D 属性 + RGB | color buffer 像素输出 |
 
-四阶段录制在同一个 RG pass 的 execute lambda 内，阶段之间手动插入 `vkCmdPipelineBarrier2`（COMPUTE → COMPUTE buffer memory barrier）。RenderGraph 只处理跨 pass 的 image barrier，pass 内的 buffer 同步由 pass 自行管理。
+这些阶段录制在同一个 RG pass 的 execute lambda 内，阶段之间手动插入 `vkCmdPipelineBarrier2`（COMPUTE → COMPUTE buffer memory barrier）。RenderGraph 只处理跨 pass 的 image barrier，pass 内的 buffer 同步由 pass 自行管理。
 
 ### 可见 Splat 数量
 
-投影 pass 剔除不可见 splat 后，可见数量是动态的。投影 shader 使用 atomic counter 写入可见 splat 数。indirect dispatch buffer（`VkDispatchIndirectCommand`）由 GsProjectionPass 在 Step 3 创建，但不在 Step 3 填充；填充由 sort pass（Step 4）开头的 `gs_sort_prepare.comp` 完成——单线程读取 counter 值并写入 `VkDispatchIndirectCommand(ceil(visible_count / workgroup_size), 1, 1)`。counter buffer 和 indirect dispatch buffer 均由 GsProjectionPass 持有。
+投影 pass 剔除不可见 splat 后，可见数量是动态的。投影 shader 使用 atomic counter 写入可见 splat 数。indirect dispatch buffer（`VkDispatchIndirectCommand`）由 GsProjectionPass 创建，`gs_sort_prepare.comp` 读取 counter 并写入 clamped dispatch dimensions。
 
-Projection shader 在 `atomicAdd` 得到 `visible_index` 后同步写入 radix sort 的初始输入：`depth_keys[visible_index] = floatBitsToUint(camera_distance)`，`splat_indices[visible_index] = visible_index`。value 使用可见 splat 的紧凑索引，因为排序后通过 `splat_indices[sorted_i]` 索引 `splats_2d[]`。
+Projection shader 在 `atomicAdd` 得到 `visible_index` 后同步写入 `GSSplatData2D` 和 `depth_keys[visible_index] = floatBitsToUint(camera_distance)`。多 SH degree group 分多次 dispatch 时，每个 group dispatch 后必须插入 compute→compute buffer barrier，确保 shared counter 和 projection 输出对下一组可见。
+
+Sort prepare 不直接信任 counter 原值，而是使用 `active_count = min(counter, max_element_count)` 计算 `VkDispatchIndirectCommand(ceil(active_count / workgroup_size), 1, 1)`。这同时用于 visible splat sort 和 tile entry sort，避免 capacity 被 clamp 后仍调度大量空 workgroup。
 
 ### Shader 文件组织
 
@@ -776,22 +787,26 @@ GS shader 文件位于 `shaders/gs/` 目录：
 | `gs_sort_histogram.comp` | Radix sort 按 digit 统计直方图 |
 | `gs_sort_scan.comp` | Prefix sum（scan） |
 | `gs_sort_scatter.comp` | Radix sort scatter |
-| `gs_tile_count.comp` | Per-tile splat 计数 |
-| `gs_tile_scan.comp` | 对 `tile_counts[]` 做 exclusive prefix sum，输出 `tile_offsets[]` |
-| `gs_tile_scatter.comp` | Scatter splat index 到 per-tile 区域 |
+| `gs_tile_count.comp` | 旧 tile count/scan/scatter 方案的计数 shader；Step 5.5 后由 tile entry generation 替代 |
+| `gs_tile_scan.comp` | 旧 tile prefix-sum shader；Step 5.5 后由 sorted entry range build 替代 |
+| `gs_tile_scatter.comp` | 旧 atomic scatter shader；Step 5.5 后由 tile entry generation + stable sort 替代 |
+| `gs_tile_entry.comp` | 生成 per-tile entries（depth key、tile id、splat id、entry index） |
+| `gs_tile_sort_gather.comp` | 将 depth-sorted entry index 转为 tile-id sort key/value |
+| `gs_tile_range.comp` | 从 sorted tile ids 构建 per-tile offsets/counts |
 | `gs_tile_render.comp` | Tile rendering（alpha blend + early termination） |
 
 ### GPU 排序
 
-自行实现 GPU Radix Sort。32-bit key（depth）+ 32-bit value（index）分离方案。
+自行实现 GPU Radix Sort。基础 sorter 保持 32-bit key + 32-bit value 分离方案，并要求 scatter 稳定；tile entry 的 `(tile_id, depth)` 复合排序通过两次 32-bit stable sort 实现。
 
 | 特性 | 选择 | 理由 |
 |------|------|------|
-| 算法 | Radix Sort | 百万级 splat 下性能可预测，O(n·k) |
-| Key 位宽 | 32-bit depth + 32-bit value 分离 | 4 个 pass（每 pass 8 bit），depth 精度无损，index 范围无限制 |
-| 替代方案排除 | 64-bit key 需 8 pass，带宽翻倍；32-bit 混合 key 的 index 范围受限 | — |
+| 算法 | Radix Sort | 百万级 splat / entry 下性能可预测，O(n·k) |
+| Key 位宽 | 32-bit key + 32-bit value 分离 | 单次 sort 4 pass（每 pass 8 bit），depth 精度无损，index 范围无限制 |
+| Tile entry 排序 | depth stable sort → tile-id stable sort | 不扩展 64-bit key；第二次稳定排序保留 tile 内前到后 depth 顺序 |
+| 当前规模上限 | `16 * 1024 * 1024` entries | 现有 scan 假设 `chunk_count <= 256`，Step 5.5 显式 clamp 并统计 |
 
-Tile ID 不编码进排序 key（高分辨率下与 depth 共享 32 bit 精度不足），通过独立的 Tile Binning 阶段建立 per-tile 列表。
+不采用 32-bit 混合 key（tile_id 与 depth 共用 32 bit 会牺牲 depth 精度），也暂不扩展 64-bit radix sort（需要 8 pass 且带宽翻倍）。
 
 #### Depth Key 编码
 
@@ -809,15 +824,18 @@ value_buffers[2]: uint32[] × 2    // ping-pong
 histogram_buffer: uint32[]        // per-digit per-block 计数
 ```
 
-### Tile Binning
+### Tile Binning / Entry Pipeline
 
-全局深度排序后，binning 阶段将每个 splat 映射到其覆盖的 tile：
+Step 5 初版使用全局 depth sort 后 per-tile count/scan/scatter，但 atomic scatter 不能保证同一 tile 内保持 depth 顺序。Step 5.5 改为 tile entry pipeline：
 
-1. 第一遍：统计每个 tile 的 splat 数量（atomicAdd）
-2. Prefix sum：计算 per-tile 偏移
-3. 第二遍：按偏移将 splat index scatter 到 per-tile 区域
+1. Entry generation：每个可见 splat 遍历覆盖 tile，每个 covered tile 写一条 entry：`entry_depth_keys[]`、`entry_tile_ids[]`、`entry_splat_ids[]`、`entry_indices[]`
+2. Capacity guard：entry capacity = `min(max_splat_count * 16, 16 * 1024 * 1024)`；超出容量的 entry 安全丢弃并累计 dropped count
+3. Depth stable sort：`entry_depth_keys + entry_indices` → `depth_sorted_entry_indices`
+4. Gather：根据 depth-sorted index 生成 `tile_sort_keys = entry_tile_ids[entry_index]` 与 `tile_sort_values = entry_index`
+5. Tile-id stable sort：`tile_sort_keys + tile_sort_values` → 最终 sorted tile ids 与 sorted entry indices
+6. Range build：遍历 sorted tile ids，写出 `tile_offsets[]` / `tile_counts[]`
 
-由于遍历全局有序数组，每个 tile 内的 splat 自然保持深度有序。
+最终每个 tile 的 entry range 连续，且 tile 内顺序保持第一次 depth sort 的前到后顺序。若 `tile_entries_dropped`、`invalid_tile_entries`、`sort_clamped` 均为 0，则容量策略没有导致画面偏离理想结果。
 
 ### Tile 大小
 
@@ -837,31 +855,45 @@ SH 低频特性决定 per-splat 一次求值在视觉上几乎无差别，性能
 
 核心属性合并 + SH 按 degree 分组 dispatch。
 
-- 各 primitive 的 `GaussianSplatCore`（position/rotation/scale/opacity）合并为一个大 GPU buffer，position 上传时应用各自的 node transform 转到世界空间
+- CPU 端 `GaussianSplatCore` 保留 position/rotation/scale/opacity；GPU 上传侧在 Step 5.6 转换为 position/opacity/world covariance layout。position 应用 node transform，covariance 使用 `M * C_local * Mᵀ` 合入 node linear transform。
 - SH 系数按 degree 分组：同 degree 的 primitive 拼接成一个 SH buffer，投影 pass 按组 dispatch（push constant 传入 `splat_offset, splat_count, sh_degree`）。`splat_offset` 是 merged core/output buffer 的全局偏移；SH buffer 组内从 0 开始按 local index 读取。
-- 投影结果（2D 属性 + RGB）写入统一输出 buffer，同时写入 depth key/value buffer，后续 sort → binning → rendering 不关心 SH degree
+- 投影结果（2D 属性 + RGB）写入统一输出 buffer，同时写入 depth key。后续 tile entry generation / sort / rendering 不关心 SH degree。
+- 多 SH group projection dispatch 共享 visible counter 和输出 buffer；group 之间必须插入 compute→compute buffer barrier。
 
 spec 保证同一 primitive 内 SH degree 统一（SH 由 primitive 的 attribute 定义），不同 primitive 之间可以有不同 degree。
 
 ### GPU 数据布局
 
-混合方案：核心属性打包 + SH 独立。
+混合方案：CPU 核心属性打包 + GPU covariance core + SH 独立。
 
-**CPU 端数据结构同步修改**：`GaussianSplatPrimitive` 中原有的 4 个独立 vector（positions/rotations/scales/opacities）替换为 `vector<GaussianSplatCore>`。SH 系数保持独立 vector 不变。上传时核心属性直接 memcpy，SH 按 degree 分组 memcpy。
+**CPU 端数据结构**：`GaussianSplatPrimitive` 中原有的 4 个独立 vector（positions/rotations/scales/opacities）替换为 `vector<GaussianSplatCore>`。该结构保留 glTF 原始语义，供 loader、bounds、上传转换使用。
 
 ```
-GaussianSplatCore {              // 打包 struct，GPU 直接映射（std430）
-    vec3  position;              // offset 0,  12 bytes
-    float _pad0;                 // offset 12, 4 bytes（vec4 对齐 padding）
-    vec4  rotation;              // offset 16, 16 bytes
-    vec3  scale;                 // offset 32, 12 bytes
-    float opacity;               // offset 44, 4 bytes
+GaussianSplatCore {              // CPU-side packed source data
+    vec3  position;
+    float _pad0;
+    vec4  rotation;
+    vec3  scale;
+    float opacity;
 };                               // = 48 bytes
 ```
 
-std430 规则下 `vec4 rotation` 需 16 字节对齐，`position`（12 bytes）之后插入 4 字节 padding。C++ 端使用 `alignas(16)` 或显式 padding 字段，并添加 `static_assert(sizeof(GaussianSplatCore) == 48)` + `offsetof` 校验。
+**GPU core layout（Step 5.6）**：上传时转换为渲染直接需要的 world-space covariance 数据。具体命名在实现时确定，布局语义如下：
 
-Loader 适配：fastgltf `iterateAccessor` 按属性逐一读取，先读入临时 vector，再循环交织填入 `GaussianSplatCore` 数组。
+```
+GaussianSplatGpuCore {
+    vec3  position;              // world-space center
+    float opacity;
+    vec3  cov0;                  // world covariance column/row 0
+    float _pad0;
+    vec3  cov1;
+    float _pad1;
+    vec3  cov2;
+    float _pad2;
+};
+```
+
+上传时计算 `C_local = R * S² * Rᵀ`，再以 node linear transform `M` 得到 `C_world = M * C_local * Mᵀ`。Projection shader 直接读取 covariance，避免每帧重复 quaternion→matrix 与 scale→covariance 计算，并修复 node rotation/scale 未作用于 splat 形状的问题。
 
 #### SH GPU Buffer 布局
 
@@ -912,38 +944,44 @@ Projection pass dispatch 每 workgroup 256 个 splat（`ceil(total_splat_count /
 
 Atomic counter 写入由 projection shader 完成；indirect dispatch buffer（`VkDispatchIndirectCommand`）由 GsProjectionPass 创建并持有，但填充留到 Step 4（sort 编排开头加一个小 compute dispatch 把 counter 值转换为 dispatch struct）。两个 buffer 均由 GsProjectionPass 持有。
 
-Tile binning 输出：
+Tile entry / range 输出：
 
 ```
-tile_offsets[]:   uint32[tile_count]    // 每个 tile 在 tile_splat_ids 中的起始偏移
-tile_counts[]:    uint32[tile_count]    // 每个 tile 的 splat 数量，保留给 tile rendering 读取
-tile_cursors[]:   uint32[tile_count]    // scatter 阶段临时写游标
-tile_splat_ids[]: uint32[]              // 所有 tile 的 splat index 列表（拼接）
+entry_depth_keys[]:    uint32[entry_capacity] // floatBitsToUint(camera_distance)
+entry_tile_ids[]:      uint32[entry_capacity] // tile_y * tile_count_x + tile_x
+entry_splat_ids[]:     uint32[entry_capacity] // compact visible splat index
+entry_indices[]:       uint32[entry_capacity] // 0..entry_capacity-1
+sorted_tile_ids[]:     uint32[entry_capacity]
+sorted_entry_indices[]:uint32[entry_capacity]
+tile_offsets[]:        uint32[tile_count]     // 每个 tile 在 sorted_entry_indices 中的起始偏移
+tile_counts[]:         uint32[tile_count]     // 每个 tile 的有效 entry 数量
 ```
 
-Tile 索引 = `tile_y * tile_count_x + tile_x`。
+Tile 索引 = `tile_y * tile_count_x + tile_x`。Step 5 初版中的 `tile_cursors[]` / `tile_splat_ids[]` 属于 atomic scatter 方案，Step 5.5 后由 sorted entry list 替代。
 
-`tile_counts[]` 与 `tile_cursors[]` 每帧分别在 count/scatter 前通过 `vkCmdFillBuffer` 清零，与 radix sort 阶段的清零策略保持一致。scatter 阶段使用 `atomicAdd(tile_cursors[tile_id], 1)` 获得 tile 内写入偏移，不修改 `tile_counts[]`，避免破坏后续 tile rendering 需要读取的 splat 数量。
+Entry capacity 是可控退化边界：容量不足时 entry generation 只写入 capacity 范围内的数据，并累计 dropped count。后续 sort、range build、tile render 只消费成功写入的 entry；不得使用理论 count 读取未写入或越界数据。
 
-`tile_splat_ids[]` 使用保守容量上限，不做按帧动态重建：容量 = `max_splat_count * kMaxTilesPerSplat`，初始 `kMaxTilesPerSplat = 64`。scatter 写入时计算 `global_index = tile_offsets[tile_id] + local_offset`，若 `global_index` 超出容量则丢弃该条写入。该策略避免 GPU 统计结果 readback 和本帧动态 buffer 分配带来的同步与复杂度；溢出时最多丢弃少量覆盖大量 tile 的 splat，作为当前阶段可接受的视觉退化。
+GS runtime stats 使用 GPU stats buffer 记录 visible splats、entry requested/written/dropped、invalid entries、sort clamped，并通过 per-frame readback buffer 延迟 1-2 帧读回 CPU。DebugUI 显示的统计可滞后，但不得通过同步 readback 阻塞每帧渲染。
 
 ### 颜色空间处理
 
-GS 渲染侧原样输出 SH 求值结果，不做颜色空间转换。gamma 转换由 PresentPass 通过 swapchain image view 格式切换控制（见第 23 节）。
+GS 渲染侧原样输出 SH 求值结果，不做颜色空间转换。Swapchain 始终使用 SRGB view；最终颜色空间处理由 PresentPass shader 完成（见第 23 节）。
 
-- `srgb_rec709_display`：SH 结果已是 sRGB 非线性值，PresentPass 用 UNORM view 直通输出
-- `lin_rec709_display`：SH 结果是线性值，PresentPass 用 SRGB view 输出（硬件自动 linear → sRGB）
+- `srgb_rec709_display`：SH 结果已是 sRGB 非线性值，PresentPass 先做精确 piecewise sRGB→linear，再写入 SRGB attachment，由硬件 linear→sRGB 编码
+- `lin_rec709_display`：SH 结果是线性值，PresentPass 直接输出 linear，SRGB attachment 负责 linear→sRGB 编码
+- `Unknown`：GS 模式下视为异常，记录 warning，并按 `lin_rec709_display` fallback
 
 ### 抗锯齿
 
 直接实现 Mip Splatting（Yu et al. 2024）。两部分改动均在投影 compute shader 中：
 
-1. **3D 频率限制**：根据 splat 到相机距离和像素大小计算采样率，将 scale 各轴 clamp 到最小阈值，防止 sub-pixel Gaussian 产生锯齿
+1. **3D 频率限制**：Step 3 初版基于 scale clamp；Step 5.6 改为 covariance layout 后，在 world covariance 上加入各向同性 lower-bound 近似，防止 sub-pixel Gaussian 产生锯齿
 
    ```
    pixel_size_at_splat = (2 * tan(fov/2) * distance) / screen_height
    min_threshold = pixel_size_at_splat * sqrt(1 / (2 * ln(2)))
-   scale_filtered = max(scale, min_threshold)   // 每轴独立 clamp
+   min_variance = min_threshold * min_threshold
+   cov_world_filtered = cov_world + min_variance * I
    ```
 
 2. **2D Mip Filter**：投影得到 2D covariance 后，加各向同性滤波核
@@ -954,7 +992,7 @@ GS 渲染侧原样输出 SH 求值结果，不做颜色空间转换。gamma 转�
 
    `filter_size = 0.3` 是原始 3DGS 实现使用的值。此加法同时提供数值正则化——防止极端视角下 covariance 投影产生近奇异矩阵。
 
-不需要新 pass、新 buffer、新数据结构，改动约 10-20 行 shader 代码。
+2D filter 不需要新 pass；3D filter 在 Step 5.6 随 GPU covariance layout 一并调整。
 
 ### 输出目标
 
@@ -971,8 +1009,11 @@ Push Descriptor（Set 3），与现有 compute/RT pass 模式一致。GS compute
 | Pass | 字段 | 说明 |
 |------|------|------|
 | Projection | `splat_offset`, `splat_count`, `sh_degree`, `screen_width`, `screen_height` | 按 SH degree 分组 dispatch |
+| Sort prepare | `workgroup_size`, `max_element_count` | counter → clamped indirect dispatch |
 | Sort | `element_count`, `pass_index` | 哪个 8-bit 段 |
-| Tile Binning | `visible_count`, `tile_count_x`, `tile_count_y` | tile 网格尺寸 |
+| Tile Entry | `entry_capacity`, `tile_count_x`, `tile_count_y` | 生成 per-tile entries |
+| Tile Sort Gather | `entry_count` | depth-sorted index → tile-id sort key/value |
+| Tile Range Build | `entry_count`, `tile_count` | sorted entries → tile offsets/counts |
 | Tile Rendering | `tile_count_x`, `tile_count_y` | tile 网格尺寸 |
 
 相机矩阵、位置、near/far plane 从 GlobalUBO（Set 0 binding 0）读取，不占 push constant 空间。
@@ -984,18 +1025,18 @@ GS GPU 资源分两类：
 | 类型 | 随什么变化 | Resize 行为 |
 |------|-----------|-------------|
 | 场景数据 buffer（core attributes, SH） | splat 数量 | 场景加载时创建/销毁，resize 不影响 |
-| 中间 buffer（projection output, sort, tile） | splat 数量 + 屏幕尺寸 | splat 数量决定大小的在场景加载时分配；tile 相关 buffer（tile_offsets, tile_counts, tile_splat_ids）在 resize 时按新 tile 数量重建 |
+| 中间 buffer（projection output, sort, tile entries/ranges, stats） | splat 数量 + entry capacity + 屏幕尺寸 | splat 数量决定 projection buffer；entry capacity 决定 sort/entry buffer；tile_offsets/tile_counts 随 tile 数量在 resize 时重建 |
 | GS color buffer | 屏幕尺寸 | RG managed image，resize 自动重建 |
 
 GS pass 类需要实现 `on_resize()` 处理 tile 数量变化。
 
 ### RenderMode 流转
 
-`Application` 中的 `pt_mode_` bool 替换为 `RenderMode render_mode_` 枚举。RenderInput 新增 `render_mode` 字段。Renderer::render() 根据 `input.render_mode` 分发到 `render_path_tracing()` 或 `render_gaussian_splatting()`。
+Application UI 保留 `pt_mode_` bool 与 `Path Tracing` checkbox：checked 表示 PathTracing，unchecked 表示 GaussianSplatting。`RenderInput` 新增 `render_mode` 字段，Application 在填充 RenderInput 时将 bool 转换为 `RenderMode` enum。Renderer::render() 根据 `input.render_mode` 分发到 `render_path_tracing()` 或 `render_gaussian_splatting()`。
 
-- GS 模式但无 GS 场景：走 `render_imgui_only()`（与 PT 无场景时行为一致）
+- GS 模式但无 GS 场景或 GS 路径未完成：走 `render_imgui_only()`（与 PT 无场景时行为一致）
 - PT 模式但无 RT 支持：走 `render_imgui_only()`（保持现有行为）
-- DebugUI 的 RenderMode 下拉菜单控制切换
+- GS 完成前 DebugUI 的 `Path Tracing` checkbox 保持 disabled，不允许取消勾选；Step 6 完成后解锁
 
 ---
 
@@ -1007,32 +1048,20 @@ GS pass 类需要实现 `on_resize()` 处理 tile 数量变化。
 
 ### 模式分支
 
-通过 push constant 传入 `uint mode`，shader 根据 mode 选择处理路径：
+通过 push constant 传入 `mode` 与 `gs_color_space`，shader 根据模式选择处理路径：
 
 | 模式 | 来源 | 处理 |
 |------|------|------|
-| PT | 线性 HDR | exposure 调节 + ACES tone curve |
-| GS | display-referred | passthrough（直接输出） |
+| PT | 线性 HDR | exposure 调节 + ACES tone curve，输出 linear LDR |
+| GS + `LinRec709Display` | 线性 display-referred | 直接输出 linear |
+| GS + `SrgbRec709Display` | sRGB display-referred | shader 内做精确 piecewise sRGB→linear，再输出 linear |
+| GS + `Unknown` | 缺失/未知元数据 | 记录 warning，按 `LinRec709Display` fallback |
 
-### 硬件 Gamma 控制
+### Swapchain View 与 Gamma 策略
 
-Swapchain image 创建两个 VkImageView：
+Swapchain 始终使用 SRGB image view 作为 color attachment。PT 和 GS linear 输出由 SRGB attachment 硬件完成 linear→sRGB 编码；GS sRGB 输入先在 shader 中 decode，再交给同一 SRGB attachment 编码。这样 PresentPass 和 ImGui pass 始终使用同一个 swapchain view format，避免 SRGB/UNORM view 混用造成 pipeline format 与 UI overlay 复杂度。
 
-| View | 格式 | 效果 | 使用场景 |
-|------|------|------|---------|
-| SRGB view | `VK_FORMAT_B8G8R8A8_SRGB` | 硬件自动 linear → sRGB | PT 输出 / GS `lin_rec709_display` |
-| UNORM view | `VK_FORMAT_B8G8R8A8_UNORM` | 直通，不做 gamma | GS `srgb_rec709_display` |
-
-PresentPass 在 `record()` 时根据 RenderMode 和 color_space 元数据选择 view 作为 color attachment。shader 代码无需关心 gamma 转换。
-
-#### Swapchain Mutable Format 前置条件
-
-创建 UNORM view 要求 swapchain 支持格式重解释。Swapchain 创建时需要：
-
-1. `VkSwapchainCreateInfoKHR::flags` 设置 `VK_SWAPCHAIN_CREATE_MUTABLE_FORMAT_BIT_KHR`
-2. 通过 `VkImageFormatListCreateInfo` pNext 声明兼容格式列表（SRGB + UNORM）
-
-这是 RHI 层（Swapchain）的改动。
+不再创建额外 UNORM swapchain image view，也不要求 `VK_SWAPCHAIN_CREATE_MUTABLE_FORMAT_BIT_KHR`、`VkImageFormatListCreateInfo` 或 `VK_KHR_swapchain_mutable_format`。Swapchain 保持普通 SRGB surface format，PresentPass 与 ImGui 均绑定 `swapchain.image_views[image_index]`。
 
 #### GsColorSpace 枚举
 
@@ -1040,27 +1069,15 @@ PresentPass 在 `record()` 时根据 RenderMode 和 color_space 元数据选择 
 
 ```cpp
 enum class GsColorSpace : uint8_t {
-    Unknown,              // PT / no GS loaded
-    SrgbRec709Display,    // srgb_rec709_display → UNORM view
-    LinRec709Display,     // lin_rec709_display → SRGB view
+    Unknown,              // PT / no GS loaded; GS mode fallback to linear with warning
+    SrgbRec709Display,    // shader sRGB→linear, then SRGB attachment encodes
+    LinRec709Display,     // direct linear output, SRGB attachment encodes
 };
 ```
 
-### UNORM ImageView 管理
-
-UNORM views 存储在 `Swapchain` 类中（`unorm_image_views`），与 `image_views`（SRGB）平行管理。同一批 VkImage、同一生命周期，随 swapchain 创建/销毁。PresentPass 通过 swapchain 指针引用。
-
 ### View 选择逻辑（C++ 侧）
 
-`FrameContext` 新增 `render_mode`、`image_index`、`gs_color_space` 字段。PresentPass::record() 根据两者组合选择：
-
-| RenderMode | GsColorSpace | 使用的 View |
-|------------|-------------|------------|
-| PathTracing | 任意 | SRGB |
-| GaussianSplatting | SrgbRec709Display | UNORM |
-| GaussianSplatting | LinRec709Display | SRGB |
-
-Step 1 暂不改 Application/RenderInput，FrameContext 中填写默认值（PathTracing / Unknown），完整流转留待 Step 6。
+`FrameContext` 保留 `render_mode`、`image_index`、`gs_color_space` 字段。PresentPass::record() 始终使用 SRGB swapchain view；`render_mode` 和 `gs_color_space` 只影响 fragment shader push constant，不影响 attachment view。
 
 ### DebugUI 控制
 
@@ -1068,6 +1085,6 @@ GS 相关的 DebugUI 控制项：
 
 | 控制 | 说明 |
 |------|------|
-| RenderMode 下拉菜单 | PathTracing / GaussianSplatting 切换 |
+| Path Tracing checkbox | checked=PT，unchecked=GS；GS 完成前 disabled |
 | Splat Count 显示 | 当前 GS 场景的总 splat 数（只读） |
-| Visible Splat Count 显示 | 当前帧可见 splat 数（GPU readback，只读） |
+| GS runtime stats | visible splats、tile entries requested/written/dropped、invalid entries、sort clamped（延迟 readback，只读） |

@@ -217,7 +217,7 @@ Application 打开文件
 
 ### 概述
 
-GS 渲染采用 Compute Tile-Based Rendering（纯 compute 软光栅），四阶段 compute 管线：Projection+Culling → Radix Sort → Tile Binning → Tile Rendering。输出到与 PT 共享的 color buffer，通过 PresentPass 输出到 swapchain。
+GS 渲染采用 Compute Tile-Based Rendering（纯 compute 软光栅）。管线为 Projection+Culling → Tile Entry Generation → 两次 stable Radix Sort（depth 后 tile-id）→ Tile Range Build → Tile Rendering。输出到独立 GS color buffer，通过 PresentPass 输出到 swapchain。
 
 ### 数据流
 
@@ -225,17 +225,19 @@ GS 渲染采用 Compute Tile-Based Rendering（纯 compute 软光栅），四阶
 GaussianSplatScene (CPU)
     │ upload (场景加载时)
     ▼
-GPU: CoreAttributes SSBO + SH SSBO[degree]
+GPU: Core/Covariance SSBO + SH SSBO[degree]
     │
     ├─ Projection+Culling (compute) ──→ 2D attrs + RGB + depth key
-    │                                        │
-    ├─ Radix Sort (compute, 4 pass) ─────────┤
-    │                                        │
-    ├─ Tile Binning (compute) ───────────────┤
-    │                                        │
-    └─ Tile Rendering (compute, 16×16) ──→ color buffer
-                                                │
-                                          PresentPass → swapchain
+    │
+    ├─ Tile Entry Generation ─────────→ (tile_id, depth, splat_id) entries
+    │
+    ├─ Stable Radix Sort × 2 ─────────→ tile-contiguous, front-to-back entries
+    │
+    ├─ Tile Range Build ──────────────→ per-tile offset/count
+    │
+    └─ Tile Rendering (compute, 16×16) ──→ GS color buffer
+                                                   │
+                                             PresentPass → swapchain
 ```
 
 ### 模块分层
@@ -251,8 +253,8 @@ GPU: CoreAttributes SSBO + SH SSBO[degree]
 
 ### 多 Primitive 合并
 
-多个 `GaussianSplatPrimitive` 的核心属性（position 应用 transform 后）合并为一个 GPU buffer。SH 系数按 degree 分组，投影 pass 按组 dispatch（push constant 传入 offset/count/degree）。后续排序和渲染阶段统一处理，不区分来源 primitive。
+多个 `GaussianSplatPrimitive` 的核心属性合并为一个 GPU buffer。上传时 position 变换到 world space，rotation/scale 转为 world covariance（node linear transform 合入 covariance）。SH 系数按 degree 分组，投影 pass 按组 dispatch（push constant 传入 offset/count/degree）。后续 entry generation、排序和渲染阶段统一处理，不区分来源 primitive。
 
 ### PresentPass（原 TonemappingPass）
 
-统一的 color buffer → swapchain 输出 pass。根据 RenderMode 选择处理路径：PT 走 exposure + tonemapping，GS 走 passthrough。通过 swapchain image 的 SRGB/UNORM view 切换控制硬件 gamma 行为。
+统一的 color buffer → swapchain 输出 pass。根据 RenderMode 选择处理路径：PT 走 exposure + tonemapping；GS 根据 `GsColorSpace` 处理 display-referred 颜色。Swapchain 与 ImGui 始终使用 SRGB view；`srgb_rec709_display` 输入在 Present shader 内先做 sRGB→linear，再由 SRGB attachment 编码输出。
