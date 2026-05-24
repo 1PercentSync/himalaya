@@ -114,7 +114,7 @@
 
 ## Step 5：Tile Binning
 
-- [ ] 创建 `shaders/gs/gs_tile_count.comp`（每个可见 splat 遍历其覆盖 tile，atomicAdd 每 tile 计数）
+- [x] 创建 `shaders/gs/gs_tile_count.comp`（每个可见 splat 遍历其覆盖 tile，atomicAdd 每 tile 计数）
 - [ ] 创建 `shaders/gs/gs_tile_scan.comp`（对 `tile_counts[]` 做 exclusive prefix sum，输出 `tile_offsets[]`）
 - [ ] 创建 `shaders/gs/gs_tile_scatter.comp`（再次遍历可见 splat，按 offset + atomicAdd 写入 tile_splat_ids）
 - [ ] 创建 tile buffer：`tile_offsets[]`、`tile_counts[]`、`tile_cursors[]`、`tile_splat_ids[]`（tile 数量依赖屏幕分辨率，resize 时重建；`tile_splat_ids` 使用保守容量上限）
