@@ -4,6 +4,7 @@
 > 技术决策见 `docs/technical-decisions.md` 第 22-23 节。
 >
 > 每完成一个复选框暂停等待审查。一个 Step 结束时应能编译通过。
+> 编译验证 = C++ 代码编译通过。Shader 为运行时编译（shaderc），编译期不验证。
 
 ---
 
@@ -15,81 +16,104 @@
 | 2 | GPU 排序算法 | 自行实现 GPU Radix Sort |
 | 3 | 排序 key 位宽 | 32-bit key（depth）+ 32-bit value（index）分离，4 pass |
 | 4 | SH 求值时机 | 投影阶段 per-splat 一次 |
-| 5 | GPU 数据布局 | 混合方案：核心属性打包 struct + SH 独立 buffer，CPU 端同步改结构 |
+| 5 | GPU 数据布局 | 混合方案：核心属性打包 struct（48 bytes, std430）+ SH 独立 buffer，CPU 端同步改结构 |
 | 6 | Tile 大小 | 16×16（256 threads/workgroup） |
-| 7 | GS 输出目标 | 写入与 PT 共享的 color buffer（R16G16B16A16F） |
+| 7 | GS 输出目标 | 独立 RG managed image（R16G16B16A16F, Storage + Sampled） |
 | 8 | 输出 Pass | TonemappingPass → PresentPass，push constant mode 分支 + SRGB/UNORM view 切换 |
-| 9 | Descriptor 绑定 | Push Descriptor（Set 3），与现有 pass 一致 |
-| 10 | Compute Pass 拆分 | 四阶段：Projection+Culling → Radix Sort → Tile Binning → Tile Rendering |
+| 9 | Descriptor 绑定 | Set 0（GlobalUBO）+ Push Descriptor（Set 3） |
+| 10 | Compute Pass 拆分 | 四阶段，单 RG pass 内手动 buffer barrier |
 | 11 | 颜色空间处理 | GS 侧原样输出 SH 值，gamma 由 PresentPass view 选择控制 |
-| 12 | 抗锯齿 | 直接实现 Mip Splatting |
+| 12 | 抗锯齿 | 直接实现 Mip Splatting（3D 频率限制 + 2D mip filter） |
 | 13 | 多 Primitive 处理 | 核心属性合并 + SH 按 degree 分组 dispatch |
 | 14 | 背景色 | 纯黑（vec4(0)） |
+| 15 | Buffer barrier 策略 | 四阶段在单个 RG pass 内，阶段间手动 vkCmdPipelineBarrier2 |
+| 16 | 可见 splat 数量 | 投影 pass atomic counter + indirect dispatch |
+| 17 | Depth key 编码 | camera distance 的 floatBitsToUint，升序 = 前到后 |
+| 18 | Early termination | transmittance < 1/255 |
+| 19 | RenderMode 流转 | Application::render_mode_ 枚举 → RenderInput::render_mode → Renderer 分发 |
 
 ---
 
 ## Step 0：数据结构重构
 
-- [ ] 定义 `GaussianSplatCore` 打包 struct（position + rotation + scale + opacity）
+- [ ] 定义 `GaussianSplatCore` 打包 struct（position + pad + rotation + scale + opacity = 48 bytes），添加 `static_assert` 校验 size 和 offset
 - [ ] 将 `GaussianSplatPrimitive` 中 4 个独立 vector 替换为 `vector<GaussianSplatCore>`
-- [ ] 修改 `GaussianSplatLoader` 适配新数据结构
-- [ ] 修改 `ply_converter` 输出适配（如需要）
+- [ ] 修改 `GaussianSplatLoader`：先读入临时 vector，再交织填入 `GaussianSplatCore` 数组
 - [ ] 更新 AABB 计算逻辑（从 `cores[i].position` 读取）
 - [ ] 编译验证
 
+> PLY 转换器不需要修改——它输出 glTF 文件（磁盘格式不变），CPU 端打包由 loader 在加载时完成。
+
 ## Step 1：PresentPass 重构
 
-- [ ] 重命名 `TonemappingPass` → `PresentPass`（头文件、源文件、类名、所有引用）
+- [ ] 重命名 `TonemappingPass` → `PresentPass`（头文件、源文件、类名）
+- [ ] 更新 `Renderer` 中的成员名（`tonemapping_pass_` → `present_pass_`）、include 路径、所有引用
 - [ ] 重命名 shader 文件 `tonemapping.frag` → `present.frag`
-- [ ] 添加 push constant struct（`uint mode`）
+- [ ] 添加 push constant struct（`uint mode`）和 pipeline layout 中的 push constant range
 - [ ] 更新 shader：根据 mode 分支（PT 走 exposure + ACES，GS 走 passthrough）
-- [ ] 为 swapchain image 创建额外的 UNORM VkImageView
-- [ ] `record()` 根据 RenderMode 和 color_space 选择 SRGB/UNORM view
-- [ ] 更新 Renderer 中的 PresentPass 调用
+- [ ] 修改 Swapchain 创建：添加 `VK_SWAPCHAIN_CREATE_MUTABLE_FORMAT_BIT_KHR` + `VkImageFormatListCreateInfo`（SRGB + UNORM 兼容格式列表）
+- [ ] 为每个 swapchain image 创建额外的 UNORM VkImageView（Renderer 或 Swapchain 层管理）
+- [ ] `FrameContext` 新增 `gs_color_space` 字段
+- [ ] `record()` 根据 RenderMode 和 `gs_color_space` 选择 SRGB/UNORM view 作为 color attachment
 - [ ] 编译验证
 
 ## Step 2：GPU Buffer 上传
 
-- [ ] 创建 GS GPU buffer 管理模块（核心属性 SSBO + SH SSBO）
-- [ ] 实现场景加载时的 GPU 上传（staging → device local）
-- [ ] 实现多 primitive 合并上传（核心属性应用 transform 后拼接，SH 按 degree 分组）
-- [ ] 实现场景卸载时的 buffer 销毁
+- [ ] 创建 `framework/include/himalaya/framework/gs_gpu_data.h`（GS GPU buffer 管理类，持有 core SSBO + SH SSBO handles）
+- [ ] 创建 `framework/src/gs_gpu_data.cpp`
+- [ ] 实现 `upload()`：staging → device local 上传核心属性（多 primitive 合并，position 应用 transform）
+- [ ] 实现 SH 上传：按 degree 分组，同 degree 的 primitive SH 数据拼接为一个 SSBO
+- [ ] 记录每个 SH degree 分组的 (splat_offset, splat_count) 供投影 pass dispatch 使用
+- [ ] 实现 `destroy()`：场景卸载时销毁所有 buffer
 - [ ] 编译验证
 
 ## Step 3：投影与剔除 Pass
 
-- [ ] 创建 GS 投影 compute shader（视锥剔除 + 3D→2D covariance 投影）
-- [ ] 实现 SH 求值（支持 degree 0-3，push constant 传 degree）
-- [ ] 实现 Mip Splatting（3D 频率限制 + 2D mip filter）
-- [ ] 创建投影输出中间 buffer（2D 属性 + RGB + depth key）
-- [ ] 创建 GS projection pass 类
+- [ ] 创建 `shaders/gs/gs_projection.comp`（视锥剔除 + 3D covariance 构建 + 2D covariance 投影 + 椭圆主轴分解）
+- [ ] 实现 SH 求值（degree 0-3，通过 push constant `sh_degree` 分支）
+- [ ] 实现 Mip Splatting 3D 频率限制（scale clamp to min_threshold）
+- [ ] 实现 Mip Splatting 2D mip filter（cov2d += 0.3 * I）
+- [ ] 实现 atomic counter 写入可见 splat 数 + 填写 indirect dispatch buffer
+- [ ] 创建投影输出中间 buffer（`GSSplatData2D` 数组，按最大 splat 数分配）
+- [ ] 创建 `passes/include/himalaya/passes/gs_projection_pass.h` 和 `passes/src/gs_projection_pass.cpp`
 - [ ] 编译验证
+
+> 依赖 Step 2 的 GPU buffer 作为输入。
 
 ## Step 4：GPU Radix Sort
 
-- [ ] 实现 prefix sum（scan）compute shader
-- [ ] 实现 radix sort scatter compute shader
-- [ ] 实现 4-pass radix sort 编排（每 pass 8 bit）
-- [ ] 创建 sort 临时 buffer 管理
-- [ ] 创建 RadixSort 工具类
+- [ ] 创建 `shaders/gs/gs_sort_histogram.comp`（per-workgroup digit 频率统计）
+- [ ] 创建 `shaders/gs/gs_sort_scan.comp`（prefix sum）
+- [ ] 创建 `shaders/gs/gs_sort_scatter.comp`（按 prefix sum 结果 scatter key+value）
+- [ ] 创建 `framework/include/himalaya/framework/radix_sort.h` 和 `framework/src/radix_sort.cpp`
+- [ ] 实现 ping-pong buffer 管理（key[2] + value[2] + histogram）
+- [ ] 实现 4-pass 编排（每 pass 处理 8 bit，循环：histogram → scan → scatter）
+- [ ] 实现 `record()`：录制到 command buffer，阶段间插入 buffer barrier
 - [ ] 编译验证
+
+> 输入为 Step 3 的 depth key + splat index，输出为排好序的 key-value 对。
 
 ## Step 5：Tile Binning
 
-- [ ] 实现 per-tile splat 计数 compute shader（atomicAdd）
-- [ ] 实现 prefix sum 计算 per-tile 偏移
-- [ ] 实现 scatter compute shader（将 splat index 写入 per-tile 区域）
-- [ ] 创建 tile binning pass 类
+- [ ] 创建 `shaders/gs/gs_tile_count.comp`（每个可见 splat 遍历其覆盖 tile，atomicAdd 每 tile 计数）
+- [ ] 实现 prefix sum 计算 per-tile 偏移（复用 Step 4 的 scan shader 或独立实现）
+- [ ] 创建 `shaders/gs/gs_tile_scatter.comp`（再次遍历可见 splat，按 offset + atomicAdd 写入 tile_splat_ids）
+- [ ] 创建 tile buffer：`tile_offsets[]`、`tile_counts[]`、`tile_splat_ids[]`（tile 数量依赖屏幕分辨率，resize 时重建）
+- [ ] 创建 `passes/include/himalaya/passes/gs_tile_binning_pass.h` 和 `passes/src/gs_tile_binning_pass.cpp`
 - [ ] 编译验证
+
+> 输入为 Step 4 排序后的 splat index + Step 3 的 2D 属性（tile 覆盖范围）。
 
 ## Step 6：Tile Rendering + 集成
 
-- [ ] 创建 tile rendering compute shader（16×16 workgroup，前到后 alpha blend）
-- [ ] 实现 2D Gaussian 求值 + transmittance early termination
-- [ ] 实现 imageStore 写入 color buffer（背景黑色）
-- [ ] 创建 tile rendering pass 类
-- [ ] 在 Renderer 中实现 `render_gaussian_splatting()` 路径
-- [ ] 将四阶段 pass 注册到 Render Graph
-- [ ] 实现 RenderMode 切换（GS 路径 ↔ PT 路径）
-- [ ] 添加 DebugUI GS 控制面板
+- [ ] 创建 `shaders/gs/gs_tile_render.comp`（16×16 workgroup，前到后 alpha blend，transmittance < 1/255 early termination）
+- [ ] 实现 2D Gaussian 求值（从椭圆主轴计算 Mahalanobis distance，3σ 截断）
+- [ ] 实现 imageStore 写入 GS color buffer（背景初始化为黑色）
+- [ ] 创建 `passes/include/himalaya/passes/gs_tile_render_pass.h` 和 `passes/src/gs_tile_render_pass.cpp`
+- [ ] 创建 GS managed color buffer（R16G16B16A16F, Storage + Sampled, 屏幕尺寸）
+- [ ] 在 Renderer 中实现 `render_gaussian_splatting()`：四阶段录制在单个 RG pass 内，阶段间手动 `vkCmdPipelineBarrier2`
+- [ ] `RenderInput` 新增 `render_mode` 字段，`Application` 中 `pt_mode_` 替换为 `RenderMode render_mode_`
+- [ ] Renderer::render() 根据 `render_mode` 分发（PT / GS / imgui_only fallback）
+- [ ] GS pass 实现 `on_resize()`（重建 tile 相关 buffer）
+- [ ] 添加 DebugUI：RenderMode 下拉菜单、splat count 显示
 - [ ] 编译验证

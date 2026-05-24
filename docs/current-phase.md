@@ -58,11 +58,12 @@ GPU Buffers: CoreAttributes + SH[degree]
 ├─────────────────────────────┤
 │ 4. Tile Rendering           │  16×16 workgroup
 │    前到后 alpha blend       │
-│    → imageStore color buffer│
+│    → imageStore GS color buf│
 └─────────────────────────────┘
     │
     ▼
 PresentPass → swapchain
+(根据 RenderMode 读 PT accumulation 或 GS color buffer)
 ```
 
 ## 实现步骤
