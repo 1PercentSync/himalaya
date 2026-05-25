@@ -9,7 +9,7 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的渲染器
 - **分支**：`reflector` — Path Tracing + Gaussian Splatting
 - **Phase**：Phase 3 — Gaussian Splatting 渲染
-- **进度**：Step 6.1 已完成并通过用户在 CLion 中的编译验证；待开始 Step 6.5（GS performance review）
+- **进度**：Step 6.2 首项已完成并通过用户运行验证；待开始 Step 6.5（GS performance review）
 
 ### 下一个任务
 

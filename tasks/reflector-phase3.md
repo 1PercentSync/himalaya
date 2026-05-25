@@ -214,6 +214,10 @@
 - [x] 清理 Step 1 旧命名残留注释：将 Tonemapping 相关注释更新为 PresentPass / presentation source
 - [x] 编译验证
 
+## Step 6.2：Post Step 6.1 Runtime Fixes
+
+- [x] 修复首次进入 GS 模式时 `vkCmdDispatchIndirect` 使用无效 `VkBuffer` 的崩溃：`GsTileBinningPass` 不再跨 `RadixSort::record()` 保存 `ResourceManager` buffer slot 引用，改为复制 `VkBuffer` handle，避免 RadixSort 首次扩容重分配 slot vector 后引用悬空
+
 ## Step 6.5：GS Performance Review
 
 - [ ] Profiling 完整 GS pipeline GPU 时间，重点记录 Projection、两次 RadixSort、tile range build、tile render

@@ -70,7 +70,7 @@ PresentPass → swapchain
 
 ## 实现步骤
 
-基础 Step 0-6.1 已完成；下一步进入 Step 6.5 profiling，详见 `tasks/reflector-phase3.md`。
+基础 Step 0-6.2 首项已完成；下一步进入 Step 6.5 profiling，详见 `tasks/reflector-phase3.md`。
 
 | Step | 内容 | 说明 |
 |------|------|------|
@@ -87,4 +87,5 @@ PresentPass → swapchain
 | 5.9 | RenderMode flow cleanup | 保留 `Path Tracing` checkbox，内部通过 RenderMode 流转；GS 完成前 checkbox disabled |
 | 6 | Tile Rendering + 集成 | 前到后混合 + Renderer GS 路径 + DebugUI stats |
 | 6.1 | Post Step 6 Correctness / Diagnostics Fixes | 修复 indirect dispatch 同步、stats readback barrier、移除无效 `sort_clamped`、遗留 buffer、scene 清理、shader fallback 与旧注释 |
+| 6.2 | Post Step 6.1 Runtime Fixes | 修复首次进入 GS 模式时 indirect dispatch 使用悬空 `VkBuffer` 的崩溃 |
 | 6.5 | GS performance review | 检查两次 RadixSort、stable scatter local-rank 与 entry capacity 是否需要优化 |
