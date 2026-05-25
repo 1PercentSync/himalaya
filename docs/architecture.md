@@ -217,7 +217,7 @@ Application 打开文件
 
 ### 概述
 
-GS 渲染采用 Compute Tile-Based Rendering（纯 compute 软光栅）。当前已跑通的原型管线为 Projection+Culling → Tile Entry Generation → 两次 stable Radix Sort（depth 后 tile-id）→ Tile Range Build → Tile Rendering。大场景验证后，后续主线改为 Step 6.3 per-tile binning / local ordering，以替代两次全局 RadixSort 主路径。输出到独立 GS color buffer，通过 PresentPass 输出到 swapchain。
+GS 渲染采用 Compute Tile-Based Rendering（纯 compute 软光栅）。当前已跑通的原型管线为 Projection+Culling → Tile Entry Generation → 两次 stable Radix Sort（depth 后 tile-id）→ Tile Range Build → Tile Rendering。大场景验证后，后续主线改为 Step 6.3 per-tile binning，以替代两次全局 RadixSort 主路径；稳定 local ordering 作为后续小项继续设计。输出到独立 GS color buffer，通过 PresentPass 输出到 swapchain。
 
 ### 数据流
 
@@ -233,7 +233,7 @@ GPU: Core/Covariance SSBO + SH SSBO[degree]
     │
     ├─ Per-Tile Scatter ──────────────→ per-tile entries (depth, splat_id)
     │
-    ├─ Per-Tile Local Ordering ───────→ front-to-back entries per tile
+    ├─ Local Ordering (pending) ──────→ front-to-back entries per tile
     │
     └─ Tile Rendering (compute, 16×16) ──→ GS color buffer
                                                    │
@@ -247,7 +247,7 @@ GPU: Core/Covariance SSBO + SH SSBO[degree]
 | GS GPU Buffer 管理 | Framework | GPU SSBO 创建、上传、销毁 |
 | RadixSort | Framework | 通用 32-bit key+value GPU radix sort；保留为工具 / 原型路径，不作为最终 GS 主路径优化目标 |
 | GS Projection Pass | Passes | 投影 + 剔除 + SH 求值 + Mip Splatting |
-| GS Tile Binning Pass | Passes | Step 6.3 后负责 per-tile count / offset / scatter / local ordering |
+| GS Tile Binning Pass | Passes | Step 6.3 后负责 per-tile count / offset / scatter；稳定 local ordering 待后续小项 |
 | GS Tile Rendering Pass | Passes | 前到后 alpha blend → imageStore |
 | PresentPass | Passes | color buffer → swapchain（原 TonemappingPass） |
 

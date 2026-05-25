@@ -67,6 +67,7 @@
 | 53 | GS 主线重构方向 | 采纳 per-tile binning / local ordering 重构作为后续主线；当前两次全局 RadixSort + range build 路径视为已跑通原型，不再通过扩展全局 RadixSort 容量作为最终方案 |
 | 54 | Step 6.2 与 Step 6.3 边界 | Step 6.2 继续完成不依赖架构的低风险 correctness/diagnostics 修正；Step 6.3 负责替换大场景与性能问题的核心 binning / ordering 架构 |
 | 55 | Step 6.5 顺序 | Step 6.5 改为 per-tile refactor 后的 profiling / performance review，不再以当前两次全局 RadixSort 路径作为最终优化目标 |
+| 56 | Step 6.3 baseline 边界 | 先提交 per-tile count / offset / scatter baseline，恢复大场景整体形状并移除两次全局 RadixSort 主路径；bitonic local sort 与 depth-bin atomic append 尝试因画面纯色 / 全屏闪烁撤销，local ordering 作为后续小项重新设计 |
 
 ---
 
@@ -227,13 +228,13 @@
 
 ## Step 6.3：GS Per-Tile Binning Refactor
 
-- [ ] 设计 per-tile pipeline 数据流与 buffer layout：明确 tile count / offset / cursor / entry storage / per-tile overflow stats 的职责，记录需要保留或废弃的旧 buffer
-- [ ] 实现 per-tile count pass：统计每个 tile 的 requested entry 数量，并保留 total requested / max tile count / overflow 诊断输入
-- [ ] 实现 tile-count prefix sum / offset build：用 tile 数量级 scan 生成 per-tile entry range，替代全局 tile-id sort + range build
-- [ ] 实现 per-tile scatter pass：将 covered splat 写入所属 tile range，写入 depth key 与 compact splat id，并处理 capacity / overflow 统计
-- [ ] 实现 per-tile local ordering 策略：在 tile 内按 view-space depth 建立前到后顺序，优先考虑 bounded local sort 或 depth-bin 近似；不得依赖全局两次 RadixSort
-- [ ] 接入 tile render：让 `gs_tile_render.comp` 消费 per-tile ranges / locally ordered entries，并移除主 GS 路径对 `gs_tile_sort_gather.comp` / `gs_tile_range.comp` 的依赖
-- [ ] 迁移 GS runtime stats / DebugUI：显示 per-tile requested、written、overflow、max tile occupancy，并在任何 overflow 时标记输出不是 correctness-valid
+- [x] 设计 per-tile pipeline 数据流与 buffer layout：明确 tile count / offset / cursor / entry storage / per-tile overflow stats 的职责，记录需要保留或废弃的旧 buffer
+- [x] 实现 per-tile count pass：统计每个 tile 的 requested entry 数量，并保留 total requested / max tile count / overflow 诊断输入
+- [x] 实现 tile-count prefix sum / offset build：用 tile 数量级 scan 生成 per-tile entry range，替代全局 tile-id sort + range build
+- [x] 实现 per-tile scatter pass：将 covered splat 写入所属 tile range，写入 depth key 与 compact splat id，并处理 capacity / overflow 统计
+- [ ] 实现 per-tile local ordering 策略：在 tile 内按 view-space depth 建立前到后顺序；bitonic local sort 与 depth-bin atomic append 已撤销，需重新设计稳定方案
+- [x] 接入 tile render：让 `gs_tile_render.comp` 消费 per-tile ranges / entries，并移除主 GS 路径对 `gs_tile_sort_gather.comp` / `gs_tile_range.comp` 的依赖
+- [x] 迁移 GS runtime stats / DebugUI：显示 requested、written、overflow、max tile requested，并在任何 overflow 时标记输出不是 correctness-valid
 - [ ] 编译验证
 - [ ] 大场景运行验证：确认 overflow 行为确定、无随机闪动；若仍有有损 cap，记录画质 / 性能取舍
 

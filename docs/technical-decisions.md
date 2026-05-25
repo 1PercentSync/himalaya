@@ -759,14 +759,14 @@ Projection + Culling
     → Tile Rendering
 ```
 
-大场景运行表明该路径在 requested entries 超过 16M capacity 时会进入 atomic clipping，保留的 entry 集合不稳定并导致闪动；即使小场景无 overflow，两次全局 sort 与按 capacity 清理/scan 也带来过高固定成本。因此 Step 6.3 采纳以下目标管线作为后续主线：
+大场景运行表明该路径在 requested entries 超过 16M capacity 时会进入 atomic clipping，保留的 entry 集合不稳定并导致闪动；即使小场景无 overflow，两次全局 sort 与按 capacity 清理/scan 也带来过高固定成本。因此 Step 6.3 采纳 per-tile pipeline 作为后续主线。当前已提交的 baseline 为 count / offset / scatter，local ordering 仍是后续小项：
 
 ```
 Projection + Culling
     → Per-Tile Count
     → Tile Offset Build
     → Per-Tile Scatter
-    → Per-Tile Local Ordering
+    → Local Ordering (pending)
     → Tile Rendering
 ```
 
@@ -776,8 +776,8 @@ Projection + Culling
 | Per-Tile Count | 可见 splat + 2D 覆盖范围 | 每个 tile 的 requested entry 数量与 overflow 诊断输入 |
 | Tile Offset Build | tile counts | per-tile (offset, count/cap) 表，scan 规模为 tile 数量级 |
 | Per-Tile Scatter | 可见 splat + tile offsets | per-tile contiguous entry list（depth key + compact splat id） |
-| Per-Tile Local Ordering | per-tile entry list | tile 内前到后顺序，使用 bounded local sort 或 depth-bin 近似 |
-| Tile Rendering | per-tile ordered entries + 2D 属性 + RGB | color buffer 像素输出 |
+| Local Ordering (pending) | per-tile entry list | tile 内前到后顺序，需重新设计稳定方案 |
+| Tile Rendering | per-tile entries + 2D 属性 + RGB | color buffer 像素输出 |
 
 这些阶段录制在同一个 RG pass 的 execute lambda 内，阶段之间手动插入 `vkCmdPipelineBarrier2`（COMPUTE → COMPUTE buffer memory barrier）。RenderGraph 只处理跨 pass 的 image barrier，pass 内的 buffer 同步由 pass 自行管理。
 
@@ -791,7 +791,7 @@ Sort prepare 不直接信任 counter 原值，而是使用 `active_count = min(c
 
 ### Shader 文件组织
 
-GS shader 文件位于 `shaders/gs/` 目录。当前 Step 5.5/6 原型包含以下 shader；Step 6.3 会保留 projection / tile render，并用 per-tile count / offset / scatter / local ordering shader 替换两次全局 sort 主路径。
+GS shader 文件位于 `shaders/gs/` 目录。当前 Step 5.5/6 原型包含以下 shader；Step 6.3 baseline 保留 projection / tile render，并用 per-tile count / offset / scatter shader 替换两次全局 sort 主路径。
 
 | 文件 | 用途 |
 |------|------|
@@ -846,15 +846,15 @@ Step 5 初版使用全局 depth sort 后 per-tile count/scan/scatter，但 atomi
 
 最终每个 tile 的 entry range 连续，且 tile 内顺序保持第一次 depth sort 的前到后顺序。若 `tile_entries_dropped` 与 `invalid_tile_entries` 均为 0，则容量策略没有导致画面偏离理想结果。
 
-Step 6.3 采纳 per-tile binning / local ordering 重构作为后续主线：
+Step 6.3 采纳 per-tile binning baseline 作为后续主线，local ordering 作为独立小项继续设计：
 
 1. Count：每个可见 splat 遍历覆盖 tile，只统计每 tile requested entry 数量与总 requested 数
 2. Offset build：对 tile 数量级 counts 做 prefix sum，生成每个 tile 的 entry range / cap；避免对全局 entry capacity 做两次 radix sort
 3. Scatter：再次遍历覆盖 tile，将 `(depth_key, splat_id)` 写入对应 tile range
-4. Local ordering：在 tile 内建立前到后顺序，优先评估 bounded local sort 或 depth-bin 近似；不得依赖全局两次 RadixSort
-5. Render：tile render 直接消费 per-tile ordered entries
+4. Local ordering：在 tile 内建立前到后顺序；bitonic global-memory local sort 与 depth-bin atomic append 尝试已撤销，需重新设计稳定方案；不得依赖全局两次 RadixSort
+5. Render：tile render 直接消费 per-tile entries
 
-per-tile 重构的目标是让工作量主要跟实际 visible entries / tile occupancy 相关，避免当前路径的小场景固定 16M capacity 成本，并将大场景 overflow 变成 per-tile 可诊断、可控且确定的退化策略，而不是全局 atomic clipping 的随机闪动。
+per-tile 重构的目标是让工作量主要跟实际 visible entries / tile occupancy 相关，避免当前路径的小场景固定 16M capacity 成本，并将大场景 overflow 变成 per-tile 可诊断、可控且确定的退化策略，而不是全局 atomic clipping 的随机闪动。当前 baseline 能恢复大场景整体形状，但由于缺少稳定 local ordering，仍存在排序错误与闪烁。
 
 ### Tile 大小
 

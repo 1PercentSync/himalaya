@@ -8,7 +8,7 @@
 
 ## 背景
 
-Phase 2 完成了 GS 数据管线（PLY → glTF 转换 + GS glTF 加载），CPU 端已有完整的 `GaussianSplatScene` 数据。Phase 3 构建从 CPU 数据到屏幕像素的完整渲染路径：GPU buffer 上传、compute tile-based 管线、输出到 swapchain。当前两次全局 RadixSort 的 tile-entry 原型已跑通，但大场景 entry overflow 与小场景固定容量开销证明该架构不适合作为最终主线；Step 6.3 采纳 per-tile binning / local ordering 重构。
+Phase 2 完成了 GS 数据管线（PLY → glTF 转换 + GS glTF 加载），CPU 端已有完整的 `GaussianSplatScene` 数据。Phase 3 构建从 CPU 数据到屏幕像素的完整渲染路径：GPU buffer 上传、compute tile-based 管线、输出到 swapchain。当前两次全局 RadixSort 的 tile-entry 原型已跑通，但大场景 entry overflow 与小场景固定容量开销证明该架构不适合作为最终主线；Step 6.3 采纳 per-tile binning baseline，local ordering 继续作为后续小项。
 
 ## 范围
 
@@ -18,7 +18,7 @@ Phase 2 完成了 GS 数据管线（PLY → glTF 转换 + GS glTF 加载），CP
 - **GPU Buffer 管理**（Framework 层）：GS 数据的 GPU buffer 创建、上传、销毁
 - **GPU Radix Sort**（Framework 层）：通用 compute stable radix sort（32-bit key + 32-bit value），保留为工具 / 已跑通原型依赖，不再作为最终 GS 主路径优化目标
 - **GS Projection Pass**（Passes 层）：投影 + 视锥剔除 + SH 求值 + Mip Splatting
-- **GS Tile Binning / Ordering Pass**（Passes 层）：Step 6.3 重构为 per-tile count / scatter / local ordering，替代两次全局 RadixSort 主路径
+- **GS Tile Binning / Ordering Pass**（Passes 层）：Step 6.3 重构为 per-tile count / offset / scatter baseline，替代两次全局 RadixSort 主路径；local ordering 待后续稳定方案
 - **GS Tile Rendering Pass**（Passes 层）：前到后 alpha blend + early termination
 - **GS Compute Shaders**（Shaders）：投影、排序、分 tile、渲染的 compute shader
 
@@ -53,8 +53,8 @@ GPU Buffers: Core/Covariance + SH[degree]
 │ 2. Per-Tile Binning         │  Step 6.3 target
 │    count → offsets → scatter│
 ├─────────────────────────────┤
-│ 3. Per-Tile Local Ordering  │  tile 内前到后顺序
-│    bounded sort / depth bins│
+│ 3. Local Ordering (pending) │  Step 6.3 follow-up
+│    稳定 tile 内前到后顺序   │
 ├─────────────────────────────┤
 │ 4. Tile Rendering           │  16×16 workgroup
 │    前到后 alpha blend       │
@@ -68,7 +68,7 @@ PresentPass → swapchain
 
 ## 实现步骤
 
-基础 Step 0-6.2 已完成；下一步进入 Step 6.3 per-tile binning refactor；Step 6.5 改为重构后的 profiling，详见 `tasks/reflector-phase3.md`。
+基础 Step 0-6.2 已完成；Step 6.3 已提交 per-tile count / offset / scatter baseline，下一步重新设计稳定 local ordering；Step 6.5 改为重构后的 profiling，详见 `tasks/reflector-phase3.md`。
 
 | Step | 内容 | 说明 |
 |------|------|------|
@@ -86,5 +86,5 @@ PresentPass → swapchain
 | 6 | Tile Rendering + 集成 | 前到后混合 + Renderer GS 路径 + DebugUI stats |
 | 6.1 | Post Step 6 Correctness / Diagnostics Fixes | 修复 indirect dispatch 同步、stats readback barrier、移除无效 `sort_clamped`、遗留 buffer、scene 清理、shader fallback 与旧注释 |
 | 6.2 | Post Step 6.1 Runtime Fixes | 修复首次进入 GS 模式时 indirect dispatch 使用悬空 `VkBuffer` 的崩溃；后续修正 AABB、depth key 与 overflow 诊断 |
-| 6.3 | GS Per-Tile Binning Refactor | 用 per-tile count / offset / scatter / local ordering 替换两次全局 RadixSort 主路径，解决大场景 overflow 与固定容量性能问题 |
+| 6.3 | GS Per-Tile Binning Refactor | 已用 per-tile count / offset / scatter baseline 替换两次全局 RadixSort 主路径；local ordering 作为后续小项重新设计 |
 | 6.5 | GS performance review | 重构后 profiling per-tile pipeline，决定 LOD、阈值剔除、tile size 或排序策略优化 |
