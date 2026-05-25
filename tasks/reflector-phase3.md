@@ -41,7 +41,7 @@
 | 27 | 投影输出 + counter buffer 持有者 | GsProjectionPass 持有（投影输出 SSBO + depth key/value buffer + counter buffer + indirect dispatch buffer），与 ReferenceViewPass 持有 accumulation 资源模式一致 |
 | 28 | Indirect dispatch 填写时机 | Step 3 只写 atomic counter，不做 count→dispatch struct 转换。Indirect buffer 在 Step 3 创建但不填充；填充留到 Step 4（sort 编排开头加一个小 compute dispatch）|
 | 29 | Projection workgroup size | 256，与 radix sort 独立（sort 的 workgroup 是 sort 自己的实现细节）。dispatch = `ceil(total_splat_count / 256)` |
-| 30 | Step 3 排序输入遗漏修正 | Projection shader 在 `atomicAdd` 得到 `visible_index` 后写入 `depth_keys[visible_index] = floatBitsToUint(camera_distance)` 和 `splat_indices[visible_index] = visible_index`。后续排序后用 `splat_indices[sorted_i]` 索引 `splats_2d[]` |
+| 30 | Step 3 排序输入遗漏修正 | Projection shader 在 `atomicAdd` 得到 `visible_index` 后写入 `depth_keys[visible_index] = floatBitsToUint(camera_distance)`；Step 6.1 删除未被 tile-entry pipeline 使用的 `splat_indices[]` |
 | 31 | Sort prepare shader | 新增 `shaders/gs/gs_sort_prepare.comp`，单线程读取 visible counter，写入 `VkDispatchIndirectCommand(ceil(visible_count / workgroup_size), 1, 1)` |
 | 32 | Radix sort scan 结构 | scan 使用多级方案：per-block scan → block-level scan → final combine。histogram 为 `digit × block_count` 二维表，scatter 必须保持稳定以保证 LSD radix sort 正确 |
 | 33 | Tile binning 清零策略 | Step 5 初版决策；Step 5.5 废弃 count/scatter 清零流程，改为 entry generation + sorted range build |
@@ -53,10 +53,10 @@
 | 39 | Tile entry 排序 key | 不扩展 64-bit radix sort；复用现有 32-bit stable RadixSort 两次排序，先 depth 后 tile-id，依赖第二次稳定排序保留 tile 内 depth 顺序 |
 | 40 | Entry 容量策略 | 固定 entry capacity：`min(max_splat_count * kAvgTilesBudget, kMaxSortableEntries)`；初始 `kAvgTilesBudget = 16`，`kMaxSortableEntries = 16 * 1024 * 1024` |
 | 41 | 可控退化诊断 | entry 容量不足时安全丢弃并记录统计；只要 dropped/invalid/clamped 计数为 0，即认为容量策略未导致画面偏离理想结果 |
-| 42 | GS runtime stats | 增加 GPU stats buffer + per-frame readback buffer，延迟 1-2 帧读回 visible splats、entry requested/written/dropped、invalid count、sort clamped 等统计 |
+| 42 | GS runtime stats | 增加 GPU stats buffer + per-frame readback buffer，延迟 1-2 帧读回 visible splats、entry requested/written/dropped、invalid count 等统计；无真实写入语义的 `sort_clamped` 在 Step 6.1 删除 |
 | 43 | Projection group barrier | 多 SH group projection dispatch 之间插入 compute→compute buffer barrier，覆盖 counter、projected splats、depth key/value 等共享输出 |
 | 44 | Sort prepare clamp | `gs_sort_prepare.comp` 根据 `min(counter, max_element_count)` 写 indirect dispatch，避免 counter 超容量时调度大量空 workgroup |
-| 45 | Sort 规模上限 | Step 5.5 显式保护现有 scan 的 `chunk_count <= 256` 规模假设；超过当前可排序范围时 clamp 并记录 `sort_clamped` |
+| 45 | Sort 规模上限 | Step 5.5 显式保护现有 scan 的 `chunk_count <= 256` 规模假设；Step 6.1 后 capacity 退化主要通过 entry dropped 诊断 |
 | 46 | Node transform 修正边界 | position-only transform 属于 correctness bug，但涉及 GPU core layout 和 projection shader，拆到 Step 5.6 处理 |
 | 47 | GsGpuData 接入边界 | Renderer 持有并上传 GsGpuData 属于 Step 2 集成遗漏，拆到 Step 5.7 处理 |
 | 48 | Compute helper 整理 | 重复 Vulkan compute 样板抽到 RHI 层 `compute_utils`，拆到 Step 5.8 处理，允许修改 `rhi/CMakeLists.txt` |
@@ -114,7 +114,7 @@
 
 ## Step 4：GPU Radix Sort
 
-- [x] 修正 Step 3 遗漏：Projection shader 写入排序输入 `depth_keys[]` 和 `splat_indices[]`，其中 value 使用 `visible_index`
+- [x] 修正 Step 3 遗漏：Projection shader 写入排序输入 `depth_keys[]`；Step 6.1 删除未使用的 `splat_indices[]`
 - [x] 创建 `shaders/gs/gs_sort_prepare.comp`（visible counter → `VkDispatchIndirectCommand`）
 - [x] 创建 `shaders/gs/gs_sort_histogram.comp`（per-workgroup digit 频率统计）
 - [x] 创建 `shaders/gs/gs_sort_scan.comp`（prefix sum，多级 scan）
@@ -150,7 +150,7 @@
 - [x] 用现有 32-bit stable RadixSort 执行两次排序：先按 depth，再按 tile-id 稳定排序
 - [x] 新增 gather pass：depth-sorted entry index → tile sort key/value
 - [x] 新增 tile range build pass：从 sorted tile ids 生成 `tile_offsets[]` / `tile_counts[]`，替代原 `gs_tile_scan.comp` prefix-sum 流程
-- [x] 增加 GS runtime stats GPU buffer 与 per-frame delayed readback buffer，缓存 visible splats、entry requested/written/dropped、invalid entries、sort clamped
+- [x] 增加 GS runtime stats GPU buffer 与 per-frame delayed readback buffer，缓存 visible splats、entry requested/written/dropped、invalid entries
 - [x] Debug/log 中暴露可控退化指标；`GsColorSpace::Unknown` 在 GS 模式按 warning + `LinRec709Display` fallback 处理
 - [x] 编译验证
 
@@ -205,17 +205,17 @@
 
 ## Step 6.1：Post Step 6 Correctness / Diagnostics Fixes
 
-- [ ] 修复 `indirect_dispatch_buffer` 复用的 WAR 同步缺口：gather / range 的 indirect read 后、下一次 sort prepare storage write 前插入 `DRAW_INDIRECT → COMPUTE` buffer barrier，或拆分独立 indirect buffer
-- [ ] 修复 GS runtime stats readback 前的 barrier：同时覆盖 transfer 写入（fill/copy visible counter）与 compute 写入，避免 `visible_splats` 等统计字段读到 stale 数据
-- [ ] 明确并修复 `sort_clamped` 统计语义：确保真实记录 radix sort clamp，或删除 / 不显示该字段；Step 6.5 不得依赖无效诊断指标
-- [ ] 删除 projection 阶段遗留的 `splat_index_buffer` / `splat_indices[]`，或重新接入明确用途，避免无用 buffer 与绑定增加理解成本
-- [ ] 清空或切换 GS scene 时重置 GS runtime stats / warning flags，并释放或重置不再需要的 projection / tile 中间资源
-- [ ] GS shader / pipeline 不完整时提供安全 fallback：避免 Present 采样未写入的 GS color；可选择 fallback 到 imgui-only 或先 clear GS color
-- [ ] 清理 Step 1 旧命名残留注释：将 Tonemapping 相关注释更新为 PresentPass / presentation source
-- [ ] 编译验证
+- [x] 修复 `indirect_dispatch_buffer` 复用的 WAR 同步缺口：gather / range 的 indirect read 后、下一次 sort prepare storage write 前插入 `DRAW_INDIRECT → COMPUTE` buffer barrier，或拆分独立 indirect buffer
+- [x] 修复 GS runtime stats readback 前的 barrier：同时覆盖 transfer 写入（fill/copy visible counter）与 compute 写入，避免 `visible_splats` 等统计字段读到 stale 数据
+- [x] 明确并修复 `sort_clamped` 统计语义：确保真实记录 radix sort clamp，或删除 / 不显示该字段；Step 6.5 不得依赖无效诊断指标
+- [x] 删除 projection 阶段遗留的 `splat_index_buffer` / `splat_indices[]`，或重新接入明确用途，避免无用 buffer 与绑定增加理解成本
+- [x] 清空或切换 GS scene 时重置 GS runtime stats / warning flags，并释放或重置不再需要的 projection / tile 中间资源
+- [x] GS shader / pipeline 不完整时提供安全 fallback：避免 Present 采样未写入的 GS color；可选择 fallback 到 imgui-only 或先 clear GS color
+- [x] 清理 Step 1 旧命名残留注释：将 Tonemapping 相关注释更新为 PresentPass / presentation source
+- [x] 编译验证
 
 ## Step 6.5：GS Performance Review
 
 - [ ] Profiling 完整 GS pipeline GPU 时间，重点记录 Projection、两次 RadixSort、tile range build、tile render
 - [ ] 检查 `gs_sort_scatter.comp` 的 O(256²) local-rank 是否成为瓶颈
-- [ ] 根据 entry count、dropped count、sort clamped、GPU 时间决定是否优化 RadixSort stable scatter 或扩展 sort 规模
+- [ ] 根据 entry count、dropped count、invalid count、GPU 时间决定是否优化 RadixSort stable scatter 或扩展 sort 规模

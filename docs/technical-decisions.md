@@ -832,7 +832,7 @@ Step 5 初版使用全局 depth sort 后 per-tile count/scan/scatter，但 atomi
 5. Tile-id stable sort：`tile_sort_keys + tile_sort_values` → 最终 sorted tile ids 与 sorted entry indices
 6. Range build：遍历 sorted tile ids，写出 `tile_offsets[]` / `tile_counts[]`
 
-最终每个 tile 的 entry range 连续，且 tile 内顺序保持第一次 depth sort 的前到后顺序。若 `tile_entries_dropped`、`invalid_tile_entries`、`sort_clamped` 均为 0，则容量策略没有导致画面偏离理想结果。
+最终每个 tile 的 entry range 连续，且 tile 内顺序保持第一次 depth sort 的前到后顺序。若 `tile_entries_dropped` 与 `invalid_tile_entries` 均为 0，则容量策略没有导致画面偏离理想结果。
 
 ### Tile 大小
 
@@ -958,13 +958,13 @@ Tile 索引 = `tile_y * tile_count_x + tile_x`。Step 5 初版中的 `tile_curso
 
 Entry capacity 是可控退化边界：容量不足时 entry generation 只写入 capacity 范围内的数据，并累计 dropped count。后续 sort、range build、tile render 只消费成功写入的 entry；不得使用理论 count 读取未写入或越界数据。
 
-GS runtime stats 使用 GPU stats buffer 记录 visible splats、entry requested/written/dropped、invalid entries、sort clamped，并通过 per-frame readback buffer 延迟 1-2 帧读回 CPU。DebugUI 显示的统计可滞后，但不得通过同步 readback 阻塞每帧渲染。
+GS runtime stats 使用 GPU stats buffer 记录 visible splats、entry requested/written/dropped、invalid entries，并通过 per-frame readback buffer 延迟 1-2 帧读回 CPU。DebugUI 显示的统计可滞后，但不得通过同步 readback 阻塞每帧渲染。
 
 Step 6.1 修订以下正确性与诊断约束：
 
 - 复用 `indirect_dispatch_buffer` 时，任何 indirect read 后若下一阶段要以 storage write 重写同一 buffer，必须插入 `DRAW_INDIRECT / INDIRECT_COMMAND_READ → COMPUTE_SHADER / SHADER_STORAGE_WRITE` 的 WAR execution dependency；也可改为使用独立 indirect buffer 避免复用 hazard。
 - stats readback 前的 barrier 必须同时覆盖 transfer 写入（fill/copy visible counter）和 compute shader 写入，确保 `visible_splats`、entry counters 与 diagnostics 字段都对 GPU-to-CPU copy 可见。
-- `sort_clamped` 必须有真实语义：只在 radix sort 输入被容量 clamp 时置位；若暂不实现该语义，不得把它作为 Step 6.5 profiling / capacity 判断依据。
+- Step 6.1 删除无真实写入语义的 `sort_clamped` runtime stat；Step 6.5 profiling / capacity 判断只使用 entry requested/written/dropped、invalid entries 与 GPU 时间。
 - 清空或切换 GS scene 时，必须重置延迟 readback 的 runtime stats、warning guard 与相关中间资源状态，避免 UI 显示旧场景的诊断数据。
 - GS shader / pipeline 不完整时不得让 PresentPass 采样未写入的 GS color；需要 fallback 到 imgui-only，或在失败路径保证 GS color 被清成黑色。
 
@@ -1092,4 +1092,4 @@ GS 相关的 DebugUI 控制项：
 |------|------|
 | Path Tracing checkbox | checked=PT，unchecked=GS；GS 完成前 disabled |
 | Splat Count 显示 | 当前 GS 场景的总 splat 数（只读） |
-| GS runtime stats | visible splats、tile entries requested/written/dropped、invalid entries、sort clamped（延迟 readback，只读） |
+| GS runtime stats | visible splats、tile entries requested/written/dropped、invalid entries（延迟 readback，只读） |

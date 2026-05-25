@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的渲染器
 - **分支**：`reflector` — Path Tracing + Gaussian Splatting
 - **Phase**：Phase 3 — Gaussian Splatting 渲染
-- **进度**：Step 6 已完成并通过用户在 CLion 中的编译验证；Step 6 后静态检查已新增 Step 6.1 修复项，待开始 Step 6.1
+- **进度**：Step 6.1 已完成并通过用户在 CLion 中的编译验证；待开始 Step 6.5（GS performance review）
 
 ### 下一个任务
 
-Step 6.1：修复 `indirect_dispatch_buffer` 复用的 WAR 同步缺口（或拆分独立 indirect buffer）
+Step 6.5：Profiling 完整 GS pipeline GPU 时间，检查 RadixSort stable scatter 与 entry capacity 是否需要优化
 
 ---
 
