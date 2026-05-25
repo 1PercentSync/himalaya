@@ -92,7 +92,10 @@ namespace himalaya::passes {
         const auto &entry_stats = rm_->get_buffer(tile_buffers_.entry_stats_buffer());
         const auto &tile_offsets = rm_->get_buffer(tile_buffers_.tile_offsets_buffer());
         const auto &tile_counts = rm_->get_buffer(tile_buffers_.tile_counts_buffer());
-        const auto &indirect_dispatch = rm_->get_buffer(indirect_dispatch_buffer);
+        // Keep a copied Vulkan handle instead of a ResourceManager slot reference:
+        // RadixSort::record() may allocate sort buffers and reallocate the buffer
+        // slot vector before the later indirect dispatches in this pass.
+        const VkBuffer indirect_dispatch = rm_->get_buffer(indirect_dispatch_buffer).buffer;
 
         vkCmdFillBuffer(cmd.handle(), entry_count.buffer, 0, entry_count.desc.size, 0u);
         vkCmdFillBuffer(cmd.handle(), entry_stats.buffer, 0, entry_stats.desc.size, 0u);
@@ -221,7 +224,7 @@ namespace himalaya::passes {
                 .max_entry_count = tile_buffers_.entry_capacity(),
             };
             cmd.push_constants(gather_pipeline_.layout, VK_SHADER_STAGE_COMPUTE_BIT, &pc, sizeof(pc));
-            vkCmdDispatchIndirect(cmd.handle(), indirect_dispatch.buffer, 0);
+            vkCmdDispatchIndirect(cmd.handle(), indirect_dispatch, 0);
         }
         barrier_gather_outputs_to_compute_read(cmd);
         rhi::buffer_barrier(cmd,
@@ -260,7 +263,7 @@ namespace himalaya::passes {
                 .tile_count = tile_buffers_.tile_count(),
             };
             cmd.push_constants(range_pipeline_.layout, VK_SHADER_STAGE_COMPUTE_BIT, &pc, sizeof(pc));
-            vkCmdDispatchIndirect(cmd.handle(), indirect_dispatch.buffer, 0);
+            vkCmdDispatchIndirect(cmd.handle(), indirect_dispatch, 0);
         }
         barrier_range_outputs_to_compute_read(cmd);
         record_stats_readback(cmd, frame_ctx.frame_index);
