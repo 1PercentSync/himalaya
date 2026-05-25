@@ -34,7 +34,7 @@ PLY → glTF 转换工具 + GS 场景加载。
 
 Compute Tile-Based Rendering 实时渲染管线。
 
-- **Compute Tile-Based 管线**：Projection+Culling → Tile Entry Generation → Stable Radix Sort(depth) → Stable Radix Sort(tile-id) → Tile Range Build → Tile Rendering（16×16 tile，前到后 alpha blend + early termination）
+- **Compute Tile-Based 管线**：Projection+Culling → per-tile count / offset / scatter → per-tile local ordering → Tile Rendering（16×16 tile，前到后 alpha blend + early termination）；两次全局 RadixSort 路径仅作为已跑通原型，不作为最终优化主线
 - **PresentPass 重构**：原 TonemappingPass 泛化，支持 PT tonemapping 和 GS display-referred 输出；swapchain 始终 SRGB view，GS sRGB 输入在 shader 内 decode
 - **Mip Splatting**：投影阶段 3D 频率限制 + 2D mip filter 抗锯齿
 

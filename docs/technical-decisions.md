@@ -747,6 +747,8 @@ nlohmann/json 手动构造 glTF JSON + binary buffer，输出 .gltf + .bin 文�
 
 ### Compute 管线
 
+Step 5.5/6 已跑通的原型管线为：
+
 ```
 Projection + Culling
     → Tile Entry Generation
@@ -757,15 +759,25 @@ Projection + Culling
     → Tile Rendering
 ```
 
+大场景运行表明该路径在 requested entries 超过 16M capacity 时会进入 atomic clipping，保留的 entry 集合不稳定并导致闪动；即使小场景无 overflow，两次全局 sort 与按 capacity 清理/scan 也带来过高固定成本。因此 Step 6.3 采纳以下目标管线作为后续主线：
+
+```
+Projection + Culling
+    → Per-Tile Count
+    → Tile Offset Build
+    → Per-Tile Scatter
+    → Per-Tile Local Ordering
+    → Tile Rendering
+```
+
 | 阶段 | 输入 | 输出 |
 |------|------|------|
-| Projection + Culling | 原始 splat 数据（GPU buffer） | 可见 splat 的 2D 属性 + RGB + depth key |
-| Tile Entry Generation | 可见 splat + 2D 覆盖范围 | 每个 covered tile 一条 entry：depth key、tile id、splat id |
-| Stable Radix Sort(depth) | entry depth key + entry index | 按 depth 前到后排序的 entry index |
-| Gather Tile Sort Keys | depth-sorted entry index | tile sort key/value（value 仍为 entry index） |
-| Stable Radix Sort(tile_id) | tile id key + entry index | 按 tile 分组、tile 内保持 depth 顺序的 entry index |
-| Tile Range Build | sorted tile ids | per-tile (offset, count) 表 |
-| Tile Rendering | per-tile entry range + 2D 属性 + RGB | color buffer 像素输出 |
+| Projection + Culling | 原始 splat 数据（GPU buffer） | 可见 splat 的 2D 属性 + RGB + view-space depth key |
+| Per-Tile Count | 可见 splat + 2D 覆盖范围 | 每个 tile 的 requested entry 数量与 overflow 诊断输入 |
+| Tile Offset Build | tile counts | per-tile (offset, count/cap) 表，scan 规模为 tile 数量级 |
+| Per-Tile Scatter | 可见 splat + tile offsets | per-tile contiguous entry list（depth key + compact splat id） |
+| Per-Tile Local Ordering | per-tile entry list | tile 内前到后顺序，使用 bounded local sort 或 depth-bin 近似 |
+| Tile Rendering | per-tile ordered entries + 2D 属性 + RGB | color buffer 像素输出 |
 
 这些阶段录制在同一个 RG pass 的 execute lambda 内，阶段之间手动插入 `vkCmdPipelineBarrier2`（COMPUTE → COMPUTE buffer memory barrier）。RenderGraph 只处理跨 pass 的 image barrier，pass 内的 buffer 同步由 pass 自行管理。
 
@@ -773,13 +785,13 @@ Projection + Culling
 
 投影 pass 剔除不可见 splat 后，可见数量是动态的。投影 shader 使用 atomic counter 写入可见 splat 数。indirect dispatch buffer（`VkDispatchIndirectCommand`）由 GsProjectionPass 创建，`gs_sort_prepare.comp` 读取 counter 并写入 clamped dispatch dimensions。
 
-Projection shader 在 `atomicAdd` 得到 `visible_index` 后同步写入 `GSSplatData2D` 和 `depth_keys[visible_index] = floatBitsToUint(camera_distance)`。多 SH degree group 分多次 dispatch 时，每个 group dispatch 后必须插入 compute→compute buffer barrier，确保 shared counter 和 projection 输出对下一组可见。
+Projection shader 在 `atomicAdd` 得到 `visible_index` 后同步写入 `GSSplatData2D` 和 depth key。Step 3/5.5 初版 depth key 为 `floatBitsToUint(camera_distance)`；Step 6.2 修订为 view-space depth（如 `floatBitsToUint(-view_pos.z)`），与屏幕空间透明混合前后关系一致。多 SH degree group 分多次 dispatch 时，每个 group dispatch 后必须插入 compute→compute buffer barrier，确保 shared counter 和 projection 输出对下一组可见。
 
 Sort prepare 不直接信任 counter 原值，而是使用 `active_count = min(counter, max_element_count)` 计算 `VkDispatchIndirectCommand(ceil(active_count / workgroup_size), 1, 1)`。这同时用于 visible splat sort 和 tile entry sort，避免 capacity 被 clamp 后仍调度大量空 workgroup。
 
 ### Shader 文件组织
 
-GS shader 文件位于 `shaders/gs/` 目录：
+GS shader 文件位于 `shaders/gs/` 目录。当前 Step 5.5/6 原型包含以下 shader；Step 6.3 会保留 projection / tile render，并用 per-tile count / offset / scatter / local ordering shader 替换两次全局 sort 主路径。
 
 | 文件 | 用途 |
 |------|------|
@@ -794,7 +806,7 @@ GS shader 文件位于 `shaders/gs/` 目录：
 
 ### GPU 排序
 
-自行实现 GPU Radix Sort。基础 sorter 保持 32-bit key + 32-bit value 分离方案，并要求 scatter 稳定；tile entry 的 `(tile_id, depth)` 复合排序通过两次 32-bit stable sort 实现。
+已实现 GPU Radix Sort 作为 Step 4/5.5 原型基础。基础 sorter 保持 32-bit key + 32-bit value 分离方案，并要求 scatter 稳定；tile entry 的 `(tile_id, depth)` 复合排序通过两次 32-bit stable sort 实现。Step 6.3 后该两次全局 RadixSort 路径不再作为 GS 主线优化目标，RadixSort 可保留为通用工具或对照路径。
 
 | 特性 | 选择 | 理由 |
 |------|------|------|
@@ -803,11 +815,11 @@ GS shader 文件位于 `shaders/gs/` 目录：
 | Tile entry 排序 | depth stable sort → tile-id stable sort | 不扩展 64-bit key；第二次稳定排序保留 tile 内前到后 depth 顺序 |
 | 当前规模上限 | `16 * 1024 * 1024` entries | 现有 scan 假设 `chunk_count <= 256`，Step 5.5 显式 clamp 并统计 |
 
-不采用 32-bit 混合 key（tile_id 与 depth 共用 32 bit 会牺牲 depth 精度），也暂不扩展 64-bit radix sort（需要 8 pass 且带宽翻倍）。
+不采用 32-bit 混合 key（tile_id 与 depth 共用 32 bit 会牺牲 depth 精度），也不把扩展 64-bit / 32M-64M 全局 radix sort 作为最终解决方案；扩容只能推迟 capacity 上限，不能解决两次全局排序、固定 capacity 成本和大场景显存/带宽压力。
 
 #### Depth Key 编码
 
-排序 key = camera distance（splat 中心到相机位置的欧氏距离）的 float bits 重解释为 uint32。IEEE 754 正浮点数的 bit 表示保持单调序，camera distance 恒正，因此 `floatBitsToUint(distance)` 直接作为排序 key，升序排列 = 前到后。
+Step 3/5.5 初版使用 camera distance（splat 中心到相机位置的欧氏距离）的 float bits 重解释为 uint32。Step 6.2 修订为 view-space depth（`-view_pos.z`）的 float bits 重解释为 uint32。两者均为正浮点数，IEEE 754 bit 表示保持单调序；使用 view-space depth 更符合屏幕空间透明混合的前后关系，升序排列 = 前到后。
 
 #### 排序 Buffer
 
@@ -823,7 +835,7 @@ histogram_buffer: uint32[]        // per-digit per-block 计数
 
 ### Tile Binning / Entry Pipeline
 
-Step 5 初版使用全局 depth sort 后 per-tile count/scan/scatter，但 atomic scatter 不能保证同一 tile 内保持 depth 顺序。Step 5.5 改为 tile entry pipeline：
+Step 5 初版使用全局 depth sort 后 per-tile count/scan/scatter，但 atomic scatter 不能保证同一 tile 内保持 depth 顺序。Step 5.5 改为 tile entry pipeline，并在 Step 6 跑通完整渲染：
 
 1. Entry generation：每个可见 splat 遍历覆盖 tile，每个 covered tile 写一条 entry：`entry_depth_keys[]`、`entry_tile_ids[]`、`entry_splat_ids[]`、`entry_indices[]`
 2. Capacity guard：entry capacity = `min(max_splat_count * 16, 16 * 1024 * 1024)`；超出容量的 entry 安全丢弃并累计 dropped count
@@ -833,6 +845,16 @@ Step 5 初版使用全局 depth sort 后 per-tile count/scan/scatter，但 atomi
 6. Range build：遍历 sorted tile ids，写出 `tile_offsets[]` / `tile_counts[]`
 
 最终每个 tile 的 entry range 连续，且 tile 内顺序保持第一次 depth sort 的前到后顺序。若 `tile_entries_dropped` 与 `invalid_tile_entries` 均为 0，则容量策略没有导致画面偏离理想结果。
+
+Step 6.3 采纳 per-tile binning / local ordering 重构作为后续主线：
+
+1. Count：每个可见 splat 遍历覆盖 tile，只统计每 tile requested entry 数量与总 requested 数
+2. Offset build：对 tile 数量级 counts 做 prefix sum，生成每个 tile 的 entry range / cap；避免对全局 entry capacity 做两次 radix sort
+3. Scatter：再次遍历覆盖 tile，将 `(depth_key, splat_id)` 写入对应 tile range
+4. Local ordering：在 tile 内建立前到后顺序，优先评估 bounded local sort 或 depth-bin 近似；不得依赖全局两次 RadixSort
+5. Render：tile render 直接消费 per-tile ordered entries
+
+per-tile 重构的目标是让工作量主要跟实际 visible entries / tile occupancy 相关，避免当前路径的小场景固定 16M capacity 成本，并将大场景 overflow 变成 per-tile 可诊断、可控且确定的退化策略，而不是全局 atomic clipping 的随机闪动。
 
 ### Tile 大小
 
@@ -944,7 +966,7 @@ Atomic counter 写入由 projection shader 完成；indirect dispatch buffer（`
 Tile entry / range 输出：
 
 ```
-entry_depth_keys[]:    uint32[entry_capacity] // floatBitsToUint(camera_distance)
+entry_depth_keys[]:    uint32[entry_capacity] // Step 6.2 后为 floatBitsToUint(view-space depth)
 entry_tile_ids[]:      uint32[entry_capacity] // tile_y * tile_count_x + tile_x
 entry_splat_ids[]:     uint32[entry_capacity] // compact visible splat index
 entry_indices[]:       uint32[entry_capacity] // 0..entry_capacity-1
@@ -964,7 +986,7 @@ Step 6.1 修订以下正确性与诊断约束：
 
 - 复用 `indirect_dispatch_buffer` 时，任何 indirect read 后若下一阶段要以 storage write 重写同一 buffer，必须插入 `DRAW_INDIRECT / INDIRECT_COMMAND_READ → COMPUTE_SHADER / SHADER_STORAGE_WRITE` 的 WAR execution dependency；也可改为使用独立 indirect buffer 避免复用 hazard。
 - stats readback 前的 barrier 必须同时覆盖 transfer 写入（fill/copy visible counter）和 compute shader 写入，确保 `visible_splats`、entry counters 与 diagnostics 字段都对 GPU-to-CPU copy 可见。
-- Step 6.1 删除无真实写入语义的 `sort_clamped` runtime stat；Step 6.5 profiling / capacity 判断只使用 entry requested/written/dropped、invalid entries 与 GPU 时间。
+- Step 6.1 删除无真实写入语义的 `sort_clamped` runtime stat；后续 profiling / capacity 判断只使用 entry requested/written/dropped、invalid entries 与 GPU 时间，Step 6.3 后扩展为 per-tile occupancy / overflow 指标。
 - 清空或切换 GS scene 时，必须重置延迟 readback 的 runtime stats、warning guard 与相关中间资源状态，避免 UI 显示旧场景的诊断数据。
 - GS shader / pipeline 不完整时不得让 PresentPass 采样未写入的 GS color；需要 fallback 到 imgui-only，或在失败路径保证 GS color 被清成黑色。
 
@@ -1034,7 +1056,7 @@ GS GPU 资源分两类：
 | 类型 | 随什么变化 | Resize 行为 |
 |------|-----------|-------------|
 | 场景数据 buffer（core attributes, SH） | splat 数量 | 场景加载时创建/销毁，resize 不影响 |
-| 中间 buffer（projection output, sort, tile entries/ranges, stats） | splat 数量 + entry capacity + 屏幕尺寸 | splat 数量决定 projection buffer；entry capacity 决定 sort/entry buffer；tile_offsets/tile_counts 随 tile 数量在 resize 时重建 |
+| 中间 buffer（projection output, binning / ordering, stats） | splat 数量 + tile 数量 + per-tile entry capacity | splat 数量决定 projection buffer；Step 6.3 后由 tile occupancy / per-tile capacity 决定 binning / ordering buffer；tile_offsets/tile_counts 随 tile 数量在 resize 时重建 |
 | GS color buffer | 屏幕尺寸 | RG managed image，resize 自动重建 |
 
 GS pass 类需要实现 `on_resize()` 处理 tile 数量变化。

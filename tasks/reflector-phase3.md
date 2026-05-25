@@ -28,7 +28,7 @@
 | 14 | 背景色 | 纯黑（vec4(0)） |
 | 15 | Buffer barrier 策略 | 多阶段 GS compute 在单个 RG pass 内，阶段间手动 `vkCmdPipelineBarrier2` |
 | 16 | 可见 splat 数量 | 投影 pass atomic counter + indirect dispatch |
-| 17 | Depth key 编码 | camera distance 的 floatBitsToUint，升序 = 前到后 |
+| 17 | Depth key 编码 | Step 3/5.5 初版使用 camera distance 的 floatBitsToUint；Step 6.2 修订为 view-space depth，避免斜视角下透明混合前后关系错误 |
 | 18 | Early termination | transmittance < 1/255 |
 | 19 | RenderMode 流转 | Application::render_mode_ 枚举 → RenderInput::render_mode → Renderer 分发 |
 | 20 | GsColorSpace 枚举位置 | `scene_data.h`，与 `RenderMode` 同级（均为渲染配置枚举，`FrameContext` 不定义枚举） |
@@ -50,8 +50,8 @@
 | 36 | Tile prefix sum | Step 5 初版决策；Step 5.5 废弃 `gs_tile_scan.comp` 主流程，改为 sorted tile entry range build |
 | 37 | PresentPass 色彩方案修订 | 废弃 SRGB/UNORM swapchain view 切换；swapchain 与 ImGui 始终使用 SRGB view，GS `srgb_rec709_display` 在 `present.frag` 内手动 sRGB→linear 后写入 SRGB attachment |
 | 38 | Tile Binning 重构方向 | 废弃 depth sort → tile count/scan/scatter 的 atomic append 方案；改为生成 per-tile entry，执行 depth stable sort → tile-id stable sort → sorted entry range build |
-| 39 | Tile entry 排序 key | 不扩展 64-bit radix sort；复用现有 32-bit stable RadixSort 两次排序，先 depth 后 tile-id，依赖第二次稳定排序保留 tile 内 depth 顺序 |
-| 40 | Entry 容量策略 | 固定 entry capacity：`min(max_splat_count * kAvgTilesBudget, kMaxSortableEntries)`；初始 `kAvgTilesBudget = 16`，`kMaxSortableEntries = 16 * 1024 * 1024` |
+| 39 | Tile entry 排序 key | Step 5.5 原型不扩展 64-bit radix sort，复用现有 32-bit stable RadixSort 两次排序；Step 6.3 后由 per-tile local ordering 取代主路径 |
+| 40 | Entry 容量策略 | Step 5.5 原型固定 entry capacity：`min(max_splat_count * kAvgTilesBudget, kMaxSortableEntries)`；Step 6.3 改为 per-tile capacity / overflow 诊断策略 |
 | 41 | 可控退化诊断 | entry 容量不足时安全丢弃并记录统计；只要 dropped/invalid/clamped 计数为 0，即认为容量策略未导致画面偏离理想结果 |
 | 42 | GS runtime stats | 增加 GPU stats buffer + per-frame readback buffer，延迟 1-2 帧读回 visible splats、entry requested/written/dropped、invalid count 等统计；无真实写入语义的 `sort_clamped` 在 Step 6.1 删除 |
 | 43 | Projection group barrier | 多 SH group projection dispatch 之间插入 compute→compute buffer barrier，覆盖 counter、projected splats、depth key/value 等共享输出 |
@@ -61,8 +61,12 @@
 | 47 | GsGpuData 接入边界 | Renderer 持有并上传 GsGpuData 属于 Step 2 集成遗漏，拆到 Step 5.7 处理 |
 | 48 | Compute helper 整理 | 重复 Vulkan compute 样板抽到 RHI 层 `compute_utils`，拆到 Step 5.8 处理，允许修改 `rhi/CMakeLists.txt` |
 | 49 | RenderMode UI | 保留 `Path Tracing` checkbox；checked=PT，unchecked=GS。GS 完成前 checkbox 保持 disabled，拆到 Step 5.9 清理内部 RenderMode 流转 |
-| 50 | RadixSort 性能 | 现有 stable scatter 的 O(256²) local rank 暂不优化；Step 6.5 完整 GS 跑通后 profiling 决定是否优化 |
-| 51 | Step 6.1 修复范围 | Step 6 完成后的静态检查发现若干同步、诊断与清理问题，先作为 Step 6.1 全部修复，再进入 Step 6.5 profiling |
+| 50 | RadixSort 性能 | 现有 stable scatter 的 O(256²) local rank 不作为最终主线继续优化；Step 6.3 将用 per-tile binning / local ordering 替代两次全局 RadixSort 主路径 |
+| 51 | Step 6.1 修复范围 | Step 6 完成后的静态检查发现若干同步、诊断与清理问题，先作为 Step 6.1 全部修复；后续 Step 6.2/6.3 处理运行期 correctness 与架构重构 |
+| 52 | 大场景 GS 根因 | 大场景 requested entries 超过 16M capacity 时，atomic append clipping 选择的 entry 集合不稳定，导致闪动和渲染错误；小场景无 dropped entries 时渲染正常，证明当前问题主要来自 overflow / 架构容量限制 |
+| 53 | GS 主线重构方向 | 采纳 per-tile binning / local ordering 重构作为后续主线；当前两次全局 RadixSort + range build 路径视为已跑通原型，不再通过扩展全局 RadixSort 容量作为最终方案 |
+| 54 | Step 6.2 与 Step 6.3 边界 | Step 6.2 继续完成不依赖架构的低风险 correctness/diagnostics 修正；Step 6.3 负责替换大场景与性能问题的核心 binning / ordering 架构 |
+| 55 | Step 6.5 顺序 | Step 6.5 改为 per-tile refactor 后的 profiling / performance review，不再以当前两次全局 RadixSort 路径作为最终优化目标 |
 
 ---
 
@@ -221,8 +225,20 @@
 - [ ] 将 GS depth sort key 从欧氏 `camera_distance` 改为 view-space depth（如 `-view_pos.z`），避免斜视角下透明混合前后关系错误
 - [ ] 强化 GS entry overflow 诊断：当 `entry_dropped > 0` 时在 log / DebugUI 明确标记当前 GS 输出不是 correctness-valid，并显示 dropped/requested 比例
 
+## Step 6.3：GS Per-Tile Binning Refactor
+
+- [ ] 设计 per-tile pipeline 数据流与 buffer layout：明确 tile count / offset / cursor / entry storage / per-tile overflow stats 的职责，记录需要保留或废弃的旧 buffer
+- [ ] 实现 per-tile count pass：统计每个 tile 的 requested entry 数量，并保留 total requested / max tile count / overflow 诊断输入
+- [ ] 实现 tile-count prefix sum / offset build：用 tile 数量级 scan 生成 per-tile entry range，替代全局 tile-id sort + range build
+- [ ] 实现 per-tile scatter pass：将 covered splat 写入所属 tile range，写入 depth key 与 compact splat id，并处理 capacity / overflow 统计
+- [ ] 实现 per-tile local ordering 策略：在 tile 内按 view-space depth 建立前到后顺序，优先考虑 bounded local sort 或 depth-bin 近似；不得依赖全局两次 RadixSort
+- [ ] 接入 tile render：让 `gs_tile_render.comp` 消费 per-tile ranges / locally ordered entries，并移除主 GS 路径对 `gs_tile_sort_gather.comp` / `gs_tile_range.comp` 的依赖
+- [ ] 迁移 GS runtime stats / DebugUI：显示 per-tile requested、written、overflow、max tile occupancy，并在任何 overflow 时标记输出不是 correctness-valid
+- [ ] 编译验证
+- [ ] 大场景运行验证：确认 overflow 行为确定、无随机闪动；若仍有有损 cap，记录画质 / 性能取舍
+
 ## Step 6.5：GS Performance Review
 
-- [ ] Profiling 完整 GS pipeline GPU 时间，重点记录 Projection、两次 RadixSort、tile range build、tile render
-- [ ] 检查 `gs_sort_scatter.comp` 的 O(256²) local-rank 是否成为瓶颈
-- [ ] 根据 entry count、dropped count、invalid count、GPU 时间决定是否优化 RadixSort stable scatter 或扩展 sort 规模
+- [ ] Profiling per-tile GS pipeline GPU 时间，重点记录 Projection、tile count、tile offset build、tile scatter、local ordering、tile render
+- [ ] 检查 per-tile local ordering 与 tile render 是否成为瓶颈，并记录小场景与大场景数据
+- [ ] 根据 per-tile occupancy、overflow、GPU 时间决定是否引入 LOD、alpha/面积阈值剔除、tile size 调整或更高级排序策略
