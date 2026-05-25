@@ -68,7 +68,7 @@ PresentPass → swapchain
 
 ## 实现步骤
 
-基础 Step 0-6.2 首项已完成；Step 6.2 后续先修正 GS AABB、depth key 与 overflow 诊断，随后进入 Step 6.3 per-tile binning refactor；Step 6.5 改为重构后的 profiling，详见 `tasks/reflector-phase3.md`。
+基础 Step 0-6.2 已完成；下一步进入 Step 6.3 per-tile binning refactor；Step 6.5 改为重构后的 profiling，详见 `tasks/reflector-phase3.md`。
 
 | Step | 内容 | 说明 |
 |------|------|------|

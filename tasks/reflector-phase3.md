@@ -221,9 +221,9 @@
 ## Step 6.2：Post Step 6.1 Runtime Fixes
 
 - [x] 修复首次进入 GS 模式时 `vkCmdDispatchIndirect` 使用无效 `VkBuffer` 的崩溃：`GsTileBinningPass` 不再跨 `RadixSort::record()` 保存 `ResourceManager` buffer slot 引用，改为复制 `VkBuffer` handle，避免 RadixSort 首次扩容重分配 slot vector 后引用悬空
-- [ ] 收紧 GS projection 的 ellipse tile AABB：用椭圆主轴的精确包围盒 `sqrt(axis_u * axis_u + axis_v * axis_v)` 替代偏保守的 `abs(axis_u) + abs(axis_v)`，减少无效 tile entries
-- [ ] 将 GS depth sort key 从欧氏 `camera_distance` 改为 view-space depth（如 `-view_pos.z`），避免斜视角下透明混合前后关系错误
-- [ ] 强化 GS entry overflow 诊断：当 `entry_dropped > 0` 时在 log / DebugUI 明确标记当前 GS 输出不是 correctness-valid，并显示 dropped/requested 比例
+- [x] 收紧 GS projection 的 ellipse tile AABB：用椭圆主轴的精确包围盒 `sqrt(axis_u * axis_u + axis_v * axis_v)` 替代偏保守的 `abs(axis_u) + abs(axis_v)`，减少无效 tile entries
+- [x] 将 GS depth sort key 从欧氏 `camera_distance` 改为 view-space depth（如 `-view_pos.z`），避免斜视角下透明混合前后关系错误
+- [x] 强化 GS entry overflow 诊断：当 `entry_dropped > 0` 时在 log / DebugUI 明确标记当前 GS 输出不是 correctness-valid，并显示 dropped/requested 比例
 
 ## Step 6.3：GS Per-Tile Binning Refactor
 

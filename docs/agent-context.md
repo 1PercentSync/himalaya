@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的渲染器
 - **分支**：`reflector` — Path Tracing + Gaussian Splatting
 - **Phase**：Phase 3 — Gaussian Splatting 渲染
-- **进度**：Step 6.2 首项已完成并通过用户运行验证；已采纳 Step 6.3 per-tile binning / local ordering 重构作为 GS 主线，后续先完成 Step 6.2 三个低风险修正，再进入 Step 6.3
+- **进度**：Step 6.2 已完成并通过用户运行验证；已采纳 Step 6.3 per-tile binning / local ordering 重构作为 GS 主线，待开始 Step 6.3
 
 ### 下一个任务
 
-Step 6.2：收紧 GS projection 的 ellipse tile AABB，减少无效 tile entries
+Step 6.3：设计 per-tile pipeline 数据流与 buffer layout
 
 ---
 
