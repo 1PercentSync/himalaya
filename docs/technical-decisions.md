@@ -759,25 +759,32 @@ Projection + Culling
     → Tile Rendering
 ```
 
-大场景运行表明该路径在 requested entries 超过 16M capacity 时会进入 atomic clipping，保留的 entry 集合不稳定并导致闪动；即使小场景无 overflow，两次全局 sort 与按 capacity 清理/scan 也带来过高固定成本。因此 Step 6.3 采纳 per-tile pipeline 作为后续主线。当前已提交的 baseline 为 count / offset / scatter，local ordering 仍是后续小项：
+大场景运行表明该路径在 requested entries 超过 16M capacity 时会进入 atomic clipping，保留的 entry 集合不稳定并导致闪动；即使小场景无 overflow，两次全局 sort 与按 capacity 清理/scan 也带来过高固定成本。Step 6.3 已提交 per-tile count / offset / scatter baseline，但该 baseline 的 `atomicAdd(tile_cursor)` 顺序不是 depth order，也不是稳定顺序，因此不能作为最终 correctness 路径。
+
+后续 correctness-first 主线改为官方 3DGS / gsplat 类似的 deterministic duplicate-with-keys 管线：先让每个 splat 通过 prefix offset 写入自己的确定 entry range，再通过 stable sort 建立 tile 内 depth order。
 
 ```
 Projection + Culling
-    → Per-Tile Count
-    → Tile Offset Build
-    → Per-Tile Scatter
-    → Local Ordering (pending)
+    → Per-Splat Coverage Count
+    → Prefix Sum(splat tile counts)
+    → Duplicate Entries(tile_id, depth_key, splat_id)
+    → Stable Radix Sort(depth)
+    → Gather Tile Sort Keys
+    → Stable Radix Sort(tile_id)
+    → Tile Range Build
     → Tile Rendering
 ```
 
 | 阶段 | 输入 | 输出 |
 |------|------|------|
 | Projection + Culling | 原始 splat 数据（GPU buffer） | 可见 splat 的 2D 属性 + RGB + view-space depth key |
-| Per-Tile Count | 可见 splat + 2D 覆盖范围 | 每个 tile 的 requested entry 数量与 overflow 诊断输入 |
-| Tile Offset Build | tile counts | per-tile (offset, count/cap) 表，scan 规模为 tile 数量级 |
-| Per-Tile Scatter | 可见 splat + tile offsets | per-tile contiguous entry list（depth key + compact splat id） |
-| Local Ordering (pending) | per-tile entry list | tile 内前到后顺序，需重新设计稳定方案 |
-| Tile Rendering | per-tile entries + 2D 属性 + RGB | color buffer 像素输出 |
+| Per-Splat Coverage Count | 可见 splat + 2D 覆盖范围 | 每个 splat 覆盖的 tile 数量、total requested entries、capacity 诊断输入 |
+| Prefix Sum | per-splat tile counts | 每个 splat 的 deterministic entry 写入起点 |
+| Duplicate Entries | 可见 splat + prefix offsets | `(tile_id, depth_key, splat_id, entry_index)` entry arrays，写入位置由 splat prefix 决定 |
+| Stable Sort(depth) | depth key + entry index | 按 view-space depth 前到后排序的 entry index |
+| Stable Sort(tile_id) | tile id + depth-sorted entry index | 每个 tile 连续，且 tile 内保持 depth sort 的稳定顺序 |
+| Tile Range Build | sorted tile ids | per-tile offset/count ranges |
+| Tile Rendering | sorted tile ranges + 2D 属性 + RGB | color buffer 像素输出 |
 
 这些阶段录制在同一个 RG pass 的 execute lambda 内，阶段之间手动插入 `vkCmdPipelineBarrier2`（COMPUTE → COMPUTE buffer memory barrier）。RenderGraph 只处理跨 pass 的 image barrier，pass 内的 buffer 同步由 pass 自行管理。
 
@@ -791,7 +798,7 @@ Sort prepare 不直接信任 counter 原值，而是使用 `active_count = min(c
 
 ### Shader 文件组织
 
-GS shader 文件位于 `shaders/gs/` 目录。当前 Step 5.5/6 原型包含以下 shader；Step 6.3 baseline 保留 projection / tile render，并用 per-tile count / offset / scatter shader 替换两次全局 sort 主路径。
+GS shader 文件位于 `shaders/gs/` 目录。当前保留 projection / tile render；Step 6.3 atomic scatter baseline 包含 per-tile count / offset / scatter shader，后续 deterministic duplicate-with-keys 路径会复用或改造 tile entry / gather / range shader，并短期复用现有 radix sort shader 验证正确性。
 
 | 文件 | 用途 |
 |------|------|
@@ -799,23 +806,26 @@ GS shader 文件位于 `shaders/gs/` 目录。当前 Step 5.5/6 原型包含以�
 | `gs_sort_histogram.comp` | Radix sort 按 digit 统计直方图 |
 | `gs_sort_scan.comp` | Prefix sum（scan） |
 | `gs_sort_scatter.comp` | Radix sort scatter |
-| `gs_tile_entry.comp` | 生成 per-tile entries（depth key、tile id、splat id、entry index） |
-| `gs_tile_sort_gather.comp` | 将 depth-sorted entry index 转为 tile-id sort key/value |
-| `gs_tile_range.comp` | 从 sorted tile ids 构建 per-tile offsets/counts |
+| `gs_tile_count.comp` | Step 6.3 atomic scatter baseline：统计每 tile requested entries |
+| `gs_tile_offset.comp` | Step 6.3 atomic scatter baseline：构建 per-tile offsets/counts 与 stats |
+| `gs_tile_scatter.comp` | Step 6.3 atomic scatter baseline：用 per-tile atomic cursor 写 entry；仅保留为诊断 baseline |
+| `gs_tile_entry.comp` | deterministic duplicate-with-keys 路径：生成 tile entries（depth key、tile id、splat id、entry index），需要改为 prefix offset 写入 |
+| `gs_tile_sort_gather.comp` | deterministic duplicate-with-keys 路径：将 depth-sorted entry index 转为 tile-id sort key/value |
+| `gs_tile_range.comp` | deterministic duplicate-with-keys 路径：从 sorted tile ids 构建 per-tile offsets/counts |
 | `gs_tile_render.comp` | Tile rendering（alpha blend + early termination） |
 
 ### GPU 排序
 
-已实现 GPU Radix Sort 作为 Step 4/5.5 原型基础。基础 sorter 保持 32-bit key + 32-bit value 分离方案，并要求 scatter 稳定；tile entry 的 `(tile_id, depth)` 复合排序通过两次 32-bit stable sort 实现。Step 6.3 后该两次全局 RadixSort 路径不再作为 GS 主线优化目标，RadixSort 可保留为通用工具或对照路径。
+已实现 GPU Radix Sort 作为 Step 4/5.5 原型基础。基础 sorter 保持 32-bit key + 32-bit value 分离方案，并要求 scatter 稳定；tile entry 的 `(tile_id, depth)` 复合排序可通过两次 32-bit stable sort 实现。Step 6.3 ordering 修复短期复用该路径做 correctness 验证；通过后再评估 64-bit key 单次 sort、Onesweep / FidelityFX Parallel Sort 等更适合最终性能目标的方案。
 
 | 特性 | 选择 | 理由 |
 |------|------|------|
 | 算法 | Radix Sort | 百万级 splat / entry 下性能可预测，O(n·k) |
 | Key 位宽 | 32-bit key + 32-bit value 分离 | 单次 sort 4 pass（每 pass 8 bit），depth 精度无损，index 范围无限制 |
 | Tile entry 排序 | depth stable sort → tile-id stable sort | 不扩展 64-bit key；第二次稳定排序保留 tile 内前到后 depth 顺序 |
-| 当前规模上限 | `16 * 1024 * 1024` entries | 现有 scan 假设 `chunk_count <= 256`，Step 5.5 显式 clamp 并统计 |
+| 验证阶段规模上限 | 沿用现有 RadixSort 可支持的 entry capacity | Step 6.3 ordering 修复先恢复 correctness；capacity 应来自实际 requested entries / prefix sum，超出时写确定 dropped stats |
 
-不采用 32-bit 混合 key（tile_id 与 depth 共用 32 bit 会牺牲 depth 精度），也不把扩展 64-bit / 32M-64M 全局 radix sort 作为最终解决方案；扩容只能推迟 capacity 上限，不能解决两次全局排序、固定 capacity 成本和大场景显存/带宽压力。
+不采用 32-bit 混合 key（tile_id 与 depth 共用 32 bit 会牺牲 depth 精度）。短期不把单纯扩展 32M-64M 固定全局 capacity 当作最终解决方案；容量应来自实际 requested entries / prefix sum，并在 overflow 时产生确定诊断。若两次 32-bit sort 验证正确性后仍是主要瓶颈，再实现 64-bit key 单次 sort 或替换为更高性能 radix sort。
 
 #### Depth Key 编码
 
@@ -846,15 +856,14 @@ Step 5 初版使用全局 depth sort 后 per-tile count/scan/scatter，但 atomi
 
 最终每个 tile 的 entry range 连续，且 tile 内顺序保持第一次 depth sort 的前到后顺序。若 `tile_entries_dropped` 与 `invalid_tile_entries` 均为 0，则容量策略没有导致画面偏离理想结果。
 
-Step 6.3 采纳 per-tile binning baseline 作为后续主线，local ordering 作为独立小项继续设计：
+Step 6.3 atomic scatter baseline 的结论：
 
-1. Count：每个可见 splat 遍历覆盖 tile，只统计每 tile requested entry 数量与总 requested 数
-2. Offset build：对 tile 数量级 counts 做 prefix sum，生成每个 tile 的 entry range / cap；避免对全局 entry capacity 做两次 radix sort
-3. Scatter：再次遍历覆盖 tile，将 `(depth_key, splat_id)` 写入对应 tile range
-4. Local ordering：在 tile 内建立前到后顺序；bitonic global-memory local sort 与 depth-bin atomic append 尝试已撤销，需重新设计稳定方案；不得依赖全局两次 RadixSort
-5. Render：tile render 直接消费 per-tile entries
+1. Count / offset / scatter 可以把 overflow 诊断从全局 capacity 转为 per-tile 可观测数据，并恢复大场景整体形状
+2. 但 scatter 使用 `atomicAdd(tile_cursor)` 决定 tile 内 entry 顺序，既不是 view-space depth order，也会随 GPU 调度变化
+3. 在该结果上补 bitonic local sort 过重且曾出现纯色 / 严重错误；depth-bin 若 bin 内仍用 atomic append，则仍会全屏闪烁
+4. 因此不再继续优化 atomic scatter 结果上的 local ordering
 
-per-tile 重构的目标是让工作量主要跟实际 visible entries / tile occupancy 相关，避免当前路径的小场景固定 16M capacity 成本，并将大场景 overflow 变成 per-tile 可诊断、可控且确定的退化策略，而不是全局 atomic clipping 的随机闪动。当前 baseline 能恢复大场景整体形状，但由于缺少稳定 local ordering，仍存在排序错误与闪烁。
+后续采用 deterministic duplicate-with-keys：每个 splat 先通过 prefix sum 获取确定写入区间，entry 内容是 `(tile_id, depth_key, splat_id)`；排序负责建立 tile 内 depth order，tile render 只消费 sorted ranges。目标是先恢复 correctness，再基于真实 GPU 时间决定是否引入 64-bit sort、LOD、阈值剔除、tile size 调整或更高级排序策略。
 
 ### Tile 大小
 

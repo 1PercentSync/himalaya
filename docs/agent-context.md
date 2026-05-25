@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的渲染器
 - **分支**：`reflector` — Path Tracing + Gaussian Splatting
 - **Phase**：Phase 3 — Gaussian Splatting 渲染
-- **进度**：Step 6.3 per-tile count / offset / scatter baseline 已提交；大场景可恢复整体形状，但稳定 local ordering 仍待重新设计
+- **进度**：Step 6.3 per-tile count / offset / scatter baseline 已提交；已确认 per-tile atomic append 无法作为最终 ordering，下一步改为 deterministic duplicate-with-keys 管线
 
 ### 下一个任务
 
-Step 6.3：重新设计 per-tile local ordering 策略，避免 bitonic local sort 纯色问题与 depth-bin atomic append 全屏闪烁问题
+Step 6.3：实现 deterministic duplicate-with-keys ordering：per-splat coverage count → prefix sum → duplicate entries → stable sort(depth) → stable sort(tile id) → tile range build
 
 ---
 
