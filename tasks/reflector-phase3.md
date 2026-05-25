@@ -62,6 +62,7 @@
 | 48 | Compute helper 整理 | 重复 Vulkan compute 样板抽到 RHI 层 `compute_utils`，拆到 Step 5.8 处理，允许修改 `rhi/CMakeLists.txt` |
 | 49 | RenderMode UI | 保留 `Path Tracing` checkbox；checked=PT，unchecked=GS。GS 完成前 checkbox 保持 disabled，拆到 Step 5.9 清理内部 RenderMode 流转 |
 | 50 | RadixSort 性能 | 现有 stable scatter 的 O(256²) local rank 暂不优化；Step 6.5 完整 GS 跑通后 profiling 决定是否优化 |
+| 51 | Step 6.1 修复范围 | Step 6 完成后的静态检查发现若干同步、诊断与清理问题，先作为 Step 6.1 全部修复，再进入 Step 6.5 profiling |
 
 ---
 
@@ -201,6 +202,17 @@
 - [x] GS pass 实现 `on_resize()`（重建屏幕尺寸相关 buffer）
 - [x] DebugUI 解锁 `Path Tracing` checkbox，显示 GS splat count 与 runtime stats
 - [x] 编译验证
+
+## Step 6.1：Post Step 6 Correctness / Diagnostics Fixes
+
+- [ ] 修复 `indirect_dispatch_buffer` 复用的 WAR 同步缺口：gather / range 的 indirect read 后、下一次 sort prepare storage write 前插入 `DRAW_INDIRECT → COMPUTE` buffer barrier，或拆分独立 indirect buffer
+- [ ] 修复 GS runtime stats readback 前的 barrier：同时覆盖 transfer 写入（fill/copy visible counter）与 compute 写入，避免 `visible_splats` 等统计字段读到 stale 数据
+- [ ] 明确并修复 `sort_clamped` 统计语义：确保真实记录 radix sort clamp，或删除 / 不显示该字段；Step 6.5 不得依赖无效诊断指标
+- [ ] 删除 projection 阶段遗留的 `splat_index_buffer` / `splat_indices[]`，或重新接入明确用途，避免无用 buffer 与绑定增加理解成本
+- [ ] 清空或切换 GS scene 时重置 GS runtime stats / warning flags，并释放或重置不再需要的 projection / tile 中间资源
+- [ ] GS shader / pipeline 不完整时提供安全 fallback：避免 Present 采样未写入的 GS color；可选择 fallback 到 imgui-only 或先 clear GS color
+- [ ] 清理 Step 1 旧命名残留注释：将 Tonemapping 相关注释更新为 PresentPass / presentation source
+- [ ] 编译验证
 
 ## Step 6.5：GS Performance Review
 

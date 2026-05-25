@@ -960,6 +960,14 @@ Entry capacity 是可控退化边界：容量不足时 entry generation 只写�
 
 GS runtime stats 使用 GPU stats buffer 记录 visible splats、entry requested/written/dropped、invalid entries、sort clamped，并通过 per-frame readback buffer 延迟 1-2 帧读回 CPU。DebugUI 显示的统计可滞后，但不得通过同步 readback 阻塞每帧渲染。
 
+Step 6.1 修订以下正确性与诊断约束：
+
+- 复用 `indirect_dispatch_buffer` 时，任何 indirect read 后若下一阶段要以 storage write 重写同一 buffer，必须插入 `DRAW_INDIRECT / INDIRECT_COMMAND_READ → COMPUTE_SHADER / SHADER_STORAGE_WRITE` 的 WAR execution dependency；也可改为使用独立 indirect buffer 避免复用 hazard。
+- stats readback 前的 barrier 必须同时覆盖 transfer 写入（fill/copy visible counter）和 compute shader 写入，确保 `visible_splats`、entry counters 与 diagnostics 字段都对 GPU-to-CPU copy 可见。
+- `sort_clamped` 必须有真实语义：只在 radix sort 输入被容量 clamp 时置位；若暂不实现该语义，不得把它作为 Step 6.5 profiling / capacity 判断依据。
+- 清空或切换 GS scene 时，必须重置延迟 readback 的 runtime stats、warning guard 与相关中间资源状态，避免 UI 显示旧场景的诊断数据。
+- GS shader / pipeline 不完整时不得让 PresentPass 采样未写入的 GS color；需要 fallback 到 imgui-only，或在失败路径保证 GS color 被清成黑色。
+
 ### 颜色空间处理
 
 GS 渲染侧原样输出 SH 求值结果，不做颜色空间转换。Swapchain 始终使用 SRGB view；最终颜色空间处理由 PresentPass shader 完成（见第 23 节）。

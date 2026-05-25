@@ -70,7 +70,7 @@ PresentPass → swapchain
 
 ## 实现步骤
 
-基础 Step 0-5 已完成；审查后新增 Step 5.5-5.9 修正设计与集成边界，详见 `tasks/reflector-phase3.md`。
+基础 Step 0-6 已完成；Step 6 后静态检查新增 Step 6.1 修复同步、诊断与清理问题；修复完成后再进入 Step 6.5 profiling，详见 `tasks/reflector-phase3.md`。
 
 | Step | 内容 | 说明 |
 |------|------|------|
@@ -86,4 +86,5 @@ PresentPass → swapchain
 | 5.8 | RHI compute utility refactor | 抽取重复 compute Vulkan helper，允许修改 `rhi/CMakeLists.txt` |
 | 5.9 | RenderMode flow cleanup | 保留 `Path Tracing` checkbox，内部通过 RenderMode 流转；GS 完成前 checkbox disabled |
 | 6 | Tile Rendering + 集成 | 前到后混合 + Renderer GS 路径 + DebugUI stats |
+| 6.1 | Post Step 6 Correctness / Diagnostics Fixes | 修复 indirect dispatch 同步、stats readback barrier、`sort_clamped` 语义、遗留 buffer、scene 清理、shader fallback 与旧注释 |
 | 6.5 | GS performance review | 检查两次 RadixSort、stable scatter local-rank 与 entry capacity 是否需要优化 |
