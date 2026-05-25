@@ -65,7 +65,10 @@ namespace himalaya::app {
                 }
                 break;
             case framework::RenderMode::GaussianSplatting:
-                if (gs_gpu_data_.total_splat_count() > 0) {
+                if (gs_gpu_data_.total_splat_count() > 0 &&
+                    gs_projection_pass_.is_ready() &&
+                    gs_tile_binning_pass_.is_ready() &&
+                    gs_tile_render_pass_.is_ready()) {
                     render_gaussian_splatting(cmd, input);
                 } else {
                     render_imgui_only(cmd, input);

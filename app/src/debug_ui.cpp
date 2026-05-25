@@ -446,9 +446,8 @@ namespace himalaya::app {
                             ctx.gs_stats.entry_requested,
                             ctx.gs_stats.entry_written,
                             ctx.gs_stats.entry_dropped);
-                ImGui::Text("GS Diagnostics: invalid=%u sort_clamped=%u",
-                            ctx.gs_stats.invalid_entries,
-                            ctx.gs_stats.sort_clamped);
+                ImGui::Text("GS Diagnostics: invalid=%u",
+                            ctx.gs_stats.invalid_entries);
             } else {
                 ImGui::TextDisabled("GS runtime stats unavailable");
             }

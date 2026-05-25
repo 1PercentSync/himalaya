@@ -369,6 +369,8 @@ namespace himalaya::app {
 
     void Renderer::destroy_gs_scene() {
         gs_gpu_data_.destroy();
+        gs_projection_pass_.ensure_capacity(0);
+        gs_tile_binning_pass_.reset_scene_state();
         gs_color_space_ = framework::GsColorSpace::Unknown;
     }
 

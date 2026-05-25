@@ -71,6 +71,9 @@ namespace himalaya::passes {
         /** @brief Destroys pipeline and Set 3 layout. */
         void destroy();
 
+        /** @brief Returns true when the compute pipeline is available for recording. */
+        [[nodiscard]] bool is_ready() const;
+
     private:
         /** @brief Creates or recreates the compute pipeline. */
         void create_pipeline();

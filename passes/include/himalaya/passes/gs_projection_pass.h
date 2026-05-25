@@ -87,14 +87,14 @@ namespace himalaya::passes {
         /** @brief Destroys pipeline, Set 3 layout, and owned buffers. */
         void destroy();
 
+        /** @brief Returns true when the compute pipeline is available for recording. */
+        [[nodiscard]] bool is_ready() const;
+
         /** @brief Projected 2D visible splat data SSBO. */
         [[nodiscard]] rhi::BufferHandle projected_splat_buffer() const;
 
         /** @brief Unsorted depth key buffer, one uint32 per visible splat. */
         [[nodiscard]] rhi::BufferHandle depth_key_buffer() const;
-
-        /** @brief Unsorted splat index/value buffer, one uint32 per visible splat. */
-        [[nodiscard]] rhi::BufferHandle splat_index_buffer() const;
 
         /** @brief Atomic visible splat counter buffer. */
         [[nodiscard]] rhi::BufferHandle visible_counter_buffer() const;
@@ -141,9 +141,6 @@ namespace himalaya::passes {
 
         /** @brief Depth key output buffer for radix sort input. */
         rhi::BufferHandle depth_key_buffer_;
-
-        /** @brief Splat index/value output buffer for radix sort input. */
-        rhi::BufferHandle splat_index_buffer_;
 
         /** @brief Atomic visible splat counter. */
         rhi::BufferHandle visible_counter_buffer_;

@@ -38,7 +38,6 @@ namespace himalaya::passes {
             rhi::storage_buffer_binding(2),
             rhi::storage_buffer_binding(3),
             rhi::storage_buffer_binding(4),
-            rhi::storage_buffer_binding(5),
         };
         set3_layout_ = rhi::create_push_storage_descriptor_set_layout(*ctx_, bindings);
 
@@ -59,7 +58,7 @@ namespace himalaya::passes {
 
         const uint64_t projected_size =
             static_cast<uint64_t>(max_splat_count_) * sizeof(framework::GSSplatData2D);
-        const uint64_t key_value_size =
+        const uint64_t depth_key_size =
             static_cast<uint64_t>(max_splat_count_) * sizeof(uint32_t);
 
         projected_splat_buffer_ = rm_->create_buffer({
@@ -69,16 +68,10 @@ namespace himalaya::passes {
         }, "GS Projected Splats SSBO");
 
         depth_key_buffer_ = rm_->create_buffer({
-            .size = key_value_size,
+            .size = depth_key_size,
             .usage = rhi::BufferUsage::StorageBuffer,
             .memory = rhi::MemoryUsage::GpuOnly,
         }, "GS Depth Key SSBO");
-
-        splat_index_buffer_ = rm_->create_buffer({
-            .size = key_value_size,
-            .usage = rhi::BufferUsage::StorageBuffer,
-            .memory = rhi::MemoryUsage::GpuOnly,
-        }, "GS Splat Index SSBO");
 
         visible_counter_buffer_ = rm_->create_buffer({
             .size = sizeof(uint32_t),
@@ -130,8 +123,6 @@ namespace himalaya::passes {
         const auto projected_info = rhi::storage_buffer_info(*rm_, projected_splat_buffer_);
         const auto counter_info = rhi::storage_buffer_info(*rm_, visible_counter_buffer_);
         const auto depth_key_info = rhi::storage_buffer_info(*rm_, depth_key_buffer_);
-        const auto splat_index_info = rhi::storage_buffer_info(*rm_, splat_index_buffer_);
-
         for (const auto &group : gs_data.sh_groups()) {
             const auto sh_buffer_handle = gs_data.sh_buffer(group.sh_degree);
             if (!sh_buffer_handle.valid() || group.splat_count == 0) {
@@ -145,7 +136,6 @@ namespace himalaya::passes {
                 sh_info,
                 counter_info,
                 depth_key_info,
-                splat_index_info,
             };
             rhi::push_storage_buffers(cmd, pipeline_, infos);
 
@@ -169,7 +159,6 @@ namespace himalaya::passes {
                 visible_counter_buffer_,
                 projected_splat_buffer_,
                 depth_key_buffer_,
-                splat_index_buffer_,
             };
             rhi::buffer_barriers(cmd,
                                  *rm_,
@@ -207,10 +196,6 @@ namespace himalaya::passes {
         return depth_key_buffer_;
     }
 
-    rhi::BufferHandle GsProjectionPass::splat_index_buffer() const {
-        return splat_index_buffer_;
-    }
-
     rhi::BufferHandle GsProjectionPass::visible_counter_buffer() const {
         return visible_counter_buffer_;
     }
@@ -221,6 +206,10 @@ namespace himalaya::passes {
 
     uint32_t GsProjectionPass::max_splat_count() const {
         return max_splat_count_;
+    }
+
+    bool GsProjectionPass::is_ready() const {
+        return pipeline_.pipeline != VK_NULL_HANDLE;
     }
 
     void GsProjectionPass::create_pipeline() {
@@ -255,10 +244,6 @@ namespace himalaya::passes {
         if (depth_key_buffer_.valid()) {
             rm_->destroy_buffer(depth_key_buffer_);
             depth_key_buffer_ = {};
-        }
-        if (splat_index_buffer_.valid()) {
-            rm_->destroy_buffer(splat_index_buffer_);
-            splat_index_buffer_ = {};
         }
         if (visible_counter_buffer_.valid()) {
             rm_->destroy_buffer(visible_counter_buffer_);

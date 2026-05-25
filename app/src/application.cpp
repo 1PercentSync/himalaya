@@ -379,7 +379,6 @@ namespace himalaya::app {
                 .entry_written = gs_stats.entry_written,
                 .entry_dropped = gs_stats.entry_dropped,
                 .invalid_entries = gs_stats.invalid_entries,
-                .sort_clamped = gs_stats.sort_clamped,
             },
             .pt_config = pt_config_,
             .pt_allow_tearing = pt_allow_tearing_,

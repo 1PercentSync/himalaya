@@ -1,6 +1,6 @@
 /**
  * @file renderer_pt.cpp
- * @brief Path tracing render path: Reference View Pass + Tonemapping + ImGui.
+ * @brief Path tracing render path: Reference View Pass + PresentPass + ImGui.
  */
 
 #include <himalaya/app/renderer.h>
@@ -87,7 +87,7 @@ namespace himalaya::app {
         // --- Construct FrameContext ---
         framework::FrameContext frame_ctx{};
         frame_ctx.swapchain = swapchain_image;
-        frame_ctx.hdr_color = accum_resource; // Tonemapping reads from accumulation
+        frame_ctx.hdr_color = accum_resource; // PresentPass reads from accumulation
         frame_ctx.pt_accumulation = accum_resource;
         frame_ctx.pt_aux_albedo = aux_albedo_resource;
         frame_ctx.pt_aux_normal = aux_normal_resource;
@@ -204,7 +204,7 @@ namespace himalaya::app {
             pending_denoised_generation_ = accumulation_generation_;
         }
 
-        // --- Tonemapping input: denoised buffer or raw accumulation ---
+        // --- Presentation input: denoised buffer or raw accumulation ---
         // Check pending completion too: upload was recorded this frame, denoised
         // buffer content will be valid after GPU executes, safe to display.
         const bool upload_committed = upload_pending_completion_ &&
@@ -216,7 +216,7 @@ namespace himalaya::app {
             frame_ctx.hdr_color = denoised_resource;
         }
 
-        // Update Set 2 binding 0 once with the final tonemapping source
+        // Update Set 2 binding 0 once with the final presentation source
         const auto hdr_backing = render_graph_.get_managed_backing_image(
             use_denoised ? managed_denoised_ : managed_pt_accumulation_);
         descriptor_manager_->update_render_target(input.frame_index, 0, hdr_backing, default_sampler_);

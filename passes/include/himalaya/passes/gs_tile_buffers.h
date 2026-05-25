@@ -25,10 +25,9 @@ namespace himalaya::passes {
         uint32_t entry_written = 0;     ///< Tile entries successfully written.
         uint32_t entry_dropped = 0;     ///< Tile entries dropped due to capacity limits.
         uint32_t invalid_entries = 0;   ///< Invalid splat or tile entries detected by shaders.
-        uint32_t sort_clamped = 0;      ///< Non-zero when sorting consumed a clamped element range.
     };
 
-    static_assert(sizeof(GsRuntimeStats) == 24, "GsRuntimeStats must match shader std430 uint layout");
+    static_assert(sizeof(GsRuntimeStats) == 20, "GsRuntimeStats must match shader std430 uint layout");
 
     /**
      * @brief Owns GPU buffers produced and consumed by the GS tile-entry pipeline.

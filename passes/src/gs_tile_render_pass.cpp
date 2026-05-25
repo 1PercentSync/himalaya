@@ -110,6 +110,10 @@ namespace himalaya::passes {
         }
     }
 
+    bool GsTileRenderPass::is_ready() const {
+        return pipeline_.pipeline != VK_NULL_HANDLE;
+    }
+
     void GsTileRenderPass::create_pipeline() {
         const std::array push_ranges = {
             VkPushConstantRange{

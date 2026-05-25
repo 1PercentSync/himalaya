@@ -83,8 +83,10 @@ namespace himalaya::passes {
         const auto storage_read = VK_ACCESS_2_SHADER_STORAGE_READ_BIT;
         const auto storage_write = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT;
         const auto transfer_write = VK_ACCESS_2_TRANSFER_WRITE_BIT;
+        const auto indirect_read = VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT;
         const auto compute_stage = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
         const auto transfer_stage = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
+        const auto indirect_stage = VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT;
 
         const auto &entry_count = rm_->get_buffer(tile_buffers_.entry_count_buffer());
         const auto &entry_stats = rm_->get_buffer(tile_buffers_.entry_stats_buffer());
@@ -222,6 +224,13 @@ namespace himalaya::passes {
             vkCmdDispatchIndirect(cmd.handle(), indirect_dispatch.buffer, 0);
         }
         barrier_gather_outputs_to_compute_read(cmd);
+        rhi::buffer_barrier(cmd,
+                            *rm_,
+                            indirect_dispatch_buffer,
+                            indirect_stage,
+                            indirect_read,
+                            compute_stage,
+                            storage_write);
 
         tile_sorter_.record(cmd,
                             frame_ctx,
@@ -270,6 +279,17 @@ namespace himalaya::passes {
         tile_sorter_.rebuild_pipelines();
     }
 
+    void GsTileBinningPass::reset_scene_state() {
+        tile_buffers_.destroy();
+        depth_sorter_.ensure_capacity(0);
+        tile_sorter_.ensure_capacity(0);
+        stats_readback_valid_.fill(false);
+        runtime_stats_ = {};
+        has_runtime_stats_ = false;
+        warned_entry_dropped_ = false;
+        warned_invalid_entries_ = false;
+    }
+
     void GsTileBinningPass::destroy() {
         tile_buffers_.destroy();
         destroy_readback_buffers();
@@ -289,6 +309,14 @@ namespace himalaya::passes {
             vkDestroyDescriptorSetLayout(ctx_->device, range_set3_layout_, nullptr);
             range_set3_layout_ = VK_NULL_HANDLE;
         }
+    }
+
+    bool GsTileBinningPass::is_ready() const {
+        return entry_pipeline_.pipeline != VK_NULL_HANDLE &&
+               gather_pipeline_.pipeline != VK_NULL_HANDLE &&
+               range_pipeline_.pipeline != VK_NULL_HANDLE &&
+               depth_sorter_.is_ready() &&
+               tile_sorter_.is_ready();
     }
 
     const GsTileBuffers &GsTileBinningPass::tile_buffers() const {
@@ -529,10 +557,6 @@ namespace himalaya::passes {
 
         VK_CHECK(vmaInvalidateAllocation(ctx_->allocator, readback.allocation, 0, VK_WHOLE_SIZE));
         std::memcpy(&runtime_stats_, readback.allocation_info.pMappedData, sizeof(GsRuntimeStats));
-        if (runtime_stats_.visible_splats > tile_buffers_.max_splat_count() ||
-            runtime_stats_.entry_written > tile_buffers_.entry_capacity()) {
-            runtime_stats_.sort_clamped = 1;
-        }
         has_runtime_stats_ = true;
         log_runtime_stats_warnings();
     }
@@ -551,8 +575,8 @@ namespace himalaya::passes {
         rhi::buffer_barrier(cmd,
                             *rm_,
                             tile_buffers_.entry_stats_buffer(),
-                            VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-                            VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+                            VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+                            VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT | VK_ACCESS_2_TRANSFER_WRITE_BIT,
                             VK_PIPELINE_STAGE_2_TRANSFER_BIT,
                             VK_ACCESS_2_TRANSFER_READ_BIT);
 
@@ -599,14 +623,6 @@ namespace himalaya::passes {
         if (runtime_stats_.invalid_entries > 0 && !warned_invalid_entries_) {
             spdlog::warn("GS invalid tile entries detected: invalid_entries={}", runtime_stats_.invalid_entries);
             warned_invalid_entries_ = true;
-        }
-
-        if (runtime_stats_.sort_clamped > 0 && !warned_sort_clamped_) {
-            spdlog::warn("GS sort input was clamped: visible_splats={}, entry_written={}, entry_capacity={}",
-                         runtime_stats_.visible_splats,
-                         runtime_stats_.entry_written,
-                         tile_buffers_.entry_capacity());
-            warned_sort_clamped_ = true;
         }
     }
 } // namespace himalaya::passes

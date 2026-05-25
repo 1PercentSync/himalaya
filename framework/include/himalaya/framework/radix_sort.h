@@ -132,6 +132,9 @@ namespace himalaya::framework {
         /** @brief Current maximum element capacity of owned buffers. */
         [[nodiscard]] uint32_t max_element_count() const;
 
+        /** @brief Returns true when all compute pipelines are available for recording. */
+        [[nodiscard]] bool is_ready() const;
+
     private:
         /** @brief Creates push descriptor layouts used by sort shaders. */
         void create_descriptor_layouts();

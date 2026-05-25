@@ -112,8 +112,14 @@ namespace himalaya::passes {
         /** @brief Rebuilds compute pipelines from disk shaders. */
         void rebuild_pipelines();
 
+        /** @brief Resets scene-sized buffers and delayed runtime diagnostics. */
+        void reset_scene_state();
+
         /** @brief Destroys pipelines, descriptor layouts, sorters, and owned buffers. */
         void destroy();
+
+        /** @brief Returns true when all compute pipelines are available for recording. */
+        [[nodiscard]] bool is_ready() const;
 
         /** @brief Tile-entry buffer storage owned by this pass. */
         [[nodiscard]] const GsTileBuffers &tile_buffers() const;
@@ -219,7 +225,5 @@ namespace himalaya::passes {
         /** @brief One-shot warning guard for invalid entry diagnostics. */
         bool warned_invalid_entries_ = false;
 
-        /** @brief One-shot warning guard for sort clamp diagnostics. */
-        bool warned_sort_clamped_ = false;
     };
 } // namespace himalaya::passes

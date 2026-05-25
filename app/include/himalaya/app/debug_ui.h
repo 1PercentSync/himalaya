@@ -83,9 +83,6 @@ namespace himalaya::app {
 
             /** @brief Invalid entries detected by shaders. */
             uint32_t invalid_entries;
-
-            /** @brief Non-zero when sort input was clamped. */
-            uint32_t sort_clamped;
         } gs_stats;
 
         /** @brief Path tracing configuration (mutable — DebugUI modifies fields directly). */

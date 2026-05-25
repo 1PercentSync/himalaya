@@ -372,6 +372,13 @@ namespace himalaya::framework {
         return max_element_count_;
     }
 
+    bool RadixSort::is_ready() const {
+        return prepare_pipeline_.pipeline != VK_NULL_HANDLE &&
+               histogram_pipeline_.pipeline != VK_NULL_HANDLE &&
+               scan_pipeline_.pipeline != VK_NULL_HANDLE &&
+               scatter_pipeline_.pipeline != VK_NULL_HANDLE;
+    }
+
     void RadixSort::create_descriptor_layouts() {
         const std::array prepare_bindings = {
             rhi::storage_buffer_binding(0),
