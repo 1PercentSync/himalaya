@@ -2,10 +2,9 @@
 
 /**
  * @file gs_tile_buffers.h
- * @brief Gaussian Splatting tile-entry buffer storage.
+ * @brief Gaussian Splatting per-tile binning buffer storage.
  */
 
-#include <himalaya/framework/radix_sort.h>
 #include <himalaya/rhi/resources.h>
 #include <himalaya/rhi/types.h>
 
@@ -17,35 +16,42 @@
 
 namespace himalaya::passes {
     /**
-     * @brief Runtime statistics produced by the GS tile-entry pipeline.
+     * @brief Runtime statistics produced by the GS per-tile pipeline.
      */
     struct GsRuntimeStats {
-        uint32_t visible_splats = 0;    ///< Visible splats reported by projection.
-        uint32_t entry_requested = 0;   ///< Total tile entries requested before capacity clipping.
-        uint32_t entry_written = 0;     ///< Tile entries successfully written.
-        uint32_t entry_dropped = 0;     ///< Tile entries dropped due to capacity limits.
-        uint32_t invalid_entries = 0;   ///< Invalid splat or tile entries detected by shaders.
+        uint32_t visible_splats = 0;       ///< Visible splats reported by projection.
+        uint32_t entry_requested = 0;      ///< Total tile entries requested before capacity clipping.
+        uint32_t entry_written = 0;        ///< Tile entries successfully written.
+        uint32_t entry_dropped = 0;        ///< Tile entries dropped due to capacity limits.
+        uint32_t invalid_entries = 0;      ///< Invalid splat or tile entries detected by shaders.
+        uint32_t max_tile_requested = 0;   ///< Maximum requested entry count observed for one tile.
     };
 
-    static_assert(sizeof(GsRuntimeStats) == 20, "GsRuntimeStats must match shader std430 uint layout");
+    static_assert(sizeof(GsRuntimeStats) == 24, "GsRuntimeStats must match shader std430 uint layout");
 
     /**
-     * @brief Owns GPU buffers produced and consumed by the GS tile-entry pipeline.
+     * @brief Owns GPU buffers produced and consumed by the GS per-tile pipeline.
      *
-     * The tile range buffers are sized by the current render target tile grid.
-     * Entry buffers are sized by a bounded capacity strategy so entry generation
-     * can safely drop overflow entries instead of writing out of bounds.
+     * The pass builds compact per-tile entry ranges and writes splat IDs into
+     * those ranges. It intentionally avoids the earlier two global RadixSort
+     * passes while keeping overflow deterministic and visible in diagnostics.
      */
     class GsTileBuffers {
     public:
         /** @brief Tile width and height in pixels. Must match GS shaders. */
         static constexpr uint32_t kTileSize = 16;
 
-        /** @brief Average tiles-per-splat budget used for fixed entry capacity. */
+        /** @brief Average tiles-per-splat budget used for total entry storage. */
         static constexpr uint32_t kAvgTilesBudget = 16;
 
-        /** @brief Absolute entry capacity limit imposed by the current radix-sort scan. */
-        static constexpr uint32_t kMaxSortableEntries = framework::RadixSort::kMaxSortableElements;
+        /** @brief Absolute retained entry storage limit for the per-tile pipeline. */
+        static constexpr uint32_t kMaxTotalEntries = 64u * 1024u * 1024u;
+
+        /** @brief Maximum entries retained for one tile before deterministic overflow. */
+        static constexpr uint32_t kMaxEntriesPerTile = 1024u * 1024u;
+
+        /** @brief Workgroup size used by tile scan helpers. */
+        static constexpr uint32_t kScanWorkgroupSize = 256;
 
         /**
          * @brief Stores the resource manager used for all buffer operations.
@@ -55,11 +61,12 @@ namespace himalaya::passes {
         }
 
         /**
-         * @brief Ensures all tile-entry buffers match the requested capacity.
+         * @brief Ensures all per-tile buffers match the requested viewport.
          *
          * Passing zero dimensions or zero splat capacity destroys existing
-         * buffers. Buffers are recreated whenever tile grid dimensions, maximum
-         * splat capacity, or derived entry capacity changes.
+         * buffers. Total entry storage is derived from the scene splat count
+         * and capped by kMaxTotalEntries; per-tile retention is capped by
+         * kMaxEntriesPerTile during offset build.
          */
         void ensure_capacity(const uint32_t max_splat_count,
                              const uint32_t screen_width,
@@ -67,11 +74,14 @@ namespace himalaya::passes {
             const uint32_t next_tile_count_x = ceil_div(screen_width, kTileSize);
             const uint32_t next_tile_count_y = ceil_div(screen_height, kTileSize);
             const uint32_t next_tile_count = next_tile_count_x * next_tile_count_y;
+            const uint32_t next_scan_chunk_count = ceil_div(next_tile_count, kScanWorkgroupSize);
             const uint32_t next_entry_capacity = compute_entry_capacity(max_splat_count);
 
             if (max_splat_count == max_splat_count_ &&
                 next_tile_count_x == tile_count_x_ &&
                 next_tile_count_y == tile_count_y_ &&
+                next_tile_count == tile_count_ &&
+                next_scan_chunk_count == scan_chunk_count_ &&
                 next_entry_capacity == entry_capacity_) {
                 return;
             }
@@ -82,15 +92,16 @@ namespace himalaya::passes {
             tile_count_x_ = next_tile_count_x;
             tile_count_y_ = next_tile_count_y;
             tile_count_ = next_tile_count;
+            scan_chunk_count_ = next_scan_chunk_count;
             entry_capacity_ = next_entry_capacity;
 
-            if (max_splat_count_ == 0 || tile_count_ == 0 || entry_capacity_ == 0) {
+            if (max_splat_count_ == 0 || tile_count_ == 0 || entry_capacity_ == 0 || scan_chunk_count_ == 0) {
                 return;
             }
 
             const uint64_t tile_buffer_size = static_cast<uint64_t>(tile_count_) * sizeof(uint32_t);
+            const uint64_t chunk_buffer_size = static_cast<uint64_t>(scan_chunk_count_) * sizeof(uint32_t);
             const uint64_t entry_buffer_size = static_cast<uint64_t>(entry_capacity_) * sizeof(uint32_t);
-            const uint64_t entry_counter_buffer_size = sizeof(uint32_t);
             const uint64_t entry_stats_buffer_size = sizeof(GsRuntimeStats);
 
             const rhi::BufferDesc tile_buffer_desc{
@@ -98,26 +109,26 @@ namespace himalaya::passes {
                 .usage = rhi::BufferUsage::StorageBuffer | rhi::BufferUsage::TransferDst,
                 .memory = rhi::MemoryUsage::GpuOnly,
             };
+            tile_requested_counts_buffer_ = rm_->create_buffer(tile_buffer_desc, "GS Tile Requested Counts SSBO");
             tile_offsets_buffer_ = rm_->create_buffer(tile_buffer_desc, "GS Tile Offsets SSBO");
             tile_counts_buffer_ = rm_->create_buffer(tile_buffer_desc, "GS Tile Counts SSBO");
+            tile_cursors_buffer_ = rm_->create_buffer(tile_buffer_desc, "GS Tile Cursors SSBO");
+
+            const rhi::BufferDesc chunk_buffer_desc{
+                .size = chunk_buffer_size,
+                .usage = rhi::BufferUsage::StorageBuffer | rhi::BufferUsage::TransferDst,
+                .memory = rhi::MemoryUsage::GpuOnly,
+            };
+            scan_chunk_sums_buffer_ = rm_->create_buffer(chunk_buffer_desc, "GS Tile Scan Chunk Sums SSBO");
+            scan_chunk_offsets_buffer_ = rm_->create_buffer(chunk_buffer_desc, "GS Tile Scan Chunk Offsets SSBO");
 
             const rhi::BufferDesc entry_buffer_desc{
                 .size = entry_buffer_size,
                 .usage = rhi::BufferUsage::StorageBuffer,
                 .memory = rhi::MemoryUsage::GpuOnly,
             };
-            entry_depth_keys_buffer_ = rm_->create_buffer(entry_buffer_desc, "GS Entry Depth Keys SSBO");
-            entry_tile_ids_buffer_ = rm_->create_buffer(entry_buffer_desc, "GS Entry Tile IDs SSBO");
-            entry_splat_ids_buffer_ = rm_->create_buffer(entry_buffer_desc, "GS Entry Splat IDs SSBO");
-            entry_indices_buffer_ = rm_->create_buffer(entry_buffer_desc, "GS Entry Indices SSBO");
-            tile_sort_keys_buffer_ = rm_->create_buffer(entry_buffer_desc, "GS Tile Sort Keys SSBO");
-            tile_sort_values_buffer_ = rm_->create_buffer(entry_buffer_desc, "GS Tile Sort Values SSBO");
-
-            entry_count_buffer_ = rm_->create_buffer({
-                .size = entry_counter_buffer_size,
-                .usage = rhi::BufferUsage::StorageBuffer | rhi::BufferUsage::TransferDst,
-                .memory = rhi::MemoryUsage::GpuOnly,
-            }, "GS Entry Count SSBO");
+            entry_depth_keys_buffer_ = rm_->create_buffer(entry_buffer_desc, "GS Per-Tile Entry Depth Keys SSBO");
+            entry_splat_ids_buffer_ = rm_->create_buffer(entry_buffer_desc, "GS Per-Tile Entry Splat IDs SSBO");
 
             entry_stats_buffer_ = rm_->create_buffer({
                 .size = entry_stats_buffer_size,
@@ -125,12 +136,14 @@ namespace himalaya::passes {
                 .memory = rhi::MemoryUsage::GpuOnly,
             }, "GS Entry Stats SSBO");
 
-            spdlog::info("GsTileBuffers: allocated {} tiles and {} tile-entry slots",
-                         tile_count_, entry_capacity_);
+            spdlog::info("GsTileBuffers: allocated {} tiles, {} scan chunks, and {} total per-tile entry slots",
+                         tile_count_,
+                         scan_chunk_count_,
+                         entry_capacity_);
         }
 
         /**
-         * @brief Destroys all owned tile-entry buffers and resets capacity.
+         * @brief Destroys all owned per-tile buffers and resets capacity.
          */
         void destroy() {
             if (rm_ == nullptr) {
@@ -138,62 +151,56 @@ namespace himalaya::passes {
                 return;
             }
 
+            destroy_buffer(tile_requested_counts_buffer_);
             destroy_buffer(tile_offsets_buffer_);
             destroy_buffer(tile_counts_buffer_);
+            destroy_buffer(tile_cursors_buffer_);
+            destroy_buffer(scan_chunk_sums_buffer_);
+            destroy_buffer(scan_chunk_offsets_buffer_);
             destroy_buffer(entry_depth_keys_buffer_);
-            destroy_buffer(entry_tile_ids_buffer_);
             destroy_buffer(entry_splat_ids_buffer_);
-            destroy_buffer(entry_indices_buffer_);
-            destroy_buffer(tile_sort_keys_buffer_);
-            destroy_buffer(tile_sort_values_buffer_);
-            destroy_buffer(entry_count_buffer_);
             destroy_buffer(entry_stats_buffer_);
             reset_capacity();
         }
 
-        /** @brief Buffer containing per-tile entry offsets. */
+        /** @brief Buffer containing requested entry counts per tile. */
+        [[nodiscard]] rhi::BufferHandle tile_requested_counts_buffer() const {
+            return tile_requested_counts_buffer_;
+        }
+
+        /** @brief Buffer containing per-tile entry offsets into compact entry storage. */
         [[nodiscard]] rhi::BufferHandle tile_offsets_buffer() const {
             return tile_offsets_buffer_;
         }
 
-        /** @brief Buffer containing per-tile entry counts. */
+        /** @brief Buffer containing retained entry counts per tile. */
         [[nodiscard]] rhi::BufferHandle tile_counts_buffer() const {
             return tile_counts_buffer_;
         }
 
-        /** @brief Buffer containing generated entry depth sort keys. */
+        /** @brief Buffer containing per-tile scatter cursors. */
+        [[nodiscard]] rhi::BufferHandle tile_cursors_buffer() const {
+            return tile_cursors_buffer_;
+        }
+
+        /** @brief Buffer containing padded per-chunk entry sums for tile scan. */
+        [[nodiscard]] rhi::BufferHandle scan_chunk_sums_buffer() const {
+            return scan_chunk_sums_buffer_;
+        }
+
+        /** @brief Buffer containing exclusive per-chunk offsets for tile scan. */
+        [[nodiscard]] rhi::BufferHandle scan_chunk_offsets_buffer() const {
+            return scan_chunk_offsets_buffer_;
+        }
+
+        /** @brief Buffer containing per-entry view-space depth keys. */
         [[nodiscard]] rhi::BufferHandle entry_depth_keys_buffer() const {
             return entry_depth_keys_buffer_;
         }
 
-        /** @brief Buffer containing generated entry tile IDs. */
-        [[nodiscard]] rhi::BufferHandle entry_tile_ids_buffer() const {
-            return entry_tile_ids_buffer_;
-        }
-
-        /** @brief Buffer containing generated compact visible splat IDs. */
+        /** @brief Buffer containing compact visible splat IDs for each retained entry. */
         [[nodiscard]] rhi::BufferHandle entry_splat_ids_buffer() const {
             return entry_splat_ids_buffer_;
-        }
-
-        /** @brief Buffer containing generated entry identity indices. */
-        [[nodiscard]] rhi::BufferHandle entry_indices_buffer() const {
-            return entry_indices_buffer_;
-        }
-
-        /** @brief Buffer containing tile-id sort keys gathered in depth-sorted order. */
-        [[nodiscard]] rhi::BufferHandle tile_sort_keys_buffer() const {
-            return tile_sort_keys_buffer_;
-        }
-
-        /** @brief Buffer containing entry indices gathered in depth-sorted order. */
-        [[nodiscard]] rhi::BufferHandle tile_sort_values_buffer() const {
-            return tile_sort_values_buffer_;
-        }
-
-        /** @brief Buffer containing the written entry count for indirect sorting. */
-        [[nodiscard]] rhi::BufferHandle entry_count_buffer() const {
-            return entry_count_buffer_;
         }
 
         /** @brief Buffer containing runtime stats copied back to CPU with delayed readback. */
@@ -216,12 +223,22 @@ namespace himalaya::passes {
             return tile_count_;
         }
 
+        /** @brief Number of 256-tile scan chunks. */
+        [[nodiscard]] uint32_t scan_chunk_count() const {
+            return scan_chunk_count_;
+        }
+
         /** @brief Maximum number of visible splats represented by this allocation. */
         [[nodiscard]] uint32_t max_splat_count() const {
             return max_splat_count_;
         }
 
-        /** @brief Capacity of entry buffers in uint32 entries. */
+        /** @brief Maximum retained entries per tile. */
+        [[nodiscard]] uint32_t max_entries_per_tile() const {
+            return kMaxEntriesPerTile;
+        }
+
+        /** @brief Total entry storage capacity in uint32 entries. */
         [[nodiscard]] uint32_t entry_capacity() const {
             return entry_capacity_;
         }
@@ -235,12 +252,12 @@ namespace himalaya::passes {
         }
 
         /**
-         * @brief Computes bounded tile-entry capacity for a maximum splat count.
+         * @brief Computes bounded total entry capacity for the current scene.
          */
         static constexpr uint32_t compute_entry_capacity(const uint32_t max_splat_count) {
             const uint64_t requested_capacity =
                 static_cast<uint64_t>(max_splat_count) * static_cast<uint64_t>(kAvgTilesBudget);
-            const uint64_t bounded_capacity = std::min<uint64_t>(requested_capacity, kMaxSortableEntries);
+            const uint64_t bounded_capacity = std::min<uint64_t>(requested_capacity, kMaxTotalEntries);
             return static_cast<uint32_t>(std::min<uint64_t>(bounded_capacity, std::numeric_limits<uint32_t>::max()));
         }
 
@@ -262,38 +279,36 @@ namespace himalaya::passes {
             tile_count_x_ = 0;
             tile_count_y_ = 0;
             tile_count_ = 0;
+            scan_chunk_count_ = 0;
             entry_capacity_ = 0;
         }
 
         /** @brief Resource manager used to create and destroy owned buffers. */
         rhi::ResourceManager *rm_ = nullptr;
 
-        /** @brief Buffer containing per-tile offsets into the sorted entry list. */
+        /** @brief Buffer containing requested entry counts per tile. */
+        rhi::BufferHandle tile_requested_counts_buffer_;
+
+        /** @brief Buffer containing per-tile offsets into compact entry storage. */
         rhi::BufferHandle tile_offsets_buffer_;
 
-        /** @brief Buffer containing per-tile sorted entry counts. */
+        /** @brief Buffer containing retained entry counts per tile. */
         rhi::BufferHandle tile_counts_buffer_;
 
-        /** @brief Buffer containing generated depth keys, one per written entry. */
+        /** @brief Buffer containing per-tile scatter cursors. */
+        rhi::BufferHandle tile_cursors_buffer_;
+
+        /** @brief Buffer containing padded per-chunk sums for tile offset scan. */
+        rhi::BufferHandle scan_chunk_sums_buffer_;
+
+        /** @brief Buffer containing exclusive per-chunk offsets. */
+        rhi::BufferHandle scan_chunk_offsets_buffer_;
+
+        /** @brief Buffer containing per-entry view-space depth keys. */
         rhi::BufferHandle entry_depth_keys_buffer_;
 
-        /** @brief Buffer containing generated tile IDs, one per written entry. */
-        rhi::BufferHandle entry_tile_ids_buffer_;
-
-        /** @brief Buffer containing compact visible splat IDs, one per written entry. */
+        /** @brief Buffer containing compact visible splat IDs for each retained entry. */
         rhi::BufferHandle entry_splat_ids_buffer_;
-
-        /** @brief Buffer containing identity entry indices, one per written entry. */
-        rhi::BufferHandle entry_indices_buffer_;
-
-        /** @brief Buffer containing tile-id sort keys gathered in depth-sorted order. */
-        rhi::BufferHandle tile_sort_keys_buffer_;
-
-        /** @brief Buffer containing entry indices gathered in depth-sorted order. */
-        rhi::BufferHandle tile_sort_values_buffer_;
-
-        /** @brief Buffer containing the number of successfully written entries. */
-        rhi::BufferHandle entry_count_buffer_;
 
         /** @brief Buffer containing runtime stats copied back to CPU with delayed readback. */
         rhi::BufferHandle entry_stats_buffer_;
@@ -310,7 +325,10 @@ namespace himalaya::passes {
         /** @brief Total tile count. */
         uint32_t tile_count_ = 0;
 
-        /** @brief Capacity of all entry buffers in uint32 entries. */
+        /** @brief Number of scan chunks. */
+        uint32_t scan_chunk_count_ = 0;
+
+        /** @brief Total entry storage capacity. */
         uint32_t entry_capacity_ = 0;
     };
 } // namespace himalaya::passes

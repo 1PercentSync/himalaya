@@ -31,8 +31,8 @@ namespace himalaya::passes {
      * @brief Shades sorted GS tile entries into a storage image.
      *
      * One 16x16 compute workgroup maps to one tile. The pass reads projected
-     * splat attributes, per-tile ranges, and final sorted entry indices, then
-     * writes an RG-managed R16G16B16A16F color image for PresentPass sampling.
+     * splat attributes plus locally ordered per-tile entry ranges, then writes
+     * an RG-managed R16G16B16A16F color image for PresentPass sampling.
      */
     class GsTileRenderPass {
     public:
@@ -55,15 +55,13 @@ namespace himalaya::passes {
          * @param frame_ctx Per-frame context for global descriptor sets.
          * @param gs_color_image Storage image receiving the rendered GS color.
          * @param projected_splat_buffer Projected visible splat data.
-         * @param tile_buffers Tile range and entry data from GsTileBinningPass.
-         * @param sorted_entry_indices_buffer Final sorted entry index buffer.
+         * @param tile_buffers Tile range and ordered entry data from GsTileBinningPass.
          */
         void record(const rhi::CommandBuffer &cmd,
                     const framework::FrameContext &frame_ctx,
                     rhi::ImageHandle gs_color_image,
                     rhi::BufferHandle projected_splat_buffer,
-                    const GsTileBuffers &tile_buffers,
-                    rhi::BufferHandle sorted_entry_indices_buffer) const;
+                    const GsTileBuffers &tile_buffers) const;
 
         /** @brief Rebuilds the compute pipeline from disk shaders. */
         void rebuild_pipelines();

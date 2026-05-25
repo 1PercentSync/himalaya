@@ -19,6 +19,16 @@
 #include <spdlog/spdlog.h>
 
 namespace himalaya::passes {
+    namespace {
+        /** @brief Tile offset build shader execution modes. */
+        enum class TileOffsetMode : uint32_t {
+            ScanTileChunks = 0,
+            ScanChunkSums = 1,
+            AddChunkOffsets = 2,
+            FinalizeStats = 3,
+        };
+    } // namespace
+
     void GsTileBinningPass::setup(rhi::Context &ctx,
                                   rhi::ResourceManager &rm,
                                   rhi::DescriptorManager &dm,
@@ -37,8 +47,6 @@ namespace himalaya::passes {
             }, "GS Runtime Stats Readback");
         }
 
-        depth_sorter_.setup(ctx, rm, dm, sc);
-        tile_sorter_.setup(ctx, rm, dm, sc);
         create_descriptor_layouts();
         create_pipelines();
     }
@@ -58,55 +66,52 @@ namespace himalaya::passes {
                                    const uint32_t max_splat_count,
                                    const uint32_t screen_width,
                                    const uint32_t screen_height) {
+        (void)indirect_dispatch_buffer;
+
         consume_delayed_stats(frame_ctx.frame_index);
 
         if (max_splat_count == 0 ||
             !projected_splat_buffer.valid() ||
             !depth_key_buffer.valid() ||
             !visible_counter_buffer.valid() ||
-            !indirect_dispatch_buffer.valid() ||
-            entry_pipeline_.pipeline == VK_NULL_HANDLE ||
-            gather_pipeline_.pipeline == VK_NULL_HANDLE ||
-            range_pipeline_.pipeline == VK_NULL_HANDLE) {
+            count_pipeline_.pipeline == VK_NULL_HANDLE ||
+            offset_pipeline_.pipeline == VK_NULL_HANDLE ||
+            scatter_pipeline_.pipeline == VK_NULL_HANDLE) {
             return;
         }
 
         ensure_capacity(max_splat_count, screen_width, screen_height);
-        if (!tile_buffers_.entry_depth_keys_buffer().valid() ||
-            !tile_buffers_.entry_count_buffer().valid() ||
+        if (!tile_buffers_.tile_requested_counts_buffer().valid() ||
+            !tile_buffers_.tile_offsets_buffer().valid() ||
+            !tile_buffers_.tile_counts_buffer().valid() ||
+            !tile_buffers_.tile_cursors_buffer().valid() ||
+            !tile_buffers_.entry_depth_keys_buffer().valid() ||
+            !tile_buffers_.entry_splat_ids_buffer().valid() ||
             !tile_buffers_.entry_stats_buffer().valid() ||
             tile_buffers_.tile_count() == 0 ||
+            tile_buffers_.scan_chunk_count() == 0 ||
             tile_buffers_.entry_capacity() == 0) {
             return;
         }
 
-        const auto storage_read = VK_ACCESS_2_SHADER_STORAGE_READ_BIT;
-        const auto storage_write = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT;
-        const auto transfer_write = VK_ACCESS_2_TRANSFER_WRITE_BIT;
-        const auto indirect_read = VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT;
-        const auto compute_stage = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
-        const auto transfer_stage = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
-        const auto indirect_stage = VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT;
-
-        const auto &entry_count = rm_->get_buffer(tile_buffers_.entry_count_buffer());
-        const auto &entry_stats = rm_->get_buffer(tile_buffers_.entry_stats_buffer());
+        const auto &tile_requested_counts = rm_->get_buffer(tile_buffers_.tile_requested_counts_buffer());
         const auto &tile_offsets = rm_->get_buffer(tile_buffers_.tile_offsets_buffer());
         const auto &tile_counts = rm_->get_buffer(tile_buffers_.tile_counts_buffer());
-        // Keep a copied Vulkan handle instead of a ResourceManager slot reference:
-        // RadixSort::record() may allocate sort buffers and reallocate the buffer
-        // slot vector before the later indirect dispatches in this pass.
-        const VkBuffer indirect_dispatch = rm_->get_buffer(indirect_dispatch_buffer).buffer;
+        const auto &tile_cursors = rm_->get_buffer(tile_buffers_.tile_cursors_buffer());
+        const auto &entry_stats = rm_->get_buffer(tile_buffers_.entry_stats_buffer());
 
-        vkCmdFillBuffer(cmd.handle(), entry_count.buffer, 0, entry_count.desc.size, 0u);
-        vkCmdFillBuffer(cmd.handle(), entry_stats.buffer, 0, entry_stats.desc.size, 0u);
+        vkCmdFillBuffer(cmd.handle(), tile_requested_counts.buffer, 0, tile_requested_counts.desc.size, 0u);
         vkCmdFillBuffer(cmd.handle(), tile_offsets.buffer, 0, tile_offsets.desc.size, 0u);
         vkCmdFillBuffer(cmd.handle(), tile_counts.buffer, 0, tile_counts.desc.size, 0u);
+        vkCmdFillBuffer(cmd.handle(), tile_cursors.buffer, 0, tile_cursors.desc.size, 0u);
+        vkCmdFillBuffer(cmd.handle(), entry_stats.buffer, 0, entry_stats.desc.size, 0u);
+
         rhi::buffer_barrier(cmd,
                             *rm_,
                             visible_counter_buffer,
-                            compute_stage,
-                            storage_write,
-                            transfer_stage,
+                            VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+                            VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+                            VK_PIPELINE_STAGE_2_TRANSFER_BIT,
                             VK_ACCESS_2_TRANSFER_READ_BIT);
         {
             VkBufferCopy visible_copy{};
@@ -122,150 +127,107 @@ namespace himalaya::passes {
         rhi::buffer_barrier(cmd,
                             *rm_,
                             visible_counter_buffer,
-                            transfer_stage,
+                            VK_PIPELINE_STAGE_2_TRANSFER_BIT,
                             VK_ACCESS_2_TRANSFER_READ_BIT,
-                            compute_stage,
-                            storage_read);
-        rhi::buffer_barrier(cmd,
-                            *rm_,
-                            tile_buffers_.entry_count_buffer(),
-                            transfer_stage,
-                            transfer_write,
-                            compute_stage,
-                            storage_read | storage_write);
-        rhi::buffer_barrier(cmd,
-                            *rm_,
-                            tile_buffers_.entry_stats_buffer(),
-                            transfer_stage,
-                            transfer_write,
-                            compute_stage,
-                            storage_read | storage_write);
-        rhi::buffer_barrier(cmd,
-                            *rm_,
-                            tile_buffers_.tile_offsets_buffer(),
-                            transfer_stage,
-                            transfer_write,
-                            compute_stage,
-                            storage_read | storage_write);
-        rhi::buffer_barrier(cmd,
-                            *rm_,
-                            tile_buffers_.tile_counts_buffer(),
-                            transfer_stage,
-                            transfer_write,
-                            compute_stage,
-                            storage_read | storage_write);
+                            VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+                            VK_ACCESS_2_SHADER_STORAGE_READ_BIT);
+        barrier_transfer_outputs_to_compute(cmd);
 
         const auto projected_info = rhi::storage_buffer_info(*rm_, projected_splat_buffer);
         const auto depth_key_info = rhi::storage_buffer_info(*rm_, depth_key_buffer);
         const auto visible_counter_info = rhi::storage_buffer_info(*rm_, visible_counter_buffer);
-        const auto entry_count_info = rhi::storage_buffer_info(*rm_, tile_buffers_.entry_count_buffer());
-        const auto entry_stats_info = rhi::storage_buffer_info(*rm_, tile_buffers_.entry_stats_buffer());
-        const auto entry_depth_keys_info = rhi::storage_buffer_info(*rm_, tile_buffers_.entry_depth_keys_buffer());
-        const auto entry_tile_ids_info = rhi::storage_buffer_info(*rm_, tile_buffers_.entry_tile_ids_buffer());
-        const auto entry_splat_ids_info = rhi::storage_buffer_info(*rm_, tile_buffers_.entry_splat_ids_buffer());
-        const auto entry_indices_info = rhi::storage_buffer_info(*rm_, tile_buffers_.entry_indices_buffer());
-        const auto tile_sort_keys_info = rhi::storage_buffer_info(*rm_, tile_buffers_.tile_sort_keys_buffer());
-        const auto tile_sort_values_info = rhi::storage_buffer_info(*rm_, tile_buffers_.tile_sort_values_buffer());
+        const auto tile_requested_counts_info = rhi::storage_buffer_info(*rm_, tile_buffers_.tile_requested_counts_buffer());
         const auto tile_offsets_info = rhi::storage_buffer_info(*rm_, tile_buffers_.tile_offsets_buffer());
         const auto tile_counts_info = rhi::storage_buffer_info(*rm_, tile_buffers_.tile_counts_buffer());
+        const auto tile_cursors_info = rhi::storage_buffer_info(*rm_, tile_buffers_.tile_cursors_buffer());
+        const auto entry_depth_keys_info = rhi::storage_buffer_info(*rm_, tile_buffers_.entry_depth_keys_buffer());
+        const auto entry_splat_ids_info = rhi::storage_buffer_info(*rm_, tile_buffers_.entry_splat_ids_buffer());
+        const auto entry_stats_info = rhi::storage_buffer_info(*rm_, tile_buffers_.entry_stats_buffer());
+        const auto scan_chunk_sums_info = rhi::storage_buffer_info(*rm_, tile_buffers_.scan_chunk_sums_buffer());
+        const auto scan_chunk_offsets_info = rhi::storage_buffer_info(*rm_, tile_buffers_.scan_chunk_offsets_buffer());
 
-        cmd.bind_compute_pipeline(entry_pipeline_);
-        rhi::bind_dispatch_descriptor_sets(cmd, *dm_, entry_pipeline_, frame_ctx.frame_index);
+        const TileCoveragePushConstants coverage_pc{
+            .max_splat_count = max_splat_count,
+            .tile_count_x = tile_buffers_.tile_count_x(),
+            .tile_count_y = tile_buffers_.tile_count_y(),
+            ._padding = 0,
+        };
+
+        cmd.bind_compute_pipeline(count_pipeline_);
+        rhi::bind_dispatch_descriptor_sets(cmd, *dm_, count_pipeline_, frame_ctx.frame_index);
+        {
+            const std::array infos = {
+                projected_info,
+                visible_counter_info,
+                tile_requested_counts_info,
+                entry_stats_info,
+            };
+            rhi::push_storage_buffers(cmd, count_pipeline_, infos);
+            cmd.push_constants(count_pipeline_.layout, VK_SHADER_STAGE_COMPUTE_BIT, &coverage_pc, sizeof(coverage_pc));
+            const uint32_t group_count = (max_splat_count + kWorkgroupSize - 1u) / kWorkgroupSize;
+            cmd.dispatch(group_count, 1, 1);
+        }
+        barrier_count_outputs_to_compute(cmd);
+
+        const std::array offset_infos = {
+            tile_requested_counts_info,
+            tile_offsets_info,
+            tile_counts_info,
+            entry_stats_info,
+            scan_chunk_sums_info,
+            scan_chunk_offsets_info,
+        };
+        cmd.bind_compute_pipeline(offset_pipeline_);
+        rhi::bind_dispatch_descriptor_sets(cmd, *dm_, offset_pipeline_, frame_ctx.frame_index);
+        rhi::push_storage_buffers(cmd, offset_pipeline_, offset_infos);
+        TileOffsetPushConstants offset_pc{
+            .mode = static_cast<uint32_t>(TileOffsetMode::ScanTileChunks),
+            .tile_count = tile_buffers_.tile_count(),
+            .max_entries_per_tile = tile_buffers_.max_entries_per_tile(),
+            .chunk_count = tile_buffers_.scan_chunk_count(),
+            .entry_capacity = tile_buffers_.entry_capacity(),
+            ._padding0 = 0,
+            ._padding1 = 0,
+            ._padding2 = 0,
+        };
+        cmd.push_constants(offset_pipeline_.layout, VK_SHADER_STAGE_COMPUTE_BIT, &offset_pc, sizeof(offset_pc));
+        cmd.dispatch(tile_buffers_.scan_chunk_count(), 1, 1);
+        barrier_offset_outputs_to_compute(cmd);
+
+        offset_pc.mode = static_cast<uint32_t>(TileOffsetMode::ScanChunkSums);
+        cmd.push_constants(offset_pipeline_.layout, VK_SHADER_STAGE_COMPUTE_BIT, &offset_pc, sizeof(offset_pc));
+        cmd.dispatch(1, 1, 1);
+        barrier_offset_outputs_to_compute(cmd);
+
+        offset_pc.mode = static_cast<uint32_t>(TileOffsetMode::AddChunkOffsets);
+        cmd.push_constants(offset_pipeline_.layout, VK_SHADER_STAGE_COMPUTE_BIT, &offset_pc, sizeof(offset_pc));
+        cmd.dispatch(tile_buffers_.scan_chunk_count(), 1, 1);
+        barrier_offset_outputs_to_compute(cmd);
+
+        offset_pc.mode = static_cast<uint32_t>(TileOffsetMode::FinalizeStats);
+        cmd.push_constants(offset_pipeline_.layout, VK_SHADER_STAGE_COMPUTE_BIT, &offset_pc, sizeof(offset_pc));
+        cmd.dispatch(1, 1, 1);
+        barrier_offset_outputs_to_compute(cmd);
+
+        cmd.bind_compute_pipeline(scatter_pipeline_);
+        rhi::bind_dispatch_descriptor_sets(cmd, *dm_, scatter_pipeline_, frame_ctx.frame_index);
         {
             const std::array infos = {
                 projected_info,
                 depth_key_info,
                 visible_counter_info,
-                entry_count_info,
-                entry_stats_info,
+                tile_offsets_info,
+                tile_counts_info,
+                tile_cursors_info,
                 entry_depth_keys_info,
-                entry_tile_ids_info,
                 entry_splat_ids_info,
-                entry_indices_info,
             };
-            rhi::push_storage_buffers(cmd, entry_pipeline_, infos);
-            const EntryPushConstants pc{
-                .max_splat_count = max_splat_count,
-                .entry_capacity = tile_buffers_.entry_capacity(),
-                .tile_count_x = tile_buffers_.tile_count_x(),
-                .tile_count_y = tile_buffers_.tile_count_y(),
-            };
-            cmd.push_constants(entry_pipeline_.layout, VK_SHADER_STAGE_COMPUTE_BIT, &pc, sizeof(pc));
+            rhi::push_storage_buffers(cmd, scatter_pipeline_, infos);
+            cmd.push_constants(scatter_pipeline_.layout, VK_SHADER_STAGE_COMPUTE_BIT, &coverage_pc, sizeof(coverage_pc));
             const uint32_t group_count = (max_splat_count + kWorkgroupSize - 1u) / kWorkgroupSize;
             cmd.dispatch(group_count, 1, 1);
         }
-        barrier_entry_outputs_to_compute_read(cmd);
-
-        depth_sorter_.record(cmd,
-                             frame_ctx,
-                             tile_buffers_.entry_depth_keys_buffer(),
-                             tile_buffers_.entry_indices_buffer(),
-                             tile_buffers_.entry_count_buffer(),
-                             indirect_dispatch_buffer,
-                             tile_buffers_.entry_capacity());
-        const auto depth_sorted_entries = depth_sorter_.sorted_value_buffer();
-        if (!depth_sorted_entries.valid()) {
-            return;
-        }
-        const auto depth_sorted_entries_info = rhi::storage_buffer_info(*rm_, depth_sorted_entries);
-
-        cmd.bind_compute_pipeline(gather_pipeline_);
-        rhi::bind_dispatch_descriptor_sets(cmd, *dm_, gather_pipeline_, frame_ctx.frame_index);
-        {
-            const std::array infos = {
-                entry_tile_ids_info,
-                depth_sorted_entries_info,
-                entry_count_info,
-                tile_sort_keys_info,
-                tile_sort_values_info,
-            };
-            rhi::push_storage_buffers(cmd, gather_pipeline_, infos);
-            const GatherPushConstants pc{
-                .max_entry_count = tile_buffers_.entry_capacity(),
-            };
-            cmd.push_constants(gather_pipeline_.layout, VK_SHADER_STAGE_COMPUTE_BIT, &pc, sizeof(pc));
-            vkCmdDispatchIndirect(cmd.handle(), indirect_dispatch, 0);
-        }
-        barrier_gather_outputs_to_compute_read(cmd);
-        rhi::buffer_barrier(cmd,
-                            *rm_,
-                            indirect_dispatch_buffer,
-                            indirect_stage,
-                            indirect_read,
-                            compute_stage,
-                            storage_write);
-
-        tile_sorter_.record(cmd,
-                            frame_ctx,
-                            tile_buffers_.tile_sort_keys_buffer(),
-                            tile_buffers_.tile_sort_values_buffer(),
-                            tile_buffers_.entry_count_buffer(),
-                            indirect_dispatch_buffer,
-                            tile_buffers_.entry_capacity());
-        if (!tile_sorter_.sorted_key_buffer().valid() || !tile_sorter_.sorted_value_buffer().valid()) {
-            return;
-        }
-
-        const auto sorted_tile_ids_info = rhi::storage_buffer_info(*rm_, tile_sorter_.sorted_key_buffer());
-        cmd.bind_compute_pipeline(range_pipeline_);
-        rhi::bind_dispatch_descriptor_sets(cmd, *dm_, range_pipeline_, frame_ctx.frame_index);
-        {
-            const std::array infos = {
-                sorted_tile_ids_info,
-                entry_count_info,
-                tile_offsets_info,
-                tile_counts_info,
-                entry_stats_info,
-            };
-            rhi::push_storage_buffers(cmd, range_pipeline_, infos);
-            const RangePushConstants pc{
-                .max_entry_count = tile_buffers_.entry_capacity(),
-                .tile_count = tile_buffers_.tile_count(),
-            };
-            cmd.push_constants(range_pipeline_.layout, VK_SHADER_STAGE_COMPUTE_BIT, &pc, sizeof(pc));
-            vkCmdDispatchIndirect(cmd.handle(), indirect_dispatch, 0);
-        }
-        barrier_range_outputs_to_compute_read(cmd);
+        barrier_scatter_outputs_to_compute_read(cmd);
         record_stats_readback(cmd, frame_ctx.frame_index);
     }
 
@@ -278,14 +240,10 @@ namespace himalaya::passes {
 
     void GsTileBinningPass::rebuild_pipelines() {
         create_pipelines();
-        depth_sorter_.rebuild_pipelines();
-        tile_sorter_.rebuild_pipelines();
     }
 
     void GsTileBinningPass::reset_scene_state() {
         tile_buffers_.destroy();
-        depth_sorter_.ensure_capacity(0);
-        tile_sorter_.ensure_capacity(0);
         stats_readback_valid_.fill(false);
         runtime_stats_ = {};
         has_runtime_stats_ = false;
@@ -296,42 +254,30 @@ namespace himalaya::passes {
     void GsTileBinningPass::destroy() {
         tile_buffers_.destroy();
         destroy_readback_buffers();
-        depth_sorter_.destroy();
-        tile_sorter_.destroy();
         destroy_pipelines();
 
-        if (entry_set3_layout_ != VK_NULL_HANDLE) {
-            vkDestroyDescriptorSetLayout(ctx_->device, entry_set3_layout_, nullptr);
-            entry_set3_layout_ = VK_NULL_HANDLE;
+        if (count_set3_layout_ != VK_NULL_HANDLE) {
+            vkDestroyDescriptorSetLayout(ctx_->device, count_set3_layout_, nullptr);
+            count_set3_layout_ = VK_NULL_HANDLE;
         }
-        if (gather_set3_layout_ != VK_NULL_HANDLE) {
-            vkDestroyDescriptorSetLayout(ctx_->device, gather_set3_layout_, nullptr);
-            gather_set3_layout_ = VK_NULL_HANDLE;
+        if (offset_set3_layout_ != VK_NULL_HANDLE) {
+            vkDestroyDescriptorSetLayout(ctx_->device, offset_set3_layout_, nullptr);
+            offset_set3_layout_ = VK_NULL_HANDLE;
         }
-        if (range_set3_layout_ != VK_NULL_HANDLE) {
-            vkDestroyDescriptorSetLayout(ctx_->device, range_set3_layout_, nullptr);
-            range_set3_layout_ = VK_NULL_HANDLE;
+        if (scatter_set3_layout_ != VK_NULL_HANDLE) {
+            vkDestroyDescriptorSetLayout(ctx_->device, scatter_set3_layout_, nullptr);
+            scatter_set3_layout_ = VK_NULL_HANDLE;
         }
     }
 
     bool GsTileBinningPass::is_ready() const {
-        return entry_pipeline_.pipeline != VK_NULL_HANDLE &&
-               gather_pipeline_.pipeline != VK_NULL_HANDLE &&
-               range_pipeline_.pipeline != VK_NULL_HANDLE &&
-               depth_sorter_.is_ready() &&
-               tile_sorter_.is_ready();
+        return count_pipeline_.pipeline != VK_NULL_HANDLE &&
+               offset_pipeline_.pipeline != VK_NULL_HANDLE &&
+               scatter_pipeline_.pipeline != VK_NULL_HANDLE;
     }
 
     const GsTileBuffers &GsTileBinningPass::tile_buffers() const {
         return tile_buffers_;
-    }
-
-    rhi::BufferHandle GsTileBinningPass::sorted_tile_ids_buffer() const {
-        return tile_sorter_.sorted_key_buffer();
-    }
-
-    rhi::BufferHandle GsTileBinningPass::sorted_entry_indices_buffer() const {
-        return tile_sorter_.sorted_value_buffer();
     }
 
     bool GsTileBinningPass::has_runtime_stats() const {
@@ -343,7 +289,25 @@ namespace himalaya::passes {
     }
 
     void GsTileBinningPass::create_descriptor_layouts() {
-        const std::array entry_bindings = {
+        const std::array count_bindings = {
+            rhi::storage_buffer_binding(0),
+            rhi::storage_buffer_binding(1),
+            rhi::storage_buffer_binding(2),
+            rhi::storage_buffer_binding(3),
+        };
+        count_set3_layout_ = rhi::create_push_storage_descriptor_set_layout(*ctx_, count_bindings);
+
+        const std::array offset_bindings = {
+            rhi::storage_buffer_binding(0),
+            rhi::storage_buffer_binding(1),
+            rhi::storage_buffer_binding(2),
+            rhi::storage_buffer_binding(3),
+            rhi::storage_buffer_binding(4),
+            rhi::storage_buffer_binding(5),
+        };
+        offset_set3_layout_ = rhi::create_push_storage_descriptor_set_layout(*ctx_, offset_bindings);
+
+        const std::array scatter_bindings = {
             rhi::storage_buffer_binding(0),
             rhi::storage_buffer_binding(1),
             rhi::storage_buffer_binding(2),
@@ -352,198 +316,138 @@ namespace himalaya::passes {
             rhi::storage_buffer_binding(5),
             rhi::storage_buffer_binding(6),
             rhi::storage_buffer_binding(7),
-            rhi::storage_buffer_binding(8),
         };
-        entry_set3_layout_ = rhi::create_push_storage_descriptor_set_layout(*ctx_, entry_bindings);
-
-        const std::array gather_bindings = {
-            rhi::storage_buffer_binding(0),
-            rhi::storage_buffer_binding(1),
-            rhi::storage_buffer_binding(2),
-            rhi::storage_buffer_binding(3),
-            rhi::storage_buffer_binding(4),
-        };
-        gather_set3_layout_ = rhi::create_push_storage_descriptor_set_layout(*ctx_, gather_bindings);
-
-        const std::array range_bindings = {
-            rhi::storage_buffer_binding(0),
-            rhi::storage_buffer_binding(1),
-            rhi::storage_buffer_binding(2),
-            rhi::storage_buffer_binding(3),
-            rhi::storage_buffer_binding(4),
-        };
-        range_set3_layout_ = rhi::create_push_storage_descriptor_set_layout(*ctx_, range_bindings);
+        scatter_set3_layout_ = rhi::create_push_storage_descriptor_set_layout(*ctx_, scatter_bindings);
     }
 
     void GsTileBinningPass::create_pipelines() {
-        const std::array entry_push_ranges = {
+        const std::array coverage_push_ranges = {
             VkPushConstantRange{
                 .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
                 .offset = 0,
-                .size = sizeof(EntryPushConstants),
+                .size = sizeof(TileCoveragePushConstants),
             },
         };
-        const std::array gather_push_ranges = {
+        const std::array offset_push_ranges = {
             VkPushConstantRange{
                 .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
                 .offset = 0,
-                .size = sizeof(GatherPushConstants),
-            },
-        };
-        const std::array range_push_ranges = {
-            VkPushConstantRange{
-                .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
-                .offset = 0,
-                .size = sizeof(RangePushConstants),
+                .size = sizeof(TileOffsetPushConstants),
             },
         };
 
-        auto entry_pipeline = rhi::create_compute_pipeline_from_file(*ctx_, *dm_, *sc_,
-                                                                     "gs/gs_tile_entry.comp",
-                                                                     entry_set3_layout_,
-                                                                     entry_push_ranges);
-        auto gather_pipeline = rhi::create_compute_pipeline_from_file(*ctx_, *dm_, *sc_,
-                                                                      "gs/gs_tile_sort_gather.comp",
-                                                                      gather_set3_layout_,
-                                                                      gather_push_ranges);
-        auto range_pipeline = rhi::create_compute_pipeline_from_file(*ctx_, *dm_, *sc_,
-                                                                     "gs/gs_tile_range.comp",
-                                                                     range_set3_layout_,
-                                                                     range_push_ranges);
+        auto count_pipeline = rhi::create_compute_pipeline_from_file(*ctx_, *dm_, *sc_,
+                                                                     "gs/gs_tile_count.comp",
+                                                                     count_set3_layout_,
+                                                                     coverage_push_ranges);
+        auto offset_pipeline = rhi::create_compute_pipeline_from_file(*ctx_, *dm_, *sc_,
+                                                                      "gs/gs_tile_offset.comp",
+                                                                      offset_set3_layout_,
+                                                                      offset_push_ranges);
+        auto scatter_pipeline = rhi::create_compute_pipeline_from_file(*ctx_, *dm_, *sc_,
+                                                                       "gs/gs_tile_scatter.comp",
+                                                                       scatter_set3_layout_,
+                                                                       coverage_push_ranges);
 
-        if (entry_pipeline.pipeline == VK_NULL_HANDLE ||
-            gather_pipeline.pipeline == VK_NULL_HANDLE ||
-            range_pipeline.pipeline == VK_NULL_HANDLE) {
-            if (entry_pipeline.pipeline != VK_NULL_HANDLE) {
-                entry_pipeline.destroy(ctx_->device);
+        if (count_pipeline.pipeline == VK_NULL_HANDLE ||
+            offset_pipeline.pipeline == VK_NULL_HANDLE ||
+            scatter_pipeline.pipeline == VK_NULL_HANDLE) {
+            if (count_pipeline.pipeline != VK_NULL_HANDLE) {
+                count_pipeline.destroy(ctx_->device);
             }
-            if (gather_pipeline.pipeline != VK_NULL_HANDLE) {
-                gather_pipeline.destroy(ctx_->device);
+            if (offset_pipeline.pipeline != VK_NULL_HANDLE) {
+                offset_pipeline.destroy(ctx_->device);
             }
-            if (range_pipeline.pipeline != VK_NULL_HANDLE) {
-                range_pipeline.destroy(ctx_->device);
+            if (scatter_pipeline.pipeline != VK_NULL_HANDLE) {
+                scatter_pipeline.destroy(ctx_->device);
             }
             spdlog::warn("GsTileBinningPass: shader compilation failed, keeping previous pipelines");
             return;
         }
 
         destroy_pipelines();
-        entry_pipeline_ = entry_pipeline;
-        gather_pipeline_ = gather_pipeline;
-        range_pipeline_ = range_pipeline;
+        count_pipeline_ = count_pipeline;
+        offset_pipeline_ = offset_pipeline;
+        scatter_pipeline_ = scatter_pipeline;
     }
 
     void GsTileBinningPass::destroy_pipelines() {
-        if (entry_pipeline_.pipeline != VK_NULL_HANDLE) {
-            entry_pipeline_.destroy(ctx_->device);
-            entry_pipeline_ = {};
+        if (count_pipeline_.pipeline != VK_NULL_HANDLE) {
+            count_pipeline_.destroy(ctx_->device);
+            count_pipeline_ = {};
         }
-        if (gather_pipeline_.pipeline != VK_NULL_HANDLE) {
-            gather_pipeline_.destroy(ctx_->device);
-            gather_pipeline_ = {};
+        if (offset_pipeline_.pipeline != VK_NULL_HANDLE) {
+            offset_pipeline_.destroy(ctx_->device);
+            offset_pipeline_ = {};
         }
-        if (range_pipeline_.pipeline != VK_NULL_HANDLE) {
-            range_pipeline_.destroy(ctx_->device);
-            range_pipeline_ = {};
+        if (scatter_pipeline_.pipeline != VK_NULL_HANDLE) {
+            scatter_pipeline_.destroy(ctx_->device);
+            scatter_pipeline_ = {};
         }
     }
 
-    void GsTileBinningPass::barrier_entry_outputs_to_compute_read(const rhi::CommandBuffer &cmd) const {
-        const auto compute_stage = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
-        const auto storage_read = VK_ACCESS_2_SHADER_STORAGE_READ_BIT;
-        const auto storage_write = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT;
-
-        rhi::buffer_barrier(cmd,
-                            *rm_,
-                            tile_buffers_.entry_count_buffer(),
-                            compute_stage,
-                            storage_write,
-                            compute_stage,
-                            storage_read | storage_write);
-        rhi::buffer_barrier(cmd,
-                            *rm_,
-                            tile_buffers_.entry_stats_buffer(),
-                            compute_stage,
-                            storage_write,
-                            compute_stage,
-                            storage_read | storage_write);
-        rhi::buffer_barrier(cmd,
-                            *rm_,
-                            tile_buffers_.entry_depth_keys_buffer(),
-                            compute_stage,
-                            storage_write,
-                            compute_stage,
-                            storage_read);
-        rhi::buffer_barrier(cmd,
-                            *rm_,
-                            tile_buffers_.entry_tile_ids_buffer(),
-                            compute_stage,
-                            storage_write,
-                            compute_stage,
-                            storage_read);
-        rhi::buffer_barrier(cmd,
-                            *rm_,
-                            tile_buffers_.entry_splat_ids_buffer(),
-                            compute_stage,
-                            storage_write,
-                            compute_stage,
-                            storage_read);
-        rhi::buffer_barrier(cmd,
-                            *rm_,
-                            tile_buffers_.entry_indices_buffer(),
-                            compute_stage,
-                            storage_write,
-                            compute_stage,
-                            storage_read);
+    void GsTileBinningPass::barrier_transfer_outputs_to_compute(const rhi::CommandBuffer &cmd) const {
+        const std::array buffers = {
+            tile_buffers_.tile_requested_counts_buffer(),
+            tile_buffers_.tile_offsets_buffer(),
+            tile_buffers_.tile_counts_buffer(),
+            tile_buffers_.tile_cursors_buffer(),
+            tile_buffers_.entry_stats_buffer(),
+        };
+        rhi::buffer_barriers(cmd,
+                             *rm_,
+                             buffers,
+                             VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+                             VK_ACCESS_2_TRANSFER_WRITE_BIT,
+                             VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+                             VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
     }
 
-    void GsTileBinningPass::barrier_gather_outputs_to_compute_read(const rhi::CommandBuffer &cmd) const {
-        const auto compute_stage = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
-        const auto storage_read = VK_ACCESS_2_SHADER_STORAGE_READ_BIT;
-        const auto storage_write = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT;
-
-        rhi::buffer_barrier(cmd,
-                            *rm_,
-                            tile_buffers_.tile_sort_keys_buffer(),
-                            compute_stage,
-                            storage_write,
-                            compute_stage,
-                            storage_read);
-        rhi::buffer_barrier(cmd,
-                            *rm_,
-                            tile_buffers_.tile_sort_values_buffer(),
-                            compute_stage,
-                            storage_write,
-                            compute_stage,
-                            storage_read);
+    void GsTileBinningPass::barrier_count_outputs_to_compute(const rhi::CommandBuffer &cmd) const {
+        const std::array buffers = {
+            tile_buffers_.tile_requested_counts_buffer(),
+            tile_buffers_.entry_stats_buffer(),
+        };
+        rhi::buffer_barriers(cmd,
+                             *rm_,
+                             buffers,
+                             VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+                             VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+                             VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+                             VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
     }
 
-    void GsTileBinningPass::barrier_range_outputs_to_compute_read(const rhi::CommandBuffer &cmd) const {
-        const auto compute_stage = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
-        const auto storage_read = VK_ACCESS_2_SHADER_STORAGE_READ_BIT;
-        const auto storage_write = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT;
+    void GsTileBinningPass::barrier_offset_outputs_to_compute(const rhi::CommandBuffer &cmd) const {
+        const std::array buffers = {
+            tile_buffers_.tile_offsets_buffer(),
+            tile_buffers_.tile_counts_buffer(),
+            tile_buffers_.entry_stats_buffer(),
+            tile_buffers_.scan_chunk_sums_buffer(),
+            tile_buffers_.scan_chunk_offsets_buffer(),
+        };
+        rhi::buffer_barriers(cmd,
+                             *rm_,
+                             buffers,
+                             VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+                             VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+                             VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+                             VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
+    }
 
-        rhi::buffer_barrier(cmd,
-                            *rm_,
-                            tile_buffers_.tile_offsets_buffer(),
-                            compute_stage,
-                            storage_write,
-                            compute_stage,
-                            storage_read);
-        rhi::buffer_barrier(cmd,
-                            *rm_,
-                            tile_buffers_.tile_counts_buffer(),
-                            compute_stage,
-                            storage_write,
-                            compute_stage,
-                            storage_read);
-        rhi::buffer_barrier(cmd,
-                            *rm_,
-                            tile_buffers_.entry_stats_buffer(),
-                            compute_stage,
-                            storage_write,
-                            compute_stage,
-                            storage_read | storage_write);
+    void GsTileBinningPass::barrier_scatter_outputs_to_compute_read(const rhi::CommandBuffer &cmd) const {
+        const std::array buffers = {
+            tile_buffers_.tile_cursors_buffer(),
+            tile_buffers_.entry_depth_keys_buffer(),
+            tile_buffers_.entry_splat_ids_buffer(),
+            tile_buffers_.entry_stats_buffer(),
+        };
+        rhi::buffer_barriers(cmd,
+                             *rm_,
+                             buffers,
+                             VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+                             VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+                             VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+                             VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
     }
 
     void GsTileBinningPass::consume_delayed_stats(const uint32_t frame_index) {
@@ -619,13 +523,14 @@ namespace himalaya::passes {
                                             ? 0.0F
                                             : static_cast<float>(runtime_stats_.entry_dropped) /
                                               static_cast<float>(runtime_stats_.entry_requested);
-            spdlog::warn("GS output is not correctness-valid: tile-entry capacity overflow "
-                         "requested={}, written={}, dropped={}, dropped_ratio={:.2f}%, capacity={}",
+            spdlog::warn("GS output is not correctness-valid: per-tile capacity overflow "
+                         "requested={}, written={}, dropped={}, dropped_ratio={:.2f}%, max_tile_requested={}, per_tile_capacity={}",
                          runtime_stats_.entry_requested,
                          runtime_stats_.entry_written,
                          runtime_stats_.entry_dropped,
                          dropped_ratio * 100.0F,
-                         tile_buffers_.entry_capacity());
+                         runtime_stats_.max_tile_requested,
+                         tile_buffers_.max_entries_per_tile());
             warned_entry_dropped_ = true;
         }
 

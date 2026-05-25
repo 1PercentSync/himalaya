@@ -455,9 +455,10 @@ namespace himalaya::app {
                                        "GS Output: not correctness-valid (entry overflow %.1f%%)",
                                        dropped_ratio * 100.0F);
                 }
-                ImGui::Text("GS Diagnostics: invalid=%u dropped_ratio=%.1f%%",
+                ImGui::Text("GS Diagnostics: invalid=%u dropped_ratio=%.1f%% max_tile_requested=%u",
                             ctx.gs_stats.invalid_entries,
-                            dropped_ratio * 100.0F);
+                            dropped_ratio * 100.0F,
+                            ctx.gs_stats.max_tile_requested);
             } else {
                 ImGui::TextDisabled("GS runtime stats unavailable");
             }

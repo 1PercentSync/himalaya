@@ -129,8 +129,7 @@ namespace himalaya::app {
                                                                frame_ctx,
                                                                render_graph_.get_image(frame_ctx.hdr_color),
                                                                gs_projection_pass_.projected_splat_buffer(),
-                                                               gs_tile_binning_pass_.tile_buffers(),
-                                                               gs_tile_binning_pass_.sorted_entry_indices_buffer());
+                                                               gs_tile_binning_pass_.tile_buffers());
                                });
 
         present_pass_.record(render_graph_, frame_ctx);

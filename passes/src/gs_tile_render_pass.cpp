@@ -32,9 +32,8 @@ namespace himalaya::passes {
             rhi::storage_buffer_binding(1),
             rhi::storage_buffer_binding(2),
             rhi::storage_buffer_binding(3),
-            rhi::storage_buffer_binding(4),
             VkDescriptorSetLayoutBinding{
-                .binding = 5,
+                .binding = 4,
                 .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
                 .descriptorCount = 1,
                 .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
@@ -49,12 +48,10 @@ namespace himalaya::passes {
                                   const framework::FrameContext &frame_ctx,
                                   const rhi::ImageHandle gs_color_image,
                                   const rhi::BufferHandle projected_splat_buffer,
-                                  const GsTileBuffers &tile_buffers,
-                                  const rhi::BufferHandle sorted_entry_indices_buffer) const {
+                                  const GsTileBuffers &tile_buffers) const {
         if (pipeline_.pipeline == VK_NULL_HANDLE ||
             !gs_color_image.valid() ||
             !projected_splat_buffer.valid() ||
-            !sorted_entry_indices_buffer.valid() ||
             !tile_buffers.entry_splat_ids_buffer().valid() ||
             !tile_buffers.tile_offsets_buffer().valid() ||
             !tile_buffers.tile_counts_buffer().valid() ||
@@ -66,8 +63,6 @@ namespace himalaya::passes {
         const auto projected_info = rhi::storage_buffer_info(*rm_, projected_splat_buffer);
         const auto entry_splat_ids_info = rhi::storage_buffer_info(
             *rm_, tile_buffers.entry_splat_ids_buffer());
-        const auto sorted_entry_indices_info = rhi::storage_buffer_info(
-            *rm_, sorted_entry_indices_buffer);
         const auto tile_offsets_info = rhi::storage_buffer_info(
             *rm_, tile_buffers.tile_offsets_buffer());
         const auto tile_counts_info = rhi::storage_buffer_info(
@@ -79,12 +74,11 @@ namespace himalaya::passes {
         const std::array infos = {
             projected_info,
             entry_splat_ids_info,
-            sorted_entry_indices_info,
             tile_offsets_info,
             tile_counts_info,
         };
         rhi::push_storage_buffers(cmd, pipeline_, infos);
-        cmd.push_storage_image(*rm_, pipeline_.layout, 3, 5, gs_color_image);
+        cmd.push_storage_image(*rm_, pipeline_.layout, 3, 4, gs_color_image);
 
         const PushConstants pc{
             .tile_count_x = tile_buffers.tile_count_x(),

@@ -83,6 +83,9 @@ namespace himalaya::app {
 
             /** @brief Invalid entries detected by shaders. */
             uint32_t invalid_entries;
+
+            /** @brief Maximum requested entries observed for one tile. */
+            uint32_t max_tile_requested;
         } gs_stats;
 
         /** @brief Path tracing configuration (mutable — DebugUI modifies fields directly). */

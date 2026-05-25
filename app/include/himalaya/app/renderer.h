@@ -302,7 +302,7 @@ namespace himalaya::app {
         /** @brief GS projection and culling pass. */
         passes::GsProjectionPass gs_projection_pass_{};
 
-        /** @brief GS tile entry generation, sorting, and range build pass. */
+        /** @brief GS per-tile binning and local ordering pass. */
         passes::GsTileBinningPass gs_tile_binning_pass_{};
 
         /** @brief GS tile rendering pass. */

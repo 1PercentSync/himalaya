@@ -2,10 +2,9 @@
 
 /**
  * @file gs_tile_binning_pass.h
- * @brief Gaussian Splatting tile-entry compute pass.
+ * @brief Gaussian Splatting per-tile binning compute pass.
  */
 
-#include <himalaya/framework/radix_sort.h>
 #include <himalaya/passes/gs_tile_buffers.h>
 #include <himalaya/rhi/context.h>
 #include <himalaya/rhi/pipeline.h>
@@ -30,63 +29,60 @@ namespace himalaya::framework {
 
 namespace himalaya::passes {
     /**
-     * @brief Generates bounded per-tile entries from projected visible splats.
+     * @brief Builds compact per-tile GS entry ranges.
      *
-     * The pass records tile-entry generation, depth sort, tile-id gather, tile-id
-     * stable sort, and tile range build into an existing command buffer.
+     * The pass records count, tile-offset build, and scatter stages into an
+     * existing command buffer. It replaces the earlier two global RadixSort path
+     * with deterministic per-tile ranges; local ordering remains a follow-up
+     * optimization after this correctness baseline.
      */
     class GsTileBinningPass {
     public:
-        /** @brief Workgroup size used by tile-entry generation and range helpers. */
+        /** @brief Workgroup size used by tile helpers. */
         static constexpr uint32_t kWorkgroupSize = 256;
 
-        /**
-         * @brief Push constant layout shared with gs_tile_entry.comp.
-         */
-        struct EntryPushConstants {
+        /** @brief Push constant layout shared with gs_tile_count.comp and gs_tile_scatter.comp. */
+        struct TileCoveragePushConstants {
             uint32_t max_splat_count; ///< Maximum visible splat capacity.
-            uint32_t entry_capacity;  ///< Maximum number of tile entries that may be written.
             uint32_t tile_count_x;    ///< Number of tiles along X.
             uint32_t tile_count_y;    ///< Number of tiles along Y.
+            uint32_t _padding;        ///< Explicit 16-byte alignment padding.
         };
 
-        /**
-         * @brief Push constant layout shared with gs_tile_sort_gather.comp.
-         */
-        struct GatherPushConstants {
-            uint32_t max_entry_count; ///< Maximum tile-entry capacity.
+        /** @brief Push constant layout shared with gs_tile_offset.comp. */
+        struct TileOffsetPushConstants {
+            uint32_t mode;                 ///< Scan mode selected by orchestration.
+            uint32_t tile_count;           ///< Total number of tiles.
+            uint32_t max_entries_per_tile; ///< Retained per-tile capacity.
+            uint32_t chunk_count;          ///< Number of 256-tile scan chunks.
+            uint32_t entry_capacity;       ///< Total retained entry storage capacity.
+            uint32_t _padding0;            ///< Explicit 16-byte alignment padding.
+            uint32_t _padding1;            ///< Explicit 16-byte alignment padding.
+            uint32_t _padding2;            ///< Explicit 16-byte alignment padding.
         };
 
-        /**
-         * @brief Push constant layout shared with gs_tile_range.comp.
-         */
-        struct RangePushConstants {
-            uint32_t max_entry_count; ///< Maximum tile-entry capacity.
-            uint32_t tile_count;      ///< Total number of tiles in the render target.
-        };
-
-        /** @brief One-time initialization: create descriptor layouts, pipelines, and sorters. */
+        /** @brief One-time initialization: create descriptor layouts and pipelines. */
         void setup(rhi::Context &ctx,
                    rhi::ResourceManager &rm,
                    rhi::DescriptorManager &dm,
                    rhi::ShaderCompiler &sc);
 
         /**
-         * @brief Ensures tile-entry buffers match the current scene and viewport.
+         * @brief Ensures per-tile buffers match the current scene and viewport.
          */
         void ensure_capacity(uint32_t max_splat_count,
                              uint32_t screen_width,
                              uint32_t screen_height);
 
         /**
-         * @brief Records tile-entry generation commands.
+         * @brief Records per-tile binning commands.
          *
          * @param cmd                      Command buffer to record into.
          * @param frame_ctx                Per-frame context for global descriptor sets.
          * @param projected_splat_buffer   Compact projected splat data from projection.
-         * @param depth_key_buffer         Unsorted depth keys from projection.
+         * @param depth_key_buffer         Unsorted view-space depth keys from projection.
          * @param visible_counter_buffer   Atomic visible splat counter from projection.
-         * @param indirect_dispatch_buffer Indirect dispatch buffer clamped to visible splat capacity.
+         * @param indirect_dispatch_buffer Unused legacy indirect buffer kept for API stability.
          * @param max_splat_count          Maximum visible splat capacity.
          * @param screen_width             Current render target width in pixels.
          * @param screen_height            Current render target height in pixels.
@@ -103,9 +99,6 @@ namespace himalaya::passes {
 
         /**
          * @brief Rebuilds screen-size-dependent tile buffers after swapchain resize.
-         *
-         * The splat/entry capacity is preserved; tile range buffers are resized
-         * to match the new viewport. Safe to call before any GS scene is loaded.
          */
         void on_resize(uint32_t screen_width, uint32_t screen_height);
 
@@ -115,7 +108,7 @@ namespace himalaya::passes {
         /** @brief Resets scene-sized buffers and delayed runtime diagnostics. */
         void reset_scene_state();
 
-        /** @brief Destroys pipelines, descriptor layouts, sorters, and owned buffers. */
+        /** @brief Destroys pipelines, descriptor layouts, and owned buffers. */
         void destroy();
 
         /** @brief Returns true when all compute pipelines are available for recording. */
@@ -123,12 +116,6 @@ namespace himalaya::passes {
 
         /** @brief Tile-entry buffer storage owned by this pass. */
         [[nodiscard]] const GsTileBuffers &tile_buffers() const;
-
-        /** @brief Final sorted tile IDs after tile-id stable sort. */
-        [[nodiscard]] rhi::BufferHandle sorted_tile_ids_buffer() const;
-
-        /** @brief Final sorted entry indices after tile-id stable sort. */
-        [[nodiscard]] rhi::BufferHandle sorted_entry_indices_buffer() const;
 
         /** @brief Returns true after at least one delayed stats readback completed. */
         [[nodiscard]] bool has_runtime_stats() const;
@@ -146,14 +133,17 @@ namespace himalaya::passes {
         /** @brief Destroys compute pipelines. */
         void destroy_pipelines();
 
-        /** @brief Inserts barriers for tile-entry outputs consumed by later compute stages. */
-        void barrier_entry_outputs_to_compute_read(const rhi::CommandBuffer &cmd) const;
+        /** @brief Inserts barriers after transfer clears and stats visible-count copy. */
+        void barrier_transfer_outputs_to_compute(const rhi::CommandBuffer &cmd) const;
 
-        /** @brief Inserts barriers for gather outputs consumed by tile-id sort. */
-        void barrier_gather_outputs_to_compute_read(const rhi::CommandBuffer &cmd) const;
+        /** @brief Inserts barriers after per-tile count. */
+        void barrier_count_outputs_to_compute(const rhi::CommandBuffer &cmd) const;
 
-        /** @brief Inserts barriers for tile range outputs consumed by tile rendering. */
-        void barrier_range_outputs_to_compute_read(const rhi::CommandBuffer &cmd) const;
+        /** @brief Inserts barriers after one tile offset scan stage. */
+        void barrier_offset_outputs_to_compute(const rhi::CommandBuffer &cmd) const;
+
+        /** @brief Inserts barriers after scatter before tile rendering/readback. */
+        void barrier_scatter_outputs_to_compute_read(const rhi::CommandBuffer &cmd) const;
 
         /** @brief Reads the stats buffer copied into this frame's readback buffer on an older frame. */
         void consume_delayed_stats(uint32_t frame_index);
@@ -180,29 +170,23 @@ namespace himalaya::passes {
         /** @brief Shader compiler. */
         rhi::ShaderCompiler *sc_ = nullptr;
 
-        /** @brief Push descriptor layout for gs_tile_entry.comp. */
-        VkDescriptorSetLayout entry_set3_layout_ = VK_NULL_HANDLE;
+        /** @brief Push descriptor layout for gs_tile_count.comp. */
+        VkDescriptorSetLayout count_set3_layout_ = VK_NULL_HANDLE;
 
-        /** @brief Push descriptor layout for gs_tile_sort_gather.comp. */
-        VkDescriptorSetLayout gather_set3_layout_ = VK_NULL_HANDLE;
+        /** @brief Push descriptor layout for gs_tile_offset.comp. */
+        VkDescriptorSetLayout offset_set3_layout_ = VK_NULL_HANDLE;
 
-        /** @brief Push descriptor layout for gs_tile_range.comp. */
-        VkDescriptorSetLayout range_set3_layout_ = VK_NULL_HANDLE;
+        /** @brief Push descriptor layout for gs_tile_scatter.comp. */
+        VkDescriptorSetLayout scatter_set3_layout_ = VK_NULL_HANDLE;
 
-        /** @brief Compute pipeline for gs_tile_entry.comp. */
-        rhi::Pipeline entry_pipeline_{};
+        /** @brief Compute pipeline for gs_tile_count.comp. */
+        rhi::Pipeline count_pipeline_{};
 
-        /** @brief Compute pipeline for gs_tile_sort_gather.comp. */
-        rhi::Pipeline gather_pipeline_{};
+        /** @brief Compute pipeline for gs_tile_offset.comp. */
+        rhi::Pipeline offset_pipeline_{};
 
-        /** @brief Compute pipeline for gs_tile_range.comp. */
-        rhi::Pipeline range_pipeline_{};
-
-        /** @brief Stable radix sort for entry depth keys. */
-        framework::RadixSort depth_sorter_;
-
-        /** @brief Stable radix sort for tile IDs after depth-key ordering. */
-        framework::RadixSort tile_sorter_;
+        /** @brief Compute pipeline for gs_tile_scatter.comp. */
+        rhi::Pipeline scatter_pipeline_{};
 
         /** @brief Owned tile-entry buffers. */
         GsTileBuffers tile_buffers_;
@@ -224,6 +208,5 @@ namespace himalaya::passes {
 
         /** @brief One-shot warning guard for invalid entry diagnostics. */
         bool warned_invalid_entries_ = false;
-
     };
 } // namespace himalaya::passes

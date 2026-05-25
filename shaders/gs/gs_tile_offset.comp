@@ -1,0 +1,186 @@
+#version 460
+
+/**
+ * @file gs_tile_offset.comp
+ * @brief Builds compact per-tile entry offsets and aggregate GS diagnostics.
+ */
+
+layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+
+const uint kModeScanTileChunks = 0u;
+const uint kModeScanChunkSums = 1u;
+const uint kModeAddChunkOffsets = 2u;
+const uint kModeFinalizeStats = 3u;
+const uint kWorkgroupSize = 256u;
+
+layout(push_constant) uniform PC {
+    uint mode;
+    uint tile_count;
+    uint max_entries_per_tile;
+    uint chunk_count;
+    uint entry_capacity;
+    uint _padding0;
+    uint _padding1;
+    uint _padding2;
+} pc;
+
+layout(set = 3, binding = 0) readonly buffer TileRequestedCountBuffer {
+    uint tile_requested_counts[];
+};
+
+layout(set = 3, binding = 1) buffer TileOffsetBuffer {
+    uint tile_offsets[];
+};
+
+layout(set = 3, binding = 2) buffer TileCountBuffer {
+    uint tile_counts[];
+};
+
+layout(set = 3, binding = 3) buffer EntryStatsBuffer {
+    uint stats_visible_splats;
+    uint entry_requested_count;
+    uint entry_written_count;
+    uint entry_dropped_count;
+    uint invalid_entry_count;
+    uint max_tile_requested_count;
+};
+
+layout(set = 3, binding = 4) buffer ScanChunkSumsBuffer {
+    uint scan_chunk_sums[];
+};
+
+layout(set = 3, binding = 5) buffer ScanChunkOffsetsBuffer {
+    uint scan_chunk_offsets[];
+};
+
+shared uint shared_values[kWorkgroupSize];
+
+uint next_power_of_two(uint value) {
+    if (value == 0u) {
+        return 0u;
+    }
+
+    --value;
+    value |= value >> 1u;
+    value |= value >> 2u;
+    value |= value >> 4u;
+    value |= value >> 8u;
+    value |= value >> 16u;
+    return value + 1u;
+}
+
+void inclusive_scan_shared() {
+    const uint local_index = gl_LocalInvocationID.x;
+    for (uint offset = 1u; offset < kWorkgroupSize; offset <<= 1u) {
+        uint addend = 0u;
+        if (local_index >= offset) {
+            addend = shared_values[local_index - offset];
+        }
+
+        barrier();
+        shared_values[local_index] += addend;
+        barrier();
+    }
+}
+
+uint capped_count(uint requested_count) {
+    return min(requested_count, pc.max_entries_per_tile);
+}
+
+uint padded_count(uint requested_count) {
+    return next_power_of_two(capped_count(requested_count));
+}
+
+void scan_tile_chunk() {
+    const uint chunk = gl_WorkGroupID.x;
+    const uint local_index = gl_LocalInvocationID.x;
+    const uint tile = chunk * kWorkgroupSize + local_index;
+    const bool valid = tile < pc.tile_count;
+
+    const uint requested = valid ? tile_requested_counts[tile] : 0u;
+    const uint padded = padded_count(requested);
+
+    shared_values[local_index] = padded;
+    barrier();
+    inclusive_scan_shared();
+
+    if (valid) {
+        tile_offsets[tile] = shared_values[local_index] - padded;
+        tile_counts[tile] = 0u;
+    }
+
+    if (local_index == 0u && chunk < pc.chunk_count) {
+        scan_chunk_sums[chunk] = shared_values[kWorkgroupSize - 1u];
+    }
+}
+
+void scan_chunk_sum_offsets() {
+    const uint local_index = gl_LocalInvocationID.x;
+    const bool valid = local_index < pc.chunk_count;
+    const uint value = valid ? scan_chunk_sums[local_index] : 0u;
+
+    shared_values[local_index] = value;
+    barrier();
+    inclusive_scan_shared();
+
+    if (valid) {
+        scan_chunk_offsets[local_index] = shared_values[local_index] - value;
+    }
+}
+
+void add_chunk_offsets() {
+    const uint chunk = gl_WorkGroupID.x;
+    const uint local_index = gl_LocalInvocationID.x;
+    const uint tile = chunk * kWorkgroupSize + local_index;
+    if (tile >= pc.tile_count || chunk >= pc.chunk_count) {
+        return;
+    }
+
+    const uint local_offset = tile_offsets[tile];
+    const uint global_offset = scan_chunk_offsets[chunk] + local_offset;
+    const uint requested = tile_requested_counts[tile];
+    const uint retained = capped_count(requested);
+    const uint padded = padded_count(requested);
+
+    tile_offsets[tile] = min(global_offset, pc.entry_capacity);
+    if (global_offset + padded <= pc.entry_capacity) {
+        tile_counts[tile] = retained;
+    } else {
+        tile_counts[tile] = 0u;
+    }
+}
+
+void finalize_stats() {
+    if (gl_LocalInvocationID.x != 0u) {
+        return;
+    }
+
+    uint requested_sum = 0u;
+    uint written_sum = 0u;
+    uint max_requested = 0u;
+
+    for (uint tile = 0u; tile < pc.tile_count; ++tile) {
+        const uint requested = tile_requested_counts[tile];
+        const uint written = tile_counts[tile];
+        requested_sum += requested;
+        written_sum += written;
+        max_requested = max(max_requested, requested);
+    }
+
+    entry_requested_count = requested_sum;
+    entry_written_count = written_sum;
+    entry_dropped_count = requested_sum - written_sum;
+    max_tile_requested_count = max_requested;
+}
+
+void main() {
+    if (pc.mode == kModeScanTileChunks) {
+        scan_tile_chunk();
+    } else if (pc.mode == kModeScanChunkSums) {
+        scan_chunk_sum_offsets();
+    } else if (pc.mode == kModeAddChunkOffsets) {
+        add_chunk_offsets();
+    } else if (pc.mode == kModeFinalizeStats) {
+        finalize_stats();
+    }
+}

@@ -2,11 +2,12 @@
 
 /**
  * @file gs_tile_render.comp
- * @brief Renders sorted Gaussian Splatting tile entries into the GS color image.
+ * @brief Renders locally ordered Gaussian Splatting tile entries into the GS color image.
  *
  * Each 16x16 workgroup shades one screen-space tile. Entries in a tile are
- * already sorted front-to-back, so each pixel can alpha-composite in order and
- * stop once transmittance becomes visually negligible.
+ * ordered front-to-back by the per-tile binning pass, so each pixel can
+ * alpha-composite in order and stop once transmittance becomes visually
+ * negligible.
  */
 
 layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
@@ -39,19 +40,15 @@ layout(set = 3, binding = 1) readonly buffer EntrySplatIdBuffer {
     uint entry_splat_ids[];
 };
 
-layout(set = 3, binding = 2) readonly buffer SortedEntryIndexBuffer {
-    uint sorted_entry_indices[];
-};
-
-layout(set = 3, binding = 3) readonly buffer TileOffsetBuffer {
+layout(set = 3, binding = 2) readonly buffer TileOffsetBuffer {
     uint tile_offsets[];
 };
 
-layout(set = 3, binding = 4) readonly buffer TileCountBuffer {
+layout(set = 3, binding = 3) readonly buffer TileCountBuffer {
     uint tile_counts[];
 };
 
-layout(set = 3, binding = 5, rgba16f) writeonly uniform image2D gs_color_image;
+layout(set = 3, binding = 4, rgba16f) writeonly uniform image2D gs_color_image;
 
 /**
  * @brief Evaluates a projected 2D Gaussian at the pixel center.
@@ -99,8 +96,7 @@ void main() {
         const vec2 sample_pos = vec2(pixel) + vec2(0.5);
 
         for (uint i = 0u; i < count; ++i) {
-            const uint sorted_index = begin + i;
-            const uint entry_index = sorted_entry_indices[sorted_index];
+            const uint entry_index = begin + i;
             const uint splat_index = entry_splat_ids[entry_index];
             const GSSplatData2D splat = splats_2d[splat_index];
 
