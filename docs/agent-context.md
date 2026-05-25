@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的渲染器
 - **分支**：`reflector` — Path Tracing + Gaussian Splatting
 - **Phase**：Phase 3 — Gaussian Splatting 渲染
-- **进度**：Step 6.2 首项已完成并通过用户运行验证；待开始 Step 6.5（GS performance review）
+- **进度**：Step 6.2 首项已完成并通过用户运行验证；后续待修正 GS AABB、depth key 与 overflow 诊断，再进入 Step 6.5（GS performance review）
 
 ### 下一个任务
 
-Step 6.5：Profiling 完整 GS pipeline GPU 时间，检查 RadixSort stable scatter 与 entry capacity 是否需要优化
+Step 6.2：收紧 GS projection 的 ellipse tile AABB，减少无效 tile entries
 
 ---
 

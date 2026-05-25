@@ -970,6 +970,8 @@ Step 6.1 修订以下正确性与诊断约束：
 
 Step 6.2 运行期修订：不得跨可能分配或释放 GPU 资源的调用保存 `ResourceManager::get_buffer()` 返回的 slot 引用。首次进入 GS 模式时，`RadixSort::record()` 可能触发 sort buffer 扩容并重分配内部 slot vector；`GsTileBinningPass` 需要复制 `VkBuffer` handle 后再录制后续 indirect dispatch，避免引用悬空导致 validation 报告 invalid `VkBuffer`。
 
+Step 6.2 后续正确性修订：projection 的 ellipse tile AABB 应使用椭圆主轴精确包围盒减少无效 entry；depth sort key 应使用 view-space depth 而非欧氏 camera distance；当 `entry_dropped > 0` 时必须在 log / DebugUI 标记 GS 输出不是 correctness-valid，并显示 dropped/requested 比例。
+
 ### 颜色空间处理
 
 GS 渲染侧原样输出 SH 求值结果，不做颜色空间转换。Swapchain 始终使用 SRGB view；最终颜色空间处理由 PresentPass shader 完成（见第 23 节）。
