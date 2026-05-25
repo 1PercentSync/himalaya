@@ -446,8 +446,18 @@ namespace himalaya::app {
                             ctx.gs_stats.entry_requested,
                             ctx.gs_stats.entry_written,
                             ctx.gs_stats.entry_dropped);
-                ImGui::Text("GS Diagnostics: invalid=%u",
-                            ctx.gs_stats.invalid_entries);
+                const float dropped_ratio = ctx.gs_stats.entry_requested == 0
+                                                ? 0.0F
+                                                : static_cast<float>(ctx.gs_stats.entry_dropped) /
+                                                  static_cast<float>(ctx.gs_stats.entry_requested);
+                if (ctx.gs_stats.entry_dropped > 0) {
+                    ImGui::TextColored(ImVec4(1.0F, 0.35F, 0.15F, 1.0F),
+                                       "GS Output: not correctness-valid (entry overflow %.1f%%)",
+                                       dropped_ratio * 100.0F);
+                }
+                ImGui::Text("GS Diagnostics: invalid=%u dropped_ratio=%.1f%%",
+                            ctx.gs_stats.invalid_entries,
+                            dropped_ratio * 100.0F);
             } else {
                 ImGui::TextDisabled("GS runtime stats unavailable");
             }

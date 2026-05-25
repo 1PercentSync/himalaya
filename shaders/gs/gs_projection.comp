@@ -279,7 +279,7 @@ void decompose_covariance_2d(mat2 cov2d, out vec2 axis_u, out vec2 axis_v) {
  */
 bool compute_tile_range(vec2 center, vec2 axis_u, vec2 axis_v,
                         out uvec2 tile_min, out uvec2 tile_max) {
-    const vec2 extent = abs(axis_u) + abs(axis_v);
+    const vec2 extent = sqrt(axis_u * axis_u + axis_v * axis_v);
     const vec2 bbox_min = center - extent;
     const vec2 bbox_max = center + extent;
 
@@ -355,5 +355,5 @@ void main() {
 
     const uint visible_index = atomicAdd(visible_splat_count, 1u);
     splats_2d[visible_index] = projected;
-    depth_keys[visible_index] = floatBitsToUint(camera_distance);
+    depth_keys[visible_index] = floatBitsToUint(max(-view_pos.z, 0.0));
 }

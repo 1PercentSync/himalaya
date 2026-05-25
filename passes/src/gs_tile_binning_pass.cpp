@@ -615,10 +615,16 @@ namespace himalaya::passes {
         }
 
         if (runtime_stats_.entry_dropped > 0 && !warned_entry_dropped_) {
-            spdlog::warn("GS tile entries dropped: requested={}, written={}, dropped={}, capacity={}",
+            const float dropped_ratio = runtime_stats_.entry_requested == 0
+                                            ? 0.0F
+                                            : static_cast<float>(runtime_stats_.entry_dropped) /
+                                              static_cast<float>(runtime_stats_.entry_requested);
+            spdlog::warn("GS output is not correctness-valid: tile-entry capacity overflow "
+                         "requested={}, written={}, dropped={}, dropped_ratio={:.2f}%, capacity={}",
                          runtime_stats_.entry_requested,
                          runtime_stats_.entry_written,
                          runtime_stats_.entry_dropped,
+                         dropped_ratio * 100.0F,
                          tile_buffers_.entry_capacity());
             warned_entry_dropped_ = true;
         }
