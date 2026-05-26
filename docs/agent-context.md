@@ -8,12 +8,12 @@
 
 - **项目**：Himalaya — 基于 Vulkan 1.4 的渲染器
 - **分支**：`reflector` — Path Tracing + Gaussian Splatting
-- **Phase**：Phase 2 — Gaussian Splatting 数据管线
-- **进度**：Phase 2 全部完成（Step 0-4 全部通过编译验证和运行测试）
+- **Phase**：Phase 3 — Gaussian Splatting 渲染（前期讨论中）
+- **进度**：Phase 2 全部完成；Phase 3 总体路线初步讨论，尚未细化
 
 ### 下一个任务
 
-Phase 3 准备（待规划）
+继续 Phase 3 方案讨论与细化
 
 ---
 
@@ -24,8 +24,7 @@ CLAUDE.md 已自动加载，以下为额外必读：
 | 文档 | 说明 |
 |------|------|
 | `docs/roadmap.md` | Reflector 分支 phase 概览与顺序 |
-| `docs/current-phase.md` | Phase 2 数据管线范围与步骤概述 |
-| `tasks/reflector-phase2.md` | Phase 2 任务清单（复选框进度跟踪） |
+| `docs/phase3-decisions.md` | Phase 3 渲染管线总体路线、子阶段规划与技术选型 |
 | `docs/architecture.md` | 渲染器架构与设计理念（含 GS 数据管线） |
 | `docs/technical-decisions.md` | 技术选型与决策（含 GS 第 20-22 节） |
 
@@ -53,6 +52,7 @@ CLAUDE.md 已自动加载，以下为额外必读：
 | `docs/archive/milestone-2.md` | M2 规划 |
 | `docs/archive/milestone-3.md` | M3 规划 |
 | `docs/archive/milestone-future.md` | 远期可选目标 |
+| `docs/archive/gaussian-splatting-reference.md` | ChatGPT 的 GS 实时渲染研究参考（Phase 3 讨论输入） |
 | `docs/archive/conversation-initial-design.md` | 初始设计的完整对话记录 |
 | `docs/archive/m1-phase1-plan.md` | M1 阶段一实现步骤 |
 | `docs/archive/m1-phase2-plan.md` | M1 阶段二实现步骤 |
