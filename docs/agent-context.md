@@ -25,6 +25,7 @@ CLAUDE.md 已自动加载，以下为额外必读：
 |------|------|
 | `docs/roadmap.md` | Reflector 分支 phase 概览与顺序 |
 | `docs/phase3-decisions.md` | Phase 3 渲染管线总体路线、子阶段规划与技术选型 |
+| `docs/khr-gaussian-splatting-spec.md` | KHR_gaussian_splatting glTF 扩展规范（Khronos Release Candidate） |
 | `docs/architecture.md` | 渲染器架构与设计理念（含 GS 数据管线） |
 | `docs/technical-decisions.md` | 技术选型与决策（含 GS 第 20-22 节） |
 
@@ -34,6 +35,8 @@ CLAUDE.md 已自动加载，以下为额外必读：
 
 | 文档 | 说明 |
 |------|------|
+| `docs/archive/reflector-phase2-plan.md` | Reflector Phase 2 实现步骤（原 current-phase.md） |
+| `tasks/archive/reflector-phase2.md` | Reflector Phase 2 任务清单（原 tasks/reflector-phase2.md） |
 | `docs/archive/reflector-phase1-plan.md` | Reflector Phase 1 精简范围与步骤（原 current-phase.md） |
 | `tasks/archive/reflector-phase1.md` | Reflector Phase 1 任务清单（原 tasks/reflector-phase1.md） |
 | `docs/archive/m1-phase8.5-plan.md` | M1 阶段八点五实现步骤（原 current-phase.md） |

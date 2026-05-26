@@ -34,7 +34,7 @@
 
 ### Subgroup Uniform Control Flow
 
-请求 `VK_KHR_shader_subgroup_uniform_control_flow` 扩展特性。上述 subgroup append 模式依赖 `subgroupBallot` 后所有活跃 invocation 重新汇合，此扩展提供该语义的正确性保证。设备初始化时请求；若不支持，该设备上不使用 subgroup 聚合模式，所有 append/scan 操作退回到 per-thread `atomicAdd`（功能正确但原子竞争更高）。
+要求 `VK_KHR_shader_subgroup_uniform_control_flow` 扩展特性。上述 subgroup append 模式依赖 `subgroupBallot` 后所有活跃 invocation 重新汇合，此扩展提供该语义的正确性保证。设备初始化时作为必需扩展请求；不支持该扩展的设备无法使用 GS 渲染模式。
 
 ### 投影 Extent 收紧（Oriented Bounding Box）
 
