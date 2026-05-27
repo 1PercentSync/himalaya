@@ -8,12 +8,12 @@
 
 - **项目**：Himalaya — 基于 Vulkan 1.4 的渲染器
 - **分支**：`reflector` — Path Tracing + Gaussian Splatting
-- **Phase**：Phase 3 — Gaussian Splatting 渲染（前期讨论中）
-- **进度**：Phase 2 全部完成；Phase 3 总体路线初步讨论，尚未细化
+- **Phase**：Phase 3.0 — Gaussian Splatting 基础渲染
+- **进度**：Phase 3.0 决策全部完成，任务规划完成，待开始实现
 
 ### 下一个任务
 
-继续 Phase 3 方案讨论与细化
+Phase 3.0 Step 0 实现
 
 ---
 
@@ -24,6 +24,8 @@ CLAUDE.md 已自动加载，以下为额外必读：
 | 文档 | 说明 |
 |------|------|
 | `docs/roadmap.md` | Reflector 分支 phase 概览与顺序 |
+| `docs/current-phase.md` | Phase 3.0 实现步骤与管线流程 |
+| `tasks/reflector-phase3.md` | Phase 3.0 任务清单与决策记录 |
 | `docs/phase3-decisions.md` | Phase 3 渲染管线总体路线、子阶段规划与技术选型 |
 | `docs/khr-gaussian-splatting-spec.md` | KHR_gaussian_splatting glTF 扩展规范（Khronos Release Candidate） |
 | `docs/architecture.md` | 渲染器架构与设计理念（含 GS 数据管线） |

@@ -76,11 +76,15 @@ Tile compute shader 中前到后 alpha blend 的颜色累积使用 FP32（shared
 
 **技术**：
 
-- Compute frustum cull + 2D 投影
-- GPU Radix Sort（深度排序可见列表）
-- Indirect Draw instanced quads + 硬件 alpha blend
-- GPU 数据上传（SoA 布局）
+- Upload-time bake（transform 烘焙、3D 协方差预计算、SH Wigner-D rotation）
+- GPU 数据上传（per-attribute SoA storage buffers）
+- Compute frustum cull + 2D 投影 + per-splat SH 求值
+- GPU Bitonic Sort（深度排序可见列表；后续演进为自实现 Radix Sort）
+- Indirect Draw instanced quads + premultiplied-under 硬件 blend（前到后）
+- R16G16B16A16Sfloat 输出 + sRGB→linear 转换 + TonemappingPass 复用
 - 上述防御性措施
+
+**实现决策**：详见 `tasks/reflector-phase3.md` 决策记录表。
 
 **结束目标**：能正确渲染 1M gaussian 场景，画面正确无明显 artifact，性能未必达到实时。
 
@@ -92,13 +96,12 @@ Tile compute shader 中前到后 alpha blend 的颜色累积使用 FP32（shared
 
 **技术**：
 
-- 3D 协方差预计算（加载时一次性，省去每帧 quaternion → matrix 转换）
-- SH 颜色预求值（每帧一次独立 compute pass，对可见 splat 求值 SH(view_dir) → RGB，渲染阶段只读预计算结果；与距离自适应 SH 截断配合——远处 splat 只求低阶 SH）
+- SH 颜色预求值（从 cull/project shader 分离为独立 post-cull compute pass，仅对可见 splat 求值；与距离自适应 SH 截断配合——远处 splat 只求低阶 SH）
 - 多级剔除（sub-pixel 半径 / 低 opacity / 异常大投影）
 - GPU buffer 热/冷/暖分离
 - 距离自适应 SH 截断（远处只算低阶 SH）
 
-**优先级**：SH 预求值 > 多级剔除 > 热冷分离 > 3D 协方差预计算 > SH 截断
+**优先级**：SH 预求值 > 多级剔除 > 热冷分离 > SH 截断
 
 **结束目标**：1M 场景达到基本实时（30+ FPS）。
 
