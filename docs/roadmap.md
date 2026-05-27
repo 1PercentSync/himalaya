@@ -9,8 +9,8 @@
 | Phase | 主题 | 状态 |
 |-------|------|------|
 | 1 | 管线精简 | 完成 |
-| 2 | Gaussian Splatting 数据管线 | 已规划 |
-| 3 | Gaussian Splatting 渲染 | 待规划 |
+| 2 | Gaussian Splatting 数据管线 | 完成 |
+| 3 | Gaussian Splatting 渲染 | Phase 3.0 已规划，待实现 |
 | 4 | 渲染增强与离屏输出 | 待规划 |
 | 5 | MCP 协议集成 | 待规划 |
 
@@ -34,7 +34,7 @@ PLY → glTF 转换工具 + GS 场景加载。
 
 实现 Gaussian Splatting 的实时渲染。
 
-具体渲染方案（compute + raster splatting、纯 compute 等）待 Phase 2 完成后研究确定。
+当前路线为分阶段演进：Phase 3.0 先实现 compute cull/project/sort + instanced quad 硬件光栅的基础渲染路径，用于验证正确性；后续 Phase 3.1/3.2 优化运行时和加载时数据效率；Phase 3.5 再将末端替换为 tile-based compute renderer，以获得 per-tile early-out 能力。
 
 ## Phase 4：渲染增强与离屏输出
 
