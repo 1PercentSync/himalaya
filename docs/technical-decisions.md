@@ -572,7 +572,7 @@ GS 使用与 PT 路径分离的资源绑定模型，绑定 static scene data 和
 
 ### 排序与索引
 
-GS 使用 front-to-back 排序，排序依据为 KHR `cameraDistance` 对应的 camera distance。排序实现必须保持相同 key 的 deterministic ordering，避免半透明累积因帧间顺序变化而闪烁。
+GS 使用 front-to-back 排序，排序依据为 KHR `cameraDistance` 对应的 camera distance squared，以避免每 splat `sqrt`。排序实现必须保持相同 key 的 deterministic ordering，避免半透明累积因帧间顺序变化而闪烁。
 
 具体 sort entry 编码、capacity 策略和 Bitonic/Radix 演进计划属于 Phase 3 文档范围。
 
