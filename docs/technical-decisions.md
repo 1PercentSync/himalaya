@@ -140,8 +140,6 @@ layout(set = 1, binding = 1) uniform samplerCube cubemaps[];   // 上限 4096
 - `push_storage_image()` / `push_sampled_image()` 绑定 Set 3 push descriptor
 - `get_dispatch_set_layouts(set3_push_layout)` → `{set0, set1, set2, set3}`（compute 和 RT pipeline 共用）
 
-Set 3 在现有 per-pass compute / RT pipeline 中通常是 push descriptor，用于绑定当前 pass 的 transient I/O。GS 渲染是例外：GS pipeline 使用自己的持久 Set 3 descriptor set 绑定 GS buffers。两者处于不同 pipeline layout 下，不混用；“Set 3”只表示 descriptor set index，不表示全局唯一 layout。
-
 ---
 
 ## 6. 数据格式与纹理管线
@@ -549,268 +547,50 @@ ReSTIR PT（GRIS 框架）对完整光传输路径做重采样，统一替代 Re
 
 ---
 
-## 20. Gaussian Splatting 数据管线
+## 20. Gaussian Splatting 管线重大决策
 
-### 模块架构
+### 数据入口与职责边界
 
-| 模块 | 层级 | 职责 |
-|------|------|------|
-| `GaussianSplatLoader` | App | 从 glTF 加载 GS 数据到 CPU 端 SoA 结构 |
-| `gltf_utils` | App | 共享 glTF 解析函数（`parse_gltf`、`transform_aabb`），供 SceneLoader 和 GaussianSplatLoader 共用 |
-| `GaussianSplatScene` / `GaussianSplatPrimitive` | Framework | GS 数据结构定义（SoA 布局） |
-| PLY 转换器 | Framework | PLY → .gltf 转换，仅供渲染器内部调用 |
+Gaussian Splatting 使用独立的数据入口和渲染路径：`GaussianSplatLoader` 负责从 glTF/GLB 读取 KHR_gaussian_splatting primitive，PLY 转换器负责把内部支持的 PLY 格式转换为 glTF 缓存后再走统一 loader。GS 与 PT scene 可以独立加载，`RenderMode` 决定每帧执行 PT 还是 GS 路径。
 
-### CPU 数据结构
+CPU 侧 GS 数据保持 SoA 布局，匹配后续 GPU 端按属性分 buffer 的访问模式。PLY 转换、extension JSON 提取、`extensionsRequired` 兼容等属于 GS 数据管线实现细节，记录在当前阶段文档或对应源码注释中，不作为全局技术决策展开。
 
-SoA 布局。主流 GS 渲染实现（compute sort + tile-based rendering）按属性分 buffer 送入 GPU，SoA 是天然匹配的布局。GPU sort 操作排 `(distance_key, global_splat_index)` 对，通过 index 间接访问各属性 buffer。排序项物理存储为两个 32-bit uint；Radix sort 只对 32-bit distance_key 做分 digit 排序，global_splat_index 作为 payload 搬运。选择该格式的主要原因是性能：相比对 64-bit packed key 做 radix，32-bit key 的 radix pass 数约减半。`distance_key = floatBitsToUint(camera_distance_squared)`，仅对 finite non-negative float 使用；invalid entry sentinel 为 `{UINT_MAX, UINT_MAX}`，ascending sort 为 front-to-back。
+### Phase 3 渲染路线
 
-Phase 3.0 渲染侧使用 GS 子系统独立的持久 Set 3 descriptor set 绑定 GPU buffers。Set 3 中包含两组 SSBO：一组是 scene load / bake 后上传的静态数据（world position、world covariance、opacity、SH、optional/reserved primitive metadata；完整 Wigner-D 完成后 SH 为 rotated SH），另一组是每帧由 GPU 改写的 work buffers（visible count、projected data、sort ping-pong、indirect draw command）。Descriptor 随 buffer 创建或重建写入；每帧只更新 buffer 内容。
+Phase 3 采用“先硬件光栅、后 tile-based compute”的演进路线：
 
-GS work buffer 容量由当前场景派生：`sort_capacity = next_power_of_two(total_splat_count)`。这不是固定上限，场景切换时会随 splat 数重建。Bitonic 先按 sort capacity 全量排序并用 sentinel 填充 invalid entries；Radix 先实现同样的 capacity 路径用于验证，再实现 visible-count-driven radix sort，避免长期排序不可见 sentinel。
+1. Phase 3.0 先实现 compute cull/project/sort → indirect instanced quad draw → hardware blend 的正确性基线。
+2. 正确性稳定后，Phase 3.5 将末端替换为 tile binning + per-tile compute blend，以获得 per-tile early-out 和更好的密集重叠性能。
 
-GPU work buffers 每帧先 reset：`visible_count = 0`，sort entries 全部填 invalid sentinel `{UINT_MAX, UINT_MAX}`，`indirect.instanceCount = 0`。Cull/project append valid entries 到 `sort_entries[0..visible_count)`；ascending sort 后 valid entries 位于前段，sentinel 位于尾部；draw instanceCount=`visible_count`，不 draw capacity。`VkDrawIndirectCommand` 的固定字段由 CPU 初始化（`vertexCount = 6`、`firstVertex = 0`、`firstInstance = 0`），GPU 只在 cull/project 后将 `visible_count` 写入 `instanceCount`。同步依赖必须覆盖 reset→cull/project、cull/project→sort、sort/projected data→graphics shader、visible_count→indirect update、indirect write→draw indirect。
+该路线的核心决策是复用上游 cull/project/sort 管线，只替换渲染末端，从而降低首个可渲染版本风险，同时保留最终性能优化空间。
 
-Sort 必须对相同 `distance_key` 保持 deterministic ordering，否则半透明累积可能因相等 key 的帧间顺序变化而闪烁。Bitonic baseline compare 使用 lexicographic `(distance_key, global_splat_index)` 升序。后续 Radix sort 仍只处理 32-bit distance key 以保持性能目标，但实现前必须确认 equal-key deterministic ordering 方案。
+### GPU 数据模型
 
-Phase 3.0 projected data 按 global splat index dense 存储，sort entry payload 存 global splat index。Cull/project 对可见 splat 写 `projected_data[global_index]` 并写入 sort entry `{distance_key, global_index}`；不可见 splat 的 projected data 未定义。Draw 使用 `sorted_entries[gl_InstanceIndex].splat_index` 读取 `projected_data[global_index]`。Draw instance count 固定为 `visible_count`，不 draw `sort_capacity`。Dense projected data 约占 `64B × total_splat_count` capacity，1M baseline 可接受；10M 目标前需重新评估 compact projected data（visible-index dense）以降低 VRAM/cache 压力。
+Phase 3.0 使用 upload-time bake：node transform 在上传时烘焙进 world-space position 和 world-space covariance。GPU 核心属性以 bake 后的数据为主，避免在每帧 shader 中重复处理静态 transform。
 
-Projected data 只存 draw 阶段需要的投影后数据：`center_px`、`axis0_extent_px`、`axis1_extent_px`、`conic`（inverse 2D covariance xx/xy/yy）、`opacity`、SH-evaluated `rgb`。它不存原始 position / rotation / scale / world covariance / SH coefficients / sort key；这些分别属于 static baked buffers 或 sort entries。Projected data 内容依赖 viewport，但容量只依赖 `total_splat_count`，因此 swapchain resize 时不重建 projected data buffer，下一帧 cull/project 会用新 viewport 覆盖内容。
+GS 使用与 PT 路径分离的资源绑定模型，绑定 static scene data 和 per-frame work data。容量由当前 GS scene 派生并随场景重建，不设置固定 splat 上限；容量不足时加载/渲染失败并报错，不静默截断。
 
-```
-GaussianSplatPrimitive              // 单个 GS primitive
-├── positions[]                     // vec3, local space
-├── rotations[]                     // quat (xyzw), 椭球朝向
-├── scales[]                        // vec3, 三轴缩放（线性正值）
-├── opacities[]                     // float, 0~1
-├── sh_coefs_0[]                    // vec3, degree 0（必选）
-├── sh_coefs_1[3][]                 // vec3 ×3, degree 1（可选）
-├── sh_coefs_2[5][]                 // vec3 ×5, degree 2（可选）
-├── sh_coefs_3[7][]                 // vec3 ×7, degree 3（可选）
-├── transform                       // mat4, node 世界变换
-├── bounds                           // AABB, 从 positions 计算
-└── metadata
-    ├── kernel                       // "ellipse"
-    ├── color_space                  // "srgb_rec709_display" / "lin_rec709_display"
-    ├── projection                   // "perspective"
-    ├── sorting_method               // "cameraDistance"
-    ├── max_sh_degree                // 0-3
-    └── splat_count
+### 排序与索引
 
-GaussianSplatScene                  // 场景级容器
-├── vector<GaussianSplatPrimitive>  // 一个或多个 primitive（各自有独立 transform/metadata）
-└── scene_bounds                    // 所有 primitive 的 AABB 并集
-```
+GS 使用 front-to-back 排序，排序依据为 KHR `cameraDistance` 对应的 camera distance。排序实现必须保持相同 key 的 deterministic ordering，避免半透明累积因帧间顺序变化而闪烁。
 
-### 数据加载策略
+具体 sort entry 编码、capacity 策略和 Bitonic/Radix 演进计划属于 Phase 3 文档范围。
 
-| 策略 | 选择 | 理由 |
-|------|------|------|
-| Component type | 统一转 float | fastgltf `iterateAccessor` 内置类型转换，shader 端统一 float |
-| SH 存储 | 按实际 degree 分配 | spec 保证同一 primitive 内 SH degree 统一，按需分配避免浪费 |
-| Scale / Rotation | CPU scene data 保留原始值；Phase 3.0 GPU upload 使用 baked world covariance | 原始值用于 reload/debug/future rebake；GPU static baked buffers 不保留 raw rotation/scale |
-| Node transform | CPU scene data 保留矩阵；Phase 3.0 upload-time bake 到 world position / world covariance | Phase 3.0 优先静态正确性路径，低频变更时重上传 |
-| Color space | 原样保留 SH 系数 + 记录元数据；Phase 3.0 要求同一 GS scene 内所有 primitive colorSpace 一致 | SH 系数不能直接做 color space 转换，需先求值再转换；混合 colorSpace composition 留待后续 |
+### 色彩与输出
 
-### GS 渲染色彩约定
+GS composition 在 KHR primitive colorSpace 中完成。进入 TonemappingPass 前，GS 管线必须已经输出 linear input；TonemappingPass 不负责 GS sRGB decode。
 
-KHR_gaussian_splatting 的 `colorSpace`、`kernel`、`projection`、`sortingMethod` 定义在 primitive extension 对象中，因此同一 asset 可以包含 metadata 不同的 GS primitive。Phase 3.0 不实现 per-primitive 分支管线，加载/上传前要求同一 GS scene 内所有 primitive metadata 一致：`kernel = ellipse`、`projection = perspective`、`sortingMethod = cameraDistance`、`colorSpace` 一致；不一致时报错。多个 primitive 在 upload 时拼接为连续 global splat buffers，并在 CPU 侧保留 per-primitive ranges / source primitive index / metadata 供 debug、error reporting 和未来 per-primitive behavior 使用。Phase 3.0 shader 按 global splat index 访问 baked SoA buffers，不按 primitive metadata 分支；GPU primitive metadata buffer 可选/预留。
+TonemappingPass 保留为最终 swapchain output pass，通过 push constant mode 区分 PT 的 `HdrAces` 和 GS 的 `LinearClamp`。PT path 执行 exposure + ACES；GS path 对 linear display-referred input 做 per-channel clamp 并输出 opaque alpha。
 
-GS composition 在 primitive colorSpace 中完成：`srgb_rec709_display` 的 SH 求值结果先按 sRGB display-referred 数值进行 alpha blend，blend 完成后的 composition target 仍存储 sRGB blended values，随后由 GS sRGB→linear conversion pass 输出 linear target；`lin_rec709_display` 直接在线性 display-referred 数值中 blend，composition target 已是 linear，可 bypass conversion pass 并直接作为 TonemappingPass 输入。SH 求值方向使用 KHR 定义的 camera → splat：`normalize(splat_world_position - camera_world_position)`。Phase 3.0 在 cull/project compute pass 中对每个可见 splat 求一次 SH RGB，并写入 projected data；fragment shader 不求 SH。Phase 3.1 可将 SH evaluation 拆成独立 post-cull compute pass，并与距离自适应 SH 截断配合。Phase 3.x 当前不规划 SH cache 或独立低阶 fallback。传给 TonemappingPass 的输入始终是 linear。TonemappingPass 只增加 GS bypass 开关以跳过 exposure / tonemap curve，不承担 GS sRGB decode。
+### RenderGraph 同步
 
-未来如果需要支持混合 colorSpace，可采用近似方案：选择第一个 primitive 的 colorSpace 作为 scene composition space，将其他 primitive 的求值结果先转换到该空间后再 blend。该方案会偏离各 primitive 原生 colorSpace 下先 blend 后转换的严格语义，需单独评估后实现。
+GS 引入大量 compute/graphics buffer hazard，因此 RenderGraph 必须从 image-only barriers 扩展到 buffer barriers。长期方案是在 RG compile 阶段跟踪 per-buffer stage/access 并生成 `VkBufferMemoryBarrier2`，而不是在 GS pass 内长期手写 barrier。
 
-### Extension JSON 提取
+### 阶段边界
 
-fastgltf 的 `Primitive` 不暴露 extension JSON。使用 nlohmann/json 对 glTF JSON 做二次解析，提取 `kernel`、`colorSpace`、`projection`、`sortingMethod`。
+- Phase 3.0 只要求 correctness baseline，重点是正确的数据 bake、排序、blend 和输出。
+- Phase 3.1 聚焦运行时优化，例如拆分 SH 求值、多级剔除和 buffer 分层。
+- Phase 3.2 聚焦加载时和上传后数据效率优化，例如 chunk、bake 后 GPU 数据量化和 Morton 排序；具体量化格式在 Phase 3.2 开始前重新讨论。
+- Phase 3.5 及之后聚焦 tile-based compute、LOD、抗锯齿和 10M 级别交互性能。
 
-对 .gltf 文件直接解析 JSON。对 .glb 文件需先提取 JSON chunk：
-
-```
-.glb 二进制布局：
-偏移 0-3:   magic (0x46546C67 = "glTF")
-偏移 4-7:   version (2)
-偏移 8-11:  total length
-偏移 12-15: chunk 0 length (JSON 数据字节数)
-偏移 16-19: chunk 0 type (0x4E4F534A = "JSON")
-偏移 20..20+chunk0Length-1: JSON 数据
-（后续可选 BIN chunk，结构相同：8 字节 header + data）
-```
-
-提取步骤：跳过 12 字节 glb header → 读 4 字节 chunk length → 验证 4 字节 chunk type 为 JSON → 读 length 字节 JSON 数据 → nlohmann/json 解析。
-
-### extensionsRequired 兼容
-
-fastgltf 的 `extensionStrings` 表中没有 `KHR_gaussian_splatting`。当 glTF 文件声明 `"extensionsRequired": ["KHR_gaussian_splatting"]` 时，fastgltf 返回 `UnknownRequiredExtension` 拒绝解析。
-
-GS loader 自身实现了 KHR_gaussian_splatting 支持（extension metadata 由 nlohmann/json 解析，attribute 数据由 fastgltf 按通用 accessor 读取），因此有权从 `extensionsRequired` 中移除该扩展名再交给 fastgltf。只移除 `KHR_gaussian_splatting`，不移除其他未知扩展。
-
-处理流程：
-
-1. nlohmann/json 解析原始 JSON（已有逻辑）
-2. 检查 `extensionsRequired` 是否包含 `KHR_gaussian_splatting`
-3. 若不包含：走 `gltf_utils::parse_gltf(path, ...)` 正常路径（零开销）
-4. 若包含：从 JSON 副本的 `extensionsRequired` 中移除 `KHR_gaussian_splatting`，将消毒后的数据传给 fastgltf
-
-.gltf 消毒：将修改后的 JSON dump 为字符串 → `GltfDataBuffer::FromBytes` → `parser.loadGltf`（外部 .bin 通过 `path.parent_path()` 解析）。
-
-.glb 消毒：读取原始文件 → 用修改后的 JSON 重组内存 GLB → `GltfDataBuffer::FromBytes`。JSON chunk 之后的所有 chunk 原样保留（不假定只有一个 BIN chunk）。
-
-重组规则：
-- JSON chunk 需 4 字节对齐，padding 字符为空格（0x20）
-- 重组后更新三个字段：GLB header 中的 total length、JSON chunk length、JSON chunk type
-- 后续 chunk（从原始文件偏移 `12 + 8 + orig_json_chunk_length` 处开始）整体复制，不解析不修改
-
-### 加载入口
-
-渲染器有两个独立加载入口，各入口自行处理数据，两个场景可同时加载：
-
-| 入口 | 行为 |
-|------|------|
-| PT 入口（SceneLoader） | 加载 mesh primitive；无 mesh 时保持现有行为（警告） |
-| GS 入口（GaussianSplatLoader） | 加载 GS primitive；无 GS primitive 时警告 |
-
-两个入口可以加载同一文件或不同文件。`.ply` 文件经 PLY 转换器转为缓存 .gltf 后由 GS 入口加载。
-
-### UI 集成
-
-DebugUI 的 Scene 面板下有两个独立文件选择器：
-
-| 选择器 | Filter | 持久化字段 |
-|--------|--------|-----------|
-| PT Scene（现有） | `*.gltf;*.glb` | `config.scene_path` |
-| GS Scene（新增） | `*.gltf;*.glb;*.ply` | `config.gs_scene_path` |
-
-RenderMode 切换（PT / GS）与文件选择无关——两个场景可独立加载和卸载，RenderMode 仅控制每帧走哪条渲染路径。
-
-### 相机初始化
-
-加载新场景时根据当前活跃的 bounds 定位相机：
-
-- 仅 PT 场景：使用 `SceneLoader::scene_bounds()`
-- 仅 GS 场景：使用 `GaussianSplatScene::scene_bounds`
-- 两者都有：使用最后加载/切换的那个场景的 bounds
-
-### 错误处理
-
-| 场景 | 处理 |
-|------|------|
-| PLY 缺少必要属性 | 报错，加载失败 |
-| PLY 转换失败 | 不缓存，报错，加载失败 |
-| glTF primitive `kernel` 非 `"ellipse"` | Warning，跳过该 primitive |
-| glTF primitive 缺少必要 GS attribute | 报错，加载失败 |
-| glTF 无任何 GS primitive | 报错，加载失败 |
-| 缓存文件损坏（GaussianSplatLoader 加载缓存 .gltf 失败） | 删除缓存文件，重新转换 |
-
----
-
-## 21. PLY 转换器
-
-### 解析
-
-tinyply（`third_party/tinyply/` 源码编译集成）。仅支持 INRIA 3DGS 格式（pre-sigmoid opacity、log-scale、wxyz 四元数）。其他训练框架的格式变体后续按需适配。
-
-### 数据转换
-
-| 步骤 | 操作 |
-|------|------|
-| 激活函数 | `opacity = sigmoid(raw_opacity)`，`scale = exp(raw_scale)` |
-| 坐标系 | COLMAP → glTF：position `(x, -y, -z)`，Y/Z 取反 |
-| 四元数 | wxyz → xyzw（glTF 顺序），同时 Y/Z 分量取反 |
-| SH 系数 | 见下方 SH 坐标系翻转表 |
-
-### SH 坐标系翻转规则
-
-COLMAP→glTF 坐标变换 `(x, y, z) → (x, -y, -z)` 下，将替换代入每个 SH 基函数的方向因子（见 spec 附录 A），方向因子符号变化的系数需要取反。
-
-**原理**：SH 系数存储的是训练空间（COLMAP）下的球谐展开。坐标系变换后，view direction 在新空间中的 y/z 分量符号相反。为使 SH 求值结果不变，需要翻转那些在 y→-y, z→-z 代入后改变符号的基函数对应的系数。
-
-| Degree | Coef 索引 | 方向因子 | 代入 (x,-y,-z) 后 | 翻转 |
-|--------|-----------|----------|-------------------|------|
-| 0 | 0 | 常数 | 不变 | 否 |
-| 1 | 0 (m=-1) | y | -y → 变号 | **是** |
-| 1 | 1 (m=0) | z | -z → 变号 | **是** |
-| 1 | 2 (m=1) | x | x → 不变 | 否 |
-| 2 | 0 (m=-2) | xy | x·(-y) → 变号 | **是** |
-| 2 | 1 (m=-1) | yz | (-y)·(-z) → 不变 | 否 |
-| 2 | 2 (m=0) | 2z²-x²-y² | z²=z², y²=y² → 不变 | 否 |
-| 2 | 3 (m=1) | xz | x·(-z) → 变号 | **是** |
-| 2 | 4 (m=2) | x²-y² | y²=y² → 不变 | 否 |
-| 3 | 0 (m=-3) | y(3x²-y²) | (-y)(3x²-y²) → 变号 | **是** |
-| 3 | 1 (m=-2) | xyz | x·(-y)·(-z) → 不变 | 否 |
-| 3 | 2 (m=-1) | y(4z²-x²-y²) | (-y)(4z²-x²-y²) → 变号 | **是** |
-| 3 | 3 (m=0) | z(2z²-3x²-3y²) | (-z)(2z²-3x²-3y²) → 变号 | **是** |
-| 3 | 4 (m=1) | x(4z²-x²-y²) | x(4z²-x²-y²) → 不变 | 否 |
-| 3 | 5 (m=2) | z(x²-y²) | (-z)(x²-y²) → 变号 | **是** |
-| 3 | 6 (m=3) | x(x²-3y²) | x(x²-3y²) → 不变 | 否 |
-
-### 输出
-
-nlohmann/json 手动构造 glTF JSON + binary buffer，输出 .gltf + .bin 文件。不使用 fastgltf exporter（无法注入自定义 extension JSON）。
-
-### 缓存
-
-复用 `cache.h` 基础设施。PLY 文件 XXH3_128 content hash 作为 key，缓存目录 `%TEMP%\himalaya\gaussians\`。
-
-### CLI 转换模式
-
-通过 CLI11（vcpkg）实现命令行参数解析。无参数启动 = 当前 GUI 渲染器；附加转换参数时作为 CLI PLY→glTF 转换器运行，不启动窗口和 Vulkan。
-
----
-
-## 22. Gaussian Splatting 渲染方案（Phase 3 方向）
-
-Phase 3 采用分阶段演进路线：先用硬件光栅完成正确性基线，再演进到 tile-based compute renderer。
-
-### Phase 3.0：硬件光栅基础路径
-
-基础路径为 compute cull/project/sort → indirect instanced quad draw → 硬件 alpha blend。Cull、projection、visible list、sort key 和排序结果构成后续阶段复用的上游管线；末端使用硬件光栅是为了降低首个可渲染版本的实现风险，优先验证数据 bake、投影、排序、颜色和 blend 的正确性。
-
-Phase 3.0 是 correctness baseline，不以最终性能为目标。Happy path 为 KHR ellipse kernel + perspective projection + cameraDistance sorting + scene-level consistent metadata + identity/no-rotation transform；支持单个或多个 GS primitive，primitive 拼接为 global splat buffers 并保留 CPU per-primitive ranges；支持 `srgb_rec709_display` 和 `lin_rec709_display` 二选一 scene，不支持 mixed colorSpace scene。必须验证投影中心、3σ OBB、front-to-back 排序、premultiplied-under blend、sRGB→linear conversion、linear GS conversion bypass、TonemappingPass GS bypass、resize 后 targets/work buffers 重建、`visible_count = 0` 空可见集和非法 asset rejection。Phase 3.0 前期明确不支持 mixed metadata/colorSpace、非 identity SH rotation、compact projected data、tile-based renderer、10M 性能目标、max-channel range compression、background/mesh/skybox 合成。
-
-Phase 3.0 使用 upload-time bake：node transform 在上传时烘焙进 world-space position 和 world-space covariance；SH rotation 前期先支持 identity/no-rotation happy path，非 identity transform rotation 不静默渲染错误，完整 Wigner-D degree 1-3 rotation 放到 Phase 3.0 末期补齐。GPU 侧核心属性因此不再以 rotation / scale 为主，而是以 bake 后的 position、covariance、opacity、SH 和 per-primitive range / metadata 为主。
-
-KHR `SCALE` 表示 Gaussian principal axes 的标准差 σ，因此 local covariance 使用 `scale²`：`Σ_local = R * diag(scale²) * Rᵀ`。Upload-time bake 用 glTF node global transform 的线性部分 `M3x3` 得到 `Σ_world = M3x3 * Σ_local * M3x3ᵀ`，position 使用完整 global transform 变换到 world space。GS static baked GPU buffers 存储 world position、world covariance、opacity、SH 和 optional/reserved primitive metadata，不存储原始 rotation/scale；原始 rotation/scale 可继续保留在 CPU 侧用于 reload、debug 或 future rebake。
-
-Upload bake 同时预计算 per-splat `world_radius_3sigma` 作为 frustum cull sphere 半径。Phase 3.0 使用保守 trace bound：`radius = 3 * sqrt(max(trace(Σ_world), 0))`。该 bound 满足 `max_eigenvalue(Σ_world) <= trace(Σ_world)`，因此不会因半径过小误剔除；代价是细长 splat 的 sphere 偏保守。Cull 使用 world-space sphere(center=`position_world`, radius=`world_radius_3sigma`) vs frustum planes。Projected OBB giant discard 是独立的 screen-space safety check，不替代 world-space frustum cull。未来可用 max eigenvalue 得到更紧半径。
-
-直接加载 glTF/GLB 时，`OPACITY` 必须 finite 且在 [0,1]，`SCALE` 必须 finite 且所有分量 >= 0，`ROTATION` 必须 finite 且为 unit quaternion。非法数据按 KHR 规范报错，不静默 clamp 或 normalize。KHR 还要求 GS node transform 可分解为 regular translation、proper rotation 和 positive scale；Phase 3.0 对包含 reflection / negative determinant 或不可分解线性部分的 global transform 报错或跳过上传，避免 covariance 与 SH rotation 在非 proper rotation 情况下静默错误。
-
-Cull/Project 输出使用 screen pixel space：projected center、2D covariance、OBB axes/extents 都以 pixel 为单位。Screen pixel space 使用 Vulkan framebuffer 坐标：top-left origin、x right、y down。GS draw pass 使用 positive-height normal viewport，不使用 negative viewport Y-flip。Vertex shader 从 pixel-space projected data 展开 oriented quad corners，再转换为 NDC，pixel→NDC 不做 Y flip；fragment shader 直接使用 `gl_FragCoord.xy - center_px` 与 pixel-space inverse covariance / conic coefficients 计算高斯 alpha 衰减。
-
-GS 使用与 PT/reference view 相同的 camera pose、FOV、aspect 和 viewport，不引入独立相机模型；可使用 GS-specific near plane 保持投影稳定。`center_px` 由 clip/NDC 转 pixel 得到，不做 Y flip。2D covariance 使用 view-space covariance 和 pixel focal length：`fx = 0.5 * width * abs(proj[0][0])`、`fy = 0.5 * height * abs(proj[1][1])`，`cov_2d = J * cov_view * Jᵀ`，从而保证 covariance、OBB extents、conic 和 `gl_FragCoord.xy` 处于同一 pixel coordinate system。
-
-Projected data 逻辑字段为 `center_px`、`axis0_extent_px`、`axis1_extent_px`、`conic`（inverse covariance xx/xy/yy）、`opacity`、`rgb`；实际 GPU struct 按 std430 / vec4 packing 实现。
-
-Fragment alpha 防御规则：`power = -0.5 * mahalanobis_distance`，`power < -20` 时 discard；`alpha = clamp(opacity * exp(power), 0, 1)`；`alpha < 1e-4` 时 discard。3σ cutoff 边界的 power 约为 -4.5，因此 -20 只裁掉极低贡献或异常 fragment。glTF 直接加载阶段按 KHR 校验 opacity，shader 侧 clamp 仅作为防御。
-
-GS near plane 初始为 scene AABB diagonal × 0.005，仅 GS 模式使用。贴脸 splat 在渲染上无意义且可能导致巨大 overdraw，因此 behind-camera、near-plane 不稳定或 projected OBB 过大的 splat 可以直接 discard。Projection z clamp 只用于防止 Jacobian / covariance projection 中出现 NaN/Inf，不用于强行保留贴脸 splat。Projected OBB 任一半轴超过 screen short side × 0.25 时 discard，不做 extent clamp。
-
-GS composition target 和 GS linear target 均存储 accumulated premultiplied RGB 与 accumulated alpha。sRGB→linear conversion pass 只转换 RGB 通道，alpha 原样保留。Phase 3.0 不做 unpremultiply，不做背景合成；alpha 仅用于 GS 内部 front-to-back under 累积。TonemappingPass 在 GS 模式下忽略 alpha，最终 swapchain 输出 opaque alpha = 1。
-
-SH 求值后的 RGB 负分量必须在 premultiply 前 clamp 到 0，符合 KHR 对 negative color 的要求。Phase 3.0 不做 per-splat upper clamp，避免改变 splat 累积结果。最终 GS 输出采用 per-channel hard clamp 到 [0,1]，作为 KHR 允许的 clamped output；GS 模式下 TonemappingPass bypass exposure / tonemap curve，仅执行 linear passthrough + hard clamp + alpha=1。`srgb_rec709_display` 的 conversion pass 在 sRGB decode 前对 composed sRGB RGB 做 [0,1] hard clamp。未来如需更好保 hue，可增加 max-channel range compression 作为 GS display-referred tonemapping 选项。
-
-TonemappingPass 保留为最终 swapchain output pass，通过 push constant `mode` 区分 `HdrAces` 与 `LinearClamp`。PT 使用 `HdrAces`：linear HDR → exposure → ACES；GS 使用 `LinearClamp`：linear display-referred input → per-channel hard clamp [0,1] → alpha=1。Mode 是 TonemappingPass 局部输出策略，不放入 GlobalUBO，避免改变全局 std140 layout 和影响其他 shader；也不新增 pipeline，单个 uniform branch 成本可忽略。TonemappingPass 不做 GS sRGB decode，GS 进入 TonemappingPass 前必须已经是 linear。
-
-Scene load/reload 重建 static baked buffers（world position/covariance/radius/opacity/SH/optional metadata）和 capacity-based work buffers（visible count、projected data、sort ping-pong、indirect command），并重写 GS Set 3。Swapchain resize 只重建 viewport-sized GS composition/linear targets，并更新对应 render target descriptors。Projected data/work buffers 容量只依赖 `total_splat_count`，resize 时不重建；其内容虽依赖 viewport，但下一帧 cull/project 会覆盖。Reload/resize 后不得有 descriptor 指向已销毁的 buffers/images。
-
-现有 RenderGraph 只自动处理 image barriers，buffer resource usage 在 compile 阶段会跳过。Phase 3.0 接入 GS compute/sort/draw 前需要扩展 RG buffer barrier 支持：track per-buffer last stage/access，emit `VkBufferMemoryBarrier2`，并补齐 GS 所需 stage/access 映射（Compute SSBO read/write、Vertex/Fragment SSBO read、DrawIndirect read、Transfer read/write）。优先扩展 RG，不在 GS pass 内长期手写 barriers。
-
-GS 复用 GlobalUBO 中的 view、projection、view_projection、camera_position、screen_size，不在 GS push constants 中重复矩阵。GS 专用 per-frame 小参数放入 `GSPushConstants`：`total_splat_count`、`sort_capacity`、`color_space`、`flags`、`near_gs`、`max_projected_extent_px`、`alpha_discard_threshold`、`power_discard_threshold`。`max_projected_extent_px` 通常为 screen short side × 0.25，discard thresholds 初始为 alpha=1e-4、power=-20。Tonemapping mode 是 TonemappingPass 独立 push constant，不属于 GS push constants。
-
-硬件光栅末端采用 front-to-back premultiplied-under blend。Fragment shader 输出 premultiplied color：`vec4(rgb * alpha, alpha)`。Color 与 alpha 的 blend state 相同：`srcColorBlendFactor/srcAlphaBlendFactor = ONE_MINUS_DST_ALPHA`，`dstColorBlendFactor/dstAlphaBlendFactor = ONE`，`blendOp = ADD`，`colorWriteMask = RGBA`。GS composition target 格式为 R16G16B16A16Sfloat，`loadOp = CLEAR` 且 clear value 为 `vec4(0,0,0,0)`，`storeOp = STORE`。Graphics pipeline 禁用 depth test/write，cull mode 为 none。
-
-### Phase 3.1 / 3.2：硬件光栅路径优化
-
-Phase 3.1 优化每帧运行时开销，例如 SH 求值分离、多级剔除、buffer 热/冷/暖分离和距离自适应 SH 截断。
-
-Phase 3.2 优化加载时和上传后的数据效率。由于 Phase 3.0 已经 bake transform，量化对象应是实际 GPU buffer，例如 world-space covariance、opacity、SH，以及可能结合空间分块后的 position 局部表示。原始 rotation / scale 可继续作为 CPU 侧源数据保留，但不再是 Phase 3.2 GPU 上传量化的主要对象。具体量化格式、误差预算、是否保留某些属性为 FP32，均在 Phase 3.2 开始前重新讨论决定。
-
-### Phase 3.5：Tile-Based Compute Renderer
-
-在正确性基线稳定后，将末端从 instanced quad draw 替换为 tile binning + per-tile compute blend。上游 cull/project/sort 管线保持复用，tile shader 在 shared memory 中按前到后顺序累积颜色，并在 transmittance 足够低时 early-out。
-
-### 选型理由
-
-- **降低首个版本风险**：硬件光栅路径能更快得到可观察画面，便于验证数据、投影、排序和色彩问题。
-- **保留演进空间**：上游 compute cull/project/sort 与 tile-based compute renderer 兼容，后续替换末端即可演进。
-- **获取最终性能能力**：tile-based compute 提供 per-tile early-out 和 shared memory 协作加载，适合密集重叠 GS 场景。
+详细的 Phase 3.x 路线和当前 Phase 3.0 实现约定分别记录在 `docs/phase3-decisions.md` 与 `docs/current-phase.md`。
