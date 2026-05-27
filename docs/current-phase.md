@@ -16,13 +16,12 @@ Phase 2 完成了 GS 数据管线（PLY → glTF 转换 + GS glTF 加载），CP
 
 - **GPU 数据上传**：CPU bake（transform 烘焙、3D 协方差预计算、SH Wigner-D rotation）+ per-attribute GPU buffer 创建
 - **Cull/Project Compute Pass**：视锥剔除、3D→2D 投影、OBB extent、SH 求值、可见列表构建、排序键生成
-- **Bitonic Sort Compute Pass**：64-bit key 前到后深度排序
+- **Sort Compute Pass**：Bitonic sort（正确性验证）→ 自实现 Radix sort（最终方案），64-bit key 前到后深度排序
 - **Quad Rendering**：Instanced quad indirect draw + premultiplied-under 硬件 blend
 - **管线集成**：Descriptor Set 3、push constant、RenderMode 分发、TonemappingPass 复用
 
 ### 不在范围内
 
-- Radix sort 替换 bitonic sort（Phase 3.0 后期或 Phase 3.1）
 - 运行时优化（SH 分离 pass、多级剔除、buffer 分层等，Phase 3.1）
 - 加载时优化（空间分块、FP16 量化、Morton 排序等，Phase 3.2）
 - Tile-based compute 渲染（Phase 3.5）
