@@ -34,29 +34,23 @@ Phase 2 已完成 GS 数据管线（PLY → glTF 转换 + GS glTF 加载）和 C
 
 ## 实现指南
 
-本节按 `tasks/reflector-phase3.md` 的 Step 顺序组织。任务清单只描述“要做什么”；本节描述“如何做”以及每项必须满足的细节要求。任务状态只在 `tasks/reflector-phase3.md` 维护。
+本节按 `tasks/reflector-phase3.md` 的 Step 顺序组织。任务清单只描述“要做什么”；本节描述“如何做”以及每项必须满足的细节要求。任务状态只在 `tasks/reflector-phase3.md` 维护。每个 checkbox 的复杂度应适中：能独立审查，不把多个不同子系统混为一个小项，也不拆到单行代码级别。
 
 ### Step 0：RenderGraph buffer barriers
 
 目标是先补齐 GS 依赖的通用 buffer 同步能力，避免后续每个 GS pass 长期手写 barriers。
 
-- RenderGraph compile 阶段需要停止跳过 buffer resource usage，并为每个 buffer 记录 last stage / access。
-- Buffer barrier 使用 `VkBufferMemoryBarrier2`，与现有 image barriers 一起提交到 `VkDependencyInfo`。
-- 当前只需要同一 graphics/compute queue 内同步；queue family ownership 可保持现状。
-- Phase 3.0 至少要支持以下 usage 映射：
-  - Transfer write/read：upload、clear/reset、fill buffer。
-  - Compute shader storage read/write：cull/project、bitonic/radix sort、indirect update。
-  - Vertex shader storage read：sorted entries、projected data。
-  - Fragment shader storage read：如 fragment 直接读 projected data 或辅助 SSBO。
-  - Draw indirect read：`VkDrawIndirectCommand`。
+- RenderGraph compile 阶段需要停止跳过 buffer resource usage，并为每个 buffer 记录 last stage / access。当前只需要同一 graphics/compute queue 内同步；queue family ownership 可保持现状。
+- Buffer barrier 使用 `VkBufferMemoryBarrier2`，与现有 image barriers 一起提交到 `VkDependencyInfo`。实现时保持 image barrier 路径行为不变。
+- Phase 3.0 至少要支持以下 usage 映射：Transfer read/write、Compute SSBO read/write、Vertex/Fragment SSBO read、DrawIndirect read。
 - 必须能表达以下依赖链：reset→cull/project、cull/project→sort、sort/projected data→graphics shader、visible_count→indirect update、indirect write→draw indirect。
-- 建议用最小 dummy buffer pass 验证 write→read、write→write、transfer→compute、compute→graphics、compute→drawIndirect 的 barrier 生成结果，再接入 GS。
+- 验证方式以检查 RG 生成的 barrier 和 Vulkan validation layer 为主；如需要临时 dummy pass，仅作为本地验证，不把无用途测试 pass 留在正式代码中。
 
 ### Step 1：GS 数据契约与加载校验
 
 本 Step 固定 CPU/GPU 数据边界，避免后续 shader 与 C++ 结构反复变动。
 
-- Scene-level GPU resource 需要记录 `total_splat_count`、`sort_capacity`、static baked buffers、work buffers、CPU per-primitive ranges、scene metadata。
+- Scene-level GS GPU resource 需要记录 `total_splat_count`、`sort_capacity`、static/work buffer handles、CPU per-primitive ranges 和 scene metadata。
 - `sort_capacity = next_power_of_two(total_splat_count)`；这是由当前 scene 派生的容量，不是固定上限。容量不足时报错，不静默截断。
 - Static baked buffers 以 SoA 组织，至少包含 world position、world covariance、world 3σ cull radius、opacity、SH coefficients。
 - Projected data 按 global splat index dense 存储，逻辑字段为：
@@ -71,7 +65,7 @@ rgb                // SH-evaluated RGB in primitive colorSpace
 ```
 
 - 实际 GPU struct 按 std430 / vec4 packing 实现；fragment shader 不做 per-pixel matrix inverse。
-- Sort entry 物理格式固定为 2×32-bit：`distance_key + global_splat_index`。
+- Sort entry 物理格式固定为 2×32-bit：`distance_key + global_splat_index`。Indirect command 固定字段由 CPU 初始化，GPU 只写 `instanceCount`。
 - Direct glTF/GLB load path 必须补齐校验：`OPACITY` finite `[0,1]`、`SCALE` finite `>=0`、`ROTATION` finite unit quaternion。
 - 同一 GS scene 内所有 primitive metadata 必须一致：`kernel=ellipse`、`projection=perspective`、`sortingMethod=cameraDistance`、`colorSpace` 一致。
 - 非法 glTF 按 KHR 语义报错，不静默 clamp、normalize 或混合渲染。PLY 转换路径产生有效数据，不替代直接加载校验。
@@ -80,13 +74,13 @@ rgb                // SH-evaluated RGB in primitive colorSpace
 
 本 Step 生成渲染使用的静态 GPU 数据。Phase 3.0 不在 shader 中每帧处理静态 transform。
 
-- Position bake：使用 node global transform 把 local position 转到 world space。
+- Node global transform 必须可分解为 regular translation、proper rotation 和 positive scale；reflection、negative determinant 或不可分解线性部分报错或跳过上传。
+- Position bake 使用 node global transform 把 local position 转到 world space。
 - Covariance bake：KHR `SCALE` 是 Gaussian principal axes 的 σ：
   - `Σ_local = R * diag(scale²) * Rᵀ`
   - `Σ_world = M3x3 * Σ_local * M3x3ᵀ`
   - GPU 存 symmetric 3×3 的 6 个 float。
 - `world_radius_3sigma = 3 * sqrt(max(trace(Σ_world), 0))`，作为 world-space frustum sphere cull 半径。
-- Node global transform 必须可分解为 regular translation、proper rotation 和 positive scale；reflection、negative determinant 或不可分解线性部分报错或跳过上传。
 - SH upload 前期只支持 identity/no-rotation transform。遇到需要 SH rotation 的 transform 时不得静默渲染错误；完整 Wigner-D 放到 Step 9。
 - 多个 primitive 按顺序拼接成 global splat buffers；CPU 侧保留 per-primitive ranges / source primitive index / metadata 供 debug、报错和未来扩展使用。
 - GPU static buffers 不保留 raw rotation / scale 作为渲染必需数据；CPU 侧可保留用于 reload/debug/future rebake。
@@ -99,33 +93,27 @@ rgb                // SH-evaluated RGB in primitive colorSpace
 - Descriptor 随 scene load/reload 或 buffer recreate 写入；每帧只更新 buffer 内容，不每帧 push descriptor。
 - `GSPushConstants` 只放 GS 专用小参数：`total_splat_count`、`sort_capacity`、`color_space`、`flags`、`near_gs`、`max_projected_extent_px`、`alpha_discard_threshold`、`power_discard_threshold`。
 - View/projection/view_projection/camera_position/screen_size 复用 GlobalUBO，不在 GS push constants 中重复矩阵。
-- Work buffers 至少包含 visible count atomic、dense-by-global-index projected data、sort entry ping-pong、indirect draw command。
-- 每帧 reset 必须发生在 cull/project 前：
-  - `visible_count = 0`
-  - sort entries 填 `{UINT_MAX, UINT_MAX}`
-  - `indirect.instanceCount = 0`
-- `VkDrawIndirectCommand` 固定字段由 CPU 初始化：`vertexCount = 6`、`firstVertex = 0`、`firstInstance = 0`。
-- GPU 只在 cull/project 后把 `visible_count` 写入 `instanceCount`。
+- Work buffers 至少包含 visible count atomic、dense-by-global-index projected data、sort entry ping-pong、indirect draw command；容量全部由 `total_splat_count` / `sort_capacity` 派生。
+- 每帧 reset 必须发生在 cull/project 前：`visible_count = 0`、sort entries 填 `{UINT_MAX, UINT_MAX}`、`indirect.instanceCount = 0`。
+- `VkDrawIndirectCommand` 固定字段由 CPU 初始化：`vertexCount = 6`、`firstVertex = 0`、`firstInstance = 0`。GPU 只在 cull/project 后把 `visible_count` 写入 `instanceCount`。
 
 ### Step 4：Cull/Project compute pass
 
-本 Step 产生 projected data、visible range 和 sort entries。
+本 Step 产生 projected data、visible range、sort entries 和 draw indirect instance count。
 
-- Workgroup size 初始使用 256。
-- 使用 world-space sphere(center=`position_world`, radius=`world_radius_3sigma`) vs frustum planes 做粗剔除。
-- 使用与 PT/reference view 相同的 camera pose、FOV、aspect、viewport；GS 可使用自己的 near plane。
+- Shader skeleton 先接通 Set 3、GlobalUBO 和 push constants，workgroup size 初始使用 256。
+- World-space cull 使用 sphere(center=`position_world`, radius=`world_radius_3sigma`) vs frustum planes。
+- 投影防御包括 behind-camera discard、near-plane unstable discard 和 projection NaN/Inf 防御。Projection z clamp 只用于防止 NaN/Inf，不用于强行保留贴脸 splat。
 - `center_px` 由 clip/NDC 转 pixel，使用 Vulkan framebuffer 坐标：top-left origin、x right、y down，不做 Y flip。
 - 2D covariance 使用 view-space covariance 和 pixel focal length：
   - `fx = 0.5 * width * abs(proj[0][0])`
   - `fy = 0.5 * height * abs(proj[1][1])`
   - `cov_2d = J * cov_view * Jᵀ`
-- 对 `cov_2d` 做正定化防御，再求 inverse covariance / conic 和 3σ OBB extent。
-- Defensive discard：behind-camera、near-plane unstable、projected OBB 任一半轴超过 screen short side × 0.25。
-- Projection z clamp 只用于防止 NaN/Inf，不用于强行保留贴脸 splat。
+- 对 `cov_2d` 做正定化防御，再求 inverse covariance / conic 和 3σ OBB extent。Projected OBB 任一半轴超过 screen short side × 0.25 时 discard。
 - SH 求值方向为 camera → splat：`normalize(splat_world_position - camera_world_position)`；长度接近 0 时使用 camera forward fallback。
 - 对每个可见 splat 求一次 all-degree SH RGB，负分量 clamp 到 0，写入 projected data；fragment shader 不求 SH。
 - 可见 splat append 到 `sort_entries[0..visible_count)`；`distance_key = floatBitsToUint(camera_distance_squared)`，只接受 finite non-negative distance，异常值写 sentinel。
-- Subgroup intrinsic 必须位于 uniform control flow 中，不放入 divergent branch。
+- Subgroup intrinsic 必须位于 uniform control flow 中，不放入 divergent branch。Cull/project 结束时将 `visible_count` 写入 indirect command 的 `instanceCount`。
 
 ### Step 5：Bitonic sort correctness baseline
 
@@ -133,25 +121,18 @@ Bitonic sort 用于建立 deterministic correctness baseline，后续 radix 必�
 
 - Bitonic 按 `sort_capacity` 全量排序；invalid sentinel 应自然排到末尾。
 - Compare 使用 lexicographic `(distance_key, global_splat_index)` ascending；ascending 等价于 front-to-back。
+- 多 pass dispatch 使用 `N = sort_capacity`，按 bitonic `log2(N)` stages × `log(N)` steps 执行。实现时明确使用 ping-pong 还是 in-place compare-and-swap。
 - 排序后 `[0, visible_count)` 必须全为 valid entries；draw 使用 `visible_count`，不 draw capacity。
-- 多 pass dispatch 使用 `N = sort_capacity`，按 bitonic `log2(N)` stages × `log(N)` steps 执行。
 - Equal-key ordering 必须 deterministic，避免透明累积因帧间顺序变化闪烁。
 
 ### Step 6：Quad rendering path
 
 本 Step 完成 GS composition target 的硬件光栅输出。
 
-#### Vertex shader
-
 - 使用 non-indexed instanced draw，每个 splat 6 vertices，`gl_VertexIndex % 6` 展开两个三角形。
 - Vertex shader 通过 sorted entry 读取 `global_splat_index`，再读取 `projected_data[global_splat_index]`。
-- Quad corner：`center_px + sx * axis0_extent_px + sy * axis1_extent_px`。
-- Pixel → NDC 不做 Y flip；GS draw 使用 positive-height normal viewport。
-
-#### Fragment shader
-
+- Quad corner：`center_px + sx * axis0_extent_px + sy * axis1_extent_px`。Pixel → NDC 不做 Y flip；GS draw 使用 positive-height normal viewport。
 - Fragment shader 直接使用 `gl_FragCoord.xy - center_px`，与 pixel-space conic 保持同一坐标系。
-- Mahalanobis distance 计算：
 
 ```glsl
 float mahalanobis =
@@ -161,17 +142,10 @@ float mahalanobis =
 float power = -0.5 * mahalanobis;
 ```
 
-- `power < -20` discard。
-- `alpha = clamp(opacity * exp(power), 0, 1)`。
-- `alpha < 1e-4` discard。
-- 输出 `vec4(rgb * alpha, alpha)`；SH-evaluated RGB 负分量应已在 cull/project 中 clamp 到 0。
-
-#### Render target 与 pipeline state
-
-- GS composition target 使用 R16G16B16A16Sfloat。
-- `loadOp = CLEAR`，clear value 为 `vec4(0,0,0,0)`；`storeOp = STORE`。
-- Depth test/write disabled，cull none，colorWriteMask=RGBA。
-- Blend 使用 front-to-back premultiplied-under：srcColor/srcAlpha=`ONE_MINUS_DST_ALPHA`，dstColor/dstAlpha=`ONE`，op=`ADD`。
+- `power < -20` discard；`alpha = clamp(opacity * exp(power), 0, 1)`；`alpha < 1e-4` discard。
+- Fragment 输出 `vec4(rgb * alpha, alpha)`；SH-evaluated RGB 负分量应已在 cull/project 中 clamp 到 0。
+- GS composition target 使用 R16G16B16A16Sfloat，`loadOp = CLEAR`，clear value 为 `vec4(0,0,0,0)`，`storeOp = STORE`。
+- Pipeline state：depth test/write disabled，cull none，colorWriteMask=RGBA，front-to-back premultiplied-under blend（srcColor/srcAlpha=`ONE_MINUS_DST_ALPHA`，dstColor/dstAlpha=`ONE`，op=`ADD`）。
 - Swapchain resize 只重建 viewport-sized composition/linear targets，并更新对应 descriptors；work buffers 不因 resize 重建。
 
 ### Step 7：RenderMode 与 output 集成
@@ -192,21 +166,21 @@ float power = -0.5 * mahalanobis;
 本 Step 是 Phase 3.0 baseline 的验收点，不以最终性能为目标。
 
 - Happy path：KHR ellipse kernel + perspective projection + cameraDistance sorting + scene-level consistent metadata + identity/no-rotation transform。
-- 支持单个或多个 GS primitive，primitive 拼接为 global splat buffers，并保留 CPU per-primitive ranges。
-- 支持 `srgb_rec709_display` 和 `lin_rec709_display` 二选一 scene；不支持 mixed colorSpace scene。
-- 必须验证投影中心、3σ OBB、front-to-back 排序、premultiplied-under blend、color conversion、TonemappingPass GS bypass。
-- 必须验证 resize、`visible_count = 0`、非法 asset rejection、reload/resize 后 descriptor 不指向已销毁资源。
+- Multi-primitive 验证需要覆盖 global buffer 拼接、per-primitive range 保留和 shader 仅按 global splat index 访问。
+- ColorSpace 验证需要分别覆盖 `srgb_rec709_display` conversion 和 `lin_rec709_display` bypass；mixed colorSpace scene 应被拒绝。
+- 核心渲染正确性至少覆盖投影中心、3σ OBB、front-to-back sorting、premultiplied-under blend、Tonemapping bypass。
+- 生命周期与异常路径至少覆盖 resize、`visible_count = 0`、非法 asset rejection、reload/resize 后 descriptor 不指向已销毁资源。
 - 目标是 1M splat 级别 correctness baseline；10M 性能不是 Phase 3.0 完成条件。
 
 ### Step 9：Phase 3.0 末期补全
 
 Step 9 在硬件光栅 correctness baseline 建立后执行，用于补齐 Phase 3.0 末期目标。
 
-- Radix sort 只处理 32-bit `distance_key`，`global_splat_index` 作为 payload 搬运；不要退回 64-bit packed key。
-- 先实现 radix capacity path（`N = sort_capacity`），并与 Bitonic capacity baseline 对比渲染结果。
-- 再实现 visible-count-driven radix，排序工作量由 GPU 侧 `visible_count` 限制，不做 CPU readback。
-- Radix 必须对相同 `distance_key` 保持 deterministic ordering；具体 equal-key 方案在实现前确认并记录。
-- Wigner-D SH rotation 从 transform 提取 proper rotation，旋转 degree 1-3 SH 系数。
+- Radix sort 保持 32-bit `distance_key` + `global_splat_index` payload，不退回 64-bit packed key；equal-key deterministic 策略需要在实现前确认。
+- Radix capacity path 包含 histogram、prefix sum、scatter 和 ping-pong payload 搬运；完成后替换 bitonic dispatch。
+- Radix capacity 必须与 Bitonic capacity baseline 对比渲染结果。
+- Visible-count-driven radix 由 GPU 侧 `visible_count` 限制排序工作量，不做 CPU readback。
+- Wigner-D SH rotation 从 transform 提取 proper rotation，旋转 degree 1-3 SH 系数，并集成到 upload bake。
 - Wigner-D 验证至少包括 identity 不变、degree 1 已知旋转、与 PLY 坐标翻转规则一致性检查。
 
 
