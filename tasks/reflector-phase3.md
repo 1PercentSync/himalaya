@@ -31,7 +31,10 @@
 - [x] 清理无实际消费的 primitive range contract（移除 `GaussianSplatPrimitiveRange`、scene/gpu `primitive_ranges`、loader range recording，并同步验证项）
 - [x] 实现 SH upload happy path（identity/no-rotation transform 直接上传；degree 0 可允许 node rotation；degree 1-3 需要 SH rotation 时暂时报错并回退空 GS scene）
 - [x] 创建并上传 static baked packed SoA storage buffers（`position_radius`、`covariance_opacity`、`sh_coefficients`）
-- [x] 请求用户在 CLion 中编译验证
+- [x] 请求用户在 CLion 中编译验证（packed static buffer upload）
+- [ ] 按 scene-level `max_sh_degree` 派生 `sh_coefficients` packed vec4 stride（degree 0/1/2/3 = 1/3/7/12 vec4，避免低阶 scene 固定 12 vec4 浪费）
+- [ ] 前移 degree 1-3 非 identity node rotation 拦截到 CPU preflight / upload 前（失败场景不进入 static buffer 创建上传）
+- [ ] 请求用户在 CLion 中编译验证（SH stride 与 rotation preflight 调整）
 
 ## Step 3:GS descriptors、work buffers 与 reset
 

@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的渲染器
 - **分支**：`reflector` — Path Tracing + Gaussian Splatting
 - **Phase**：Phase 3.0 — Gaussian Splatting 基础渲染
-- **进度**：Phase 3.0 Step 2 完成：upload-time bake、packed static buffer 创建/上传和 CLion 编译验证均完成
+- **进度**：Phase 3.0 Step 2 追加优化待处理：需要按 scene-level `max_sh_degree` 派生 SH stride，并将 degree 1-3 非 identity node rotation 拦截前移到 CPU preflight / upload 前
 
 ### 下一个任务
 
-Phase 3.0 Step 3 第一小项：定义 GS Set 3 持久 descriptor layout 与 `GSPushConstants`（static baked buffers + work buffers；复用 GlobalUBO camera/screen 字段）
+Phase 3.0 Step 2 追加小项：按 scene-level `max_sh_degree` 派生 `sh_coefficients` packed vec4 stride（degree 0/1/2/3 = 1/3/7/12 vec4，避免低阶 scene 固定 12 vec4 浪费）
 
 ---
 

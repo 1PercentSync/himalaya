@@ -46,7 +46,7 @@ GS 使用自己的持久 Set 3 descriptor set 绑定 static baked buffers 和 GP
 
 GS scene GPU resources 必须有集中 owner：由 Renderer 持有的 GS scene resource owner 负责 static/work buffers 的创建、上传、销毁以及持久 Set 3 descriptor 写入/重写。该 owner 按现有 PT 资源构建模式实现，职责类似 `SceneASBuilder` / `EmissiveLightBuilder`：Loader 只产出 CPU scene，Application 只编排加载、immediate scope 和失败回退。GS pass 类只负责 pipeline、RenderGraph resource declaration 和命令录制，不拥有 scene static/work buffers，也不直接管理持久 Set 3 生命周期。
 
-static scene data 的物理布局采用 packed SoA：world position 与 3σ radius 合并为 `position_radius`，world covariance 与 opacity 合并为 `covariance_opacity`，SH 将 KHR base extension degree 0-3 的 16 个 RGB coefficient 密集打包为 12 个 vec4。
+static scene data 的物理布局采用 packed SoA：world position 与 3σ radius 合并为 `position_radius`，world covariance 与 opacity 合并为 `covariance_opacity`，SH 按 scene-level `max_sh_degree` 派生 packed vec4 stride。degree 0/1/2/3 分别使用 1/3/7/12 个 vec4；Phase 3.0 baseline 不做 per-primitive 变长 SH stride。
 
 容量由当前 GS scene 派生并随场景重建，不设置固定 splat 上限，也不在容量不足时静默截断。
 
