@@ -10,6 +10,7 @@
 #include <glm/vec3.hpp>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdint>
 #include <limits>
@@ -29,6 +30,9 @@ namespace himalaya::framework {
 
         /** @brief Maximum accepted deviation from a unit per-splat quaternion. */
         constexpr float kUnitQuaternionTolerance = 1.0e-3f;
+
+        /** @brief Maximum allowed absolute rotation matrix element delta for SH direct upload. */
+        constexpr float kShRotationIdentityTolerance = 1.0e-3f;
 
         /** @brief Mathematical pi constant used by the symmetric eigenvalue solver. */
         constexpr double kPi = 3.141592653589793238462643383279502884;
@@ -244,6 +248,111 @@ namespace himalaya::framework {
             };
         }
 
+        /** @brief Returns true if a proper rotation is close enough to identity for direct SH upload. */
+        bool is_identity_rotation_for_sh(const glm::mat3 &rotation) {
+            for (int col = 0; col < 3; ++col) {
+                for (int row = 0; row < 3; ++row) {
+                    const float expected = (col == row) ? 1.0f : 0.0f;
+                    if (std::abs(rotation[col][row] - expected) > kShRotationIdentityTolerance) {
+                        return false;
+                    }
+                }
+            }
+            return true;
+        }
+
+        /** @brief Validates SH attribute vector counts required by one primitive's max degree. */
+        void validate_sh_counts(const GaussianSplatPrimitive &primitive,
+                                const size_t primitive_index) {
+            if (primitive.sh_coefs_0.size() != primitive.splat_count) {
+                throw std::runtime_error("GS primitive " + std::to_string(primitive_index)
+                                         + " SH degree 0 count does not match splat_count");
+            }
+
+            if (primitive.max_sh_degree >= 1) {
+                for (const auto &coefficients : primitive.sh_coefs_1) {
+                    if (coefficients.size() != primitive.splat_count) {
+                        throw std::runtime_error("GS primitive " + std::to_string(primitive_index)
+                                                 + " SH degree 1 count does not match splat_count");
+                    }
+                }
+            }
+            if (primitive.max_sh_degree >= 2) {
+                for (const auto &coefficients : primitive.sh_coefs_2) {
+                    if (coefficients.size() != primitive.splat_count) {
+                        throw std::runtime_error("GS primitive " + std::to_string(primitive_index)
+                                                 + " SH degree 2 count does not match splat_count");
+                    }
+                }
+            }
+            if (primitive.max_sh_degree >= 3) {
+                for (const auto &coefficients : primitive.sh_coefs_3) {
+                    if (coefficients.size() != primitive.splat_count) {
+                        throw std::runtime_error("GS primitive " + std::to_string(primitive_index)
+                                                 + " SH degree 3 count does not match splat_count");
+                    }
+                }
+            }
+        }
+
+        /** @brief Validates and appends one RGB SH coefficient to a dense scalar array. */
+        void write_sh_coefficient(std::array<float, kGaussianSplatShScalarCount> &scalars,
+                                  const uint32_t coefficient_index,
+                                  const glm::vec3 &coefficient,
+                                  const size_t primitive_index,
+                                  const size_t splat_index) {
+            if (!is_finite_vec3(coefficient)) {
+                throw std::runtime_error("GS primitive " + std::to_string(primitive_index)
+                                         + " has non-finite SH coefficient at splat "
+                                         + std::to_string(splat_index));
+            }
+
+            const uint32_t scalar_index = coefficient_index * 3;
+            scalars[scalar_index + 0] = coefficient.r;
+            scalars[scalar_index + 1] = coefficient.g;
+            scalars[scalar_index + 2] = coefficient.b;
+        }
+
+        /** @brief Packs one splat's KHR degree 0-3 SH RGB coefficients into 12 vec4 elements. */
+        void bake_sh_coefficients(const GaussianSplatPrimitive &primitive,
+                                  const size_t primitive_index,
+                                  const size_t splat_index,
+                                  std::vector<glm::vec4> &out) {
+            std::array<float, kGaussianSplatShScalarCount> scalars{};
+
+            uint32_t coefficient_index = 0;
+            write_sh_coefficient(scalars, coefficient_index++, primitive.sh_coefs_0[splat_index],
+                                 primitive_index, splat_index);
+
+            if (primitive.max_sh_degree >= 1) {
+                for (const auto &coefficients : primitive.sh_coefs_1) {
+                    write_sh_coefficient(scalars, coefficient_index++, coefficients[splat_index],
+                                         primitive_index, splat_index);
+                }
+            }
+            if (primitive.max_sh_degree >= 2) {
+                for (const auto &coefficients : primitive.sh_coefs_2) {
+                    write_sh_coefficient(scalars, coefficient_index++, coefficients[splat_index],
+                                         primitive_index, splat_index);
+                }
+            }
+            if (primitive.max_sh_degree >= 3) {
+                for (const auto &coefficients : primitive.sh_coefs_3) {
+                    write_sh_coefficient(scalars, coefficient_index++, coefficients[splat_index],
+                                         primitive_index, splat_index);
+                }
+            }
+
+            for (uint32_t i = 0; i < kGaussianSplatShPackedVec4Stride; ++i) {
+                const uint32_t base = i * 4;
+                out.push_back(glm::vec4(
+                    scalars[base + 0],
+                    scalars[base + 1],
+                    scalars[base + 2],
+                    scalars[base + 3]));
+            }
+        }
+
         /**
          * @brief Validates that a node transform is decomposable into T * R * S.
          *
@@ -322,10 +431,21 @@ namespace himalaya::framework {
 
             baked_position_radius_.reserve(scene.total_splat_count);
             baked_covariance_opacity_.reserve(scene.total_splat_count);
+            baked_sh_coefficients_.reserve(static_cast<size_t>(scene.total_splat_count)
+                                           * kGaussianSplatShPackedVec4Stride);
 
             for (size_t primitive_index = 0; primitive_index < scene.primitives.size(); ++primitive_index) {
                 const auto &primitive = scene.primitives[primitive_index];
                 const auto node_transform = validate_node_transform(primitive.transform, primitive_index);
+
+                if (primitive.max_sh_degree > 3) {
+                    throw std::runtime_error("GS primitive " + std::to_string(primitive_index)
+                                             + " has unsupported SH degree");
+                }
+                if (!is_identity_rotation_for_sh(node_transform.rotation) && primitive.max_sh_degree > 0) {
+                    throw std::runtime_error("GS primitive " + std::to_string(primitive_index)
+                                             + " requires SH rotation for degree 1-3 coefficients");
+                }
 
                 if (primitive.positions.size() != primitive.splat_count
                     || primitive.rotations.size() != primitive.splat_count
@@ -334,6 +454,7 @@ namespace himalaya::framework {
                     throw std::runtime_error("GS primitive " + std::to_string(primitive_index)
                                              + " attribute counts do not match splat_count");
                 }
+                validate_sh_counts(primitive, primitive_index);
 
                 for (size_t splat_index = 0; splat_index < primitive.positions.size(); ++splat_index) {
                     const glm::vec3 local_position = primitive.positions[splat_index];
@@ -364,11 +485,14 @@ namespace himalaya::framework {
                     baked_position_radius_.push_back({
                         .position_radius = glm::vec4(world_position, world_radius_3sigma),
                     });
+                    bake_sh_coefficients(primitive, primitive_index, splat_index, baked_sh_coefficients_);
                 }
             }
 
             if (baked_position_radius_.size() != scene.total_splat_count
-                || baked_covariance_opacity_.size() != scene.total_splat_count) {
+                || baked_covariance_opacity_.size() != scene.total_splat_count
+                || baked_sh_coefficients_.size() != static_cast<size_t>(scene.total_splat_count)
+                                                  * kGaussianSplatShPackedVec4Stride) {
                 throw std::runtime_error("GS baked static attribute count does not match total_splat_count");
             }
 
@@ -385,6 +509,7 @@ namespace himalaya::framework {
         gpu_scene_ = {};
         baked_position_radius_.clear();
         baked_covariance_opacity_.clear();
+        baked_sh_coefficients_.clear();
         valid_ = false;
     }
 

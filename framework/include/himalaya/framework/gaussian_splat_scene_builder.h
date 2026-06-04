@@ -29,9 +29,9 @@ namespace himalaya::framework {
         /**
          * @brief Validates node transforms and bakes static GS attributes.
          *
-         * Current Step 2 scope bakes world positions, world covariance, and the
-         * covariance-derived 3-sigma cull radius. Later Step 2 tasks fill SH
-         * data and create the corresponding GPU buffers.
+         * Current Step 2 scope bakes world positions, world covariance,
+         * covariance-derived 3-sigma cull radius, and happy-path SH data. Later
+         * Step 2 tasks create the corresponding GPU buffers.
          *
          * @param scene CPU-side GS scene loaded from glTF or converted PLY.
          * @param error_message Receives a human-readable failure reason.
@@ -61,6 +61,9 @@ namespace himalaya::framework {
 
         /** @brief CPU-side baked covariance/opacity data, indexed by global splat index. */
         std::vector<GaussianSplatCovarianceOpacity> baked_covariance_opacity_;
+
+        /** @brief CPU-side packed SH data, indexed by global splat index and packed vec4 stride. */
+        std::vector<glm::vec4> baked_sh_coefficients_;
 
         /** @brief True when gpu_scene_ and baked data match a successfully built scene. */
         bool valid_ = false;
