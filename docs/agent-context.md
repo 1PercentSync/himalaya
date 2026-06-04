@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的渲染器
 - **分支**：`reflector` — Path Tracing + Gaussian Splatting
 - **Phase**：Phase 3.0 — Gaussian Splatting 基础渲染
-- **进度**：Phase 3.0 Step 2 第五小项完成：SH upload happy path 已完成，degree 0 可允许 node rotation，degree 1-3 遇到非 identity node rotation 会拒绝 scene
+- **进度**：Phase 3.0 Step 2 完成：upload-time bake、packed static buffer 创建/上传和 CLion 编译验证均完成
 
 ### 下一个任务
 
-Phase 3.0 Step 2 第六小项：创建并上传 static baked packed SoA storage buffers（`position_radius`、`covariance_opacity`、`sh_coefficients`）
+Phase 3.0 Step 3 第一小项：定义 GS Set 3 持久 descriptor layout 与 `GSPushConstants`（static baked buffers + work buffers；复用 GlobalUBO camera/screen 字段）
 
 ---
 
