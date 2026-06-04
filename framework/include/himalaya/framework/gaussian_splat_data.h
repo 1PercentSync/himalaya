@@ -9,8 +9,10 @@
 #include <himalaya/rhi/types.h>
 
 #include <glm/glm.hpp>
+#include <vulkan/vulkan.h>
 
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -97,6 +99,70 @@ namespace himalaya::framework {
         /** @brief Union AABB of all primitives in world space. */
         AABB scene_bounds{};
     };
+
+    // ---- GPU Data Layouts ----
+    // Must match shader-side std430 layouts exactly.
+
+    /**
+     * @brief Projected splat data consumed by the GS quad draw shaders.
+     *
+     * std430 layout, 64 bytes per element, aligned to 16. The cull/project
+     * compute pass writes this buffer densely by global splat index. The draw
+     * path reads it through the sorted entry payload. Matrix inversion is done
+     * before writing conic, so the fragment shader only evaluates the quadratic form.
+     */
+    struct alignas(16) GaussianSplatProjectedData {
+        glm::vec4 center_opacity; ///< offset  0 — xy = center_px, z = opacity, w unused
+        glm::vec4 axis0_axis1; ///< offset 16 — xy = axis0_extent_px, zw = axis1_extent_px
+        glm::vec4 conic; ///< offset 32 — xyz = inverse covariance xx, xy, yy; w unused
+        glm::vec4 rgb; ///< offset 48 — xyz = SH-evaluated RGB, w unused
+    };
+
+    /**
+     * @brief Sort entry payload used by GS sorting and draw passes.
+     *
+     * std430 layout, 8 bytes per element. distance_key stores the bit encoding
+     * of finite non-negative camera distance squared. global_splat_index indexes
+     * all static and projected GS buffers. The invalid sentinel is {UINT32_MAX, UINT32_MAX}.
+     */
+    struct alignas(8) GaussianSplatSortEntry {
+        uint32_t distance_key = UINT32_MAX; ///< offset 0 — floatBitsToUint(camera_distance_squared)
+        uint32_t global_splat_index = UINT32_MAX; ///< offset 4 — payload index into global splat buffers
+    };
+
+    /** @brief Fixed vertex count for one non-indexed GS quad instance. */
+    inline constexpr uint32_t kGaussianSplatQuadVertexCount = 6;
+
+    /**
+     * @brief Draw indirect command layout used by the GS draw pass.
+     *
+     * Matches VkDrawIndirectCommand exactly. CPU initializes the fixed fields
+     * vertex_count, first_vertex, and first_instance. The GPU only writes
+     * instance_count after cull/project has produced visible_count.
+     */
+    struct GaussianSplatDrawIndirectCommand {
+        uint32_t vertex_count = kGaussianSplatQuadVertexCount; ///< offset  0 — fixed to 6
+        uint32_t instance_count = 0; ///< offset  4 — written by GPU from visible_count
+        uint32_t first_vertex = 0; ///< offset  8 — fixed to 0
+        uint32_t first_instance = 0; ///< offset 12 — fixed to 0
+    };
+
+    static_assert(sizeof(GaussianSplatProjectedData) == 64,
+                  "GaussianSplatProjectedData must be 64 bytes (std430)");
+    static_assert(offsetof(GaussianSplatProjectedData, center_opacity) == 0);
+    static_assert(offsetof(GaussianSplatProjectedData, axis0_axis1) == 16);
+    static_assert(offsetof(GaussianSplatProjectedData, conic) == 32);
+    static_assert(offsetof(GaussianSplatProjectedData, rgb) == 48);
+    static_assert(sizeof(GaussianSplatSortEntry) == 8,
+                  "GaussianSplatSortEntry must be 8 bytes (std430)");
+    static_assert(offsetof(GaussianSplatSortEntry, distance_key) == 0);
+    static_assert(offsetof(GaussianSplatSortEntry, global_splat_index) == 4);
+    static_assert(sizeof(GaussianSplatDrawIndirectCommand) == sizeof(VkDrawIndirectCommand),
+                  "GaussianSplatDrawIndirectCommand must match VkDrawIndirectCommand");
+    static_assert(offsetof(GaussianSplatDrawIndirectCommand, vertex_count) == 0);
+    static_assert(offsetof(GaussianSplatDrawIndirectCommand, instance_count) == 4);
+    static_assert(offsetof(GaussianSplatDrawIndirectCommand, first_vertex) == 8);
+    static_assert(offsetof(GaussianSplatDrawIndirectCommand, first_instance) == 12);
 
     /** @brief Phase 3.0-supported Gaussian Splatting kernel type. */
     enum class GaussianSplatKernel : uint8_t {
