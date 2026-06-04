@@ -5,13 +5,16 @@
 
 #include <himalaya/framework/gaussian_splat_scene_builder.h>
 
+#include <glm/gtc/quaternion.hpp>
 #include <glm/mat3x3.hpp>
 #include <glm/vec3.hpp>
 
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <limits>
 #include <stdexcept>
+#include <string>
 
 namespace himalaya::framework {
     namespace {
@@ -23,6 +26,12 @@ namespace himalaya::framework {
 
         /** @brief Maximum allowed deviation from a proper-rotation determinant of +1. */
         constexpr float kTransformDeterminantTolerance = 1.0e-3f;
+
+        /** @brief Maximum accepted deviation from a unit per-splat quaternion. */
+        constexpr float kUnitQuaternionTolerance = 1.0e-3f;
+
+        /** @brief Mathematical pi constant used by the symmetric eigenvalue solver. */
+        constexpr double kPi = 3.141592653589793238462643383279502884;
 
         /** @brief Validated decomposition data for a GS node transform. */
         struct ValidatedNodeTransform {
@@ -39,6 +48,12 @@ namespace himalaya::framework {
         /** @brief Returns true when every component is finite. */
         bool is_finite_vec3(const glm::vec3 &value) {
             return std::isfinite(value.x) && std::isfinite(value.y) && std::isfinite(value.z);
+        }
+
+        /** @brief Returns true when every component is finite. */
+        bool is_finite_vec4(const glm::vec4 &value) {
+            return std::isfinite(value.x) && std::isfinite(value.y)
+                   && std::isfinite(value.z) && std::isfinite(value.w);
         }
 
         /** @brief Returns true when every relevant affine transform component is finite. */
@@ -67,6 +82,166 @@ namespace himalaya::framework {
                 throw std::runtime_error("GS sort capacity exceeds uint32_t range");
             }
             return static_cast<uint32_t>(capacity);
+        }
+
+        /** @brief Validates one per-splat unit quaternion and returns it as a GLM quaternion. */
+        glm::quat validate_splat_rotation(const glm::vec4 &rotation,
+                                          const size_t primitive_index,
+                                          const size_t splat_index) {
+            if (!is_finite_vec4(rotation)) {
+                throw std::runtime_error("GS primitive " + std::to_string(primitive_index)
+                                         + " has non-finite ROTATION at splat "
+                                         + std::to_string(splat_index));
+            }
+
+            const float length_sq = rotation.x * rotation.x
+                                    + rotation.y * rotation.y
+                                    + rotation.z * rotation.z
+                                    + rotation.w * rotation.w;
+            if (!std::isfinite(length_sq) || std::abs(length_sq - 1.0f) > kUnitQuaternionTolerance) {
+                throw std::runtime_error("GS primitive " + std::to_string(primitive_index)
+                                         + " has non-unit ROTATION at splat "
+                                         + std::to_string(splat_index));
+            }
+
+            return {rotation.w, rotation.x, rotation.y, rotation.z};
+        }
+
+        /** @brief Validates one non-negative per-splat sigma scale. */
+        glm::vec3 validate_splat_scale(const glm::vec3 &scale,
+                                       const size_t primitive_index,
+                                       const size_t splat_index) {
+            if (!is_finite_vec3(scale) || scale.x < 0.0f || scale.y < 0.0f || scale.z < 0.0f) {
+                throw std::runtime_error("GS primitive " + std::to_string(primitive_index)
+                                         + " has invalid SCALE at splat "
+                                         + std::to_string(splat_index));
+            }
+            return scale;
+        }
+
+        /** @brief Validates one opacity value before packing it with covariance data. */
+        float validate_splat_opacity(const float opacity,
+                                     const size_t primitive_index,
+                                     const size_t splat_index) {
+            if (!std::isfinite(opacity) || opacity < 0.0f || opacity > 1.0f) {
+                throw std::runtime_error("GS primitive " + std::to_string(primitive_index)
+                                         + " has invalid OPACITY at splat "
+                                         + std::to_string(splat_index));
+            }
+            return opacity;
+        }
+
+        /** @brief Computes the largest eigenvalue of a symmetric 3x3 matrix. */
+        double largest_symmetric_eigenvalue(const double xx,
+                                            const double xy,
+                                            const double xz,
+                                            const double yy,
+                                            const double yz,
+                                            const double zz) {
+            const double p1 = xy * xy + xz * xz + yz * yz;
+            if (p1 == 0.0) {
+                return std::max(xx, std::max(yy, zz));
+            }
+
+            const double q = (xx + yy + zz) / 3.0;
+            const double dx = xx - q;
+            const double dy = yy - q;
+            const double dz = zz - q;
+            const double p2 = dx * dx + dy * dy + dz * dz + 2.0 * p1;
+            const double p = std::sqrt(p2 / 6.0);
+            if (p == 0.0) {
+                return q;
+            }
+
+            const double b00 = dx / p;
+            const double b01 = xy / p;
+            const double b02 = xz / p;
+            const double b11 = dy / p;
+            const double b12 = yz / p;
+            const double b22 = dz / p;
+            const double det_b = b00 * (b11 * b22 - b12 * b12)
+                                 - b01 * (b01 * b22 - b12 * b02)
+                                 + b02 * (b01 * b12 - b11 * b02);
+            const double r = det_b * 0.5;
+
+            double phi = 0.0;
+            if (r <= -1.0) {
+                phi = kPi / 3.0;
+            } else if (r >= 1.0) {
+                phi = 0.0;
+            } else {
+                phi = std::acos(r) / 3.0;
+            }
+
+            return q + 2.0 * p * std::cos(phi);
+        }
+
+        /** @brief Bakes local splat rotation/scale through the node transform into world covariance. */
+        GaussianSplatCovarianceOpacity bake_covariance_opacity(const ValidatedNodeTransform &node_transform,
+                                                               const glm::vec4 &rotation,
+                                                               const glm::vec3 &scale,
+                                                               const float opacity,
+                                                               const size_t primitive_index,
+                                                               const size_t splat_index,
+                                                               float &world_radius_3sigma) {
+            const glm::quat quaternion = validate_splat_rotation(rotation, primitive_index, splat_index);
+            const glm::vec3 sigma = validate_splat_scale(scale, primitive_index, splat_index);
+            const float validated_opacity = validate_splat_opacity(opacity, primitive_index, splat_index);
+
+            glm::mat3 sigma_squared(0.0f);
+            sigma_squared[0][0] = sigma.x * sigma.x;
+            sigma_squared[1][1] = sigma.y * sigma.y;
+            sigma_squared[2][2] = sigma.z * sigma.z;
+
+            const glm::mat3 local_rotation = glm::mat3_cast(quaternion);
+            const glm::mat3 covariance_local = local_rotation * sigma_squared * glm::transpose(local_rotation);
+            const glm::mat3 covariance_world = node_transform.linear
+                                               * covariance_local
+                                               * glm::transpose(node_transform.linear);
+
+            const double xx = static_cast<double>(covariance_world[0][0]);
+            const double xy = 0.5 * (static_cast<double>(covariance_world[1][0])
+                                     + static_cast<double>(covariance_world[0][1]));
+            const double xz = 0.5 * (static_cast<double>(covariance_world[2][0])
+                                     + static_cast<double>(covariance_world[0][2]));
+            const double yy = static_cast<double>(covariance_world[1][1]);
+            const double yz = 0.5 * (static_cast<double>(covariance_world[2][1])
+                                     + static_cast<double>(covariance_world[1][2]));
+            const double zz = static_cast<double>(covariance_world[2][2]);
+
+            if (!std::isfinite(xx) || !std::isfinite(xy) || !std::isfinite(xz)
+                || !std::isfinite(yy) || !std::isfinite(yz) || !std::isfinite(zz)) {
+                throw std::runtime_error("GS primitive " + std::to_string(primitive_index)
+                                         + " produced non-finite world covariance at splat "
+                                         + std::to_string(splat_index));
+            }
+
+            const double lambda_max = largest_symmetric_eigenvalue(xx, xy, xz, yy, yz, zz);
+            if (!std::isfinite(lambda_max)) {
+                throw std::runtime_error("GS primitive " + std::to_string(primitive_index)
+                                         + " produced non-finite covariance eigenvalue at splat "
+                                         + std::to_string(splat_index));
+            }
+
+            world_radius_3sigma = static_cast<float>(3.0 * std::sqrt(std::max(lambda_max, 0.0)));
+            if (!std::isfinite(world_radius_3sigma)) {
+                throw std::runtime_error("GS primitive " + std::to_string(primitive_index)
+                                         + " produced non-finite cull radius at splat "
+                                         + std::to_string(splat_index));
+            }
+
+            return {
+                .covariance0 = glm::vec4(
+                    static_cast<float>(xx),
+                    static_cast<float>(xy),
+                    static_cast<float>(xz),
+                    static_cast<float>(yy)),
+                .covariance1_opacity = glm::vec4(
+                    static_cast<float>(yz),
+                    static_cast<float>(zz),
+                    validated_opacity,
+                    0.0f),
+            };
         }
 
         /**
@@ -147,14 +322,18 @@ namespace himalaya::framework {
             gpu_scene_.metadata = scene.metadata;
 
             baked_position_radius_.reserve(scene.total_splat_count);
+            baked_covariance_opacity_.reserve(scene.total_splat_count);
 
             for (size_t primitive_index = 0; primitive_index < scene.primitives.size(); ++primitive_index) {
                 const auto &primitive = scene.primitives[primitive_index];
-                validate_node_transform(primitive.transform, primitive_index);
+                const auto node_transform = validate_node_transform(primitive.transform, primitive_index);
 
-                if (primitive.positions.size() != primitive.splat_count) {
+                if (primitive.positions.size() != primitive.splat_count
+                    || primitive.rotations.size() != primitive.splat_count
+                    || primitive.scales.size() != primitive.splat_count
+                    || primitive.opacities.size() != primitive.splat_count) {
                     throw std::runtime_error("GS primitive " + std::to_string(primitive_index)
-                                             + " position count does not match splat_count");
+                                             + " attribute counts do not match splat_count");
                 }
 
                 for (size_t splat_index = 0; splat_index < primitive.positions.size(); ++splat_index) {
@@ -173,14 +352,25 @@ namespace himalaya::framework {
                                                  + std::to_string(splat_index));
                     }
 
+                    float world_radius_3sigma = 0.0f;
+                    baked_covariance_opacity_.push_back(bake_covariance_opacity(
+                        node_transform,
+                        primitive.rotations[splat_index],
+                        primitive.scales[splat_index],
+                        primitive.opacities[splat_index],
+                        primitive_index,
+                        splat_index,
+                        world_radius_3sigma));
+
                     baked_position_radius_.push_back({
-                        .position_radius = glm::vec4(world_position, 0.0f),
+                        .position_radius = glm::vec4(world_position, world_radius_3sigma),
                     });
                 }
             }
 
-            if (baked_position_radius_.size() != scene.total_splat_count) {
-                throw std::runtime_error("GS baked position count does not match total_splat_count");
+            if (baked_position_radius_.size() != scene.total_splat_count
+                || baked_covariance_opacity_.size() != scene.total_splat_count) {
+                throw std::runtime_error("GS baked static attribute count does not match total_splat_count");
             }
 
             valid_ = true;
@@ -195,6 +385,7 @@ namespace himalaya::framework {
     void GaussianSplatSceneBuilder::destroy() {
         gpu_scene_ = {};
         baked_position_radius_.clear();
+        baked_covariance_opacity_.clear();
         valid_ = false;
     }
 

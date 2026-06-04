@@ -7,7 +7,6 @@
 
 #include <himalaya/framework/gaussian_splat_data.h>
 
-#include <span>
 #include <string>
 #include <vector>
 
@@ -28,11 +27,11 @@ namespace himalaya::framework {
     class GaussianSplatSceneBuilder {
     public:
         /**
-         * @brief Validates node transforms and bakes local positions to world space.
+         * @brief Validates node transforms and bakes static GS attributes.
          *
-         * Current Step 2 scope bakes position/radius records with radius set to
-         * zero. Later Step 2 tasks fill covariance-derived radius, opacity, SH,
-         * and create the corresponding GPU buffers.
+         * Current Step 2 scope bakes world positions, world covariance, and the
+         * covariance-derived 3-sigma cull radius. Later Step 2 tasks fill SH
+         * data and create the corresponding GPU buffers.
          *
          * @param scene CPU-side GS scene loaded from glTF or converted PLY.
          * @param error_message Receives a human-readable failure reason.
@@ -59,6 +58,9 @@ namespace himalaya::framework {
 
         /** @brief CPU-side baked position/radius data, indexed by global splat index. */
         std::vector<GaussianSplatPositionRadius> baked_position_radius_;
+
+        /** @brief CPU-side baked covariance/opacity data, indexed by global splat index. */
+        std::vector<GaussianSplatCovarianceOpacity> baked_covariance_opacity_;
 
         /** @brief True when gpu_scene_ and baked data match a successfully built scene. */
         bool valid_ = false;
