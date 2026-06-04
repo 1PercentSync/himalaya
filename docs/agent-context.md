@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的渲染器
 - **分支**：`reflector` — Path Tracing + Gaussian Splatting
 - **Phase**：Phase 3.0 — Gaussian Splatting 基础渲染
-- **进度**：Phase 3.0 Step 0 第三小项完成：Phase 3.0 所需 buffer usage 映射已补齐，待检查 GS 依赖链覆盖
+- **进度**：Phase 3.0 Step 0 完成：RenderGraph buffer barrier tracking、emission、usage 映射和 GS 依赖链检查均完成，用户已在 CLion 编译通过
 
 ### 下一个任务
 
-Phase 3.0 Step 0 第四小项：检查 RG 生成的 buffer barrier 链路覆盖 GS 依赖（reset→cull/project、cull/project→sort、sort/projected data→graphics、indirect write→draw indirect）
+Phase 3.0 Step 1 第一小项：定义 scene-level GS GPU resource（splat 总数、`sort_capacity`、static/work buffer handles、scene metadata、CPU per-primitive ranges）
 
 ---
 
