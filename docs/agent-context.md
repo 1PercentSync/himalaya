@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的渲染器
 - **分支**：`reflector` — Path Tracing + Gaussian Splatting
 - **Phase**：Phase 3.0 — Gaussian Splatting 基础渲染
-- **进度**：Phase 3.0 Step 1 第二小项完成：已定义 CPU/shader 共享 GPU layouts，包括 projected data、sort entry 和 indirect draw command
+- **进度**：Phase 3.0 Step 1 第三小项完成：glTF 直接加载已校验 opacity、SCALE 和 ROTATION 数值合法性
 
 ### 下一个任务
 
-Phase 3.0 Step 1 第三小项：实现 glTF 直接加载数值校验（opacity finite [0,1]、SCALE finite >= 0、ROTATION finite unit quaternion）
+Phase 3.0 Step 1 第四小项：实现 primitive metadata 一致性校验与 global primitive range 记录（`kernel=ellipse`、`projection=perspective`、`sortingMethod=cameraDistance`、`colorSpace` 一致）
 
 ---
 
