@@ -27,7 +27,7 @@
 
 - [x] 修正 GS static baked buffer 契约为 packed SoA layout（`position_radius`、`covariance_opacity`、`sh_coefficients`，替换 Step 1 的分离 radius/opacity handles）
 - [x] 实现 node transform 合法性检查与 position baking（regular/proper/positive transform；local position → world space）
-- [ ] 实现 covariance baking 与 cull radius 预计算（`Σ_local`、`Σ_world`、6-float symmetric covariance、`world_radius_3sigma`）
+- [x] 实现 covariance baking 与 cull radius 预计算（`Σ_local`、`Σ_world`、6-float symmetric covariance、`world_radius_3sigma`）
 - [ ] 清理无实际消费的 primitive range contract（移除 `GaussianSplatPrimitiveRange`、scene/gpu `primitive_ranges`、loader range recording，并同步验证项）
 - [ ] 实现 SH upload happy path（identity/no-rotation transform 直接上传；degree 0 可允许 node rotation；degree 1-3 需要 SH rotation 时暂时报错并回退空 GS scene）
 - [ ] 创建并上传 static baked packed SoA storage buffers（`position_radius`、`covariance_opacity`、`sh_coefficients`）
