@@ -217,16 +217,27 @@ namespace himalaya::framework {
     RenderGraph::ResolvedUsage RenderGraph::resolve_buffer_usage(const RGAccessType access, const RGStage stage) {
         switch (stage) {
             case RGStage::Compute:
-                return {
-                    .layout = VK_IMAGE_LAYOUT_UNDEFINED,
-                    .stage = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-                    .access = access == RGAccessType::Read
-                                  ? VK_ACCESS_2_SHADER_STORAGE_READ_BIT
-                                  : (VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT |
-                                     (access == RGAccessType::ReadWrite
-                                          ? VK_ACCESS_2_SHADER_STORAGE_READ_BIT
-                                          : VkAccessFlags2{0})),
-                };
+                switch (access) {
+                    case RGAccessType::Read:
+                        return {
+                            .layout = VK_IMAGE_LAYOUT_UNDEFINED,
+                            .stage = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+                            .access = VK_ACCESS_2_SHADER_STORAGE_READ_BIT,
+                        };
+                    case RGAccessType::Write:
+                        return {
+                            .layout = VK_IMAGE_LAYOUT_UNDEFINED,
+                            .stage = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+                            .access = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+                        };
+                    case RGAccessType::ReadWrite:
+                        return {
+                            .layout = VK_IMAGE_LAYOUT_UNDEFINED,
+                            .stage = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+                            .access = VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+                        };
+                }
+                break;
 
             case RGStage::Vertex:
                 assert(access == RGAccessType::Read && "Vertex shader buffer access must be read-only");
@@ -245,6 +256,8 @@ namespace himalaya::framework {
                 };
 
             case RGStage::Transfer:
+                assert((access == RGAccessType::Read || access == RGAccessType::Write)
+                    && "Transfer buffer access must be read-only or write-only");
                 return {
                     .layout = VK_IMAGE_LAYOUT_UNDEFINED,
                     .stage = VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT,
@@ -266,6 +279,10 @@ namespace himalaya::framework {
                 // ReSharper disable once CppDFAUnreachableCode
                 return {};
         }
+
+        assert(false && "Unhandled buffer RGAccessType");
+        // ReSharper disable once CppDFAUnreachableCode
+        return {};
     }
 
     void RenderGraph::set_reference_resolution(const VkExtent2D extent) {
