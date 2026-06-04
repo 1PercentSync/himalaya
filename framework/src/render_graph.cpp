@@ -127,10 +127,10 @@ namespace himalaya::framework {
         });
     }
 
-    // Maps (RGAccessType, RGStage) to Vulkan layout/stage/access.
+    // Maps image (RGAccessType, RGStage) to Vulkan layout/stage/access.
     // Implemented on-demand: only combinations actually used by passes are mapped,
     // all others assert to catch unhandled cases early.
-    RenderGraph::ResolvedUsage RenderGraph::resolve_usage(const RGAccessType access, const RGStage stage) {
+    RenderGraph::ResolvedUsage RenderGraph::resolve_image_usage(const RGAccessType access, const RGStage stage) {
         switch (stage) {
             case RGStage::ColorAttachment:
                 assert(access == RGAccessType::Write || access == RGAccessType::ReadWrite);
@@ -206,7 +206,63 @@ namespace himalaya::framework {
                 };
 
             default:
-                assert(false && "Unhandled (RGAccessType, RGStage) combination");
+                assert(false && "Unhandled image (RGAccessType, RGStage) combination");
+                // ReSharper disable once CppDFAUnreachableCode
+                return {};
+        }
+    }
+
+    // Maps buffer (RGAccessType, RGStage) to Vulkan stage/access.
+    // Buffers have no layout transitions, but still require memory dependencies.
+    RenderGraph::ResolvedUsage RenderGraph::resolve_buffer_usage(const RGAccessType access, const RGStage stage) {
+        switch (stage) {
+            case RGStage::Compute:
+                return {
+                    .layout = VK_IMAGE_LAYOUT_UNDEFINED,
+                    .stage = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+                    .access = access == RGAccessType::Read
+                                  ? VK_ACCESS_2_SHADER_STORAGE_READ_BIT
+                                  : (VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT |
+                                     (access == RGAccessType::ReadWrite
+                                          ? VK_ACCESS_2_SHADER_STORAGE_READ_BIT
+                                          : VkAccessFlags2{0})),
+                };
+
+            case RGStage::Vertex:
+                assert(access == RGAccessType::Read && "Vertex shader buffer access must be read-only");
+                return {
+                    .layout = VK_IMAGE_LAYOUT_UNDEFINED,
+                    .stage = VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT,
+                    .access = VK_ACCESS_2_SHADER_STORAGE_READ_BIT,
+                };
+
+            case RGStage::Fragment:
+                assert(access == RGAccessType::Read && "Fragment shader buffer access must be read-only");
+                return {
+                    .layout = VK_IMAGE_LAYOUT_UNDEFINED,
+                    .stage = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+                    .access = VK_ACCESS_2_SHADER_STORAGE_READ_BIT,
+                };
+
+            case RGStage::Transfer:
+                return {
+                    .layout = VK_IMAGE_LAYOUT_UNDEFINED,
+                    .stage = VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT,
+                    .access = access == RGAccessType::Read
+                                  ? VK_ACCESS_2_TRANSFER_READ_BIT
+                                  : VK_ACCESS_2_TRANSFER_WRITE_BIT,
+                };
+
+            case RGStage::DrawIndirect:
+                assert(access == RGAccessType::Read && "Draw indirect buffer access must be read-only");
+                return {
+                    .layout = VK_IMAGE_LAYOUT_UNDEFINED,
+                    .stage = VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT,
+                    .access = VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT,
+                };
+
+            default:
+                assert(false && "Unhandled buffer (RGAccessType, RGStage) combination");
                 // ReSharper disable once CppDFAUnreachableCode
                 return {};
         }
@@ -417,26 +473,30 @@ namespace himalaya::framework {
     void RenderGraph::compile() {
         assert(!compiled_ && "compile() called twice without clear()");
 
-        // Per-image tracking: current layout and last pipeline usage
-        struct ImageState {
-            VkImageLayout current_layout;
-            VkPipelineStageFlags2 last_stage;
-            VkAccessFlags2 last_access;
+        // Per-resource tracking: images track layout plus last usage; buffers track last usage only.
+        struct ResourceState {
+            VkImageLayout current_layout = VK_IMAGE_LAYOUT_UNDEFINED;
+            VkPipelineStageFlags2 last_stage = VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT;
+            VkAccessFlags2 last_access = VK_ACCESS_2_NONE;
         };
 
-        // Initialize image states from import parameters
-        std::vector<ImageState> image_states(resources_.size());
+        // Initialize states from import parameters.
+        std::vector<ResourceState> resource_states(resources_.size());
         for (uint32_t i = 0; i < resources_.size(); ++i) {
             if (resources_[i].type == RGResourceType::Image) {
-                image_states[i] = {
-                    .current_layout = resources_[i].initial_layout,
-                    .last_stage = VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
-                    .last_access = VK_ACCESS_2_NONE,
-                };
+                resource_states[i].current_layout = resources_[i].initial_layout;
             }
         }
 
-        // Walk passes and compute barriers
+        // Emit barrier on image layout change or any data hazard (RAW, WAW, WAR).
+        // RAR (read-after-read) is the only case that needs no barrier.
+        constexpr VkAccessFlags2 kWriteFlags =
+                VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT |
+                VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT |
+                VK_ACCESS_2_TRANSFER_WRITE_BIT |
+                VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT;
+
+        // Walk passes and compute barriers.
         compiled_passes_.resize(passes_.size());
         for (uint32_t pass_idx = 0; pass_idx < passes_.size(); ++pass_idx) {
             // ReSharper disable once CppUseStructuredBinding
@@ -447,34 +507,26 @@ namespace himalaya::framework {
                 const auto res_idx = usage.resource.index;
                 assert(res_idx < resources_.size() && "Invalid RGResourceId");
 
-                if (resources_[res_idx].type != RGResourceType::Image) {
-                    continue; // Buffers: no layout transitions
-                }
-
+                const auto resource_type = resources_[res_idx].type;
                 // ReSharper disable once CppUseStructuredBinding
-                auto &state = image_states[res_idx];
-                // ReSharper disable once CppUseStructuredBinding
-                const auto resolved = resolve_usage(usage.access, usage.stage);
+                auto &state = resource_states[res_idx];
+                const auto resolved = resource_type == RGResourceType::Image
+                                          ? resolve_image_usage(usage.access, usage.stage)
+                                          : resolve_buffer_usage(usage.access, usage.stage);
 
-                // Emit barrier on layout change or any data hazard (RAW, WAW, WAR).
-                // RAR (read-after-read) is the only case that needs no barrier.
-                constexpr VkAccessFlags2 kWriteFlags =
-                        VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT |
-                        VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT |
-                        VK_ACCESS_2_TRANSFER_WRITE_BIT |
-                        VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT;
-
-                const bool layout_change = state.current_layout != resolved.layout;
+                const bool layout_change = resource_type == RGResourceType::Image
+                                           && state.current_layout != resolved.layout;
                 const bool prev_wrote = (state.last_access & kWriteFlags) != 0;
                 const bool current_writes = (resolved.access & kWriteFlags) != 0;
-                // RAW / WAW: previous access included a write
-                // WAR: current access includes a write and resource was previously accessed
+                // RAW / WAW: previous access included a write.
+                // WAR: current access includes a write and resource was previously accessed.
                 const bool has_hazard = prev_wrote
                                         || (current_writes && state.last_access != VK_ACCESS_2_NONE);
 
                 if (layout_change || has_hazard) {
                     compiled.barriers.push_back({
                         .resource_index = res_idx,
+                        .resource_type = resource_type,
                         .old_layout = state.current_layout,
                         .new_layout = resolved.layout,
                         .src_stage = state.last_stage,
@@ -501,9 +553,10 @@ namespace himalaya::framework {
                 continue;
             }
             // ReSharper disable once CppUseStructuredBinding
-            if (const auto &state = image_states[i]; state.current_layout != resources_[i].final_layout) {
+            if (const auto &state = resource_states[i]; state.current_layout != resources_[i].final_layout) {
                 final_barriers_.push_back({
                     .resource_index = i,
+                    .resource_type = RGResourceType::Image,
                     .old_layout = state.current_layout,
                     .new_layout = resources_[i].final_layout,
                     .src_stage = state.last_stage,
@@ -539,12 +592,17 @@ namespace himalaya::framework {
             return;
         }
 
-        // Build VkImageMemoryBarrier2 array
+        // Build VkImageMemoryBarrier2 array.
+        // Buffer barriers are compiled in compile() and emitted in the follow-up Step 0 task.
         std::vector<VkImageMemoryBarrier2> vk_barriers;
         vk_barriers.reserve(barriers.size());
 
         // ReSharper disable once CppUseStructuredBinding
         for (const auto &b: barriers) {
+            if (b.resource_type != RGResourceType::Image) {
+                continue;
+            }
+
             const auto &res = resources_[b.resource_index];
             const auto &image = resource_manager_->get_image(res.image_handle);
 
@@ -567,6 +625,10 @@ namespace himalaya::framework {
                 VK_REMAINING_ARRAY_LAYERS
             };
             vk_barriers.push_back(barrier);
+        }
+
+        if (vk_barriers.empty()) {
+            return;
         }
 
         VkDependencyInfo dep_info{};

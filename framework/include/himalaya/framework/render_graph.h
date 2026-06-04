@@ -152,6 +152,7 @@ namespace himalaya::framework {
         DepthAttachment,
         Transfer,
         RayTracing,
+        DrawIndirect,
     };
 
     /**
@@ -413,11 +414,12 @@ namespace himalaya::framework {
             std::function<void(rhi::CommandBuffer &)> execute;
         };
 
-        /** @brief A compiled image barrier to insert during execute(). */
+        /** @brief A compiled resource barrier to insert during execute(). */
         struct CompiledBarrier {
             uint32_t resource_index; ///< Index into resources_.
-            VkImageLayout old_layout;
-            VkImageLayout new_layout;
+            RGResourceType resource_type; ///< Whether this barrier targets an image or buffer.
+            VkImageLayout old_layout; ///< Image only; ignored for buffers.
+            VkImageLayout new_layout; ///< Image only; ignored for buffers.
             VkPipelineStageFlags2 src_stage;
             VkAccessFlags2 src_access;
             VkPipelineStageFlags2 dst_stage;
@@ -431,17 +433,24 @@ namespace himalaya::framework {
 
         /** @brief Resolved Vulkan parameters for a resource usage. */
         struct ResolvedUsage {
-            VkImageLayout layout;
+            VkImageLayout layout; ///< Image layout; ignored for buffers.
             VkPipelineStageFlags2 stage;
             VkAccessFlags2 access;
         };
 
         /**
-         * @brief Maps (RGAccessType, RGStage) to Vulkan barrier parameters.
+         * @brief Maps image (RGAccessType, RGStage) to Vulkan barrier parameters.
          *
          * Implemented on-demand: asserts for unhandled combinations.
          */
-        static ResolvedUsage resolve_usage(RGAccessType access, RGStage stage);
+        static ResolvedUsage resolve_image_usage(RGAccessType access, RGStage stage);
+
+        /**
+         * @brief Maps buffer (RGAccessType, RGStage) to Vulkan barrier parameters.
+         *
+         * Implemented on-demand: asserts for unhandled combinations.
+         */
+        static ResolvedUsage resolve_buffer_usage(RGAccessType access, RGStage stage);
 
         /**
          * @brief Emits VkImageMemoryBarrier2 commands for a list of compiled barriers.
