@@ -1,0 +1,10 @@
+{
+  "$schema": "https://raw.githubusercontent.com/gotgenes/pi-permission-system/main/schemas/permissions.schema.json",
+  "permission": {
+    "edit": "allow",
+    "write": "allow",
+    "bash": {
+      "scripts/sync-shaders.sh": "allow"
+    }
+  }
+}
