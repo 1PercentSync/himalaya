@@ -18,7 +18,7 @@
 ## Step 1:GS 数据契约与加载校验
 
 - [x] 定义 scene-level GS GPU resource（splat 总数、`sort_capacity`、static/work buffer handles、scene metadata、CPU per-primitive ranges）
-- [ ] 定义 CPU/shader 共享 GPU layouts（projected data、sort entry、indirect command 固定字段、std430/vec4 packing 约定）
+- [x] 定义 CPU/shader 共享 GPU layouts（projected data、sort entry、indirect command 固定字段、std430/vec4 packing 约定）
 - [ ] 实现 glTF 直接加载数值校验（opacity finite [0,1]、SCALE finite >= 0、ROTATION finite unit quaternion）
 - [ ] 实现 primitive metadata 一致性校验与 global primitive range 记录（`kernel=ellipse`、`projection=perspective`、`sortingMethod=cameraDistance`、`colorSpace` 一致）
 - [ ] 请求用户在 CLion 中编译验证
