@@ -14,6 +14,7 @@
 #include <nlohmann/json.hpp>
 #include <spdlog/spdlog.h>
 
+#include <cmath>
 #include <cstddef>
 #include <cstring>
 #include <fstream>
@@ -26,6 +27,66 @@ namespace himalaya::app::gaussian_splat_loader {
     namespace {
         constexpr uint32_t kGlbMagic = 0x46546C67;
         constexpr uint32_t kGlbJsonChunkType = 0x4E4F534A;
+        constexpr float kUnitQuaternionTolerance = 1.0e-3f;
+
+        /** @brief Returns true when every component is finite. */
+        bool is_finite_vec3(const glm::vec3 &value) {
+            return std::isfinite(value.x) && std::isfinite(value.y) && std::isfinite(value.z);
+        }
+
+        /** @brief Returns true when every component is finite. */
+        bool is_finite_vec4(const glm::vec4 &value) {
+            return std::isfinite(value.x) && std::isfinite(value.y)
+                   && std::isfinite(value.z) && std::isfinite(value.w);
+        }
+
+        /**
+         * @brief Validates a KHR_gaussian_splatting SCALE value.
+         *
+         * KHR SCALE stores Gaussian sigma along local principal axes. Negative or
+         * non-finite values are invalid and must not be clamped or fixed silently.
+         */
+        void validate_scale(const glm::vec3 &scale, const size_t index) {
+            if (!is_finite_vec3(scale) || scale.x < 0.0f || scale.y < 0.0f || scale.z < 0.0f) {
+                throw std::runtime_error("Invalid SCALE at splat " + std::to_string(index)
+                                         + ": expected finite non-negative VEC3");
+            }
+        }
+
+        /**
+         * @brief Validates a KHR_gaussian_splatting ROTATION value.
+         *
+         * ROTATION is stored as a unit quaternion in glTF xyzw order. Invalid
+         * quaternions are rejected instead of being normalized silently.
+         */
+        void validate_rotation(const glm::vec4 &rotation, const size_t index) {
+            if (!is_finite_vec4(rotation)) {
+                throw std::runtime_error("Invalid ROTATION at splat " + std::to_string(index)
+                                         + ": expected finite unit quaternion");
+            }
+
+            const float length_sq = rotation.x * rotation.x
+                                    + rotation.y * rotation.y
+                                    + rotation.z * rotation.z
+                                    + rotation.w * rotation.w;
+            if (!std::isfinite(length_sq) || std::abs(length_sq - 1.0f) > kUnitQuaternionTolerance) {
+                throw std::runtime_error("Invalid ROTATION at splat " + std::to_string(index)
+                                         + ": expected finite unit quaternion");
+            }
+        }
+
+        /**
+         * @brief Validates a KHR_gaussian_splatting OPACITY value.
+         *
+         * OPACITY is a normalized linear value. Out-of-range or non-finite values
+         * are invalid and must not be clamped silently.
+         */
+        void validate_opacity(const float opacity, const size_t index) {
+            if (!std::isfinite(opacity) || opacity < 0.0f || opacity > 1.0f) {
+                throw std::runtime_error("Invalid OPACITY at splat " + std::to_string(index)
+                                         + ": expected finite value in [0, 1]");
+            }
+        }
 
         // ---- JSON extraction ----
 
@@ -488,7 +549,9 @@ namespace himalaya::app::gaussian_splat_loader {
 
                 size_t i = 0;
                 for (auto v : fastgltf::iterateAccessor<fastgltf::math::fvec4>(gltf, accessor)) {
-                    prim.rotations[i] = {v.x(), v.y(), v.z(), v.w()};
+                    const glm::vec4 rotation{v.x(), v.y(), v.z(), v.w()};
+                    validate_rotation(rotation, i);
+                    prim.rotations[i] = rotation;
                     ++i;
                 }
             }
@@ -496,6 +559,9 @@ namespace himalaya::app::gaussian_splat_loader {
             // SCALE (required, VEC3)
             read_vec3_attribute(gltf, primitive, "KHR_gaussian_splatting:SCALE",
                                 prim.scales, splat_count);
+            for (size_t i = 0; i < prim.scales.size(); ++i) {
+                validate_scale(prim.scales[i], i);
+            }
 
             // OPACITY (required, SCALAR)
             {
@@ -516,6 +582,7 @@ namespace himalaya::app::gaussian_splat_loader {
 
                 size_t i = 0;
                 for (auto v : fastgltf::iterateAccessor<float>(gltf, accessor)) {
+                    validate_opacity(v, i);
                     prim.opacities[i] = v;
                     ++i;
                 }
