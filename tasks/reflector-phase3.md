@@ -9,7 +9,7 @@
 
 ## Step 0:RenderGraph buffer barriers
 
-- [ ] 扩展 RenderGraph buffer resource usage tracking（记录 per-buffer last stage/access,不再在 compile 阶段跳过 buffer resource）
+- [x] 扩展 RenderGraph buffer resource usage tracking（记录 per-buffer last stage/access,不再在 compile 阶段跳过 buffer resource）
 - [ ] 实现 buffer barrier emission（生成 `VkBufferMemoryBarrier2`,并与现有 image barriers 合并到 `VkDependencyInfo`）
 - [ ] 补齐 Phase 3.0 所需 buffer usage 映射（Transfer read/write、Compute SSBO read/write、Vertex/Fragment SSBO read、DrawIndirect read）
 - [ ] 检查 RG 生成的 buffer barrier 链路覆盖 GS 依赖（reset→cull/project、cull/project→sort、sort/projected data→graphics、indirect write→draw indirect）

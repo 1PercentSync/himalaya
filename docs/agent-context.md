@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的渲染器
 - **分支**：`reflector` — Path Tracing + Gaussian Splatting
 - **Phase**：Phase 3.0 — Gaussian Splatting 基础渲染
-- **进度**：Phase 3.0 决策全部完成，文档边界已整理，待开始实现
+- **进度**：Phase 3.0 Step 0 第一小项完成：RenderGraph compile 阶段已跟踪 buffer resource hazard，待实现 buffer barrier emission
 
 ### 下一个任务
 
-Phase 3.0 Step 0 实现
+Phase 3.0 Step 0 第二小项：实现 buffer barrier emission（生成 `VkBufferMemoryBarrier2`，并与现有 image barriers 合并到 `VkDependencyInfo`）
 
 ---
 
