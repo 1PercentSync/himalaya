@@ -65,17 +65,34 @@ namespace himalaya::framework {
     // ---- GPU Data Layouts ----
     // Must match shader-side std430 layouts exactly.
 
+    /** @brief Maximum SH degree supported by KHR_gaussian_splatting base attributes. */
+    inline constexpr uint32_t kGaussianSplatMaxShDegree = 3;
+
     /** @brief Number of RGB SH coefficients defined by KHR degree 0-3. */
-    inline constexpr uint32_t kGaussianSplatShCoefficientCount = 16;
+    inline constexpr uint32_t kGaussianSplatMaxShCoefficientCount = 16;
 
-    /** @brief Number of scalar RGB values stored per splat in the packed SH buffer. */
-    inline constexpr uint32_t kGaussianSplatShScalarCount = kGaussianSplatShCoefficientCount * 3;
+    /** @brief Number of scalar RGB values needed for KHR degree 0-3. */
+    inline constexpr uint32_t kGaussianSplatMaxShScalarCount = kGaussianSplatMaxShCoefficientCount * 3;
 
-    /** @brief Number of vec4 elements reserved per splat in the packed SH buffer. */
-    inline constexpr uint32_t kGaussianSplatShPackedVec4Stride = kGaussianSplatShScalarCount / 4;
+    /** @brief Returns the number of RGB SH coefficients for a given supported degree. */
+    constexpr uint32_t gaussian_splat_sh_coefficient_count(const uint32_t max_sh_degree) {
+        return (max_sh_degree + 1) * (max_sh_degree + 1);
+    }
 
-    static_assert(kGaussianSplatShScalarCount % 4 == 0,
-                  "Packed SH scalar count must fit an integral number of vec4 elements");
+    /** @brief Returns the number of packed vec4 elements per splat for a given supported degree. */
+    constexpr uint32_t gaussian_splat_sh_packed_vec4_stride(const uint32_t max_sh_degree) {
+        const uint32_t scalar_count = gaussian_splat_sh_coefficient_count(max_sh_degree) * 3;
+        return (scalar_count + 3) / 4;
+    }
+
+    static_assert(gaussian_splat_sh_packed_vec4_stride(0) == 1,
+                  "SH degree 0 must pack into one vec4");
+    static_assert(gaussian_splat_sh_packed_vec4_stride(1) == 3,
+                  "SH degree 1 must pack into three vec4 elements");
+    static_assert(gaussian_splat_sh_packed_vec4_stride(2) == 7,
+                  "SH degree 2 must pack into seven vec4 elements");
+    static_assert(gaussian_splat_sh_packed_vec4_stride(3) == 12,
+                  "SH degree 3 must pack into twelve vec4 elements");
 
     /**
      * @brief Static baked world position and cull radius for one splat.
@@ -299,6 +316,9 @@ namespace himalaya::framework {
 
         /** @brief Power-of-two sort capacity derived from total_splat_count. */
         uint32_t sort_capacity = 0;
+
+        /** @brief Packed vec4 stride per splat in static_buffers.sh_coefficients_buffer. */
+        uint32_t sh_packed_vec4_stride = 0;
 
         /** @brief Static baked buffers read by GS passes. */
         GaussianSplatStaticBuffers static_buffers{};

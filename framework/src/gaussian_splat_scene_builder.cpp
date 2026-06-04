@@ -298,7 +298,7 @@ namespace himalaya::framework {
         }
 
         /** @brief Validates and appends one RGB SH coefficient to a dense scalar array. */
-        void write_sh_coefficient(std::array<float, kGaussianSplatShScalarCount> &scalars,
+        void write_sh_coefficient(std::array<float, kGaussianSplatMaxShScalarCount> &scalars,
                                   const uint32_t coefficient_index,
                                   const glm::vec3 &coefficient,
                                   const size_t primitive_index,
@@ -317,10 +317,11 @@ namespace himalaya::framework {
 
         /** @brief Packs one splat's KHR degree 0-3 SH RGB coefficients into 12 vec4 elements. */
         void bake_sh_coefficients(const GaussianSplatPrimitive &primitive,
+                                  const uint32_t sh_packed_vec4_stride,
                                   const size_t primitive_index,
                                   const size_t splat_index,
                                   std::vector<glm::vec4> &out) {
-            std::array<float, kGaussianSplatShScalarCount> scalars{};
+            std::array<float, kGaussianSplatMaxShScalarCount> scalars{};
 
             uint32_t coefficient_index = 0;
             write_sh_coefficient(scalars, coefficient_index++, primitive.sh_coefs_0[splat_index],
@@ -345,7 +346,7 @@ namespace himalaya::framework {
                 }
             }
 
-            for (uint32_t i = 0; i < kGaussianSplatShPackedVec4Stride; ++i) {
+            for (uint32_t i = 0; i < sh_packed_vec4_stride; ++i) {
                 const uint32_t base = i * 4;
                 out.push_back(glm::vec4(
                     scalars[base + 0],
@@ -443,20 +444,25 @@ namespace himalaya::framework {
                 throw std::runtime_error("GS scene contains no splats");
             }
 
+            if (scene.metadata.max_sh_degree > kGaussianSplatMaxShDegree) {
+                throw std::runtime_error("GS scene has unsupported SH degree");
+            }
+
             gpu_scene_.total_splat_count = scene.total_splat_count;
             gpu_scene_.sort_capacity = next_power_of_two(scene.total_splat_count);
+            gpu_scene_.sh_packed_vec4_stride = gaussian_splat_sh_packed_vec4_stride(scene.metadata.max_sh_degree);
             gpu_scene_.metadata = scene.metadata;
 
             baked_position_radius_.reserve(scene.total_splat_count);
             baked_covariance_opacity_.reserve(scene.total_splat_count);
             baked_sh_coefficients_.reserve(static_cast<size_t>(scene.total_splat_count)
-                                           * kGaussianSplatShPackedVec4Stride);
+                                           * gpu_scene_.sh_packed_vec4_stride);
 
             for (size_t primitive_index = 0; primitive_index < scene.primitives.size(); ++primitive_index) {
                 const auto &primitive = scene.primitives[primitive_index];
                 const auto node_transform = validate_node_transform(primitive.transform, primitive_index);
 
-                if (primitive.max_sh_degree > 3) {
+                if (primitive.max_sh_degree > kGaussianSplatMaxShDegree) {
                     throw std::runtime_error("GS primitive " + std::to_string(primitive_index)
                                              + " has unsupported SH degree");
                 }
@@ -503,14 +509,18 @@ namespace himalaya::framework {
                     baked_position_radius_.push_back({
                         .position_radius = glm::vec4(world_position, world_radius_3sigma),
                     });
-                    bake_sh_coefficients(primitive, primitive_index, splat_index, baked_sh_coefficients_);
+                    bake_sh_coefficients(primitive,
+                                         gpu_scene_.sh_packed_vec4_stride,
+                                         primitive_index,
+                                         splat_index,
+                                         baked_sh_coefficients_);
                 }
             }
 
             if (baked_position_radius_.size() != scene.total_splat_count
                 || baked_covariance_opacity_.size() != scene.total_splat_count
                 || baked_sh_coefficients_.size() != static_cast<size_t>(scene.total_splat_count)
-                                                  * kGaussianSplatShPackedVec4Stride) {
+                                                  * gpu_scene_.sh_packed_vec4_stride) {
                 throw std::runtime_error("GS baked static attribute count does not match total_splat_count");
             }
 
