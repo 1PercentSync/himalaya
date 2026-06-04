@@ -453,7 +453,7 @@ namespace himalaya::framework {
         static ResolvedUsage resolve_buffer_usage(RGAccessType access, RGStage stage);
 
         /**
-         * @brief Emits VkImageMemoryBarrier2 commands for a list of compiled barriers.
+         * @brief Emits Vulkan image and buffer memory barriers for a list of compiled barriers.
          */
         void emit_barriers(const rhi::CommandBuffer &cmd, std::span<const CompiledBarrier> barriers) const;
 

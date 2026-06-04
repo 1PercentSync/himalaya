@@ -592,49 +592,65 @@ namespace himalaya::framework {
             return;
         }
 
-        // Build VkImageMemoryBarrier2 array.
-        // Buffer barriers are compiled in compile() and emitted in the follow-up Step 0 task.
-        std::vector<VkImageMemoryBarrier2> vk_barriers;
-        vk_barriers.reserve(barriers.size());
+        // Build image and buffer barrier arrays, then submit them together through one dependency info.
+        std::vector<VkImageMemoryBarrier2> image_barriers;
+        std::vector<VkBufferMemoryBarrier2> buffer_barriers;
+        image_barriers.reserve(barriers.size());
+        buffer_barriers.reserve(barriers.size());
 
         // ReSharper disable once CppUseStructuredBinding
         for (const auto &b: barriers) {
-            if (b.resource_type != RGResourceType::Image) {
-                continue;
-            }
-
             const auto &res = resources_[b.resource_index];
-            const auto &image = resource_manager_->get_image(res.image_handle);
+            if (b.resource_type == RGResourceType::Image) {
+                const auto &image = resource_manager_->get_image(res.image_handle);
 
-            const VkImageAspectFlags aspect = rhi::aspect_from_format(image.desc.format);
+                const VkImageAspectFlags aspect = rhi::aspect_from_format(image.desc.format);
 
-            VkImageMemoryBarrier2 barrier{};
-            barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-            barrier.srcStageMask = b.src_stage;
-            barrier.srcAccessMask = b.src_access;
-            barrier.dstStageMask = b.dst_stage;
-            barrier.dstAccessMask = b.dst_access;
-            barrier.oldLayout = b.old_layout;
-            barrier.newLayout = b.new_layout;
-            barrier.image = image.image;
-            barrier.subresourceRange = {
-                aspect,
-                0,
-                VK_REMAINING_MIP_LEVELS,
-                0,
-                VK_REMAINING_ARRAY_LAYERS
-            };
-            vk_barriers.push_back(barrier);
+                VkImageMemoryBarrier2 barrier{};
+                barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+                barrier.srcStageMask = b.src_stage;
+                barrier.srcAccessMask = b.src_access;
+                barrier.dstStageMask = b.dst_stage;
+                barrier.dstAccessMask = b.dst_access;
+                barrier.oldLayout = b.old_layout;
+                barrier.newLayout = b.new_layout;
+                barrier.image = image.image;
+                barrier.subresourceRange = {
+                    aspect,
+                    0,
+                    VK_REMAINING_MIP_LEVELS,
+                    0,
+                    VK_REMAINING_ARRAY_LAYERS
+                };
+                image_barriers.push_back(barrier);
+            } else {
+                const auto &buffer = resource_manager_->get_buffer(res.buffer_handle);
+
+                VkBufferMemoryBarrier2 barrier{};
+                barrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2;
+                barrier.srcStageMask = b.src_stage;
+                barrier.srcAccessMask = b.src_access;
+                barrier.dstStageMask = b.dst_stage;
+                barrier.dstAccessMask = b.dst_access;
+                barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+                barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+                barrier.buffer = buffer.buffer;
+                barrier.offset = 0;
+                barrier.size = VK_WHOLE_SIZE;
+                buffer_barriers.push_back(barrier);
+            }
         }
 
-        if (vk_barriers.empty()) {
+        if (image_barriers.empty() && buffer_barriers.empty()) {
             return;
         }
 
         VkDependencyInfo dep_info{};
         dep_info.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-        dep_info.imageMemoryBarrierCount = static_cast<uint32_t>(vk_barriers.size());
-        dep_info.pImageMemoryBarriers = vk_barriers.data();
+        dep_info.imageMemoryBarrierCount = static_cast<uint32_t>(image_barriers.size());
+        dep_info.pImageMemoryBarriers = image_barriers.data();
+        dep_info.bufferMemoryBarrierCount = static_cast<uint32_t>(buffer_barriers.size());
+        dep_info.pBufferMemoryBarriers = buffer_barriers.data();
 
         cmd.pipeline_barrier(dep_info);
     }
