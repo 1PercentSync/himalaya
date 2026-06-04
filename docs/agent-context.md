@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的渲染器
 - **分支**：`reflector` — Path Tracing + Gaussian Splatting
 - **Phase**：Phase 3.0 — Gaussian Splatting 基础渲染
-- **进度**：Phase 3.0 Step 2 第四小项完成：无实际消费的 primitive range contract 已清理，CPU/GPU scene contract 不再保留 per-primitive ranges
+- **进度**：Phase 3.0 Step 2 第五小项完成：SH upload happy path 已完成，degree 0 可允许 node rotation，degree 1-3 遇到非 identity node rotation 会拒绝 scene
 
 ### 下一个任务
 
-Phase 3.0 Step 2 第五小项：实现 SH upload happy path（identity/no-rotation transform 直接上传；degree 0 可允许 node rotation；degree 1-3 需要 SH rotation 时暂时报错并回退空 GS scene）
+Phase 3.0 Step 2 第六小项：创建并上传 static baked packed SoA storage buffers（`position_radius`、`covariance_opacity`、`sh_coefficients`）
 
 ---
 
