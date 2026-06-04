@@ -44,6 +44,8 @@ Sort entry 物理存储为 2×32-bit：`distance_key + global_splat_index`。`di
 
 GS 使用自己的持久 Set 3 descriptor set 绑定 static baked buffers 和 GPU work buffers。该 Set 3 与现有 PT / compute pass 的 Set 3 push descriptor layout 只共享 set index，不共享 layout 或语义。
 
+GS scene GPU resources 必须有集中 owner：由 Renderer 持有的 GS scene resource owner 负责 static/work buffers 的创建、上传、销毁以及持久 Set 3 descriptor 写入/重写。GS pass 类只负责 pipeline、RenderGraph resource declaration 和命令录制，不拥有 scene static/work buffers，也不直接管理持久 Set 3 生命周期。
+
 容量由当前 GS scene 派生并随场景重建，不设置固定 splat 上限，也不在容量不足时静默截断。
 
 ### Subgroup 使用

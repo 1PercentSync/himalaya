@@ -50,6 +50,8 @@ Phase 2 已完成 GS 数据管线（PLY → glTF 转换 + GS glTF 加载）和 C
 
 本 Step 固定 CPU/GPU 数据边界，避免后续 shader 与 C++ 结构反复变动。
 
+资源组织必须遵循已有项目模式：GS CPU 数据、GPU shader layout 和 scene-level GPU resource contract 可以集中放在 GS 数据契约文件中；真正的 GPU 资源创建、上传、销毁、descriptor 写入必须集中在 Renderer 持有的 GS scene resource owner 中。各 GS pass 只负责 pipeline、RG resource declaration 和命令录制，不得分散创建/销毁 static/work scene buffers，也不得绕过该 owner 重写持久 GS Set 3。viewport-sized composition / linear targets 仍按现有 RenderGraph managed image / Renderer resize 生命周期管理。
+
 - Scene-level GS GPU resource 需要记录 `total_splat_count`、`sort_capacity`、static/work buffer handles、CPU per-primitive ranges 和 scene metadata。
 - `sort_capacity = next_power_of_two(total_splat_count)`；这是由当前 scene 派生的容量，不是固定上限。容量不足时报错，不静默截断。
 - Static baked buffers 以 SoA 组织，至少包含 world position、world covariance、world 3σ cull radius、opacity、SH coefficients。
@@ -205,6 +207,8 @@ Step 9 在硬件光栅 correctness baseline 建立后执行，用于补齐 Phase
 
 ### GPU buffers、索引与生命周期
 
+- GS scene GPU resources 必须集中由 Renderer 持有的 GS scene resource owner 管理；数据契约 struct 只记录 handles / counts / metadata，不负责创建或销毁资源。
+- GS passes 只拥有 pipeline / shader 等 pass-local 对象，并通过 RenderGraph 声明资源读写；不得各自长期持有或重建 scene static/work buffers。
 - GS 使用独立持久 Set 3 descriptor set，不与现有 PT / compute push descriptor Set 3 混用。
 - Work buffer capacity 由当前 scene `total_splat_count` 派生；`sort_capacity = next_power_of_two(total_splat_count)`。容量不是固定渲染器上限，不允许静默截断。
 - Projected data 按 global splat index dense 存储；sort entry payload 也存 global splat index。
