@@ -98,6 +98,7 @@ Phase 3.0 使用 per-channel hard clamp 作为 KHR 允许的 clamped output。�
 - SH evaluation 从 cull/project shader 中拆为独立 post-cull compute pass。
 - 多级剔除：sub-pixel 半径、低 opacity、异常大投影等。
 - GPU buffer 热 / 冷 / 暖分离。
+- 排序带宽优化：评估将适合 in-place compare-and-swap 的排序阶段改为单 primary sort entry buffer 路径，减少 primary/scratch ping-pong 读写带宽；不改变 sort entry 物理格式和最终 draw range 语义。
 - 距离自适应 SH 截断：远处 splat 只计算低阶 SH。
 
 **优先级**：SH 求值分离 > 多级剔除 > buffer 分层 > 距离自适应 SH 截断。
