@@ -213,6 +213,7 @@ namespace himalaya::app {
     }
 
     void Renderer::destroy() {
+        gaussian_splat_scene_builder_.destroy();
         emissive_light_builder_.destroy();
         scene_as_builder_.destroy();
         as_manager_.destroy();
@@ -309,6 +310,17 @@ namespace himalaya::app {
         scene_as_builder_.destroy();
         emissive_light_builder_.destroy();
         reference_view_pass_.set_emissive_light_count(0);
+    }
+
+    // ---- GS scene data ----
+
+    bool Renderer::build_gaussian_splat_scene(const framework::GaussianSplatScene &scene,
+                                              std::string &error_message) {
+        return gaussian_splat_scene_builder_.build(scene, error_message);
+    }
+
+    void Renderer::destroy_gaussian_splat_scene() {
+        gaussian_splat_scene_builder_.destroy();
     }
 
     // ---- Environment reload ----

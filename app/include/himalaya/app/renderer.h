@@ -11,6 +11,7 @@
 #include <himalaya/framework/material_system.h>
 #include <himalaya/framework/render_graph.h>
 #include <himalaya/framework/emissive_light_builder.h>
+#include <himalaya/framework/gaussian_splat_scene_builder.h>
 #include <himalaya/framework/scene_as_builder.h>
 #include <himalaya/framework/scene_data.h>
 #include <himalaya/framework/texture.h>
@@ -23,6 +24,7 @@
 #include <chrono>
 #include <cstdint>
 #include <span>
+#include <string>
 #include <vector>
 
 namespace himalaya::rhi {
@@ -152,6 +154,29 @@ namespace himalaya::app {
         void destroy_scene_rt();
 
         /**
+         * @brief Builds Gaussian Splatting GPU scene data from loaded CPU scene data.
+         *
+         * Current Step 2 scope validates node transforms and bakes world positions.
+         * Later GS tasks extend the same builder path with covariance, SH, buffer
+         * upload, and descriptor writes. On failure the renderer destroys any
+         * previous GS scene data so the application falls back to an empty GS scene.
+         *
+         * @param scene CPU-side Gaussian Splatting scene from GaussianSplatLoader.
+         * @param error_message Receives a human-readable failure reason.
+         * @return true on success, false if the GS scene was rejected as a whole.
+         */
+        bool build_gaussian_splat_scene(const framework::GaussianSplatScene &scene,
+                                        std::string &error_message);
+
+        /**
+         * @brief Destroys Gaussian Splatting scene data owned by the renderer.
+         *
+         * Called on GS scene switch failure and renderer shutdown. Safe to call
+         * when no GS scene has been built.
+         */
+        void destroy_gaussian_splat_scene();
+
+        /**
          * @brief Recompiles all shaders from disk and rebuilds every pipeline.
          *
          * Waits for GPU idle, then calls rebuild_pipelines() on each pass.
@@ -273,6 +298,9 @@ namespace himalaya::app {
 
         /** @brief Emissive face light builder (RT, builds emissive triangle + alias table SSBOs). */
         framework::EmissiveLightBuilder emissive_light_builder_{};
+
+        /** @brief Gaussian Splatting scene resource builder and owner. */
+        framework::GaussianSplatSceneBuilder gaussian_splat_scene_builder_{};
 
         /** @brief PT accumulation buffer (RGBA32F, Relative 1.0x, Storage); created when rt_supported. */
         framework::RGManagedHandle managed_pt_accumulation_;

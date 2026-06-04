@@ -15,6 +15,7 @@ target_sources(himalaya_framework PRIVATE
         src/mesh.cpp
         src/scene_as_builder.cpp
         src/emissive_light_builder.cpp
+        src/gaussian_splat_scene_builder.cpp
         src/render_graph.cpp
         src/stb_impl.cpp
         src/texture.cpp

@@ -185,6 +185,9 @@ namespace himalaya::app {
     }
 
     void Application::switch_gs_scene(const std::string &path) {
+        vkQueueWaitIdle(context_.graphics_queue);
+
+        renderer_.destroy_gaussian_splat_scene();
         gs_scene_.reset();
         camera_controller_.set_focus_target(&scene_loader_.scene_bounds());
 
@@ -242,14 +245,22 @@ namespace himalaya::app {
                 spdlog::error("Failed to load GS scene: {}", path);
                 error_message_ = "Failed to load GS scene: " + path;
             } else {
-                error_message_.clear();
-                gs_scene_ = std::move(result);
-                spdlog::info("Loaded GS scene: {} ({} primitives)",
-                             path, gs_scene_->primitives.size());
+                std::string build_error;
+                if (!renderer_.build_gaussian_splat_scene(*result, build_error)) {
+                    spdlog::error("Failed to build GS scene: {}: {}", path, build_error);
+                    renderer_.destroy_gaussian_splat_scene();
+                    gs_scene_.reset();
+                    error_message_ = "Failed to build GS scene: " + build_error;
+                } else {
+                    error_message_.clear();
+                    gs_scene_ = std::move(result);
+                    spdlog::info("Loaded GS scene: {} ({} primitives)",
+                                 path, gs_scene_->primitives.size());
 
-                if (!pt_mode_) {
-                    auto_position_camera(gs_scene_->scene_bounds);
-                    camera_controller_.set_focus_target(&gs_scene_->scene_bounds);
+                    if (!pt_mode_) {
+                        auto_position_camera(gs_scene_->scene_bounds);
+                        camera_controller_.set_focus_target(&gs_scene_->scene_bounds);
+                    }
                 }
             }
         }
