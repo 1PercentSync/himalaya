@@ -17,10 +17,10 @@
 
 ## Step 1:GS 数据契约与加载校验
 
-- [x] 定义 scene-level GS GPU resource（splat 总数、`sort_capacity`、static/work buffer handles、scene metadata、CPU per-primitive ranges）
+- [x] 定义 scene-level GS GPU resource（splat 总数、`sort_capacity`、static/work buffer handles、scene metadata、CPU per-primitive ranges；Step 2 将清理无实际消费的 range 字段）
 - [x] 定义 CPU/shader 共享 GPU layouts（projected data、sort entry、indirect command 固定字段、std430/vec4 packing 约定）
 - [x] 实现 glTF 直接加载数值校验（opacity finite [0,1]、SCALE finite >= 0、ROTATION finite unit quaternion）
-- [x] 实现 primitive metadata 一致性校验与 global primitive range 记录（`kernel=ellipse`、`projection=perspective`、`sortingMethod=cameraDistance`、`colorSpace` 一致）
+- [x] 实现 primitive metadata 一致性校验与 global primitive range 记录（`kernel=ellipse`、`projection=perspective`、`sortingMethod=cameraDistance`、`colorSpace` 一致；Step 2 将清理无实际消费的 range 字段）
 - [x] 请求用户在 CLion 中编译验证
 
 ## Step 2:Upload-time bake 与 static buffers
@@ -28,6 +28,7 @@
 - [x] 修正 GS static baked buffer 契约为 packed SoA layout（`position_radius`、`covariance_opacity`、`sh_coefficients`，替换 Step 1 的分离 radius/opacity handles）
 - [x] 实现 node transform 合法性检查与 position baking（regular/proper/positive transform；local position → world space）
 - [ ] 实现 covariance baking 与 cull radius 预计算（`Σ_local`、`Σ_world`、6-float symmetric covariance、`world_radius_3sigma`）
+- [ ] 清理无实际消费的 primitive range contract（移除 `GaussianSplatPrimitiveRange`、scene/gpu `primitive_ranges`、loader range recording，并同步验证项）
 - [ ] 实现 SH upload happy path（identity/no-rotation transform 直接上传；degree 0 可允许 node rotation；degree 1-3 需要 SH rotation 时暂时报错并回退空 GS scene）
 - [ ] 创建并上传 static baked packed SoA storage buffers（`position_radius`、`covariance_opacity`、`sh_coefficients`）
 - [ ] 请求用户在 CLion 中编译验证
@@ -75,7 +76,7 @@
 ## Step 8:Phase 3.0 correctness validation
 
 - [ ] 验证 happy path scene 能正确渲染（ellipse + perspective + cameraDistance + consistent metadata + identity/no-rotation transform）
-- [ ] 验证 multi-primitive global buffer 拼接与 per-primitive range 保留正确
+- [ ] 验证 multi-primitive global buffer 拼接正确（不保留无实际消费的 per-primitive range contract）
 - [ ] 验证 colorSpace 输出路径（`srgb_rec709_display` conversion 与 `lin_rec709_display` bypass）
 - [ ] 验证核心渲染正确性（投影中心、3σ OBB、front-to-back sorting、premultiplied-under blend、Tonemapping bypass）
 - [ ] 验证生命周期与异常路径（resize、`visible_count = 0`、非法 asset rejection、reload/resize descriptor safety）

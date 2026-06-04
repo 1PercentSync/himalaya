@@ -52,7 +52,7 @@ Phase 2 已完成 GS 数据管线（PLY → glTF 转换 + GS glTF 加载）和 C
 
 资源组织必须遵循已有项目模式：GS CPU 数据、GPU shader layout 和 scene-level GPU resource contract 可以集中放在 GS 数据契约文件中；真正的 GPU 资源创建、上传、销毁、descriptor 写入必须集中在 Renderer 持有的 GS scene resource owner 中。各 GS pass 只负责 pipeline、RG resource declaration 和命令录制，不得分散创建/销毁 static/work scene buffers，也不得绕过该 owner 重写持久 GS Set 3。viewport-sized composition / linear targets 仍按现有 RenderGraph managed image / Renderer resize 生命周期管理。
 
-- Scene-level GS GPU resource 需要记录 `total_splat_count`、`sort_capacity`、static/work buffer handles、CPU per-primitive ranges 和 scene metadata。
+- Scene-level GS GPU resource 需要记录 `total_splat_count`、`sort_capacity`、static/work buffer handles 和 scene metadata；不保留无实际消费的 per-primitive range contract。
 - `sort_capacity = next_power_of_two(total_splat_count)`；这是由当前 scene 派生的容量，不是固定上限。容量不足时报错，不静默截断。
 - Static baked buffers 以 SoA 组织，逻辑属性至少包含 world position、world covariance、world 3σ cull radius、opacity、SH coefficients；物理布局采用大数据量友好的 packed buffers：`position_radius`（vec4：xyz = world position，w = radius）、`covariance_opacity`（2×vec4：xx/xy/xz/yy、yz/zz/opacity/unused）和 `sh_coefficients`（KHR degree 0-3 的 16 个 RGB coefficient 密集打包为 12 个 vec4）。
 - Projected data 按 global splat index dense 存储，逻辑字段为：
@@ -84,7 +84,7 @@ rgb                // SH-evaluated RGB in primitive colorSpace
   - GPU 存 symmetric 3×3 的 6 个 float。
 - `world_radius_3sigma = 3 * sqrt(max(lambda_max(Σ_world), 0))`，作为 world-space frustum sphere cull 半径；`lambda_max` 为 symmetric covariance 的最大特征值。该值在 upload-time 预计算，避免每帧 shader 重复求解。
 - SH upload 前期只支持不需要 Wigner-D 的 happy path：node proper rotation 近似 identity 时直接上传；node rotation 非 identity 但 scene/primitive `max_sh_degree == 0` 时允许直接上传；node rotation 非 identity 且存在 degree 1-3 SH 时必须报错并回退空 GS scene。完整 Wigner-D 放到 Step 9。
-- 多个 primitive 按顺序拼接成 global splat buffers；CPU 侧保留 per-primitive ranges / source primitive index / metadata 供 debug、报错和未来扩展使用。
+- 多个 primitive 按顺序拼接成 global splat buffers；Phase 3.0 不保留 per-primitive range contract，报错定位使用当前遍历的 primitive/local splat index，shader 仅依赖 global splat index。
 - GPU static buffers 不保留 raw rotation / scale 作为渲染必需数据；CPU 侧可保留用于 reload/debug/future rebake。GS GPU scene resource owner 仿照现有 PT 路径的 `SceneASBuilder` / `EmissiveLightBuilder` 模式：Loader 只产出 CPU scene，Renderer 持有 builder/owner，Application 只负责 scene switch orchestration 和 immediate scope。
 
 ### Step 3：GS descriptors、work buffers 与 reset
@@ -168,7 +168,7 @@ float power = -0.5 * mahalanobis;
 本 Step 是 Phase 3.0 baseline 的验收点，不以最终性能为目标。
 
 - Happy path：KHR ellipse kernel + perspective projection + cameraDistance sorting + scene-level consistent metadata + identity/no-rotation transform。
-- Multi-primitive 验证需要覆盖 global buffer 拼接、per-primitive range 保留和 shader 仅按 global splat index 访问。
+- Multi-primitive 验证需要覆盖 global buffer 拼接和 shader 仅按 global splat index 访问；不验证也不保留无实际消费的 per-primitive range contract。
 - ColorSpace 验证需要分别覆盖 `srgb_rec709_display` conversion 和 `lin_rec709_display` bypass；mixed colorSpace scene 应被拒绝。
 - 核心渲染正确性至少覆盖投影中心、3σ OBB、front-to-back sorting、premultiplied-under blend、Tonemapping bypass。
 - 生命周期与异常路径至少覆盖 resize、`visible_count = 0`、非法 asset rejection、reload/resize 后 descriptor 不指向已销毁资源。
@@ -201,7 +201,7 @@ Step 9 在硬件光栅 correctness baseline 建立后执行，用于补齐 Phase
 ### Primitive metadata 与场景一致性
 
 - 同一 GS scene 内所有 primitive metadata 必须一致：`kernel = ellipse`、`projection = perspective`、`sortingMethod = cameraDistance`、`colorSpace` 一致。
-- 多个 primitive 在 upload 时拼接为 global splat buffers，CPU 侧保留 per-primitive ranges / source primitive index / metadata。
+- 多个 primitive 在 upload 时拼接为 global splat buffers；CPU/GPU scene contract 不保留 per-primitive ranges，除非未来出现明确消费者。
 - Phase 3.0 shader 按 global splat index 访问 baked SoA buffers，不按 primitive metadata 分支。
 - GPU primitive metadata buffer 可选 / 预留，不作为 Phase 3.0 shader 依赖。
 
@@ -274,7 +274,7 @@ Step 9 在硬件光栅 correctness baseline 建立后执行，用于补齐 Phase
 ## 完成标准
 
 - Happy path：KHR ellipse kernel + perspective projection + cameraDistance sorting + scene-level consistent metadata + identity/no-rotation transform。
-- 支持单个或多个 GS primitive，primitive 拼接为 global splat buffers，并保留 CPU per-primitive ranges。
+- 支持单个或多个 GS primitive，primitive 拼接为 global splat buffers；不保留无实际消费的 CPU per-primitive ranges。
 - 支持 `srgb_rec709_display` 和 `lin_rec709_display` 二选一 scene；不支持 mixed colorSpace scene。
 - 以 1M splat 级别 correctness baseline 为目标，不以 10M 性能为 Phase 3.0 完成条件。
 - 必须验证：投影中心、3σ OBB、front-to-back 排序、premultiplied-under blend、color conversion、TonemappingPass GS bypass、resize、`visible_count = 0`、非法 asset rejection。
