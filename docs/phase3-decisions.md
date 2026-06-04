@@ -44,7 +44,9 @@ Sort entry 物理存储为 2×32-bit：`distance_key + global_splat_index`。`di
 
 GS 使用自己的持久 Set 3 descriptor set 绑定 static baked buffers 和 GPU work buffers。该 Set 3 与现有 PT / compute pass 的 Set 3 push descriptor layout 只共享 set index，不共享 layout 或语义。
 
-GS scene GPU resources 必须有集中 owner：由 Renderer 持有的 GS scene resource owner 负责 static/work buffers 的创建、上传、销毁以及持久 Set 3 descriptor 写入/重写。GS pass 类只负责 pipeline、RenderGraph resource declaration 和命令录制，不拥有 scene static/work buffers，也不直接管理持久 Set 3 生命周期。
+GS scene GPU resources 必须有集中 owner：由 Renderer 持有的 GS scene resource owner 负责 static/work buffers 的创建、上传、销毁以及持久 Set 3 descriptor 写入/重写。该 owner 按现有 PT 资源构建模式实现，职责类似 `SceneASBuilder` / `EmissiveLightBuilder`：Loader 只产出 CPU scene，Application 只编排加载、immediate scope 和失败回退。GS pass 类只负责 pipeline、RenderGraph resource declaration 和命令录制，不拥有 scene static/work buffers，也不直接管理持久 Set 3 生命周期。
+
+static scene data 的物理布局采用 packed SoA：world position 与 3σ radius 合并为 `position_radius`，world covariance 与 opacity 合并为 `covariance_opacity`，SH 使用 fixed 16×vec4 coefficient stride 覆盖 KHR base extension 的 degree 0-3。
 
 容量由当前 GS scene 派生并随场景重建，不设置固定 splat 上限，也不在容量不足时静默截断。
 
@@ -78,7 +80,7 @@ Phase 3.0 使用 per-channel hard clamp 作为 KHR 允许的 clamped output。�
 **技术**：
 
 - Upload-time bake：world position、world covariance、cull radius、SH happy path。
-- Per-attribute SoA GPU buffers，通过 GS 持久 Set 3 绑定。
+- Packed SoA GPU buffers，通过 GS 持久 Set 3 绑定：`position_radius`、`covariance_opacity`、`sh_coefficients`。
 - RenderGraph buffer barrier 扩展，支持 GS compute/sort/draw 的 buffer hazard。
 - Compute frustum cull + 2D projection + SH evaluation。
 - Bitonic sort correctness baseline，后续接 radix capacity / visible-count-driven radix。

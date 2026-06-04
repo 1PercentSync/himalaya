@@ -54,7 +54,7 @@ Phase 2 已完成 GS 数据管线（PLY → glTF 转换 + GS glTF 加载）和 C
 
 - Scene-level GS GPU resource 需要记录 `total_splat_count`、`sort_capacity`、static/work buffer handles、CPU per-primitive ranges 和 scene metadata。
 - `sort_capacity = next_power_of_two(total_splat_count)`；这是由当前 scene 派生的容量，不是固定上限。容量不足时报错，不静默截断。
-- Static baked buffers 以 SoA 组织，至少包含 world position、world covariance、world 3σ cull radius、opacity、SH coefficients。
+- Static baked buffers 以 SoA 组织，逻辑属性至少包含 world position、world covariance、world 3σ cull radius、opacity、SH coefficients；物理布局采用大数据量友好的 packed buffers：`position_radius`（vec4：xyz = world position，w = radius）、`covariance_opacity`（2×vec4：xx/xy/xz/yy、yz/zz/opacity/unused）和 `sh_coefficients`（vec4 coefficients）。
 - Projected data 按 global splat index dense 存储，逻辑字段为：
 
 ```text
@@ -76,16 +76,16 @@ rgb                // SH-evaluated RGB in primitive colorSpace
 
 本 Step 生成渲染使用的静态 GPU 数据。Phase 3.0 不在 shader 中每帧处理静态 transform。
 
-- Node global transform 必须可分解为 regular translation、proper rotation 和 positive scale；reflection、negative determinant 或不可分解线性部分报错或跳过上传。
+- Node global transform 必须可分解为 regular translation、proper rotation 和 positive scale；reflection、negative determinant、shear 或不可分解线性部分一律报错，不跳过 primitive，不静默修正，GS scene 回退到空场景状态。判定容差：translation / 3×3 linear 全部 finite；列向量 scale finite 且 `> 1e-8`；归一化列向量点乘绝对值 `<= 1e-3`；归一化矩阵 determinant 满足 `abs(det - 1) <= 1e-3`。
 - Position bake 使用 node global transform 把 local position 转到 world space。
 - Covariance bake：KHR `SCALE` 是 Gaussian principal axes 的 σ：
   - `Σ_local = R * diag(scale²) * Rᵀ`
   - `Σ_world = M3x3 * Σ_local * M3x3ᵀ`
   - GPU 存 symmetric 3×3 的 6 个 float。
 - `world_radius_3sigma = 3 * sqrt(max(trace(Σ_world), 0))`，作为 world-space frustum sphere cull 半径。
-- SH upload 前期只支持 identity/no-rotation transform。遇到需要 SH rotation 的 transform 时不得静默渲染错误；完整 Wigner-D 放到 Step 9。
+- SH upload 前期只支持不需要 Wigner-D 的 happy path：node proper rotation 近似 identity 时直接上传；node rotation 非 identity 但 scene/primitive `max_sh_degree == 0` 时允许直接上传；node rotation 非 identity 且存在 degree 1-3 SH 时必须报错并回退空 GS scene。完整 Wigner-D 放到 Step 9。
 - 多个 primitive 按顺序拼接成 global splat buffers；CPU 侧保留 per-primitive ranges / source primitive index / metadata 供 debug、报错和未来扩展使用。
-- GPU static buffers 不保留 raw rotation / scale 作为渲染必需数据；CPU 侧可保留用于 reload/debug/future rebake。
+- GPU static buffers 不保留 raw rotation / scale 作为渲染必需数据；CPU 侧可保留用于 reload/debug/future rebake。GS GPU scene resource owner 仿照现有 PT 路径的 `SceneASBuilder` / `EmissiveLightBuilder` 模式：Loader 只产出 CPU scene，Renderer 持有 builder/owner，Application 只负责 scene switch orchestration 和 immediate scope。
 
 ### Step 3：GS descriptors、work buffers 与 reset
 
@@ -195,8 +195,8 @@ Step 9 在硬件光栅 correctness baseline 建立后执行，用于补齐 Phase
 - GPU static baked buffers 不保留 raw rotation / scale；CPU 侧可保留用于 reload、debug、future rebake。
 - Upload bake 预计算 per-splat `world_radius_3sigma`，Phase 3.0 使用 trace bound 作为保守半径。
 - 直接 glTF/GLB 加载必须校验 opacity finite 且在 `[0,1]`、scale finite 且 `>= 0`、rotation finite 且为 unit quaternion。
-- Node global transform 必须可分解为 regular translation、proper rotation 和 positive scale；reflection / negative determinant 或不可分解线性部分在 Phase 3.0 报错或跳过上传。
-- Phase 3.0 前期只支持 identity/no-rotation transform 的 SH 直接上传；非 identity rotation 不静默渲染错误。完整 Wigner-D degree 1-3 放到 Phase 3.0 末期。
+- Node global transform 必须可分解为 regular translation、proper rotation 和 positive scale；reflection / negative determinant / shear / 不可分解线性部分在 Phase 3.0 报错并回退空 GS scene，不跳过 primitive。
+- Phase 3.0 前期只支持不需要 Wigner-D 的 SH 直接上传：identity/no-rotation transform 可直接上传；非 identity rotation 仅在 `max_sh_degree == 0` 时允许；degree 1-3 遇到非 identity rotation 必须报错，不静默渲染错误。完整 Wigner-D degree 1-3 放到 Phase 3.0 末期。
 
 ### Primitive metadata 与场景一致性
 
