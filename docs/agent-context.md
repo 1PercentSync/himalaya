@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的渲染器
 - **分支**：`reflector` — Path Tracing + Gaussian Splatting
 - **Phase**：Phase 3.0 — Gaussian Splatting 基础渲染
-- **进度**：Phase 3.0 Step 2 第三小项完成：covariance baking 与 cull radius 预计算已完成，`world_radius_3sigma` 使用 `Σ_world` 最大特征值预计算
+- **进度**：Phase 3.0 Step 2 第四小项完成：无实际消费的 primitive range contract 已清理，CPU/GPU scene contract 不再保留 per-primitive ranges
 
 ### 下一个任务
 
-Phase 3.0 Step 2 第四小项：清理无实际消费的 primitive range contract（移除 `GaussianSplatPrimitiveRange`、scene/gpu `primitive_ranges`、loader range recording，并同步验证项）
+Phase 3.0 Step 2 第五小项：实现 SH upload happy path（identity/no-rotation transform 直接上传；degree 0 可允许 node rotation；degree 1-3 需要 SH rotation 时暂时报错并回退空 GS scene）
 
 ---
 
