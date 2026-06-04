@@ -66,6 +66,41 @@ namespace himalaya::framework {
     // ---- GPU Data Layouts ----
     // Must match shader-side std430 layouts exactly.
 
+    /** @brief Number of RGB SH coefficients defined by KHR degree 0-3. */
+    inline constexpr uint32_t kGaussianSplatShCoefficientCount = 16;
+
+    /** @brief Number of scalar RGB values stored per splat in the packed SH buffer. */
+    inline constexpr uint32_t kGaussianSplatShScalarCount = kGaussianSplatShCoefficientCount * 3;
+
+    /** @brief Number of vec4 elements reserved per splat in the packed SH buffer. */
+    inline constexpr uint32_t kGaussianSplatShPackedVec4Stride = kGaussianSplatShScalarCount / 4;
+
+    static_assert(kGaussianSplatShScalarCount % 4 == 0,
+                  "Packed SH scalar count must fit an integral number of vec4 elements");
+
+    /**
+     * @brief Static baked world position and cull radius for one splat.
+     *
+     * std430 layout, 16 bytes per element. The xyz components store the baked
+     * world-space splat center. The w component stores the conservative
+     * world-space 3-sigma frustum cull radius.
+     */
+    struct alignas(16) GaussianSplatPositionRadius {
+        glm::vec4 position_radius; ///< offset 0 — xyz = world position, w = world 3-sigma radius
+    };
+
+    /**
+     * @brief Static baked world covariance and opacity for one splat.
+     *
+     * std430 layout, 32 bytes per element. The symmetric 3x3 covariance is
+     * packed as six floats in xx, xy, xz, yy, yz, zz order. Opacity is packed
+     * into the remaining vec4 lane to avoid a separate scalar opacity buffer.
+     */
+    struct alignas(16) GaussianSplatCovarianceOpacity {
+        glm::vec4 covariance0; ///< offset  0 — x/y/z/w = covariance xx/xy/xz/yy
+        glm::vec4 covariance1_opacity; ///< offset 16 — x/y/z/w = covariance yz/zz, opacity, unused
+    };
+
     /**
      * @brief Projected splat data consumed by the GS quad draw shaders.
      *
@@ -110,6 +145,13 @@ namespace himalaya::framework {
         uint32_t first_instance = 0; ///< offset 12 — fixed to 0
     };
 
+    static_assert(sizeof(GaussianSplatPositionRadius) == 16,
+                  "GaussianSplatPositionRadius must be 16 bytes (std430)");
+    static_assert(offsetof(GaussianSplatPositionRadius, position_radius) == 0);
+    static_assert(sizeof(GaussianSplatCovarianceOpacity) == 32,
+                  "GaussianSplatCovarianceOpacity must be 32 bytes (std430)");
+    static_assert(offsetof(GaussianSplatCovarianceOpacity, covariance0) == 0);
+    static_assert(offsetof(GaussianSplatCovarianceOpacity, covariance1_opacity) == 16);
     static_assert(sizeof(GaussianSplatProjectedData) == 64,
                   "GaussianSplatProjectedData must be 64 bytes (std430)");
     static_assert(offsetof(GaussianSplatProjectedData, center_opacity) == 0);
@@ -227,23 +269,19 @@ namespace himalaya::framework {
      * @brief GPU buffers containing static baked GS attributes.
      *
      * These buffers are created when a GS scene is uploaded and are read by
-     * cull/project and draw shaders. The handles are owned and destroyed by
-     * the Renderer-held GS scene resource owner, not by this contract struct.
+     * cull/project and draw shaders. Position/radius and covariance/opacity are
+     * packed together to avoid wasting std430 padding lanes on large GS scenes.
+     * The handles are owned and destroyed by the Renderer-held GS scene resource
+     * owner, not by this contract struct.
      */
     struct GaussianSplatStaticBuffers {
-        /** @brief World-space splat centers, indexed by global splat index. */
-        rhi::BufferHandle world_position_buffer{};
+        /** @brief Packed world position plus cull radius, indexed by global splat index. */
+        rhi::BufferHandle position_radius_buffer{};
 
-        /** @brief World-space symmetric 3x3 covariance data, indexed by global splat index. */
-        rhi::BufferHandle world_covariance_buffer{};
+        /** @brief Packed world covariance plus opacity, indexed by global splat index. */
+        rhi::BufferHandle covariance_opacity_buffer{};
 
-        /** @brief Conservative world-space 3-sigma cull radii, indexed by global splat index. */
-        rhi::BufferHandle world_radius_buffer{};
-
-        /** @brief Linear opacity values, indexed by global splat index. */
-        rhi::BufferHandle opacity_buffer{};
-
-        /** @brief Packed spherical harmonics coefficients, indexed by global splat index. */
+        /** @brief Packed spherical harmonics coefficients, indexed by global splat index and packed vec4 stride. */
         rhi::BufferHandle sh_coefficients_buffer{};
     };
 
