@@ -14,6 +14,7 @@
 #include <nlohmann/json.hpp>
 #include <spdlog/spdlog.h>
 
+#include <algorithm>
 #include <cmath>
 #include <cstddef>
 #include <cstring>
@@ -86,6 +87,136 @@ namespace himalaya::app::gaussian_splat_loader {
                 throw std::runtime_error("Invalid OPACITY at splat " + std::to_string(index)
                                          + ": expected finite value in [0, 1]");
             }
+        }
+
+        /**
+         * @brief Raw KHR_gaussian_splatting primitive metadata used only during loading.
+         *
+         * This string-based representation mirrors glTF extension JSON. It is
+         * converted to GaussianSplatSceneMetadata during load and is not stored
+         * in the final GaussianSplatScene.
+         */
+        struct RawGaussianSplatMetadata {
+            /** @brief Kernel type string from KHR_gaussian_splatting::kernel. */
+            std::string kernel;
+
+            /** @brief Color space string from KHR_gaussian_splatting::colorSpace. */
+            std::string color_space;
+
+            /** @brief Projection method string, defaulting per KHR to perspective. */
+            std::string projection = "perspective";
+
+            /** @brief Sorting method string, defaulting per KHR to cameraDistance. */
+            std::string sorting_method = "cameraDistance";
+        };
+
+        /** @brief Loaded primitive plus validated scene-level metadata kept local to the loader. */
+        struct LoadedGaussianSplatPrimitive {
+            /** @brief CPU-side splat data copied into the final scene for each node instance. */
+            framework::GaussianSplatPrimitive primitive;
+
+            /** @brief Validated render metadata derived from raw glTF primitive metadata. */
+            framework::GaussianSplatSceneMetadata metadata{};
+        };
+
+        /** @brief Converts raw primitive metadata strings to validated scene-level enum metadata. */
+        framework::GaussianSplatSceneMetadata to_scene_metadata(
+            const RawGaussianSplatMetadata &metadata,
+            const uint32_t max_sh_degree,
+            const size_t primitive_index) {
+            framework::GaussianSplatSceneMetadata result{};
+
+            if (metadata.kernel != "ellipse") {
+                throw std::runtime_error("Unsupported GS kernel at primitive "
+                                         + std::to_string(primitive_index) + ": " + metadata.kernel);
+            }
+            result.kernel = framework::GaussianSplatKernel::Ellipse;
+
+            if (metadata.color_space == "srgb_rec709_display") {
+                result.color_space = framework::GaussianSplatColorSpace::SrgbRec709Display;
+            } else if (metadata.color_space == "lin_rec709_display") {
+                result.color_space = framework::GaussianSplatColorSpace::LinRec709Display;
+            } else {
+                throw std::runtime_error("Unsupported GS colorSpace at primitive "
+                                         + std::to_string(primitive_index) + ": " + metadata.color_space);
+            }
+
+            if (metadata.projection != "perspective") {
+                throw std::runtime_error("Unsupported GS projection at primitive "
+                                         + std::to_string(primitive_index) + ": " + metadata.projection);
+            }
+            result.projection = framework::GaussianSplatProjection::Perspective;
+
+            if (metadata.sorting_method != "cameraDistance") {
+                throw std::runtime_error("Unsupported GS sortingMethod at primitive "
+                                         + std::to_string(primitive_index) + ": " + metadata.sorting_method);
+            }
+            result.sorting_method = framework::GaussianSplatSortingMethod::CameraDistance;
+            result.max_sh_degree = max_sh_degree;
+
+            return result;
+        }
+
+        /** @brief Returns true when Phase 3.0 scene-level metadata fields are consistent. */
+        bool has_same_render_metadata(const framework::GaussianSplatSceneMetadata &lhs,
+                                      const framework::GaussianSplatSceneMetadata &rhs) {
+            return lhs.kernel == rhs.kernel
+                   && lhs.color_space == rhs.color_space
+                   && lhs.projection == rhs.projection
+                   && lhs.sorting_method == rhs.sorting_method;
+        }
+
+        /**
+         * @brief Merges one primitive metadata set into the scene-level metadata.
+         *
+         * The GS render path uses one scene-wide metadata set. Mixed
+         * kernel/projection/sorting/colorSpace scenes are rejected instead of
+         * being partially rendered or silently mixed.
+         */
+        void merge_scene_metadata(framework::GaussianSplatScene &scene,
+                                  const framework::GaussianSplatSceneMetadata &primitive_metadata,
+                                  const size_t primitive_index,
+                                  bool &metadata_initialized) {
+            if (!metadata_initialized) {
+                scene.metadata = primitive_metadata;
+                metadata_initialized = true;
+                return;
+            }
+
+            if (!has_same_render_metadata(scene.metadata, primitive_metadata)) {
+                throw std::runtime_error("Mixed KHR_gaussian_splatting metadata in GS scene at primitive "
+                                         + std::to_string(primitive_index));
+            }
+
+            scene.metadata.max_sh_degree = std::max(scene.metadata.max_sh_degree,
+                                                    primitive_metadata.max_sh_degree);
+        }
+
+        /** @brief Records global primitive ranges after final scene primitives are assembled. */
+        void record_primitive_ranges(framework::GaussianSplatScene &scene) {
+            if (scene.primitives.empty()) {
+                throw std::runtime_error("Cannot record ranges for empty GS scene");
+            }
+
+            scene.primitive_ranges.clear();
+            scene.primitive_ranges.reserve(scene.primitives.size());
+
+            uint64_t first_splat = 0;
+            for (size_t i = 0; i < scene.primitives.size(); ++i) {
+                const uint32_t splat_count = scene.primitives[i].splat_count;
+                if (first_splat + splat_count > std::numeric_limits<uint32_t>::max()) {
+                    throw std::runtime_error("GS scene splat count exceeds uint32_t range");
+                }
+
+                scene.primitive_ranges.push_back({
+                    .source_primitive_index = static_cast<uint32_t>(i),
+                    .first_splat = static_cast<uint32_t>(first_splat),
+                    .splat_count = splat_count,
+                });
+                first_splat += splat_count;
+            }
+
+            scene.total_splat_count = static_cast<uint32_t>(first_splat);
         }
 
         // ---- JSON extraction ----
@@ -323,17 +454,17 @@ namespace himalaya::app::gaussian_splat_loader {
         }
 
         /**
-         * Extracts GaussianSplatMetadata from a primitive's
+         * Extracts raw Gaussian Splatting metadata from a primitive's
          * KHR_gaussian_splatting extension JSON object.
          */
-        framework::GaussianSplatMetadata extract_metadata(const nlohmann::json &gs_ext) {
+        RawGaussianSplatMetadata extract_metadata(const nlohmann::json &gs_ext) {
             if (!gs_ext.contains("kernel") || !gs_ext.contains("colorSpace")) {
                 throw std::runtime_error(
                     "KHR_gaussian_splatting extension missing required field: "
                     + std::string(!gs_ext.contains("kernel") ? "kernel" : "colorSpace"));
             }
 
-            framework::GaussianSplatMetadata meta;
+            RawGaussianSplatMetadata meta;
             meta.kernel = gs_ext["kernel"].get<std::string>();
             meta.color_space = gs_ext["colorSpace"].get<std::string>();
 
@@ -482,10 +613,11 @@ namespace himalaya::app::gaussian_splat_loader {
          * kernel or non-POINTS mode); throws on malformed data (missing
          * attributes, type/count mismatch).
          */
-        std::optional<framework::GaussianSplatPrimitive> load_primitive(
+        std::optional<LoadedGaussianSplatPrimitive> load_primitive(
             const fastgltf::Asset &gltf,
             const fastgltf::Primitive &primitive,
-            const nlohmann::json &gs_ext_json) {
+            const nlohmann::json &gs_ext_json,
+            const size_t source_primitive_index) {
 
             if (primitive.type != fastgltf::PrimitiveType::Points) {
                 spdlog::warn("Skipping GS primitive with non-POINTS mode (got {})",
@@ -496,8 +628,7 @@ namespace himalaya::app::gaussian_splat_loader {
             auto meta = extract_metadata(gs_ext_json);
 
             if (meta.kernel != "ellipse") {
-                spdlog::warn("Skipping GS primitive with unsupported kernel: {}", meta.kernel);
-                return std::nullopt;
+                throw std::runtime_error("Unsupported GS kernel: " + meta.kernel);
             }
 
             // POSITION (required)
@@ -512,7 +643,7 @@ namespace himalaya::app::gaussian_splat_loader {
             const auto splat_count = static_cast<uint32_t>(pos_accessor.count);
 
             framework::GaussianSplatPrimitive prim;
-            meta.splat_count = splat_count;
+            prim.splat_count = splat_count;
 
             // Read positions and compute local AABB
             prim.positions.resize(splat_count);
@@ -594,7 +725,7 @@ namespace himalaya::app::gaussian_splat_loader {
 
             // SH higher degrees (optional, must be contiguous from degree 1 up)
             const uint32_t sh_degree = detect_sh_degree(primitive);
-            meta.max_sh_degree = sh_degree;
+            prim.max_sh_degree = sh_degree;
 
             if (sh_degree >= 1) {
                 read_sh_coefficients(gltf, primitive, 1, prim.sh_coefs_1, splat_count);
@@ -606,8 +737,10 @@ namespace himalaya::app::gaussian_splat_loader {
                 read_sh_coefficients(gltf, primitive, 3, prim.sh_coefs_3, splat_count);
             }
 
-            prim.metadata = std::move(meta);
-            return prim;
+            return LoadedGaussianSplatPrimitive{
+                .primitive = std::move(prim),
+                .metadata = to_scene_metadata(meta, sh_degree, source_primitive_index),
+            };
         }
     }
 
@@ -641,9 +774,9 @@ namespace himalaya::app::gaussian_splat_loader {
 
         // Phase 1: Load GS primitive data grouped by mesh index.
         // Transform is left as identity; assigned during scene node traversal.
-        // Malformed primitives throw, aborting the entire load.
-        // Unsupported kernels / non-POINTS primitives are silently skipped.
-        std::unordered_map<uint32_t, std::vector<framework::GaussianSplatPrimitive>> gs_by_mesh;
+        // Malformed or unsupported GS primitives throw, aborting the entire load.
+        // Non-POINTS primitives are skipped because ellipse kernel requires POINTS mode.
+        std::unordered_map<uint32_t, std::vector<LoadedGaussianSplatPrimitive>> gs_by_mesh;
 
         try {
             for (size_t mi = 0; mi < gltf.meshes.size(); ++mi) {
@@ -659,7 +792,7 @@ namespace himalaya::app::gaussian_splat_loader {
                     }
 
                     const auto &gs_ext_json = prim_json["extensions"]["KHR_gaussian_splatting"];
-                    auto loaded = load_primitive(gltf, mesh.primitives[pi], gs_ext_json);
+                    auto loaded = load_primitive(gltf, mesh.primitives[pi], gs_ext_json, pi);
 
                     if (loaded.has_value()) {
                         gs_by_mesh[static_cast<uint32_t>(mi)].push_back(std::move(*loaded));
@@ -680,6 +813,7 @@ namespace himalaya::app::gaussian_splat_loader {
         // Each node-mesh reference produces its own set of GaussianSplatPrimitives,
         // correctly handling mesh instancing (multiple nodes → same mesh).
         framework::GaussianSplatScene scene;
+        bool metadata_initialized = false;
 
         if (!gltf.scenes.empty()) {
             const auto scene_index = gltf.defaultScene.value_or(0);
@@ -695,7 +829,12 @@ namespace himalaya::app::gaussian_splat_loader {
 
                     const auto world_mat = convert_matrix(world_transform);
                     for (const auto &template_prim : it->second) {
-                        auto prim = template_prim;
+                        merge_scene_metadata(scene,
+                                             template_prim.metadata,
+                                             scene.primitives.size(),
+                                             metadata_initialized);
+
+                        auto prim = template_prim.primitive;
                         prim.transform = world_mat;
                         scene.primitives.push_back(std::move(prim));
                     }
@@ -719,13 +858,15 @@ namespace himalaya::app::gaussian_splat_loader {
             scene.scene_bounds.max = glm::max(scene.scene_bounds.max, world_aabb.max);
         }
 
-        uint32_t total_splats = 0;
-        for (const auto &p : scene.primitives) {
-            total_splats += p.metadata.splat_count;
+        try {
+            record_primitive_ranges(scene);
+        } catch (const std::exception &e) {
+            spdlog::error("GS scene validation failed: {}", e.what());
+            return std::nullopt;
         }
 
         spdlog::info("GS scene loaded: {} primitives, {} total splats",
-                     scene.primitives.size(), total_splats);
+                     scene.primitives.size(), scene.total_splat_count);
 
         return scene;
     }

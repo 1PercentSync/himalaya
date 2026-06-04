@@ -19,37 +19,11 @@
 
 namespace himalaya::framework {
     /**
-     * @brief Metadata from KHR_gaussian_splatting extension JSON.
-     *
-     * Stores per-primitive extension properties. kernel and color_space
-     * are required by the spec; projection and sorting_method have defaults.
-     */
-    struct GaussianSplatMetadata {
-        /** @brief Kernel type (e.g. "ellipse"). */
-        std::string kernel;
-
-        /** @brief Color space (e.g. "srgb_rec709_display", "lin_rec709_display"). */
-        std::string color_space;
-
-        /** @brief Projection method. */
-        std::string projection = "perspective";
-
-        /** @brief Sorting method. */
-        std::string sorting_method = "cameraDistance";
-
-        /** @brief Maximum SH degree present (0-3). */
-        uint32_t max_sh_degree = 0;
-
-        /** @brief Total number of Gaussian splats in this primitive. */
-        uint32_t splat_count = 0;
-    };
-
-    /**
      * @brief A single Gaussian Splatting primitive (SoA layout).
      *
      * Stores splat data from one glTF mesh primitive with
      * KHR_gaussian_splatting extension. All per-splat arrays are
-     * parallel with metadata.splat_count elements.
+     * parallel with splat_count elements.
      */
     struct GaussianSplatPrimitive {
         /** @brief Splat centers in local space. */
@@ -82,22 +56,11 @@ namespace himalaya::framework {
         /** @brief Local-space AABB computed from positions. */
         AABB bounds{};
 
-        /** @brief Extension metadata for this primitive. */
-        GaussianSplatMetadata metadata;
-    };
+        /** @brief Total number of Gaussian splats in this primitive. */
+        uint32_t splat_count = 0;
 
-    /**
-     * @brief Scene-level container for Gaussian Splatting data.
-     *
-     * Contains one or more primitives, each with independent transform
-     * and metadata. scene_bounds is the union of all primitive world-space bounds.
-     */
-    struct GaussianSplatScene {
-        /** @brief All GS primitives in the scene. */
-        std::vector<GaussianSplatPrimitive> primitives;
-
-        /** @brief Union AABB of all primitives in world space. */
-        AABB scene_bounds{};
+        /** @brief Maximum SH degree present in this primitive (0-3). */
+        uint32_t max_sh_degree = 0;
     };
 
     // ---- GPU Data Layouts ----
@@ -233,8 +196,31 @@ namespace himalaya::framework {
         /** @brief Number of splats owned by this primitive. */
         uint32_t splat_count = 0;
 
-        /** @brief Original primitive metadata retained for debug and validation. */
-        GaussianSplatMetadata metadata{};
+    };
+
+    /**
+     * @brief Scene-level container for Gaussian Splatting data.
+     *
+     * Contains one or more primitives, each with independent transform and
+     * metadata. scene_bounds is the union of all primitive world-space bounds.
+     * primitive_ranges records the global splat span of every primitive after
+     * metadata consistency validation.
+     */
+    struct GaussianSplatScene {
+        /** @brief All GS primitives in the scene. */
+        std::vector<GaussianSplatPrimitive> primitives;
+
+        /** @brief Union AABB of all primitives in world space. */
+        AABB scene_bounds{};
+
+        /** @brief Total number of splats across every primitive in the scene. */
+        uint32_t total_splat_count = 0;
+
+        /** @brief CPU-side mapping from source primitives to global splat ranges. */
+        std::vector<GaussianSplatPrimitiveRange> primitive_ranges;
+
+        /** @brief Scene-level metadata shared by all renderable GS primitives. */
+        GaussianSplatSceneMetadata metadata{};
     };
 
     /**
