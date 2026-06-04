@@ -314,6 +314,11 @@ namespace himalaya::app {
 
     // ---- GS scene data ----
 
+    bool Renderer::preflight_gaussian_splat_scene(const framework::GaussianSplatScene &scene,
+                                                  std::string &error_message) const {
+        return gaussian_splat_scene_builder_.preflight(scene, error_message);
+    }
+
     bool Renderer::build_gaussian_splat_scene(const framework::GaussianSplatScene &scene,
                                               std::string &error_message) {
         return gaussian_splat_scene_builder_.build(*resource_manager_, scene, error_message);

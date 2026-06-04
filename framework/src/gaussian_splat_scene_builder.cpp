@@ -430,33 +430,15 @@ namespace himalaya::framework {
 
             return result;
         }
-    } // namespace
 
-    bool GaussianSplatSceneBuilder::build(rhi::ResourceManager &rm,
-                                          const GaussianSplatScene &scene,
-                                          std::string &error_message) {
-        destroy();
-        resource_manager_ = &rm;
-        error_message.clear();
-
-        try {
+        /** @brief Performs CPU-only scene validation before any static buffer upload work. */
+        void preflight_scene(const GaussianSplatScene &scene) {
             if (scene.total_splat_count == 0) {
                 throw std::runtime_error("GS scene contains no splats");
             }
-
             if (scene.metadata.max_sh_degree > kGaussianSplatMaxShDegree) {
                 throw std::runtime_error("GS scene has unsupported SH degree");
             }
-
-            gpu_scene_.total_splat_count = scene.total_splat_count;
-            gpu_scene_.sort_capacity = next_power_of_two(scene.total_splat_count);
-            gpu_scene_.sh_packed_vec4_stride = gaussian_splat_sh_packed_vec4_stride(scene.metadata.max_sh_degree);
-            gpu_scene_.metadata = scene.metadata;
-
-            baked_position_radius_.reserve(scene.total_splat_count);
-            baked_covariance_opacity_.reserve(scene.total_splat_count);
-            baked_sh_coefficients_.reserve(static_cast<size_t>(scene.total_splat_count)
-                                           * gpu_scene_.sh_packed_vec4_stride);
 
             for (size_t primitive_index = 0; primitive_index < scene.primitives.size(); ++primitive_index) {
                 const auto &primitive = scene.primitives[primitive_index];
@@ -479,6 +461,43 @@ namespace himalaya::framework {
                                              + " attribute counts do not match splat_count");
                 }
                 validate_sh_counts(primitive, primitive_index);
+            }
+        }
+    } // namespace
+
+    bool GaussianSplatSceneBuilder::preflight(const GaussianSplatScene &scene,
+                                              std::string &error_message) const {
+        error_message.clear();
+        try {
+            preflight_scene(scene);
+            return true;
+        } catch (const std::exception &e) {
+            error_message = e.what();
+            return false;
+        }
+    }
+
+    bool GaussianSplatSceneBuilder::build(rhi::ResourceManager &rm,
+                                          const GaussianSplatScene &scene,
+                                          std::string &error_message) {
+        destroy();
+        resource_manager_ = &rm;
+        error_message.clear();
+
+        try {
+            gpu_scene_.total_splat_count = scene.total_splat_count;
+            gpu_scene_.sort_capacity = next_power_of_two(scene.total_splat_count);
+            gpu_scene_.sh_packed_vec4_stride = gaussian_splat_sh_packed_vec4_stride(scene.metadata.max_sh_degree);
+            gpu_scene_.metadata = scene.metadata;
+
+            baked_position_radius_.reserve(scene.total_splat_count);
+            baked_covariance_opacity_.reserve(scene.total_splat_count);
+            baked_sh_coefficients_.reserve(static_cast<size_t>(scene.total_splat_count)
+                                           * gpu_scene_.sh_packed_vec4_stride);
+
+            for (size_t primitive_index = 0; primitive_index < scene.primitives.size(); ++primitive_index) {
+                const auto &primitive = scene.primitives[primitive_index];
+                const auto node_transform = validate_node_transform(primitive.transform, primitive_index);
 
                 for (size_t splat_index = 0; splat_index < primitive.positions.size(); ++splat_index) {
                     const glm::vec3 local_position = primitive.positions[splat_index];

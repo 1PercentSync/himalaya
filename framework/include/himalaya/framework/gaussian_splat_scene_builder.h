@@ -30,10 +30,25 @@ namespace himalaya::framework {
     class GaussianSplatSceneBuilder {
     public:
         /**
+         * @brief Runs CPU-only validation that can reject a scene before upload.
+         *
+         * This checks renderer capability limits that do not require an
+         * immediate command scope, including unsupported SH degree and degree
+         * 1-3 SH coefficients under non-identity node rotation.
+         *
+         * @param scene CPU-side GS scene loaded from glTF or converted PLY.
+         * @param error_message Receives a human-readable failure reason.
+         * @return true on success; false when the whole GS scene must be rejected.
+         */
+        [[nodiscard]] bool preflight(const GaussianSplatScene &scene,
+                                     std::string &error_message) const;
+
+        /**
          * @brief Validates, bakes, creates, and uploads static GS buffers.
          *
-         * Must be called within a Context::begin_immediate() / end_immediate()
-         * scope because static buffers are uploaded through ResourceManager.
+         * Expects preflight() to have succeeded. Must be called within a
+         * Context::begin_immediate() / end_immediate() scope because static
+         * buffers are uploaded through ResourceManager.
          *
          * @param rm Resource manager used to create and upload static buffers.
          * @param scene CPU-side GS scene loaded from glTF or converted PLY.

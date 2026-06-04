@@ -154,6 +154,20 @@ namespace himalaya::app {
         void destroy_scene_rt();
 
         /**
+         * @brief Runs CPU-only GS scene validation before opening an upload scope.
+         *
+         * Rejects unsupported renderer capability cases before static buffers are
+         * created or uploaded, including degree 1-3 SH under non-identity node
+         * rotation.
+         *
+         * @param scene CPU-side Gaussian Splatting scene from GaussianSplatLoader.
+         * @param error_message Receives a human-readable failure reason.
+         * @return true on success, false if the GS scene was rejected as a whole.
+         */
+        bool preflight_gaussian_splat_scene(const framework::GaussianSplatScene &scene,
+                                            std::string &error_message) const;
+
+        /**
          * @brief Builds Gaussian Splatting GPU scene data from loaded CPU scene data.
          *
          * Current Step 2 scope validates node transforms, bakes static packed
