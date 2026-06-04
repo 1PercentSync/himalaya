@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的渲染器
 - **分支**：`reflector` — Path Tracing + Gaussian Splatting
 - **Phase**：Phase 3.0 — Gaussian Splatting 基础渲染
-- **进度**：Phase 3.0 Step 2 第一小项完成：GS static baked buffer 契约已修正为 packed SoA layout（`position_radius`、`covariance_opacity`、`sh_coefficients`），替换 Step 1 的分离 radius/opacity handles
+- **进度**：Phase 3.0 Step 2 第二小项完成：node transform 合法性检查与 position baking 已接入 Renderer-held GS scene builder；非法 transform 会导致 GS scene 回退为空
 
 ### 下一个任务
 
-Phase 3.0 Step 2 第二小项：实现 node transform 合法性检查与 position baking（regular/proper/positive transform；local position → world space）
+Phase 3.0 Step 2 第三小项：实现 covariance baking 与 cull radius 预计算（`Σ_local`、`Σ_world`、6-float symmetric covariance、`world_radius_3sigma`）
 
 ---
 
