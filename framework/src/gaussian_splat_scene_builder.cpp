@@ -318,7 +318,6 @@ namespace himalaya::framework {
 
             gpu_scene_.total_splat_count = scene.total_splat_count;
             gpu_scene_.sort_capacity = next_power_of_two(scene.total_splat_count);
-            gpu_scene_.primitive_ranges = scene.primitive_ranges;
             gpu_scene_.metadata = scene.metadata;
 
             baked_position_radius_.reserve(scene.total_splat_count);

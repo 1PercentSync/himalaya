@@ -14,7 +14,6 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
-#include <string>
 #include <vector>
 
 namespace himalaya::framework {
@@ -222,31 +221,11 @@ namespace himalaya::framework {
     };
 
     /**
-     * @brief Global splat range for one CPU-side GS primitive.
-     *
-     * The renderer concatenates all primitives into global splat buffers.
-     * This range preserves the CPU source primitive and its global index span
-     * for diagnostics, validation, and future per-primitive extensions.
-     */
-    struct GaussianSplatPrimitiveRange {
-        /** @brief Index into GaussianSplatScene::primitives for the source primitive. */
-        uint32_t source_primitive_index = 0;
-
-        /** @brief First global splat index owned by this primitive. */
-        uint32_t first_splat = 0;
-
-        /** @brief Number of splats owned by this primitive. */
-        uint32_t splat_count = 0;
-
-    };
-
-    /**
      * @brief Scene-level container for Gaussian Splatting data.
      *
      * Contains one or more primitives, each with independent transform and
      * metadata. scene_bounds is the union of all primitive world-space bounds.
-     * primitive_ranges records the global splat span of every primitive after
-     * metadata consistency validation.
+     * Multiple primitives are concatenated in primitive order during upload.
      */
     struct GaussianSplatScene {
         /** @brief All GS primitives in the scene. */
@@ -257,9 +236,6 @@ namespace himalaya::framework {
 
         /** @brief Total number of splats across every primitive in the scene. */
         uint32_t total_splat_count = 0;
-
-        /** @brief CPU-side mapping from source primitives to global splat ranges. */
-        std::vector<GaussianSplatPrimitiveRange> primitive_ranges;
 
         /** @brief Scene-level metadata shared by all renderable GS primitives. */
         GaussianSplatSceneMetadata metadata{};
@@ -315,7 +291,7 @@ namespace himalaya::framework {
      * Records all persistent GS scene resources and derived capacities needed by
      * the Phase 3.0 render path. Resource creation, upload, descriptor writes,
      * and destruction are centralized in the Renderer-held GS scene resource owner;
-     * this struct only stores handles, counts, ranges, and validated metadata.
+     * this struct only stores handles, counts, and validated metadata.
      */
     struct GaussianSplatGpuScene {
         /** @brief Total number of splats across every primitive in the scene. */
@@ -329,9 +305,6 @@ namespace himalaya::framework {
 
         /** @brief Per-frame work buffers read and written by GS passes. */
         GaussianSplatWorkBuffers work_buffers{};
-
-        /** @brief CPU-side mapping from source primitives to global splat ranges. */
-        std::vector<GaussianSplatPrimitiveRange> primitive_ranges;
 
         /** @brief Scene-level metadata shared by all renderable GS primitives. */
         GaussianSplatSceneMetadata metadata{};

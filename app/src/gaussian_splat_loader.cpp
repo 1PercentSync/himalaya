@@ -192,31 +192,21 @@ namespace himalaya::app::gaussian_splat_loader {
                                                     primitive_metadata.max_sh_degree);
         }
 
-        /** @brief Records global primitive ranges after final scene primitives are assembled. */
-        void record_primitive_ranges(framework::GaussianSplatScene &scene) {
+        /** @brief Computes total splat count after final scene primitives are assembled. */
+        void compute_total_splat_count(framework::GaussianSplatScene &scene) {
             if (scene.primitives.empty()) {
-                throw std::runtime_error("Cannot record ranges for empty GS scene");
+                throw std::runtime_error("Cannot count splats for empty GS scene");
             }
 
-            scene.primitive_ranges.clear();
-            scene.primitive_ranges.reserve(scene.primitives.size());
-
-            uint64_t first_splat = 0;
-            for (size_t i = 0; i < scene.primitives.size(); ++i) {
-                const uint32_t splat_count = scene.primitives[i].splat_count;
-                if (first_splat + splat_count > std::numeric_limits<uint32_t>::max()) {
+            uint64_t total_splat_count = 0;
+            for (const auto &primitive : scene.primitives) {
+                if (total_splat_count + primitive.splat_count > std::numeric_limits<uint32_t>::max()) {
                     throw std::runtime_error("GS scene splat count exceeds uint32_t range");
                 }
-
-                scene.primitive_ranges.push_back({
-                    .source_primitive_index = static_cast<uint32_t>(i),
-                    .first_splat = static_cast<uint32_t>(first_splat),
-                    .splat_count = splat_count,
-                });
-                first_splat += splat_count;
+                total_splat_count += primitive.splat_count;
             }
 
-            scene.total_splat_count = static_cast<uint32_t>(first_splat);
+            scene.total_splat_count = static_cast<uint32_t>(total_splat_count);
         }
 
         // ---- JSON extraction ----
@@ -859,7 +849,7 @@ namespace himalaya::app::gaussian_splat_loader {
         }
 
         try {
-            record_primitive_ranges(scene);
+            compute_total_splat_count(scene);
         } catch (const std::exception &e) {
             spdlog::error("GS scene validation failed: {}", e.what());
             return std::nullopt;
