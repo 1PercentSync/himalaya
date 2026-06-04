@@ -5,6 +5,8 @@
 
 #include <himalaya/framework/gaussian_splat_scene_builder.h>
 
+#include <himalaya/rhi/resources.h>
+
 #include <glm/gtc/quaternion.hpp>
 #include <glm/mat3x3.hpp>
 #include <glm/vec3.hpp>
@@ -353,6 +355,20 @@ namespace himalaya::framework {
             }
         }
 
+        /** @brief Creates and uploads one static GS storage buffer. */
+        rhi::BufferHandle create_static_buffer(rhi::ResourceManager &rm,
+                                               const void *data,
+                                               const uint64_t size,
+                                               const char *debug_name) {
+            const auto buffer = rm.create_buffer({
+                .size = size,
+                .usage = rhi::BufferUsage::StorageBuffer | rhi::BufferUsage::TransferDst,
+                .memory = rhi::MemoryUsage::GpuOnly,
+            }, debug_name);
+            rm.upload_buffer(buffer, data, size);
+            return buffer;
+        }
+
         /**
          * @brief Validates that a node transform is decomposable into T * R * S.
          *
@@ -415,9 +431,11 @@ namespace himalaya::framework {
         }
     } // namespace
 
-    bool GaussianSplatSceneBuilder::build(const GaussianSplatScene &scene,
+    bool GaussianSplatSceneBuilder::build(rhi::ResourceManager &rm,
+                                          const GaussianSplatScene &scene,
                                           std::string &error_message) {
         destroy();
+        resource_manager_ = &rm;
         error_message.clear();
 
         try {
@@ -496,6 +514,33 @@ namespace himalaya::framework {
                 throw std::runtime_error("GS baked static attribute count does not match total_splat_count");
             }
 
+            const uint64_t position_radius_size = static_cast<uint64_t>(baked_position_radius_.size())
+                                                  * sizeof(GaussianSplatPositionRadius);
+            const uint64_t covariance_opacity_size = static_cast<uint64_t>(baked_covariance_opacity_.size())
+                                                     * sizeof(GaussianSplatCovarianceOpacity);
+            const uint64_t sh_coefficients_size = static_cast<uint64_t>(baked_sh_coefficients_.size())
+                                                  * sizeof(glm::vec4);
+
+            gpu_scene_.static_buffers.position_radius_buffer = create_static_buffer(
+                rm,
+                baked_position_radius_.data(),
+                position_radius_size,
+                "GS Position Radius Buffer");
+            gpu_scene_.static_buffers.covariance_opacity_buffer = create_static_buffer(
+                rm,
+                baked_covariance_opacity_.data(),
+                covariance_opacity_size,
+                "GS Covariance Opacity Buffer");
+            gpu_scene_.static_buffers.sh_coefficients_buffer = create_static_buffer(
+                rm,
+                baked_sh_coefficients_.data(),
+                sh_coefficients_size,
+                "GS SH Coefficients Buffer");
+
+            baked_position_radius_.clear();
+            baked_covariance_opacity_.clear();
+            baked_sh_coefficients_.clear();
+
             valid_ = true;
             return true;
         } catch (const std::exception &e) {
@@ -506,10 +551,24 @@ namespace himalaya::framework {
     }
 
     void GaussianSplatSceneBuilder::destroy() {
+        if (resource_manager_) {
+            auto &static_buffers = gpu_scene_.static_buffers;
+            if (static_buffers.position_radius_buffer.valid()) {
+                resource_manager_->destroy_buffer(static_buffers.position_radius_buffer);
+            }
+            if (static_buffers.covariance_opacity_buffer.valid()) {
+                resource_manager_->destroy_buffer(static_buffers.covariance_opacity_buffer);
+            }
+            if (static_buffers.sh_coefficients_buffer.valid()) {
+                resource_manager_->destroy_buffer(static_buffers.sh_coefficients_buffer);
+            }
+        }
+
         gpu_scene_ = {};
         baked_position_radius_.clear();
         baked_covariance_opacity_.clear();
         baked_sh_coefficients_.clear();
+        resource_manager_ = nullptr;
         valid_ = false;
     }
 

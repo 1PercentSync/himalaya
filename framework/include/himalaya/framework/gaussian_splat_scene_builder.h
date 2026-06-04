@@ -10,15 +10,18 @@
 #include <string>
 #include <vector>
 
+namespace himalaya::rhi {
+    class ResourceManager;
+}
+
 namespace himalaya::framework {
     /**
      * @brief Builds Renderer-owned Gaussian Splatting scene resources.
      *
      * Follows the same ownership pattern as SceneASBuilder and
      * EmissiveLightBuilder: the loader produces CPU scene data, while this
-     * builder validates upload-time constraints, bakes static attributes, and
-     * owns the derived GPU-scene contract. Buffer upload is added incrementally
-     * by later Phase 3.0 Step 2 tasks.
+     * builder validates upload-time constraints, bakes static attributes, creates
+     * static GPU buffers, uploads them, and owns the derived GPU-scene contract.
      *
      * Calling build() again automatically destroys previous data before
      * rebuilding. Invalid input scenes are rejected as a whole; primitives are
@@ -27,17 +30,19 @@ namespace himalaya::framework {
     class GaussianSplatSceneBuilder {
     public:
         /**
-         * @brief Validates node transforms and bakes static GS attributes.
+         * @brief Validates, bakes, creates, and uploads static GS buffers.
          *
-         * Current Step 2 scope bakes world positions, world covariance,
-         * covariance-derived 3-sigma cull radius, and happy-path SH data. Later
-         * Step 2 tasks create the corresponding GPU buffers.
+         * Must be called within a Context::begin_immediate() / end_immediate()
+         * scope because static buffers are uploaded through ResourceManager.
          *
+         * @param rm Resource manager used to create and upload static buffers.
          * @param scene CPU-side GS scene loaded from glTF or converted PLY.
          * @param error_message Receives a human-readable failure reason.
          * @return true on success; false when the whole GS scene must be rejected.
          */
-        bool build(const GaussianSplatScene &scene, std::string &error_message);
+        bool build(rhi::ResourceManager &rm,
+                   const GaussianSplatScene &scene,
+                   std::string &error_message);
 
         /**
          * @brief Destroys all owned baked data and GPU scene handles.
@@ -65,7 +70,10 @@ namespace himalaya::framework {
         /** @brief CPU-side packed SH data, indexed by global splat index and packed vec4 stride. */
         std::vector<glm::vec4> baked_sh_coefficients_;
 
-        /** @brief True when gpu_scene_ and baked data match a successfully built scene. */
+        /** @brief Resource manager that owns the created static GPU buffers. */
+        rhi::ResourceManager *resource_manager_ = nullptr;
+
+        /** @brief True when gpu_scene_ and static GPU buffers match a successfully built scene. */
         bool valid_ = false;
     };
 } // namespace himalaya::framework

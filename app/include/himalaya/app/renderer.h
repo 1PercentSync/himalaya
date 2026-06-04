@@ -156,10 +156,11 @@ namespace himalaya::app {
         /**
          * @brief Builds Gaussian Splatting GPU scene data from loaded CPU scene data.
          *
-         * Current Step 2 scope validates node transforms and bakes world positions.
-         * Later GS tasks extend the same builder path with covariance, SH, buffer
-         * upload, and descriptor writes. On failure the renderer destroys any
-         * previous GS scene data so the application falls back to an empty GS scene.
+         * Current Step 2 scope validates node transforms, bakes static packed
+         * SoA data, and uploads the static GS buffers. Later GS tasks extend the
+         * same owner path with work buffers and descriptor writes. On failure the
+         * renderer destroys any previous GS scene data so the application falls
+         * back to an empty GS scene.
          *
          * @param scene CPU-side Gaussian Splatting scene from GaussianSplatLoader.
          * @param error_message Receives a human-readable failure reason.

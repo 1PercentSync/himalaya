@@ -246,7 +246,11 @@ namespace himalaya::app {
                 error_message_ = "Failed to load GS scene: " + path;
             } else {
                 std::string build_error;
-                if (!renderer_.build_gaussian_splat_scene(*result, build_error)) {
+                context_.begin_immediate();
+                const bool build_ok = renderer_.build_gaussian_splat_scene(*result, build_error);
+                context_.end_immediate();
+
+                if (!build_ok) {
                     spdlog::error("Failed to build GS scene: {}: {}", path, build_error);
                     renderer_.destroy_gaussian_splat_scene();
                     gs_scene_.reset();

@@ -316,7 +316,7 @@ namespace himalaya::app {
 
     bool Renderer::build_gaussian_splat_scene(const framework::GaussianSplatScene &scene,
                                               std::string &error_message) {
-        return gaussian_splat_scene_builder_.build(scene, error_message);
+        return gaussian_splat_scene_builder_.build(*resource_manager_, scene, error_message);
     }
 
     void Renderer::destroy_gaussian_splat_scene() {
