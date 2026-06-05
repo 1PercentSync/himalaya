@@ -602,7 +602,7 @@ namespace himalaya::app::gaussian_splat_loader {
          * Loads one GS primitive. Throws on malformed or unsupported GS data,
          * including non-POINTS primitives that violate the ellipse kernel contract.
          */
-        std::optional<LoadedGaussianSplatPrimitive> load_primitive(
+        LoadedGaussianSplatPrimitive load_primitive(
             const fastgltf::Asset &gltf,
             const fastgltf::Primitive &primitive,
             const nlohmann::json &gs_ext_json,
@@ -764,7 +764,6 @@ namespace himalaya::app::gaussian_splat_loader {
         // Phase 1: Load GS primitive data grouped by mesh index.
         // Transform is left as identity; assigned during scene node traversal.
         // Malformed or unsupported GS primitives throw, aborting the entire load.
-        // Non-POINTS primitives are skipped because ellipse kernel requires POINTS mode.
         std::unordered_map<uint32_t, std::vector<LoadedGaussianSplatPrimitive>> gs_by_mesh;
 
         try {
@@ -782,10 +781,7 @@ namespace himalaya::app::gaussian_splat_loader {
 
                     const auto &gs_ext_json = prim_json["extensions"]["KHR_gaussian_splatting"];
                     auto loaded = load_primitive(gltf, mesh.primitives[pi], gs_ext_json, pi);
-
-                    if (loaded.has_value()) {
-                        gs_by_mesh[static_cast<uint32_t>(mi)].push_back(std::move(*loaded));
-                    }
+                    gs_by_mesh[static_cast<uint32_t>(mi)].push_back(std::move(loaded));
                 }
             }
         } catch (const std::exception &e) {
