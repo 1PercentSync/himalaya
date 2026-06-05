@@ -44,16 +44,6 @@ bool gs_sort_entry_less(GaussianSplatSortEntry lhs, GaussianSplatSortEntry rhs) 
     return lhs.global_splat_index < rhs.global_splat_index;
 }
 
-/** Returns the earlier entry under lexicographic ascending order. */
-GaussianSplatSortEntry gs_sort_entry_min(GaussianSplatSortEntry lhs, GaussianSplatSortEntry rhs) {
-    return gs_sort_entry_less(lhs, rhs) ? lhs : rhs;
-}
-
-/** Returns the later entry under lexicographic ascending order. */
-GaussianSplatSortEntry gs_sort_entry_max(GaussianSplatSortEntry lhs, GaussianSplatSortEntry rhs) {
-    return gs_sort_entry_less(lhs, rhs) ? rhs : lhs;
-}
-
 void main() {
     uint index = gl_GlobalInvocationID.x;
     if (index >= gs_sort_pc.sort_capacity) {
@@ -69,8 +59,9 @@ void main() {
     GaussianSplatSortEntry b = gs_sort_entries[partner];
 
     bool ascending_segment = (index & gs_sort_pc.stage_k) == 0u;
-    GaussianSplatSortEntry lower = gs_sort_entry_min(a, b);
-    GaussianSplatSortEntry upper = gs_sort_entry_max(a, b);
+    bool a_less_b = gs_sort_entry_less(a, b);
+    GaussianSplatSortEntry lower = a_less_b ? a : b;
+    GaussianSplatSortEntry upper = a_less_b ? b : a;
 
     if (ascending_segment) {
         gs_sort_entries[index] = lower;
