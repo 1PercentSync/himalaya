@@ -599,9 +599,8 @@ namespace himalaya::app::gaussian_splat_loader {
         }
 
         /**
-         * Loads one GS primitive. Returns std::nullopt to skip (unsupported
-         * kernel or non-POINTS mode); throws on malformed data (missing
-         * attributes, type/count mismatch).
+         * Loads one GS primitive. Throws on malformed or unsupported GS data,
+         * including non-POINTS primitives that violate the ellipse kernel contract.
          */
         std::optional<LoadedGaussianSplatPrimitive> load_primitive(
             const fastgltf::Asset &gltf,
@@ -610,9 +609,9 @@ namespace himalaya::app::gaussian_splat_loader {
             const size_t source_primitive_index) {
 
             if (primitive.type != fastgltf::PrimitiveType::Points) {
-                spdlog::warn("Skipping GS primitive with non-POINTS mode (got {})",
-                             static_cast<int>(primitive.type));
-                return std::nullopt;
+                throw std::runtime_error("GS primitive " + std::to_string(source_primitive_index)
+                                         + " has non-POINTS mode: expected POINTS (0), got "
+                                         + std::to_string(static_cast<int>(primitive.type)));
             }
 
             auto meta = extract_metadata(gs_ext_json);
