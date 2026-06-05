@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的渲染器
 - **分支**：`reflector` — Path Tracing + Gaussian Splatting
 - **Phase**：Phase 3.0 — Gaussian Splatting 基础渲染
-- **进度**：Phase 3.0 Step 3 完成：GS Set 3 descriptor layout / descriptor set、capacity-based work buffers、每帧 reset pass、indirect command 固定字段初始化均完成；用户已在 CLion 编译验证通过
+- **进度**：Phase 3.0 Step 4 第一小项完成：`GSPushConstants::flags` 已清理并替换为明确的 `max_sh_degree` 字段，C++/GLSL 契约已同步；用户已验收并允许继续
 
 ### 下一个任务
 
-Phase 3.0 Step 4 第一小项：清理 `GSPushConstants::flags` 预留字段，替换为明确的 `max_sh_degree` 字段并同步 C++/GLSL/文档契约
+Phase 3.0 Step 4 第二小项：创建 cull/project compute shader 与 C++ pipeline/dispatch skeleton（buffer 声明、workgroup 256、Set 3 + GlobalUBO + push constants）
 
 ---
 
