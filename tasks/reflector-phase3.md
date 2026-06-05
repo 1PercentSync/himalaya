@@ -59,8 +59,8 @@
 
 - [x] 创建 bitonic sort compute shader（2×32-bit sort entry compare-and-swap；lexicographic `(distance_key, global_splat_index)` 升序；sentinel 排末尾）
 - [x] 实现 bitonic capacity dispatch orchestration（`N = sort_capacity`,完整 stages/steps,sort ping-pong 或 in-place 策略明确）
-- [ ] 接入 cull/project 输出并确认 draw range 语义（排序后 `[0, visible_count)` 为 valid entries,draw 不使用 capacity）
-- [ ] 请求用户在 CLion 中编译验证
+- [x] 接入 cull/project 输出并确认 draw range 语义（排序后 `[0, visible_count)` 为 valid entries,draw 不使用 capacity）
+- [x] 请求用户在 CLion 中编译验证
 
 ## Step 6:Quad rendering path
 
