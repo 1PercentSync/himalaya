@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的渲染器
 - **分支**：`reflector` — Path Tracing + Gaussian Splatting
 - **Phase**：Phase 3.0 — Gaussian Splatting 基础渲染
-- **进度**：Phase 3.0 Step 3 第二小项完成：按 PT 模式拆分 GS Set 3 生命周期职责，descriptor layout 改由 pass-layer renderer-lifetime owner 管理，GS scene resource owner 恢复只管理 scene-specific buffers
+- **进度**：Phase 3.0 Step 3 第三小项完成：创建 capacity-based GS work buffers（visible count、projected data、sort entry ping-pong、indirect draw command），并补齐 RHI IndirectBuffer usage
 
 ### 下一个任务
 
-Phase 3.0 Step 3 第三小项：创建 capacity-based GS work buffers（visible count、projected data、sort entry ping-pong、indirect draw command）
+Phase 3.0 Step 3 第四小项：创建 GS Set 3 descriptor set 并实现 descriptor 写入/重写逻辑（scene reload 或 buffer recreate 时更新，非每帧 push）
 
 ---
 
