@@ -5,6 +5,9 @@
 
 #version 460
 
+#extension GL_KHR_shader_subgroup_basic : require
+#extension GL_KHR_shader_subgroup_ballot : require
+
 #include "common/bindings.glsl"
 #include "gs/gs_common.glsl"
 
@@ -354,68 +357,96 @@ vec3 gs_evaluate_sh_rgb(uint global_splat_index, vec3 view_direction) {
 
 void main() {
     uint global_splat_index = gl_GlobalInvocationID.x;
-    if (global_splat_index >= gs_pc.total_splat_count) {
-        return;
+    bool visible = false;
+    uint distance_key = 0xFFFFFFFFu;
+    GaussianSplatProjectedData projected;
+
+    if (global_splat_index < gs_pc.total_splat_count) {
+        do {
+            vec4 position_radius = gs_position_radius[global_splat_index];
+            vec3 position_world = position_radius.xyz;
+            float radius_world = position_radius.w;
+
+            vec3 center_view = vec3(0.0);
+            vec3 center_ndc = vec3(0.0);
+            bool passes_cull = gs_sphere_inside_frustum(position_world, radius_world) &&
+                               gs_projection_guard(position_world, center_view, center_ndc);
+            if (!passes_cull) {
+                break;
+            }
+
+            mat3 covariance_world = gs_load_world_covariance(global_splat_index);
+            mat2 covariance_2d = mat2(1.0);
+            if (!gs_project_covariance_2d(center_view, covariance_world, covariance_2d)) {
+                break;
+            }
+
+            mat2 regularized_covariance_2d = mat2(1.0);
+            if (!gs_regularize_covariance_2d(covariance_2d, regularized_covariance_2d)) {
+                break;
+            }
+
+            vec3 conic = vec3(0.0);
+            if (!gs_inverse_covariance_2d(regularized_covariance_2d, conic)) {
+                break;
+            }
+
+            vec2 axis0_extent_px = vec2(0.0);
+            vec2 axis1_extent_px = vec2(0.0);
+            if (!gs_covariance_axes_3sigma(regularized_covariance_2d,
+                                           axis0_extent_px,
+                                           axis1_extent_px)) {
+                break;
+            }
+            if (!gs_accept_projected_extent(axis0_extent_px, axis1_extent_px)) {
+                break;
+            }
+
+            GaussianSplatCovarianceOpacity packed = gs_covariance_opacity[global_splat_index];
+            float opacity = packed.covariance1_opacity.z;
+            if (!gs_is_finite(opacity)) {
+                break;
+            }
+
+            vec3 sh_direction = gs_sh_view_direction(position_world);
+            vec3 rgb = gs_evaluate_sh_rgb(global_splat_index, sh_direction);
+
+            vec3 camera_delta = position_world - global.camera_position_and_exposure.xyz;
+            float camera_distance_squared = dot(camera_delta, camera_delta);
+            if (!gs_is_finite(camera_distance_squared) || camera_distance_squared < 0.0) {
+                break;
+            }
+
+            projected.center_opacity = vec4(gs_ndc_to_pixel(center_ndc.xy), opacity, 0.0);
+            projected.axis0_axis1 = vec4(axis0_extent_px, axis1_extent_px);
+            projected.conic = vec4(conic, 0.0);
+            projected.rgb = vec4(rgb, 0.0);
+            distance_key = floatBitsToUint(camera_distance_squared);
+            visible = true;
+        } while (false);
     }
 
-    // A later subtask will append visible splats and generate sort entries. Keep
-    // the indirect instance-count write wired for now so Set 3 work-buffer writes
-    // remain validated.
-    if (global_splat_index == 0u) {
-        gs_indirect_draw.instance_count = gs_visible_count;
+    // Keep subgroup intrinsics in uniform control flow: all invocations reach
+    // this point, and the visibility predicate is passed as data to ballot.
+    uvec4 visible_mask = subgroupBallot(visible);
+    uint subgroup_visible_count = subgroupBallotBitCount(visible_mask);
+    uint subgroup_local_index = subgroupBallotExclusiveBitCount(visible_mask);
+
+    bool subgroup_leader = subgroupElect();
+    uint subgroup_base = 0u;
+    if (subgroup_leader && subgroup_visible_count > 0u) {
+        subgroup_base = atomicAdd(gs_visible_count, subgroup_visible_count);
+    }
+    subgroup_base = subgroupBroadcastFirst(subgroup_base);
+
+    if (visible) {
+        uint visible_index = subgroup_base + subgroup_local_index;
+        gs_projected_data[global_splat_index] = projected;
+        gs_sort_entries[visible_index].distance_key = distance_key;
+        gs_sort_entries[visible_index].global_splat_index = global_splat_index;
     }
 
-    vec4 position_radius = gs_position_radius[global_splat_index];
-    vec3 position_world = position_radius.xyz;
-    float radius_world = position_radius.w;
-
-    vec3 center_view = vec3(0.0);
-    vec3 center_ndc = vec3(0.0);
-    bool passes_cull = gs_sphere_inside_frustum(position_world, radius_world) &&
-                       gs_projection_guard(position_world, center_view, center_ndc);
-
-    if (!passes_cull) {
-        return;
+    if (subgroup_leader && subgroup_visible_count > 0u) {
+        atomicMax(gs_indirect_draw.instance_count, subgroup_base + subgroup_visible_count);
     }
-
-    mat3 covariance_world = gs_load_world_covariance(global_splat_index);
-    mat2 covariance_2d = mat2(1.0);
-    if (!gs_project_covariance_2d(center_view, covariance_world, covariance_2d)) {
-        return;
-    }
-
-    mat2 regularized_covariance_2d = mat2(1.0);
-    if (!gs_regularize_covariance_2d(covariance_2d, regularized_covariance_2d)) {
-        return;
-    }
-
-    vec3 conic = vec3(0.0);
-    if (!gs_inverse_covariance_2d(regularized_covariance_2d, conic)) {
-        return;
-    }
-
-    vec2 axis0_extent_px = vec2(0.0);
-    vec2 axis1_extent_px = vec2(0.0);
-    if (!gs_covariance_axes_3sigma(regularized_covariance_2d,
-                                   axis0_extent_px,
-                                   axis1_extent_px)) {
-        return;
-    }
-    if (!gs_accept_projected_extent(axis0_extent_px, axis1_extent_px)) {
-        return;
-    }
-
-    GaussianSplatCovarianceOpacity packed = gs_covariance_opacity[global_splat_index];
-    float opacity = packed.covariance1_opacity.z;
-    if (!gs_is_finite(opacity)) {
-        return;
-    }
-
-    vec3 sh_direction = gs_sh_view_direction(position_world);
-    vec3 rgb = gs_evaluate_sh_rgb(global_splat_index, sh_direction);
-
-    gs_projected_data[global_splat_index].center_opacity = vec4(gs_ndc_to_pixel(center_ndc.xy), opacity, 0.0);
-    gs_projected_data[global_splat_index].axis0_axis1 = vec4(axis0_extent_px, axis1_extent_px);
-    gs_projected_data[global_splat_index].conic = vec4(conic, 0.0);
-    gs_projected_data[global_splat_index].rgb = vec4(rgb, 0.0);
 }
