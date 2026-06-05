@@ -62,6 +62,14 @@ namespace himalaya::rhi {
                   first_instance);
     }
 
+    // ReSharper disable once CppParameterMayBeConst
+    void CommandBuffer::draw_indirect(VkBuffer buffer,
+                                      const VkDeviceSize offset,
+                                      const uint32_t draw_count,
+                                      const uint32_t stride) const {
+        vkCmdDrawIndirect(cmd_, buffer, offset, draw_count, stride);
+    }
+
     void CommandBuffer::draw_indexed(const uint32_t index_count,
                                      const uint32_t instance_count,
                                      const uint32_t first_index,

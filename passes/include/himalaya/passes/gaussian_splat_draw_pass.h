@@ -5,6 +5,7 @@
  * @brief Gaussian Splatting hardware raster composition pass.
  */
 
+#include <himalaya/passes/gaussian_splat_pass_resources.h>
 #include <himalaya/passes/gs_push_constants.h>
 #include <himalaya/rhi/pipeline.h>
 
@@ -56,18 +57,19 @@ namespace himalaya::passes {
         /**
          * @brief Registers the GS composition render pass.
          *
-         * This Step 6.2 pass establishes the target clear/store behavior,
-         * graphics state, descriptor binding, and premultiplied-under pipeline.
-         * The indirect draw command is added in the following task.
+         * Uses the cull/project-written VkDrawIndirectCommand so draw range is
+         * driven by visible_count while fixed command fields remain CPU-initialized.
          *
          * @param rg Render graph to add the graphics pass to.
          * @param composition_target Per-frame RG image ID for the GS composition target.
+         * @param resources Per-frame imported GS scene buffer resources.
          * @param scene Uploaded GS scene with a persistent Set 3 descriptor set.
          * @param frame_index Current frame-in-flight index for Set 0-2 binding.
          * @param push_constants Per-frame GS scalar state shared by draw shaders.
          */
         void record(framework::RenderGraph &rg,
                     framework::RGResourceId composition_target,
+                    const GaussianSplatGraphResources &resources,
                     const framework::GaussianSplatGpuScene &scene,
                     uint32_t frame_index,
                     const GSPushConstants &push_constants) const;

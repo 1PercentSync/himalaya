@@ -36,6 +36,7 @@ namespace himalaya::passes {
 
     void GaussianSplatDrawPass::record(framework::RenderGraph &rg,
                                        const framework::RGResourceId composition_target,
+                                       const GaussianSplatGraphResources &resources,
                                        const framework::GaussianSplatGpuScene &scene,
                                        const uint32_t frame_index,
                                        const GSPushConstants &push_constants) const {
@@ -50,10 +51,26 @@ namespace himalaya::passes {
                 framework::RGAccessType::Write,
                 framework::RGStage::ColorAttachment,
             },
+            framework::RGResourceUsage{
+                resources.projected_data,
+                framework::RGAccessType::Read,
+                framework::RGStage::Vertex,
+            },
+            framework::RGResourceUsage{
+                resources.sort_entries,
+                framework::RGAccessType::Read,
+                framework::RGStage::Vertex,
+            },
+            framework::RGResourceUsage{
+                resources.indirect_draw,
+                framework::RGAccessType::Read,
+                framework::RGStage::DrawIndirect,
+            },
         };
 
         rg.add_pass("GS Draw", usages,
-                    [this, &rg, composition_target, scene, frame_index, push_constants](const rhi::CommandBuffer &cmd) {
+                    [this, &rg, composition_target, resources, scene, frame_index, push_constants](
+                        const rhi::CommandBuffer &cmd) {
                         const auto composition_handle = rg.get_image(composition_target);
                         const auto &composition_image = rm_->get_image(composition_handle);
                         const VkExtent2D render_extent{
@@ -110,9 +127,12 @@ namespace himalaya::passes {
                         cmd.set_depth_test_enable(false);
                         cmd.set_depth_write_enable(false);
 
-                        // The following task adds vkCmdDrawIndirect using the
-                        // cull/project-written instance_count. This pass already
-                        // owns the target clear/store behavior and pipeline state.
+                        const auto indirect_handle = rg.get_buffer(resources.indirect_draw);
+                        const auto &indirect_buffer = rm_->get_buffer(indirect_handle);
+                        cmd.draw_indirect(indirect_buffer.buffer,
+                                          0,
+                                          1,
+                                          sizeof(framework::GaussianSplatDrawIndirectCommand));
 
                         cmd.end_rendering();
                     });

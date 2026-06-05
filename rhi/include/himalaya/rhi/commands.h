@@ -91,6 +91,18 @@ namespace himalaya::rhi {
                   uint32_t first_vertex = 0, uint32_t first_instance = 0) const;
 
         /**
+         * @brief Records non-indexed indirect draw calls.
+         * @param buffer     Vulkan buffer containing VkDrawIndirectCommand entries.
+         * @param offset     Byte offset of the first command.
+         * @param draw_count Number of commands to execute.
+         * @param stride     Byte stride between commands.
+         */
+        void draw_indirect(VkBuffer buffer,
+                           VkDeviceSize offset,
+                           uint32_t draw_count,
+                           uint32_t stride) const;
+
+        /**
          * @brief Records an indexed draw call.
          * @param index_count    Number of indices to draw.
          * @param instance_count Number of instances (default 1).
