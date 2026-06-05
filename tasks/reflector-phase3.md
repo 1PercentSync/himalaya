@@ -66,7 +66,7 @@
 
 - [x] 创建 GS vertex/fragment shaders（sorted entry → projected data → instanced quad；pixel-space conic alpha；premultiplied output）
 - [x] 创建 GS composition target 与 graphics pipeline（R16G16B16A16Sfloat、clear/store、depth off、cull none、premultiplied-under blend）
-- [ ] 实现 indirect draw integration（CPU 初始化 fixed fields,GPU 写 instanceCount,draw indirect 读取 command buffer）
+- [x] 实现 indirect draw integration（CPU 初始化 fixed fields,GPU 写 instanceCount,draw indirect 读取 command buffer）
 - [ ] 接入 resize 生命周期（只重建 viewport-sized composition/linear targets,不重建 capacity work buffers）
 - [ ] 请求用户在 CLion 中编译验证
 

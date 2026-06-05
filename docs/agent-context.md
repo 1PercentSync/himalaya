@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的渲染器
 - **分支**：`reflector` — Path Tracing + Gaussian Splatting
 - **Phase**：Phase 3.0 — Gaussian Splatting 基础渲染
-- **进度**：Phase 3.0 Step 6 第二小项完成：GS composition target 与 graphics pipeline 已创建；composition target 为 viewport-sized R16G16B16A16Sfloat managed image，GS draw pass 已建立 Set 0-2 + GS Set 3 pipeline、clear/store dynamic rendering 状态、depth off/cull none 和 front-to-back premultiplied-under blend；用户已审查通过
+- **进度**：Phase 3.0 Step 6 第三小项完成：GS indirect draw integration 已实现；RHI CommandBuffer 支持 non-indexed draw indirect，GS draw pass 声明 projected_data/sort_entries vertex reads 与 indirect_draw indirect read，并通过 VkDrawIndirectCommand-compatible buffer 执行单 command draw；用户已审查通过
 
 ### 下一个任务
 
-Phase 3.0 Step 6 第三小项：实现 indirect draw integration（CPU 初始化 fixed fields，GPU 写 instanceCount，draw indirect 读取 command buffer）
+Phase 3.0 Step 6 第四小项：接入 resize 生命周期（只重建 viewport-sized composition/linear targets，不重建 capacity work buffers）
 
 ---
 
