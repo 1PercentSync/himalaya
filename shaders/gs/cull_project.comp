@@ -200,7 +200,7 @@ bool gs_regularize_covariance_2d(mat2 covariance_2d, out mat2 regularized_covari
                      ? normalize(vec2(b, lambda0 - a))
                      : (a >= c ? vec2(1.0, 0.0) : vec2(0.0, 1.0));
     if (!gs_is_finite(axis0)) {
-        axis0 = vec2(1.0, 0.0);
+        return false;
     }
     vec2 axis1 = vec2(-axis0.y, axis0.x);
 
@@ -247,7 +247,7 @@ bool gs_covariance_axes_3sigma(mat2 covariance_2d, out vec2 axis0_extent_px, out
                      ? normalize(vec2(b, lambda0 - a))
                      : (a >= c ? vec2(1.0, 0.0) : vec2(0.0, 1.0));
     if (!gs_is_finite(axis0)) {
-        axis0 = vec2(1.0, 0.0);
+        return false;
     }
     vec2 axis1 = vec2(-axis0.y, axis0.x);
 
@@ -290,31 +290,31 @@ vec3 gs_load_sh_coefficient(uint global_splat_index, uint coefficient_index) {
 }
 
 /** Returns the world-space camera-forward fallback direction. */
-vec3 gs_camera_forward_world() {
-    vec3 forward = normalize((global.inv_view * vec4(0.0, 0.0, -1.0, 0.0)).xyz);
-    if (!gs_is_finite(forward)) {
-        return vec3(0.0, 0.0, -1.0);
-    }
-    return forward;
+bool gs_camera_forward_world(out vec3 forward) {
+    forward = normalize((global.inv_view * vec4(0.0, 0.0, -1.0, 0.0)).xyz);
+    return gs_is_finite(forward);
 }
 
 /** Computes the KHR camera-to-splat SH evaluation direction. */
-vec3 gs_sh_view_direction(vec3 position_world) {
-    vec3 direction = position_world - global.camera_position_and_exposure.xyz;
+bool gs_sh_view_direction(vec3 position_world, out vec3 direction) {
+    direction = position_world - global.camera_position_and_exposure.xyz;
     float length_squared = dot(direction, direction);
-    if (!gs_is_finite(length_squared) || length_squared <= 1.0e-12) {
-        return gs_camera_forward_world();
+    if (!gs_is_finite(length_squared)) {
+        return false;
+    }
+    if (length_squared <= 1.0e-12) {
+        return gs_camera_forward_world(direction);
     }
 
     direction *= inversesqrt(length_squared);
     if (!gs_is_finite(direction)) {
-        return gs_camera_forward_world();
+        return false;
     }
-    return direction;
+    return true;
 }
 
 /** Evaluates all scene SH degrees for one visible splat and clamps negative RGB. */
-vec3 gs_evaluate_sh_rgb(uint global_splat_index, vec3 view_direction) {
+bool gs_evaluate_sh_rgb(uint global_splat_index, vec3 view_direction, out vec3 rgb) {
     float x = view_direction.x;
     float y = view_direction.y;
     float z = view_direction.z;
@@ -322,7 +322,7 @@ vec3 gs_evaluate_sh_rgb(uint global_splat_index, vec3 view_direction) {
     float yy = y * y;
     float zz = z * z;
 
-    vec3 rgb = gs_load_sh_coefficient(global_splat_index, 0u) * 0.2820947917738781;
+    rgb = gs_load_sh_coefficient(global_splat_index, 0u) * 0.2820947917738781;
 
     if (gs_pc.max_sh_degree >= 1u) {
         rgb += gs_load_sh_coefficient(global_splat_index, 1u) * (y * -0.4886025119029199);
@@ -350,9 +350,10 @@ vec3 gs_evaluate_sh_rgb(uint global_splat_index, vec3 view_direction) {
 
     rgb += vec3(0.5);
     if (!gs_is_finite(rgb)) {
-        return vec3(0.0);
+        return false;
     }
-    return max(rgb, vec3(0.0));
+    rgb = max(rgb, vec3(0.0));
+    return true;
 }
 
 void main() {
@@ -408,8 +409,14 @@ void main() {
                 break;
             }
 
-            vec3 sh_direction = gs_sh_view_direction(position_world);
-            vec3 rgb = gs_evaluate_sh_rgb(global_splat_index, sh_direction);
+            vec3 sh_direction = vec3(0.0);
+            if (!gs_sh_view_direction(position_world, sh_direction)) {
+                break;
+            }
+            vec3 rgb = vec3(0.0);
+            if (!gs_evaluate_sh_rgb(global_splat_index, sh_direction, rgb)) {
+                break;
+            }
 
             vec3 camera_delta = position_world - global.camera_position_and_exposure.xyz;
             float camera_distance_squared = dot(camera_delta, camera_delta);
