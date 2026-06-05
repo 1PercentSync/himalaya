@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Phase 3.0 Step 4 第一小项：创建 cull/project compute shader 与 C++ pipeline/dispatch skeleton（buffer 声明、workgroup 256、Set 3 + GlobalUBO + push constants）
+Phase 3.0 Step 4 第一小项：清理 `GSPushConstants::flags` 预留字段，替换为明确的 `max_sh_degree` 字段并同步 C++/GLSL/文档契约
 
 ---
 

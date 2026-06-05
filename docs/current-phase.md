@@ -94,7 +94,7 @@ rgb                // SH-evaluated RGB in primitive colorSpace
 - GS 使用独立持久 Set 3 descriptor set，绑定 static baked buffers 和 work buffers。它不是 PT / compute pass 的 push descriptor Set 3。
 - Set 3 descriptor layout / pipeline layout 生命周期按 PT 模式归属于 renderer-lifetime pass / pipeline owner；GS scene resource owner 只管理 scene buffers、descriptor set allocation/write/rewrite，不引入 `shutdown()` 式双重销毁语义。
 - Descriptor 随 scene load/reload 或 buffer recreate 写入；每帧只更新 buffer 内容，不每帧 push descriptor。
-- `GSPushConstants` 只放 GS 专用小参数：`total_splat_count`、`sort_capacity`、`color_space`、`flags`、`near_gs`、`max_projected_extent_px`、`alpha_discard_threshold`、`power_discard_threshold`。
+- `GSPushConstants` 只放 GS 专用小参数：`total_splat_count`、`sort_capacity`、`color_space`、`max_sh_degree`、`near_gs`、`max_projected_extent_px`、`alpha_discard_threshold`、`power_discard_threshold`。`max_sh_degree` 来自 scene-level metadata，shader 由该字段推导 `sh_coefficients` packed vec4 stride（degree 0/1/2/3 = 1/3/7/12）。
 - View/projection/view_projection/camera_position/screen_size 复用 GlobalUBO，不在 GS push constants 中重复矩阵。
 - Work buffers 至少包含 visible count atomic、dense-by-global-index projected data、sort entry ping-pong、indirect draw command；容量全部由 `total_splat_count` / `sort_capacity` 派生。
 - 每帧 reset 必须发生在 cull/project 前：`visible_count = 0`、sort entries 填 `{UINT_MAX, UINT_MAX}`、`indirect.instanceCount = 0`。
@@ -229,7 +229,7 @@ Step 9 在硬件光栅 correctness baseline 建立后执行，用于补齐 Phase
 ### Per-frame 参数
 
 - GS 复用 GlobalUBO 中的 view、projection、view_projection、camera_position、screen_size。
-- GS 专用小参数放入 `GSPushConstants`：`total_splat_count`、`sort_capacity`、`color_space`、`flags`、`near_gs`、`max_projected_extent_px`、`alpha_discard_threshold`、`power_discard_threshold`。
+- GS 专用小参数放入 `GSPushConstants`：`total_splat_count`、`sort_capacity`、`color_space`、`max_sh_degree`、`near_gs`、`max_projected_extent_px`、`alpha_discard_threshold`、`power_discard_threshold`。`max_sh_degree` 来自 scene-level metadata，shader 由该字段推导 `sh_coefficients` packed vec4 stride（degree 0/1/2/3 = 1/3/7/12）。
 - `max_projected_extent_px` 初始为 screen short side × 0.25；discard thresholds 初始为 alpha=1e-4、power=-20。
 - Tonemapping mode 是 TonemappingPass 独立 push constant，不属于 GS push constants。
 
