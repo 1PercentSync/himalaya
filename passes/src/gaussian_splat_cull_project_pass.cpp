@@ -79,7 +79,7 @@ namespace himalaya::passes {
             },
             framework::RGResourceUsage{
                 resources.indirect_draw,
-                framework::RGAccessType::Write,
+                framework::RGAccessType::ReadWrite,
                 framework::RGStage::Compute,
             },
         };
