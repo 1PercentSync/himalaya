@@ -297,6 +297,23 @@ namespace himalaya::rhi {
         return true;
     }
 
+    // Checks subgroup operations required by GS compute shaders.
+    // Vulkan guarantees basic subgroup operations for graphics/compute devices;
+    // ballot operations are optional and must be queried explicitly.
+    // ReSharper disable once CppParameterMayBeConst
+    static bool has_required_subgroup_operations(VkPhysicalDevice dev) {
+        VkPhysicalDeviceSubgroupProperties subgroup_props{};
+        subgroup_props.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_PROPERTIES;
+
+        VkPhysicalDeviceProperties2 props2{};
+        props2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
+        props2.pNext = &subgroup_props;
+
+        vkGetPhysicalDeviceProperties2(dev, &props2);
+
+        return (subgroup_props.supportedOperations & VK_SUBGROUP_FEATURE_BALLOT_BIT) != 0;
+    }
+
     // Checks whether the device meets descriptor capacity requirements.
     // Combined image samplers count against both sampled image and sampler limits.
     // ReSharper disable once CppParameterMayBeConst
@@ -335,6 +352,7 @@ namespace himalaya::rhi {
         if (props.apiVersion < VK_API_VERSION_1_4) return 0;
 
         if (!has_required_features(dev)) return 0;
+        if (!has_required_subgroup_operations(dev)) return 0;
         if (!has_required_limits(dev)) return 0;
 
         int score = 1;
