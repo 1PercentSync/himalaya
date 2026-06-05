@@ -16,6 +16,7 @@
 #include <himalaya/framework/scene_data.h>
 #include <himalaya/framework/texture.h>
 #include <himalaya/rhi/acceleration_structure.h>
+#include <himalaya/passes/gaussian_splat_bitonic_sort_pass.h>
 #include <himalaya/passes/gaussian_splat_cull_project_pass.h>
 #include <himalaya/passes/gaussian_splat_pass_resources.h>
 #include <himalaya/passes/gaussian_splat_reset_pass.h>
@@ -316,6 +317,9 @@ namespace himalaya::app {
 
         /** @brief Compute cull/project pass for GS visible-list generation. */
         passes::GaussianSplatCullProjectPass gaussian_splat_cull_project_pass_{};
+
+        /** @brief Compute bitonic sort pass for the GS correctness baseline. */
+        passes::GaussianSplatBitonicSortPass gaussian_splat_bitonic_sort_pass_{};
 
         /** @brief Acceleration structure manager (RT, initialized when rt_supported). */
         rhi::AccelerationStructureManager as_manager_{};

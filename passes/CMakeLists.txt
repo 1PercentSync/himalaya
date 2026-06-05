@@ -6,6 +6,7 @@ target_sources(himalaya_passes PRIVATE
         src/gaussian_splat_pass_resources.cpp
         src/gaussian_splat_reset_pass.cpp
         src/gaussian_splat_cull_project_pass.cpp
+        src/gaussian_splat_bitonic_sort_pass.cpp
 )
 
 target_include_directories(himalaya_passes PUBLIC include)
