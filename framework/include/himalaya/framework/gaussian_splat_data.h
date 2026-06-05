@@ -356,6 +356,9 @@ namespace himalaya::framework {
         /** @brief Per-frame work buffers read and written by GS passes. */
         GaussianSplatWorkBuffers work_buffers{};
 
+        /** @brief Persistent descriptor set binding all static and work GS buffers. */
+        VkDescriptorSet descriptor_set = VK_NULL_HANDLE;
+
         /** @brief Scene-level metadata shared by all renderable GS primitives. */
         GaussianSplatSceneMetadata metadata{};
     };

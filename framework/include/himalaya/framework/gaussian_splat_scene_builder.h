@@ -7,10 +7,13 @@
 
 #include <himalaya/framework/gaussian_splat_data.h>
 
+#include <vulkan/vulkan.h>
+
 #include <string>
 #include <vector>
 
 namespace himalaya::rhi {
+    class Context;
     class ResourceManager;
 }
 
@@ -51,12 +54,16 @@ namespace himalaya::framework {
          * Context::begin_immediate() / end_immediate() scope because static
          * buffers are uploaded through ResourceManager.
          *
+         * @param ctx Vulkan context used for scene-specific descriptor set allocation.
          * @param rm Resource manager used to create and upload static buffers.
+         * @param descriptor_set_layout Persistent GS Set 3 layout owned by pass-layer resources.
          * @param scene CPU-side GS scene loaded from glTF or converted PLY.
          * @param error_message Receives a human-readable failure reason.
          * @return true on success; false when the whole GS scene must be rejected.
          */
-        bool build(rhi::ResourceManager &rm,
+        bool build(rhi::Context &ctx,
+                   rhi::ResourceManager &rm,
+                   VkDescriptorSetLayout descriptor_set_layout,
                    const GaussianSplatScene &scene,
                    std::string &error_message);
 
@@ -87,8 +94,14 @@ namespace himalaya::framework {
         /** @brief CPU-side packed SH data, indexed by global splat index and packed vec4 stride. */
         std::vector<glm::vec4> baked_sh_coefficients_;
 
+        /** @brief Vulkan context used to own scene-specific descriptor pool resources. */
+        rhi::Context *context_ = nullptr;
+
         /** @brief Resource manager that owns the created static GPU buffers. */
         rhi::ResourceManager *resource_manager_ = nullptr;
+
+        /** @brief Descriptor pool owning the scene-specific persistent GS Set 3 descriptor set. */
+        VkDescriptorPool descriptor_pool_ = VK_NULL_HANDLE;
 
         /** @brief True when gpu_scene_ and static GPU buffers match a successfully built scene. */
         bool valid_ = false;

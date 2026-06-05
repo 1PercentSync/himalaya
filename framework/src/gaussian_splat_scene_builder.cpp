@@ -5,6 +5,7 @@
 
 #include <himalaya/framework/gaussian_splat_scene_builder.h>
 
+#include <himalaya/rhi/context.h>
 #include <himalaya/rhi/resources.h>
 
 #include <glm/gtc/quaternion.hpp>
@@ -18,6 +19,7 @@
 #include <limits>
 #include <stdexcept>
 #include <string>
+#include <tuple>
 
 namespace himalaya::framework {
     namespace {
@@ -382,6 +384,52 @@ namespace himalaya::framework {
             }, debug_name);
         }
 
+        /** @brief Creates a scene-specific descriptor pool for one persistent GS Set 3. */
+        VkDescriptorPool create_descriptor_pool(const rhi::Context &ctx) {
+            const VkDescriptorPoolSize pool_size{
+                .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                .descriptorCount = kGaussianSplatSet3BindingCount,
+            };
+
+            const VkDescriptorPoolCreateInfo pool_info{
+                .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+                .maxSets = 1,
+                .poolSizeCount = 1,
+                .pPoolSizes = &pool_size,
+            };
+
+            VkDescriptorPool pool = VK_NULL_HANDLE;
+            VK_CHECK(vkCreateDescriptorPool(ctx.device, &pool_info, nullptr, &pool));
+            return pool;
+        }
+
+        /** @brief Allocates one persistent GS Set 3 descriptor set. */
+        VkDescriptorSet allocate_descriptor_set(const rhi::Context &ctx,
+                                                const VkDescriptorPool pool,
+                                                const VkDescriptorSetLayout layout) {
+            const VkDescriptorSetAllocateInfo alloc_info{
+                .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+                .descriptorPool = pool,
+                .descriptorSetCount = 1,
+                .pSetLayouts = &layout,
+            };
+
+            VkDescriptorSet set = VK_NULL_HANDLE;
+            VK_CHECK(vkAllocateDescriptorSets(ctx.device, &alloc_info, &set));
+            return set;
+        }
+
+        /** @brief Returns a whole-buffer descriptor info for one RHI buffer handle. */
+        VkDescriptorBufferInfo buffer_info(const rhi::ResourceManager &rm,
+                                           const rhi::BufferHandle buffer) {
+            const auto &data = rm.get_buffer(buffer);
+            return {
+                .buffer = data.buffer,
+                .offset = 0,
+                .range = static_cast<VkDeviceSize>(data.desc.size),
+            };
+        }
+
         /**
          * @brief Validates that a node transform is decomposable into T * R * S.
          *
@@ -489,14 +537,21 @@ namespace himalaya::framework {
         }
     }
 
-    bool GaussianSplatSceneBuilder::build(rhi::ResourceManager &rm,
+    bool GaussianSplatSceneBuilder::build(rhi::Context &ctx,
+                                          rhi::ResourceManager &rm,
+                                          const VkDescriptorSetLayout descriptor_set_layout,
                                           const GaussianSplatScene &scene,
                                           std::string &error_message) {
         destroy();
+        context_ = &ctx;
         resource_manager_ = &rm;
         error_message.clear();
 
         try {
+            if (descriptor_set_layout == VK_NULL_HANDLE) {
+                throw std::runtime_error("GS descriptor set layout is not initialized");
+            }
+
             gpu_scene_.total_splat_count = scene.total_splat_count;
             gpu_scene_.sort_capacity = next_power_of_two(scene.total_splat_count);
             gpu_scene_.sh_packed_vec4_stride = gaussian_splat_sh_packed_vec4_stride(scene.metadata.max_sh_degree);
@@ -614,6 +669,92 @@ namespace himalaya::framework {
                     rhi::BufferUsage::IndirectBuffer,
                 "GS Indirect Draw Buffer");
 
+            descriptor_pool_ = create_descriptor_pool(ctx);
+            gpu_scene_.descriptor_set = allocate_descriptor_set(ctx, descriptor_pool_, descriptor_set_layout);
+
+            const auto position_radius_info = buffer_info(rm, gpu_scene_.static_buffers.position_radius_buffer);
+            const auto covariance_opacity_info = buffer_info(rm, gpu_scene_.static_buffers.covariance_opacity_buffer);
+            const auto sh_coefficients_info = buffer_info(rm, gpu_scene_.static_buffers.sh_coefficients_buffer);
+            const auto visible_count_info = buffer_info(rm, work_buffers.visible_count_buffer);
+            const auto projected_data_info = buffer_info(rm, work_buffers.projected_data_buffer);
+            const auto sort_entries_info = buffer_info(rm, work_buffers.sort_entries_buffer);
+            const auto sort_entries_scratch_info = buffer_info(rm, work_buffers.sort_entries_scratch_buffer);
+            const auto indirect_draw_info = buffer_info(rm, work_buffers.indirect_draw_buffer);
+
+            const std::array writes = {
+                VkWriteDescriptorSet{
+                    .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                    .dstSet = gpu_scene_.descriptor_set,
+                    .dstBinding = static_cast<uint32_t>(GaussianSplatSet3Binding::PositionRadius),
+                    .descriptorCount = 1,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                    .pBufferInfo = &position_radius_info,
+                },
+                VkWriteDescriptorSet{
+                    .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                    .dstSet = gpu_scene_.descriptor_set,
+                    .dstBinding = static_cast<uint32_t>(GaussianSplatSet3Binding::CovarianceOpacity),
+                    .descriptorCount = 1,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                    .pBufferInfo = &covariance_opacity_info,
+                },
+                VkWriteDescriptorSet{
+                    .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                    .dstSet = gpu_scene_.descriptor_set,
+                    .dstBinding = static_cast<uint32_t>(GaussianSplatSet3Binding::ShCoefficients),
+                    .descriptorCount = 1,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                    .pBufferInfo = &sh_coefficients_info,
+                },
+                VkWriteDescriptorSet{
+                    .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                    .dstSet = gpu_scene_.descriptor_set,
+                    .dstBinding = static_cast<uint32_t>(GaussianSplatSet3Binding::VisibleCount),
+                    .descriptorCount = 1,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                    .pBufferInfo = &visible_count_info,
+                },
+                VkWriteDescriptorSet{
+                    .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                    .dstSet = gpu_scene_.descriptor_set,
+                    .dstBinding = static_cast<uint32_t>(GaussianSplatSet3Binding::ProjectedData),
+                    .descriptorCount = 1,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                    .pBufferInfo = &projected_data_info,
+                },
+                VkWriteDescriptorSet{
+                    .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                    .dstSet = gpu_scene_.descriptor_set,
+                    .dstBinding = static_cast<uint32_t>(GaussianSplatSet3Binding::SortEntries),
+                    .descriptorCount = 1,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                    .pBufferInfo = &sort_entries_info,
+                },
+                VkWriteDescriptorSet{
+                    .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                    .dstSet = gpu_scene_.descriptor_set,
+                    .dstBinding = static_cast<uint32_t>(GaussianSplatSet3Binding::SortEntriesScratch),
+                    .descriptorCount = 1,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                    .pBufferInfo = &sort_entries_scratch_info,
+                },
+                VkWriteDescriptorSet{
+                    .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                    .dstSet = gpu_scene_.descriptor_set,
+                    .dstBinding = static_cast<uint32_t>(GaussianSplatSet3Binding::IndirectDraw),
+                    .descriptorCount = 1,
+                    .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                    .pBufferInfo = &indirect_draw_info,
+                },
+            };
+            static_assert(std::tuple_size_v<decltype(writes)> == kGaussianSplatSet3BindingCount);
+
+            vkUpdateDescriptorSets(ctx.device,
+                                   static_cast<uint32_t>(writes.size()),
+                                   writes.data(),
+                                   0,
+                                   nullptr);
+
             baked_position_radius_.clear();
             baked_covariance_opacity_.clear();
             baked_sh_coefficients_.clear();
@@ -628,6 +769,11 @@ namespace himalaya::framework {
     }
 
     void GaussianSplatSceneBuilder::destroy() {
+        if (context_ && descriptor_pool_ != VK_NULL_HANDLE) {
+            vkDestroyDescriptorPool(context_->device, descriptor_pool_, nullptr);
+            descriptor_pool_ = VK_NULL_HANDLE;
+        }
+
         if (resource_manager_) {
             auto &static_buffers = gpu_scene_.static_buffers;
             if (static_buffers.position_radius_buffer.valid()) {
@@ -662,6 +808,7 @@ namespace himalaya::framework {
         baked_position_radius_.clear();
         baked_covariance_opacity_.clear();
         baked_sh_coefficients_.clear();
+        context_ = nullptr;
         resource_manager_ = nullptr;
         valid_ = false;
     }
