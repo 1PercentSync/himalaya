@@ -39,7 +39,7 @@
 ## Step 3:GS descriptors、work buffers 与 reset
 
 - [x] 定义 GS Set 3 持久 descriptor layout 与 `GSPushConstants`（static baked buffers + work buffers；复用 GlobalUBO camera/screen 字段）
-- [ ] 按 PT 模式拆分 GS Set 3 生命周期职责（descriptor layout 属于 renderer-lifetime pass/pipeline owner；GS scene resource owner 只管理 scene buffers、descriptor set allocation/write/rewrite，不使用 `shutdown()` 式双重销毁语义）
+- [x] 按 PT 模式拆分 GS Set 3 生命周期职责（descriptor layout 属于 renderer-lifetime pass/pipeline owner；GS scene resource owner 只管理 scene buffers、descriptor set allocation/write/rewrite，不使用 `shutdown()` 式双重销毁语义）
 - [ ] 创建 capacity-based GS work buffers（visible count、projected data、sort entry ping-pong、indirect draw command）
 - [ ] 创建 GS Set 3 descriptor set 并实现 descriptor 写入/重写逻辑（scene reload 或 buffer recreate 时更新,非每帧 push）
 - [ ] 实现每帧 work buffer reset 与 indirect command 固定字段初始化（visible_count、sort sentinel、instanceCount）
