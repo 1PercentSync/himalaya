@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的渲染器
 - **分支**：`reflector` — Path Tracing + Gaussian Splatting
 - **Phase**：Phase 3.0 — Gaussian Splatting 基础渲染
-- **进度**：Phase 3.0 Step 4 第五小项完成：per-visible-splat SH evaluation 已实现，projected data RGB 写入已接通；用户已验收并允许继续
+- **进度**：Phase 3.0 Step 4 第六小项完成：visible append、sort entry 生成与 indirect instanceCount 更新已实现，采用 subgroup aggregated append；用户已在 CLion 编译验证通过
 
 ### 下一个任务
 
-Phase 3.0 Step 4 第六小项：实现 visible append、sort entry 生成与 indirect instanceCount 更新（subgroup uniform control flow、distance_key、sentinel、global_splat_index）
+Phase 3.0 Step 4 最后一小项：请求用户在 CLion 中编译验证
 
 ---
 
