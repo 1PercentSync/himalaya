@@ -21,7 +21,7 @@ namespace himalaya::passes {
         uint32_t total_splat_count; ///< Total number of splats in the uploaded GS scene.
         uint32_t sort_capacity; ///< Power-of-two sort/work capacity derived from total_splat_count.
         uint32_t color_space; ///< GaussianSplatColorSpace encoded as a shader-visible integer.
-        uint32_t flags; ///< GS path feature/debug flags, currently reserved for later steps.
+        uint32_t max_sh_degree; ///< Scene-level maximum SH degree used to derive the shader coefficient stride.
         float near_gs; ///< GS-specific near plane used by projection-stability checks.
         float max_projected_extent_px; ///< Maximum accepted projected OBB half-axis extent in pixels.
         float alpha_discard_threshold; ///< Minimum alpha accepted by the draw fragment shader.

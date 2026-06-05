@@ -14,6 +14,8 @@
 const uint GS_COLOR_SPACE_SRGB_REC709_DISPLAY = 0u;
 const uint GS_COLOR_SPACE_LIN_REC709_DISPLAY = 1u;
 
+const uint GS_MAX_SH_DEGREE = 3u;
+
 // ---- Set 3 persistent descriptor bindings ----
 
 const uint GS_BINDING_POSITION_RADIUS = 0u;
@@ -61,12 +63,26 @@ layout (push_constant) uniform GSPushConstantBlock {
     uint total_splat_count;
     uint sort_capacity;
     uint color_space;
-    uint flags;
+    uint max_sh_degree;
     float near_gs;
     float max_projected_extent_px;
     float alpha_discard_threshold;
     float power_discard_threshold;
 } gs_pc;
+
+/** Returns the packed vec4 stride for one splat's SH coefficients. */
+uint gs_sh_packed_vec4_stride() {
+    if (gs_pc.max_sh_degree == 0u) {
+        return 1u;
+    }
+    if (gs_pc.max_sh_degree == 1u) {
+        return 3u;
+    }
+    if (gs_pc.max_sh_degree == 2u) {
+        return 7u;
+    }
+    return 12u;
+}
 
 // ---- Set 3: static baked buffers + work buffers ----
 
