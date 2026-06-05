@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的渲染器
 - **分支**：`reflector` — Path Tracing + Gaussian Splatting
 - **Phase**：Phase 3.0 — Gaussian Splatting 基础渲染
-- **进度**：Phase 3.0 Step 4 第三小项完成：world-space frustum sphere cull 与 projection 防御已实现；用户已验收并允许继续
+- **进度**：Phase 3.0 Step 4 第四小项完成：screen-space projected data 生成已实现（center_px、2D covariance、正定化、conic、3σ OBB、giant projection discard）；用户已验收并允许继续
 
 ### 下一个任务
 
-Phase 3.0 Step 4 第四小项：实现 screen-space projection 数据生成（center_px、2D covariance、正定化、conic、3σ OBB extent、giant projection discard）
+Phase 3.0 Step 4 第五小项：实现 per-visible-splat SH evaluation 与 projected data 写入（camera→splat view dir、all-degree RGB、负分量 clamp）
 
 ---
 
