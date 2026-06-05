@@ -30,6 +30,8 @@ namespace himalaya::app {
         descriptor_manager_ = &dm;
         imgui_ = &imgui;
 
+        gaussian_splat_scene_builder_.init(*ctx_);
+
         render_graph_.init(resource_manager_);
         render_graph_.set_reference_resolution(swapchain_->extent);
         register_swapchain_images();
@@ -213,7 +215,7 @@ namespace himalaya::app {
     }
 
     void Renderer::destroy() {
-        gaussian_splat_scene_builder_.destroy();
+        gaussian_splat_scene_builder_.shutdown();
         emissive_light_builder_.destroy();
         scene_as_builder_.destroy();
         as_manager_.destroy();

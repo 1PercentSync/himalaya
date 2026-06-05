@@ -144,6 +144,36 @@ namespace himalaya::framework {
         uint32_t global_splat_index = UINT32_MAX; ///< offset 4 — payload index into global splat buffers
     };
 
+    /** @brief Persistent Set 3 storage-buffer bindings used by every GS pass. */
+    enum class GaussianSplatSet3Binding : uint32_t {
+        /** @brief Static baked world position plus 3-sigma cull radius buffer. */
+        PositionRadius = 0,
+
+        /** @brief Static baked world covariance plus opacity buffer. */
+        CovarianceOpacity = 1,
+
+        /** @brief Static packed spherical harmonics coefficient buffer. */
+        ShCoefficients = 2,
+
+        /** @brief Work buffer containing the visible splat counter. */
+        VisibleCount = 3,
+
+        /** @brief Work buffer containing dense projected splat data by global splat index. */
+        ProjectedData = 4,
+
+        /** @brief Work buffer containing the primary sort entries. */
+        SortEntries = 5,
+
+        /** @brief Work buffer containing scratch/ping-pong sort entries. */
+        SortEntriesScratch = 6,
+
+        /** @brief Work buffer containing the VkDrawIndirectCommand payload. */
+        IndirectDraw = 7,
+    };
+
+    /** @brief Number of persistent GS Set 3 storage-buffer bindings. */
+    inline constexpr uint32_t kGaussianSplatSet3BindingCount = 8;
+
     /** @brief Fixed vertex count for one non-indexed GS quad instance. */
     inline constexpr uint32_t kGaussianSplatQuadVertexCount = 6;
 

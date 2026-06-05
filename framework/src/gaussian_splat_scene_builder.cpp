@@ -5,6 +5,7 @@
 
 #include <himalaya/framework/gaussian_splat_scene_builder.h>
 
+#include <himalaya/rhi/context.h>
 #include <himalaya/rhi/resources.h>
 
 #include <glm/gtc/quaternion.hpp>
@@ -18,6 +19,7 @@
 #include <limits>
 #include <stdexcept>
 #include <string>
+#include <tuple>
 
 namespace himalaya::framework {
     namespace {
@@ -465,6 +467,11 @@ namespace himalaya::framework {
         }
     } // namespace
 
+    void GaussianSplatSceneBuilder::init(rhi::Context &ctx) {
+        context_ = &ctx;
+        create_descriptor_set_layout();
+    }
+
     bool GaussianSplatSceneBuilder::preflight(const GaussianSplatScene &scene,
                                               std::string &error_message) const {
         error_message.clear();
@@ -601,11 +608,104 @@ namespace himalaya::framework {
         valid_ = false;
     }
 
+    void GaussianSplatSceneBuilder::shutdown() {
+        destroy();
+        destroy_descriptor_set_layout();
+        context_ = nullptr;
+    }
+
     bool GaussianSplatSceneBuilder::valid() const {
         return valid_;
     }
 
     const GaussianSplatGpuScene &GaussianSplatSceneBuilder::gpu_scene() const {
         return gpu_scene_;
+    }
+
+    VkDescriptorSetLayout GaussianSplatSceneBuilder::descriptor_set_layout() const {
+        return descriptor_set_layout_;
+    }
+
+    void GaussianSplatSceneBuilder::create_descriptor_set_layout() {
+        if (descriptor_set_layout_ != VK_NULL_HANDLE) {
+            return;
+        }
+        if (!context_) {
+            throw std::runtime_error("GS descriptor layout creation requires an initialized context");
+        }
+
+        constexpr VkShaderStageFlags kAllGsStages = VK_SHADER_STAGE_COMPUTE_BIT |
+                                                    VK_SHADER_STAGE_VERTEX_BIT |
+                                                    VK_SHADER_STAGE_FRAGMENT_BIT;
+
+        const std::array bindings = {
+            VkDescriptorSetLayoutBinding{
+                .binding = static_cast<uint32_t>(GaussianSplatSet3Binding::PositionRadius),
+                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                .descriptorCount = 1,
+                .stageFlags = kAllGsStages,
+            },
+            VkDescriptorSetLayoutBinding{
+                .binding = static_cast<uint32_t>(GaussianSplatSet3Binding::CovarianceOpacity),
+                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                .descriptorCount = 1,
+                .stageFlags = kAllGsStages,
+            },
+            VkDescriptorSetLayoutBinding{
+                .binding = static_cast<uint32_t>(GaussianSplatSet3Binding::ShCoefficients),
+                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                .descriptorCount = 1,
+                .stageFlags = kAllGsStages,
+            },
+            VkDescriptorSetLayoutBinding{
+                .binding = static_cast<uint32_t>(GaussianSplatSet3Binding::VisibleCount),
+                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                .descriptorCount = 1,
+                .stageFlags = kAllGsStages,
+            },
+            VkDescriptorSetLayoutBinding{
+                .binding = static_cast<uint32_t>(GaussianSplatSet3Binding::ProjectedData),
+                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                .descriptorCount = 1,
+                .stageFlags = kAllGsStages,
+            },
+            VkDescriptorSetLayoutBinding{
+                .binding = static_cast<uint32_t>(GaussianSplatSet3Binding::SortEntries),
+                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                .descriptorCount = 1,
+                .stageFlags = kAllGsStages,
+            },
+            VkDescriptorSetLayoutBinding{
+                .binding = static_cast<uint32_t>(GaussianSplatSet3Binding::SortEntriesScratch),
+                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                .descriptorCount = 1,
+                .stageFlags = kAllGsStages,
+            },
+            VkDescriptorSetLayoutBinding{
+                .binding = static_cast<uint32_t>(GaussianSplatSet3Binding::IndirectDraw),
+                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                .descriptorCount = 1,
+                .stageFlags = kAllGsStages,
+            },
+        };
+        static_assert(std::tuple_size_v<decltype(bindings)> == kGaussianSplatSet3BindingCount);
+
+        const VkDescriptorSetLayoutCreateInfo layout_info{
+            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+            .bindingCount = static_cast<uint32_t>(bindings.size()),
+            .pBindings = bindings.data(),
+        };
+
+        VK_CHECK(vkCreateDescriptorSetLayout(context_->device,
+                                             &layout_info,
+                                             nullptr,
+                                             &descriptor_set_layout_));
+    }
+
+    void GaussianSplatSceneBuilder::destroy_descriptor_set_layout() {
+        if (context_ && descriptor_set_layout_ != VK_NULL_HANDLE) {
+            vkDestroyDescriptorSetLayout(context_->device, descriptor_set_layout_, nullptr);
+            descriptor_set_layout_ = VK_NULL_HANDLE;
+        }
     }
 } // namespace himalaya::framework
