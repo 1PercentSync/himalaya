@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的渲染器
 - **分支**：`reflector` — Path Tracing + Gaussian Splatting
 - **Phase**：Phase 3.0 — Gaussian Splatting 基础渲染
-- **进度**：Phase 3.0 Step 5 完成：bitonic sort shader 与 capacity dispatch orchestration 已实现；GS preprocess helper 已接入 reset → cull/project → bitonic sort，共享同一组 imported GS buffer RG resources，sort 消费 cull/project 写入的 primary `sort_entries`，draw range 语义保持为后续 draw indirect 读取 cull/project 写入的 `visible_count` / `instanceCount`；用户已在 CLion 编译验证通过
+- **进度**：Phase 3.0 Step 6 第一小项完成：GS draw vertex/fragment shaders 已创建；vertex shader 通过 sorted entry 读取 projected data 并展开 instanced quad，fragment shader 使用 pixel-space conic 计算 alpha 并输出 premultiplied color；用户已审查通过
 
 ### 下一个任务
 
-Phase 3.0 Step 6 第一小项：创建 GS vertex/fragment shaders（sorted entry → projected data → instanced quad；pixel-space conic alpha；premultiplied output）
+Phase 3.0 Step 6 第二小项：创建 GS composition target 与 graphics pipeline（R16G16B16A16Sfloat、clear/store、depth off、cull none、premultiplied-under blend）
 
 ---
 
