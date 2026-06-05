@@ -205,6 +205,7 @@ namespace himalaya::app {
 
         // --- Pass setup ---
         gaussian_splat_pass_resources_.setup(*ctx_);
+        gaussian_splat_reset_pass_.setup(*resource_manager_);
         tonemapping_pass_.setup(*ctx_, *resource_manager_, *descriptor_manager_, shader_compiler_, swapchain_->format);
 
         if (ctx_->rt_supported) {
@@ -215,6 +216,7 @@ namespace himalaya::app {
 
     void Renderer::destroy() {
         gaussian_splat_scene_builder_.destroy();
+        gaussian_splat_reset_pass_.destroy();
         gaussian_splat_pass_resources_.destroy();
         emissive_light_builder_.destroy();
         scene_as_builder_.destroy();

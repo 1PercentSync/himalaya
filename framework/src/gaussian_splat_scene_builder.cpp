@@ -669,6 +669,11 @@ namespace himalaya::framework {
                     rhi::BufferUsage::IndirectBuffer,
                 "GS Indirect Draw Buffer");
 
+            const GaussianSplatDrawIndirectCommand indirect_initial{};
+            rm.upload_buffer(work_buffers.indirect_draw_buffer,
+                             &indirect_initial,
+                             sizeof(indirect_initial));
+
             descriptor_pool_ = create_descriptor_pool(ctx);
             gpu_scene_.descriptor_set = allocate_descriptor_set(ctx, descriptor_pool_, descriptor_set_layout);
 

@@ -17,6 +17,7 @@
 #include <himalaya/framework/texture.h>
 #include <himalaya/rhi/acceleration_structure.h>
 #include <himalaya/passes/gaussian_splat_pass_resources.h>
+#include <himalaya/passes/gaussian_splat_reset_pass.h>
 #include <himalaya/passes/reference_view_pass.h>
 #include <himalaya/passes/tonemapping_pass.h>
 #include <himalaya/rhi/context.h>
@@ -308,6 +309,9 @@ namespace himalaya::app {
 
         /** @brief Renderer-lifetime shared descriptor layout state for GS passes. */
         passes::GaussianSplatPassResources gaussian_splat_pass_resources_{};
+
+        /** @brief Transfer reset pass for per-frame GS work buffers. */
+        passes::GaussianSplatResetPass gaussian_splat_reset_pass_{};
 
         /** @brief Acceleration structure manager (RT, initialized when rt_supported). */
         rhi::AccelerationStructureManager as_manager_{};

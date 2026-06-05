@@ -97,4 +97,27 @@ namespace himalaya::passes {
     VkDescriptorSetLayout GaussianSplatPassResources::descriptor_set_layout() const {
         return descriptor_set_layout_;
     }
+
+    GaussianSplatGraphResources GaussianSplatPassResources::import_scene_resources(
+        framework::RenderGraph &rg,
+        const framework::GaussianSplatGpuScene &scene) const {
+        return {
+            .position_radius = rg.import_buffer(
+                "GS Position Radius", scene.static_buffers.position_radius_buffer),
+            .covariance_opacity = rg.import_buffer(
+                "GS Covariance Opacity", scene.static_buffers.covariance_opacity_buffer),
+            .sh_coefficients = rg.import_buffer(
+                "GS SH Coefficients", scene.static_buffers.sh_coefficients_buffer),
+            .visible_count = rg.import_buffer(
+                "GS Visible Count", scene.work_buffers.visible_count_buffer),
+            .projected_data = rg.import_buffer(
+                "GS Projected Data", scene.work_buffers.projected_data_buffer),
+            .sort_entries = rg.import_buffer(
+                "GS Sort Entries", scene.work_buffers.sort_entries_buffer),
+            .sort_entries_scratch = rg.import_buffer(
+                "GS Sort Entries Scratch", scene.work_buffers.sort_entries_scratch_buffer),
+            .indirect_draw = rg.import_buffer(
+                "GS Indirect Draw", scene.work_buffers.indirect_draw_buffer),
+        };
+    }
 } // namespace himalaya::passes
