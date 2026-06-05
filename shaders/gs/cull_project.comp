@@ -1,0 +1,34 @@
+/**
+ * @file cull_project.comp
+ * @brief Gaussian Splatting cull/project compute shader skeleton.
+ */
+
+#version 460
+
+#include "common/bindings.glsl"
+#include "gs/gs_common.glsl"
+
+layout (local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+
+void main() {
+    const uint global_splat_index = gl_GlobalInvocationID.x;
+    if (global_splat_index >= gs_pc.total_splat_count) {
+        return;
+    }
+
+    // Skeleton only: the full cull/project implementation will populate
+    // projected data and sort entries. For now, keep the end-of-pass indirect
+    // instance-count write wired so Set 3 work-buffer writes are validated.
+    if (global_splat_index == 0u) {
+        const vec4 first_position_radius = gs_position_radius[0];
+        const vec3 camera_world = global.camera_position_and_exposure.xyz;
+        const float distance_squared = dot(first_position_radius.xyz - camera_world,
+                                           first_position_radius.xyz - camera_world);
+
+        uint visible_count = gs_visible_count;
+        if (any(isnan(first_position_radius)) || isnan(distance_squared) || isinf(distance_squared)) {
+            visible_count = 0u;
+        }
+        gs_indirect_draw.instance_count = visible_count;
+    }
+}
