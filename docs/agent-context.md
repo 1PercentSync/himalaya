@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的渲染器
 - **分支**：`reflector` — Path Tracing + Gaussian Splatting
 - **Phase**：Phase 3.0 — Gaussian Splatting 基础渲染
-- **进度**：Phase 3.0 Step 4 第一小项完成：`GSPushConstants::flags` 已清理并替换为明确的 `max_sh_degree` 字段，C++/GLSL 契约已同步；用户已验收并允许继续
+- **进度**：Phase 3.0 Step 4 第二小项完成：cull/project compute shader 与 C++ pipeline/dispatch skeleton 已创建；GS Set 3、GlobalUBO 和 push constants 已接通；用户已验收并允许继续
 
 ### 下一个任务
 
-Phase 3.0 Step 4 第二小项：创建 cull/project compute shader 与 C++ pipeline/dispatch skeleton（buffer 声明、workgroup 256、Set 3 + GlobalUBO + push constants）
+Phase 3.0 Step 4 第三小项：实现 world-space cull 与投影防御（frustum sphere、behind-camera/near-plane discard、projection NaN/Inf 防御）
 
 ---
 
