@@ -16,6 +16,11 @@ bool gs_is_finite(float value) {
 }
 
 /** Returns true when every vector component is finite. */
+bool gs_is_finite(vec2 value) {
+    return !any(isnan(value)) && !any(isinf(value));
+}
+
+/** Returns true when every vector component is finite. */
 bool gs_is_finite(vec3 value) {
     return !any(isnan(value)) && !any(isinf(value));
 }
@@ -67,7 +72,7 @@ bool gs_sphere_inside_frustum(vec3 center_world, float radius_world) {
  * negative view-space z. Splat centers behind the camera or too close to the GS
  * near plane are discarded instead of being force-clamped through projection.
  */
-bool gs_projection_guard(vec3 center_world, out vec3 center_ndc) {
+bool gs_projection_guard(vec3 center_world, out vec3 center_view_xyz, out vec3 center_ndc) {
     vec4 center_world_h = vec4(center_world, 1.0);
     vec4 center_view = global.view * center_world_h;
     if (!gs_is_finite(center_view)) {
@@ -88,7 +93,170 @@ bool gs_projection_guard(vec3 center_world, out vec3 center_ndc) {
     }
 
     center_ndc = center_clip.xyz / center_clip.w;
-    return gs_is_finite(center_ndc);
+    if (!gs_is_finite(center_ndc)) {
+        return false;
+    }
+
+    center_view_xyz = center_view.xyz;
+    return true;
+}
+
+/** Converts Vulkan NDC to top-left-origin framebuffer pixel coordinates. */
+vec2 gs_ndc_to_pixel(vec2 ndc) {
+    return vec2((ndc.x * 0.5 + 0.5) * global.screen_size.x,
+                (0.5 - ndc.y * 0.5) * global.screen_size.y);
+}
+
+/** Reconstructs the baked world covariance matrix from the packed Set 3 layout. */
+mat3 gs_load_world_covariance(uint global_splat_index) {
+    GaussianSplatCovarianceOpacity packed = gs_covariance_opacity[global_splat_index];
+    float xx = packed.covariance0.x;
+    float xy = packed.covariance0.y;
+    float xz = packed.covariance0.z;
+    float yy = packed.covariance0.w;
+    float yz = packed.covariance1_opacity.x;
+    float zz = packed.covariance1_opacity.y;
+    return mat3(xx, xy, xz,
+                xy, yy, yz,
+                xz, yz, zz);
+}
+
+/** Returns true when all matrix columns are finite. */
+bool gs_is_finite_mat3(mat3 value) {
+    return gs_is_finite(value[0]) && gs_is_finite(value[1]) && gs_is_finite(value[2]);
+}
+
+/** Computes one entry of J * covariance * transpose(J). */
+float gs_project_covariance_entry(vec3 jacobian_a, mat3 covariance_view, vec3 jacobian_b) {
+    return dot(jacobian_a, covariance_view * jacobian_b);
+}
+
+/**
+ * Projects baked 3D covariance into 2D pixel-space covariance.
+ *
+ * Pixel coordinates use top-left origin, x right, y down. The Jacobian therefore
+ * carries a negative y row relative to view-space y-up coordinates.
+ */
+bool gs_project_covariance_2d(vec3 center_view, mat3 covariance_world, out mat2 covariance_2d) {
+    mat3 world_to_view = mat3(global.view);
+    mat3 covariance_view = world_to_view * covariance_world * transpose(world_to_view);
+    if (!gs_is_finite_mat3(covariance_view)) {
+        return false;
+    }
+
+    float depth = -center_view.z;
+    if (!gs_is_finite(depth) || depth <= max(gs_pc.near_gs, 1.0e-6)) {
+        return false;
+    }
+
+    float inv_depth = 1.0 / depth;
+    float inv_depth_sq = inv_depth * inv_depth;
+    float fx = 0.5 * global.screen_size.x * abs(global.projection[0][0]);
+    float fy = 0.5 * global.screen_size.y * abs(global.projection[1][1]);
+
+    vec3 jacobian_x = vec3(fx * inv_depth,
+                           0.0,
+                           fx * center_view.x * inv_depth_sq);
+    vec3 jacobian_y = vec3(0.0,
+                           -fy * inv_depth,
+                           -fy * center_view.y * inv_depth_sq);
+
+    float cov_xx = gs_project_covariance_entry(jacobian_x, covariance_view, jacobian_x);
+    float cov_xy = gs_project_covariance_entry(jacobian_x, covariance_view, jacobian_y);
+    float cov_yy = gs_project_covariance_entry(jacobian_y, covariance_view, jacobian_y);
+    if (!gs_is_finite(cov_xx) || !gs_is_finite(cov_xy) || !gs_is_finite(cov_yy)) {
+        return false;
+    }
+
+    covariance_2d = mat2(cov_xx, cov_xy,
+                         cov_xy, cov_yy);
+    return true;
+}
+
+/** Positive-definitizes a symmetric 2D covariance matrix by clamping eigenvalues. */
+bool gs_regularize_covariance_2d(mat2 covariance_2d, out mat2 regularized_covariance_2d) {
+    float a = covariance_2d[0][0];
+    float b = 0.5 * (covariance_2d[0][1] + covariance_2d[1][0]);
+    float c = covariance_2d[1][1];
+
+    float trace_half = 0.5 * (a + c);
+    float diff_half = 0.5 * (a - c);
+    float root = sqrt(max(diff_half * diff_half + b * b, 0.0));
+    float lambda0 = trace_half + root;
+    float lambda1 = trace_half - root;
+    if (!gs_is_finite(lambda0) || !gs_is_finite(lambda1)) {
+        return false;
+    }
+
+    float scale = max(max(abs(lambda0), abs(lambda1)), 1.0);
+    float min_variance = max(1.0e-4 * scale, 1.0e-4);
+    lambda0 = max(lambda0, min_variance);
+    lambda1 = max(lambda1, min_variance);
+
+    vec2 axis0 = abs(b) > 1.0e-8
+                     ? normalize(vec2(b, lambda0 - a))
+                     : (a >= c ? vec2(1.0, 0.0) : vec2(0.0, 1.0));
+    if (!gs_is_finite(axis0)) {
+        axis0 = vec2(1.0, 0.0);
+    }
+    vec2 axis1 = vec2(-axis0.y, axis0.x);
+
+    mat2 eigenvectors = mat2(axis0, axis1);
+    mat2 eigenvalues = mat2(lambda0, 0.0,
+                            0.0, lambda1);
+    regularized_covariance_2d = eigenvectors * eigenvalues * transpose(eigenvectors);
+    return gs_is_finite(regularized_covariance_2d[0]) && gs_is_finite(regularized_covariance_2d[1]);
+}
+
+/** Inverts a symmetric 2D covariance matrix into conic coefficients. */
+bool gs_inverse_covariance_2d(mat2 covariance_2d, out vec3 conic) {
+    float a = covariance_2d[0][0];
+    float b = 0.5 * (covariance_2d[0][1] + covariance_2d[1][0]);
+    float c = covariance_2d[1][1];
+    float determinant = a * c - b * b;
+    if (!gs_is_finite(determinant) || determinant <= 1.0e-12) {
+        return false;
+    }
+
+    float inv_determinant = 1.0 / determinant;
+    conic = vec3(c * inv_determinant,
+                 -b * inv_determinant,
+                 a * inv_determinant);
+    return gs_is_finite(conic);
+}
+
+/** Computes 3-sigma OBB half-axis vectors from a regularized 2D covariance. */
+bool gs_covariance_axes_3sigma(mat2 covariance_2d, out vec2 axis0_extent_px, out vec2 axis1_extent_px) {
+    float a = covariance_2d[0][0];
+    float b = 0.5 * (covariance_2d[0][1] + covariance_2d[1][0]);
+    float c = covariance_2d[1][1];
+
+    float trace_half = 0.5 * (a + c);
+    float diff_half = 0.5 * (a - c);
+    float root = sqrt(max(diff_half * diff_half + b * b, 0.0));
+    float lambda0 = trace_half + root;
+    float lambda1 = trace_half - root;
+    if (!gs_is_finite(lambda0) || !gs_is_finite(lambda1) || lambda0 < 0.0 || lambda1 < 0.0) {
+        return false;
+    }
+
+    vec2 axis0 = abs(b) > 1.0e-8
+                     ? normalize(vec2(b, lambda0 - a))
+                     : (a >= c ? vec2(1.0, 0.0) : vec2(0.0, 1.0));
+    if (!gs_is_finite(axis0)) {
+        axis0 = vec2(1.0, 0.0);
+    }
+    vec2 axis1 = vec2(-axis0.y, axis0.x);
+
+    axis0_extent_px = axis0 * (3.0 * sqrt(lambda0));
+    axis1_extent_px = axis1 * (3.0 * sqrt(lambda1));
+    return gs_is_finite(axis0_extent_px) && gs_is_finite(axis1_extent_px);
+}
+
+/** Returns true when the projected OBB is small enough for the baseline renderer. */
+bool gs_accept_projected_extent(vec2 axis0_extent_px, vec2 axis1_extent_px) {
+    float max_extent = max(gs_pc.max_projected_extent_px, 0.0);
+    return length(axis0_extent_px) <= max_extent && length(axis1_extent_px) <= max_extent;
 }
 
 void main() {
@@ -97,9 +265,9 @@ void main() {
         return;
     }
 
-    // A later subtask will append visible splats, write projected data, and
-    // generate sort entries. Keep the indirect instance-count write wired for
-    // now so Set 3 work-buffer writes remain validated.
+    // A later subtask will append visible splats and generate sort entries. Keep
+    // the indirect instance-count write wired for now so Set 3 work-buffer writes
+    // remain validated.
     if (global_splat_index == 0u) {
         gs_indirect_draw.instance_count = gs_visible_count;
     }
@@ -108,11 +276,50 @@ void main() {
     vec3 position_world = position_radius.xyz;
     float radius_world = position_radius.w;
 
+    vec3 center_view = vec3(0.0);
     vec3 center_ndc = vec3(0.0);
     bool passes_cull = gs_sphere_inside_frustum(position_world, radius_world) &&
-                       gs_projection_guard(position_world, center_ndc);
+                       gs_projection_guard(position_world, center_view, center_ndc);
 
     if (!passes_cull) {
         return;
     }
+
+    mat3 covariance_world = gs_load_world_covariance(global_splat_index);
+    mat2 covariance_2d = mat2(1.0);
+    if (!gs_project_covariance_2d(center_view, covariance_world, covariance_2d)) {
+        return;
+    }
+
+    mat2 regularized_covariance_2d = mat2(1.0);
+    if (!gs_regularize_covariance_2d(covariance_2d, regularized_covariance_2d)) {
+        return;
+    }
+
+    vec3 conic = vec3(0.0);
+    if (!gs_inverse_covariance_2d(regularized_covariance_2d, conic)) {
+        return;
+    }
+
+    vec2 axis0_extent_px = vec2(0.0);
+    vec2 axis1_extent_px = vec2(0.0);
+    if (!gs_covariance_axes_3sigma(regularized_covariance_2d,
+                                   axis0_extent_px,
+                                   axis1_extent_px)) {
+        return;
+    }
+    if (!gs_accept_projected_extent(axis0_extent_px, axis1_extent_px)) {
+        return;
+    }
+
+    GaussianSplatCovarianceOpacity packed = gs_covariance_opacity[global_splat_index];
+    float opacity = packed.covariance1_opacity.z;
+    if (!gs_is_finite(opacity)) {
+        return;
+    }
+
+    gs_projected_data[global_splat_index].center_opacity = vec4(gs_ndc_to_pixel(center_ndc.xy), opacity, 0.0);
+    gs_projected_data[global_splat_index].axis0_axis1 = vec4(axis0_extent_px, axis1_extent_px);
+    gs_projected_data[global_splat_index].conic = vec4(conic, 0.0);
+    gs_projected_data[global_splat_index].rgb = vec4(0.0);
 }
