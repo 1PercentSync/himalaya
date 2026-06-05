@@ -30,8 +30,6 @@ namespace himalaya::app {
         descriptor_manager_ = &dm;
         imgui_ = &imgui;
 
-        gaussian_splat_scene_builder_.init(*ctx_);
-
         render_graph_.init(resource_manager_);
         render_graph_.set_reference_resolution(swapchain_->extent);
         register_swapchain_images();
@@ -206,6 +204,7 @@ namespace himalaya::app {
         }
 
         // --- Pass setup ---
+        gaussian_splat_pass_resources_.setup(*ctx_);
         tonemapping_pass_.setup(*ctx_, *resource_manager_, *descriptor_manager_, shader_compiler_, swapchain_->format);
 
         if (ctx_->rt_supported) {
@@ -215,7 +214,8 @@ namespace himalaya::app {
     }
 
     void Renderer::destroy() {
-        gaussian_splat_scene_builder_.shutdown();
+        gaussian_splat_scene_builder_.destroy();
+        gaussian_splat_pass_resources_.destroy();
         emissive_light_builder_.destroy();
         scene_as_builder_.destroy();
         as_manager_.destroy();

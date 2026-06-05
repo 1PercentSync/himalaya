@@ -7,13 +7,10 @@
 
 #include <himalaya/framework/gaussian_splat_data.h>
 
-#include <vulkan/vulkan.h>
-
 #include <string>
 #include <vector>
 
 namespace himalaya::rhi {
-    class Context;
     class ResourceManager;
 }
 
@@ -28,22 +25,11 @@ namespace himalaya::framework {
      *
      * Calling build() again automatically destroys previous scene data before
      * rebuilding. Invalid input scenes are rejected as a whole; primitives are
-     * never skipped silently. The GS Set 3 descriptor layout is renderer-lifetime
-     * state created by init() and kept stable across scene switches.
+     * never skipped silently. Renderer-lifetime descriptor layout and pipeline
+     * state remain owned by GS pass-layer resources.
      */
     class GaussianSplatSceneBuilder {
     public:
-        /**
-         * @brief Creates renderer-lifetime GS descriptor layout state.
-         *
-         * Must be called once during Renderer initialization before GS pipelines
-         * are created. The persistent Set 3 layout binds static baked scene
-         * buffers and capacity-derived work buffers as storage buffers.
-         *
-         * @param ctx Vulkan context used to create descriptor set layouts.
-         */
-        void init(rhi::Context &ctx);
-
         /**
          * @brief Runs CPU-only validation that can reject a scene before upload.
          *
@@ -77,27 +63,16 @@ namespace himalaya::framework {
         /**
          * @brief Destroys scene-specific GS buffers and descriptor resources.
          *
-         * Safe to call even if build() was never called. Renderer-lifetime
-         * descriptor layout state remains valid for subsequent scene reloads.
+         * Safe to call even if build() was never called. Renderer-lifetime pass
+         * resources remain valid for subsequent scene reloads.
          */
         void destroy();
-
-        /**
-         * @brief Destroys all owned scene data and renderer-lifetime layout state.
-         *
-         * Called during Renderer shutdown. Safe to call even if init() or build()
-         * was never called.
-         */
-        void shutdown();
 
         /** @brief Returns true after a successful build(). */
         [[nodiscard]] bool valid() const;
 
         /** @brief Returns the scene-level GPU resource contract. */
         [[nodiscard]] const GaussianSplatGpuScene &gpu_scene() const;
-
-        /** @brief Returns the persistent GS Set 3 descriptor set layout. */
-        [[nodiscard]] VkDescriptorSetLayout descriptor_set_layout() const;
 
     private:
         /** @brief Scene-level GPU resource contract populated by build(). */
@@ -112,22 +87,10 @@ namespace himalaya::framework {
         /** @brief CPU-side packed SH data, indexed by global splat index and packed vec4 stride. */
         std::vector<glm::vec4> baked_sh_coefficients_;
 
-        /** @brief Vulkan context used to own the persistent GS descriptor layout. */
-        rhi::Context *context_ = nullptr;
-
         /** @brief Resource manager that owns the created static GPU buffers. */
         rhi::ResourceManager *resource_manager_ = nullptr;
 
-        /** @brief Persistent GS Set 3 descriptor set layout for static and work storage buffers. */
-        VkDescriptorSetLayout descriptor_set_layout_ = VK_NULL_HANDLE;
-
         /** @brief True when gpu_scene_ and static GPU buffers match a successfully built scene. */
         bool valid_ = false;
-
-        /** @brief Creates the persistent GS Set 3 descriptor layout. */
-        void create_descriptor_set_layout();
-
-        /** @brief Destroys the persistent GS Set 3 descriptor layout. */
-        void destroy_descriptor_set_layout();
     };
 } // namespace himalaya::framework
