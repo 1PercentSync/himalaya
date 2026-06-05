@@ -92,6 +92,7 @@ rgb                // SH-evaluated RGB in primitive colorSpace
 本 Step 建立 GS 渲染运行时资源，但还不要求产生可见列表。
 
 - GS 使用独立持久 Set 3 descriptor set，绑定 static baked buffers 和 work buffers。它不是 PT / compute pass 的 push descriptor Set 3。
+- Set 3 descriptor layout / pipeline layout 生命周期按 PT 模式归属于 renderer-lifetime pass / pipeline owner；GS scene resource owner 只管理 scene buffers、descriptor set allocation/write/rewrite，不引入 `shutdown()` 式双重销毁语义。
 - Descriptor 随 scene load/reload 或 buffer recreate 写入；每帧只更新 buffer 内容，不每帧 push descriptor。
 - `GSPushConstants` 只放 GS 专用小参数：`total_splat_count`、`sort_capacity`、`color_space`、`flags`、`near_gs`、`max_projected_extent_px`、`alpha_discard_threshold`、`power_discard_threshold`。
 - View/projection/view_projection/camera_position/screen_size 复用 GlobalUBO，不在 GS push constants 中重复矩阵。
