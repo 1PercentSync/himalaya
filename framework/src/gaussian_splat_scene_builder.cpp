@@ -370,6 +370,18 @@ namespace himalaya::framework {
             return buffer;
         }
 
+        /** @brief Creates one capacity-derived GS work storage buffer. */
+        rhi::BufferHandle create_work_buffer(rhi::ResourceManager &rm,
+                                             const uint64_t size,
+                                             const rhi::BufferUsage usage,
+                                             const char *debug_name) {
+            return rm.create_buffer({
+                .size = size,
+                .usage = usage,
+                .memory = rhi::MemoryUsage::GpuOnly,
+            }, debug_name);
+        }
+
         /**
          * @brief Validates that a node transform is decomposable into T * R * S.
          *
@@ -566,6 +578,42 @@ namespace himalaya::framework {
                 sh_coefficients_size,
                 "GS SH Coefficients Buffer");
 
+            const uint64_t visible_count_size = sizeof(uint32_t);
+            const uint64_t projected_data_size = static_cast<uint64_t>(gpu_scene_.total_splat_count)
+                                                 * sizeof(GaussianSplatProjectedData);
+            const uint64_t sort_entries_size = static_cast<uint64_t>(gpu_scene_.sort_capacity)
+                                               * sizeof(GaussianSplatSortEntry);
+            const uint64_t indirect_draw_size = sizeof(GaussianSplatDrawIndirectCommand);
+
+            auto &work_buffers = gpu_scene_.work_buffers;
+            work_buffers.visible_count_buffer = create_work_buffer(
+                rm,
+                visible_count_size,
+                rhi::BufferUsage::StorageBuffer | rhi::BufferUsage::TransferDst,
+                "GS Visible Count Buffer");
+            work_buffers.projected_data_buffer = create_work_buffer(
+                rm,
+                projected_data_size,
+                rhi::BufferUsage::StorageBuffer,
+                "GS Projected Data Buffer");
+            work_buffers.sort_entries_buffer = create_work_buffer(
+                rm,
+                sort_entries_size,
+                rhi::BufferUsage::StorageBuffer | rhi::BufferUsage::TransferDst,
+                "GS Sort Entries Buffer");
+            work_buffers.sort_entries_scratch_buffer = create_work_buffer(
+                rm,
+                sort_entries_size,
+                rhi::BufferUsage::StorageBuffer | rhi::BufferUsage::TransferDst,
+                "GS Sort Entries Scratch Buffer");
+            work_buffers.indirect_draw_buffer = create_work_buffer(
+                rm,
+                indirect_draw_size,
+                rhi::BufferUsage::StorageBuffer |
+                    rhi::BufferUsage::TransferDst |
+                    rhi::BufferUsage::IndirectBuffer,
+                "GS Indirect Draw Buffer");
+
             baked_position_radius_.clear();
             baked_covariance_opacity_.clear();
             baked_sh_coefficients_.clear();
@@ -590,6 +638,23 @@ namespace himalaya::framework {
             }
             if (static_buffers.sh_coefficients_buffer.valid()) {
                 resource_manager_->destroy_buffer(static_buffers.sh_coefficients_buffer);
+            }
+
+            auto &work_buffers = gpu_scene_.work_buffers;
+            if (work_buffers.visible_count_buffer.valid()) {
+                resource_manager_->destroy_buffer(work_buffers.visible_count_buffer);
+            }
+            if (work_buffers.projected_data_buffer.valid()) {
+                resource_manager_->destroy_buffer(work_buffers.projected_data_buffer);
+            }
+            if (work_buffers.sort_entries_buffer.valid()) {
+                resource_manager_->destroy_buffer(work_buffers.sort_entries_buffer);
+            }
+            if (work_buffers.sort_entries_scratch_buffer.valid()) {
+                resource_manager_->destroy_buffer(work_buffers.sort_entries_scratch_buffer);
+            }
+            if (work_buffers.indirect_draw_buffer.valid()) {
+                resource_manager_->destroy_buffer(work_buffers.indirect_draw_buffer);
             }
         }
 
