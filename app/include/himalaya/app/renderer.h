@@ -477,6 +477,26 @@ namespace himalaya::app {
          */
         void render_imgui_only(rhi::CommandBuffer &cmd, const RenderInput &input);
 
+        /**
+         * @brief Records the GS reset → cull/project → sort preprocessing chain.
+         *
+         * Imports the GS scene buffers once and shares the resulting RG IDs across
+         * reset, cull/project, and bitonic sort so sort consumes the primary
+         * sort_entries output written by cull/project. The chain preserves draw
+         * range semantics: cull/project writes indirect_draw.instance_count from
+         * visible_count, bitonic sorts only the primary sort_entries buffer, and
+         * the later draw pass must draw indirect rather than draw sort_capacity.
+         *
+         * @param scene Uploaded GS scene with persistent Set 3 descriptors.
+         * @param frame_index Current frame-in-flight index for global descriptor sets.
+         * @param push_constants Per-frame GS scalar state consumed by cull/project.
+         * @return Imported GS buffer resources for downstream GS draw passes.
+         */
+        passes::GaussianSplatGraphResources record_gaussian_splat_preprocess(
+            const framework::GaussianSplatGpuScene &scene,
+            uint32_t frame_index,
+            const passes::GSPushConstants &push_constants);
+
         /** @brief Registers all swapchain images as external images in ResourceManager. */
         void register_swapchain_images();
 

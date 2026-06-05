@@ -63,6 +63,27 @@ namespace himalaya::app {
         ++frame_counter_;
     }
 
+    passes::GaussianSplatGraphResources Renderer::record_gaussian_splat_preprocess(
+        const framework::GaussianSplatGpuScene &scene,
+        const uint32_t frame_index,
+        const passes::GSPushConstants &push_constants) {
+        const auto resources = gaussian_splat_pass_resources_.import_scene_resources(render_graph_, scene);
+
+        gaussian_splat_reset_pass_.record(render_graph_, resources);
+        gaussian_splat_cull_project_pass_.record(render_graph_,
+                                                 resources,
+                                                 scene,
+                                                 frame_index,
+                                                 push_constants);
+
+        // Bitonic consumes the cull/project sort_entries output in place. It does
+        // not touch indirect_draw, so the later draw pass must use the
+        // cull/project-written instance_count instead of drawing sort_capacity.
+        gaussian_splat_bitonic_sort_pass_.record(render_graph_, resources, scene, frame_index);
+
+        return resources;
+    }
+
     void Renderer::render_imgui_only(rhi::CommandBuffer &cmd, const RenderInput &input) {
         render_graph_.clear();
 
