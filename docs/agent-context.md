@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的渲染器
 - **分支**：`reflector` — Path Tracing + Gaussian Splatting
 - **Phase**：Phase 3.0 — Gaussian Splatting 基础渲染
-- **进度**：Phase 3.0 Step 4 第二小项完成：cull/project compute shader 与 C++ pipeline/dispatch skeleton 已创建；GS Set 3、GlobalUBO 和 push constants 已接通；用户已验收并允许继续
+- **进度**：Phase 3.0 Step 4 第三小项完成：world-space frustum sphere cull 与 projection 防御已实现；用户已验收并允许继续
 
 ### 下一个任务
 
-Phase 3.0 Step 4 第三小项：实现 world-space cull 与投影防御（frustum sphere、behind-camera/near-plane discard、projection NaN/Inf 防御）
+Phase 3.0 Step 4 第四小项：实现 screen-space projection 数据生成（center_px、2D covariance、正定化、conic、3σ OBB extent、giant projection discard）
 
 ---
 
