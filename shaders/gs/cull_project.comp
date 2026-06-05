@@ -10,25 +10,109 @@
 
 layout (local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
 
+/** Returns true when the scalar is neither NaN nor infinity. */
+bool gs_is_finite(float value) {
+    return !isnan(value) && !isinf(value);
+}
+
+/** Returns true when every vector component is finite. */
+bool gs_is_finite(vec3 value) {
+    return !any(isnan(value)) && !any(isinf(value));
+}
+
+/** Returns true when every vector component is finite. */
+bool gs_is_finite(vec4 value) {
+    return !any(isnan(value)) && !any(isinf(value));
+}
+
+/** Extracts a row from a column-major GLSL matrix. */
+vec4 gs_matrix_row(mat4 matrix, int row) {
+    return vec4(matrix[0][row], matrix[1][row], matrix[2][row], matrix[3][row]);
+}
+
+/** Tests a world-space sphere against one homogeneous frustum plane. */
+bool gs_sphere_inside_plane(vec4 plane, vec3 center_world, float radius_world) {
+    float normal_length = length(plane.xyz);
+    if (!gs_is_finite(plane) || !gs_is_finite(normal_length) || normal_length <= 1.0e-8) {
+        return false;
+    }
+
+    float signed_distance = (dot(plane.xyz, center_world) + plane.w) / normal_length;
+    return signed_distance >= -radius_world;
+}
+
+/** Tests a world-space splat cull sphere against the current camera frustum. */
+bool gs_sphere_inside_frustum(vec3 center_world, float radius_world) {
+    if (!gs_is_finite(center_world) || !gs_is_finite(radius_world) || radius_world < 0.0) {
+        return false;
+    }
+
+    vec4 row0 = gs_matrix_row(global.view_projection, 0);
+    vec4 row1 = gs_matrix_row(global.view_projection, 1);
+    vec4 row2 = gs_matrix_row(global.view_projection, 2);
+    vec4 row3 = gs_matrix_row(global.view_projection, 3);
+
+    return gs_sphere_inside_plane(row3 + row0, center_world, radius_world) &&
+           gs_sphere_inside_plane(row3 - row0, center_world, radius_world) &&
+           gs_sphere_inside_plane(row3 + row1, center_world, radius_world) &&
+           gs_sphere_inside_plane(row3 - row1, center_world, radius_world) &&
+           gs_sphere_inside_plane(row2, center_world, radius_world) &&
+           gs_sphere_inside_plane(row3 - row2, center_world, radius_world);
+}
+
+/**
+ * Applies projection safety checks before any perspective-dependent math.
+ *
+ * The renderer uses a right-handed camera convention where visible points have
+ * negative view-space z. Splat centers behind the camera or too close to the GS
+ * near plane are discarded instead of being force-clamped through projection.
+ */
+bool gs_projection_guard(vec3 center_world, out vec3 center_ndc) {
+    vec4 center_world_h = vec4(center_world, 1.0);
+    vec4 center_view = global.view * center_world_h;
+    if (!gs_is_finite(center_view)) {
+        return false;
+    }
+
+    float view_depth = -center_view.z;
+    if (!gs_is_finite(view_depth) || view_depth <= 0.0) {
+        return false;
+    }
+    if (view_depth <= max(gs_pc.near_gs, 1.0e-6)) {
+        return false;
+    }
+
+    vec4 center_clip = global.view_projection * center_world_h;
+    if (!gs_is_finite(center_clip) || abs(center_clip.w) <= 1.0e-8) {
+        return false;
+    }
+
+    center_ndc = center_clip.xyz / center_clip.w;
+    return gs_is_finite(center_ndc);
+}
+
 void main() {
-    const uint global_splat_index = gl_GlobalInvocationID.x;
+    uint global_splat_index = gl_GlobalInvocationID.x;
     if (global_splat_index >= gs_pc.total_splat_count) {
         return;
     }
 
-    // Skeleton only: the full cull/project implementation will populate
-    // projected data and sort entries. For now, keep the end-of-pass indirect
-    // instance-count write wired so Set 3 work-buffer writes are validated.
+    // A later subtask will append visible splats, write projected data, and
+    // generate sort entries. Keep the indirect instance-count write wired for
+    // now so Set 3 work-buffer writes remain validated.
     if (global_splat_index == 0u) {
-        const vec4 first_position_radius = gs_position_radius[0];
-        const vec3 camera_world = global.camera_position_and_exposure.xyz;
-        const float distance_squared = dot(first_position_radius.xyz - camera_world,
-                                           first_position_radius.xyz - camera_world);
+        gs_indirect_draw.instance_count = gs_visible_count;
+    }
 
-        uint visible_count = gs_visible_count;
-        if (any(isnan(first_position_radius)) || isnan(distance_squared) || isinf(distance_squared)) {
-            visible_count = 0u;
-        }
-        gs_indirect_draw.instance_count = visible_count;
+    vec4 position_radius = gs_position_radius[global_splat_index];
+    vec3 position_world = position_radius.xyz;
+    float radius_world = position_radius.w;
+
+    vec3 center_ndc = vec3(0.0);
+    bool passes_cull = gs_sphere_inside_frustum(position_world, radius_world) &&
+                       gs_projection_guard(position_world, center_ndc);
+
+    if (!passes_cull) {
+        return;
     }
 }
