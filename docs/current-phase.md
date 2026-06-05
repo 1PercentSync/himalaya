@@ -124,7 +124,9 @@ Bitonic sort 用于建立 deterministic correctness baseline，后续 radix 必�
 
 - Bitonic 按 `sort_capacity` 全量排序；invalid sentinel 应自然排到末尾。
 - Compare 使用 lexicographic `(distance_key, global_splat_index)` ascending；ascending 等价于 front-to-back。
-- 多 pass dispatch 使用 `N = sort_capacity`，按 bitonic `log2(N)` stages × `log(N)` steps 执行。实现时明确使用 ping-pong 还是 in-place compare-and-swap。
+- Bitonic baseline 采用 in-place compare-and-swap，最终结果始终落在 primary `sort_entries` buffer；`sort_entries_scratch` 在本 Step 中有意不使用，保留给后续 radix / ping-pong scatter 路径。shader 与 C++ sort pass 代码实现时必须注释说明该例外，避免误判为遗漏。
+- Dispatch orchestration 使用 `N = sort_capacity`，按 bitonic `log2(N)` stages × `log(N)` steps 执行。为避免 1M splat 时产生约 210 个 RenderGraph pass，sort 作为单个 RG pass 录制完整多 dispatch 序列，并在每个 dispatch step 之间手动插入 compute SSBO buffer barrier（compute write → compute read/write）。这是 Phase 3.0 bitonic correctness baseline 的局部同步例外；跨 pass 依赖仍交给 RenderGraph。
+- Bitonic sort 使用独立的 sort push constants（至少包含 `sort_capacity`、`stage_k`、`step_j`），不把 sort step 临时参数加入通用 `GSPushConstants` / `gs_common.glsl` 渲染参数契约。
 - 排序后 `[0, visible_count)` 必须全为 valid entries；draw 使用 `visible_count`，不 draw capacity。
 - Equal-key ordering 必须 deterministic，避免透明累积因帧间顺序变化闪烁。
 
@@ -250,6 +252,8 @@ Step 9 在硬件光栅 correctness baseline 建立后执行，用于补齐 Phase
 - 每帧 reset：`visible_count = 0`、sort entries 填 sentinel、`indirect.instanceCount = 0`。
 - Cull/project append valid entries 到 `sort_entries[0..visible_count)`；ascending sort 后 valid entries 在前，sentinel 在尾。
 - Bitonic compare 使用 lexicographic `(distance_key, global_splat_index)`；未来 sort 实现也必须对相同 `distance_key` 保持 deterministic ordering，避免透明累积闪烁。
+- Phase 3.0 Bitonic baseline 使用 primary `sort_entries` 的 in-place compare-and-swap；scratch sort buffer 保留给后续 out-of-place radix / ping-pong scatter，不为 bitonic 强行增加 buffer 搬运。
+- Bitonic orchestration 作为单个 RenderGraph pass 内的多 dispatch 序列执行，并在 dispatch step 之间手写 compute-to-compute buffer barrier，避免按 step 拆分导致 RG pass 数随 `log2(N) * (log2(N)+1) / 2` 膨胀。
 - `VkDrawIndirectCommand` 固定字段由 CPU 初始化：`vertexCount = 6`、`firstVertex = 0`、`firstInstance = 0`。GPU 只写 `instanceCount = visible_count`。
 
 ### Color、alpha 与 output
