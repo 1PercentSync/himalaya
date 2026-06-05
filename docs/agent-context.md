@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的渲染器
 - **分支**：`reflector` — Path Tracing + Gaussian Splatting
 - **Phase**：Phase 3.0 — Gaussian Splatting 基础渲染
-- **进度**：Phase 3.0 Step 3 第四小项完成：创建 scene-specific GS Set 3 descriptor set，并实现 static/work buffer descriptor 写入；descriptor layout 仍由 pass-layer renderer-lifetime owner 管理
+- **进度**：Phase 3.0 Step 3 完成：GS Set 3 descriptor layout / descriptor set、capacity-based work buffers、每帧 reset pass、indirect command 固定字段初始化均完成；用户已在 CLion 编译验证通过
 
 ### 下一个任务
 
-Phase 3.0 Step 3 第五小项：实现每帧 work buffer reset 与 indirect command 固定字段初始化（visible_count、sort sentinel、instanceCount）
+Phase 3.0 Step 4 第一小项：创建 cull/project compute shader 与 C++ pipeline/dispatch skeleton（buffer 声明、workgroup 256、Set 3 + GlobalUBO + push constants）
 
 ---
 
