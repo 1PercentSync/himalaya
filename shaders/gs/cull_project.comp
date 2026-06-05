@@ -259,6 +259,99 @@ bool gs_accept_projected_extent(vec2 axis0_extent_px, vec2 axis1_extent_px) {
     return length(axis0_extent_px) <= max_extent && length(axis1_extent_px) <= max_extent;
 }
 
+/** Reads one scalar from the packed SH coefficient buffer. */
+float gs_load_sh_scalar(uint global_splat_index, uint scalar_index) {
+    uint stride = gs_sh_packed_vec4_stride();
+    uint packed_index = global_splat_index * stride + scalar_index / 4u;
+    uint lane = scalar_index & 3u;
+    vec4 packed = gs_sh_coefficients[packed_index];
+
+    if (lane == 0u) {
+        return packed.x;
+    }
+    if (lane == 1u) {
+        return packed.y;
+    }
+    if (lane == 2u) {
+        return packed.z;
+    }
+    return packed.w;
+}
+
+/** Reads one RGB SH coefficient from the packed scalar stream. */
+vec3 gs_load_sh_coefficient(uint global_splat_index, uint coefficient_index) {
+    uint scalar_base = coefficient_index * 3u;
+    return vec3(gs_load_sh_scalar(global_splat_index, scalar_base + 0u),
+                gs_load_sh_scalar(global_splat_index, scalar_base + 1u),
+                gs_load_sh_scalar(global_splat_index, scalar_base + 2u));
+}
+
+/** Returns the world-space camera-forward fallback direction. */
+vec3 gs_camera_forward_world() {
+    vec3 forward = normalize((global.inv_view * vec4(0.0, 0.0, -1.0, 0.0)).xyz);
+    if (!gs_is_finite(forward)) {
+        return vec3(0.0, 0.0, -1.0);
+    }
+    return forward;
+}
+
+/** Computes the KHR camera-to-splat SH evaluation direction. */
+vec3 gs_sh_view_direction(vec3 position_world) {
+    vec3 direction = position_world - global.camera_position_and_exposure.xyz;
+    float length_squared = dot(direction, direction);
+    if (!gs_is_finite(length_squared) || length_squared <= 1.0e-12) {
+        return gs_camera_forward_world();
+    }
+
+    direction *= inversesqrt(length_squared);
+    if (!gs_is_finite(direction)) {
+        return gs_camera_forward_world();
+    }
+    return direction;
+}
+
+/** Evaluates all scene SH degrees for one visible splat and clamps negative RGB. */
+vec3 gs_evaluate_sh_rgb(uint global_splat_index, vec3 view_direction) {
+    float x = view_direction.x;
+    float y = view_direction.y;
+    float z = view_direction.z;
+    float xx = x * x;
+    float yy = y * y;
+    float zz = z * z;
+
+    vec3 rgb = gs_load_sh_coefficient(global_splat_index, 0u) * 0.2820947917738781;
+
+    if (gs_pc.max_sh_degree >= 1u) {
+        rgb += gs_load_sh_coefficient(global_splat_index, 1u) * (y * -0.4886025119029199);
+        rgb += gs_load_sh_coefficient(global_splat_index, 2u) * (z * 0.4886025119029199);
+        rgb += gs_load_sh_coefficient(global_splat_index, 3u) * (x * -0.4886025119029199);
+    }
+
+    if (gs_pc.max_sh_degree >= 2u) {
+        rgb += gs_load_sh_coefficient(global_splat_index, 4u) * (x * y * 1.092548430592079);
+        rgb += gs_load_sh_coefficient(global_splat_index, 5u) * (y * z * -1.092548430592079);
+        rgb += gs_load_sh_coefficient(global_splat_index, 6u) * ((2.0 * zz - xx - yy) * 0.3153915652525200);
+        rgb += gs_load_sh_coefficient(global_splat_index, 7u) * (x * z * -1.092548430592079);
+        rgb += gs_load_sh_coefficient(global_splat_index, 8u) * ((xx - yy) * 0.5462742152960395);
+    }
+
+    if (gs_pc.max_sh_degree >= 3u) {
+        rgb += gs_load_sh_coefficient(global_splat_index, 9u) * (y * (3.0 * xx - yy) * -0.5900435899266435);
+        rgb += gs_load_sh_coefficient(global_splat_index, 10u) * (x * y * z * 2.890611442640554);
+        rgb += gs_load_sh_coefficient(global_splat_index, 11u) * (y * (4.0 * zz - xx - yy) * -0.4570457994644657);
+        rgb += gs_load_sh_coefficient(global_splat_index, 12u) * (z * (2.0 * zz - 3.0 * xx - 3.0 * yy) * 0.3731763325901154);
+        rgb += gs_load_sh_coefficient(global_splat_index, 13u) * (x * (4.0 * zz - xx - yy) * -0.4570457994644657);
+        rgb += gs_load_sh_coefficient(global_splat_index, 14u) * (z * (xx - yy) * 1.445305721320277);
+        rgb += gs_load_sh_coefficient(global_splat_index, 15u) * (x * (xx - 3.0 * yy) * -0.5900435899266435);
+    }
+
+    rgb += vec3(0.5);
+    if (!gs_is_finite(rgb)) {
+        return vec3(0.0);
+    }
+    return max(rgb, vec3(0.0));
+}
+
 void main() {
     uint global_splat_index = gl_GlobalInvocationID.x;
     if (global_splat_index >= gs_pc.total_splat_count) {
@@ -318,8 +411,11 @@ void main() {
         return;
     }
 
+    vec3 sh_direction = gs_sh_view_direction(position_world);
+    vec3 rgb = gs_evaluate_sh_rgb(global_splat_index, sh_direction);
+
     gs_projected_data[global_splat_index].center_opacity = vec4(gs_ndc_to_pixel(center_ndc.xy), opacity, 0.0);
     gs_projected_data[global_splat_index].axis0_axis1 = vec4(axis0_extent_px, axis1_extent_px);
     gs_projected_data[global_splat_index].conic = vec4(conic, 0.0);
-    gs_projected_data[global_splat_index].rgb = vec4(0.0);
+    gs_projected_data[global_splat_index].rgb = vec4(rgb, 0.0);
 }
