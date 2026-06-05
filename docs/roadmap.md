@@ -6,13 +6,13 @@
 
 ## Phase 概览
 
-| Phase | 主题 | 状态 |
-|-------|------|------|
-| 1 | 管线精简 | 完成 |
-| 2 | Gaussian Splatting 数据管线 | 完成 |
-| 3 | Gaussian Splatting 渲染 | Phase 3.0 已规划，待实现 |
-| 4 | 渲染增强与离屏输出 | 待规划 |
-| 5 | MCP 协议集成 | 待规划 |
+| Phase | 主题 |
+|-------|------|
+| 1 | 管线精简 |
+| 2 | Gaussian Splatting 数据管线 |
+| 3 | Gaussian Splatting 渲染 |
+| 4 | 渲染增强与离屏输出 |
+| 5 | MCP 协议集成 |
 
 ---
 
@@ -20,7 +20,7 @@
 
 移除光栅化和烘焙管线，只保留 Path Tracing 渲染 GLTF 的能力。为 Phase 2 提供干净的代码基础。
 
-详见 `current-phase.md` 和 `tasks/reflector-phase1.md`。
+详见 `docs/archive/reflector-phase1-plan.md` 和 `tasks/archive/reflector-phase1.md`。
 
 ## Phase 2：Gaussian Splatting 数据管线
 

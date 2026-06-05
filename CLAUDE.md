@@ -185,7 +185,7 @@ vcpkg 有端口的库通过 `vcpkg.json` 管理。vcpkg 无端口的库放入 `t
 | 渲染模式 | Dynamic Rendering（Vulkan 1.3+ 核心） |
 | 同步 API | Synchronization2（Vulkan 1.3+ 核心） |
 | 管线动态状态 | Extended Dynamic State（Vulkan 1.3+ 核心） |
-| 描述符 | Set 0 传统 Descriptor Set（GlobalUBO + MaterialBuffer + RT 资源） + Set 1 传统 Descriptor Set（Bindless 纹理） + Set 2 传统 Descriptor Set（渲染目标） |
+| 描述符 | 传统 Descriptor Set + Bindless 纹理；具体布局以技术决策和当前阶段文档为准 |
 | 资源句柄 | Generation-based（index + generation） |
 | 对象销毁 | 显式 `destroy()` 方法，不依赖析构函数 |
 | 帧并行 | 2 Frames in Flight |
