@@ -10,6 +10,18 @@
 #include <vulkan/vulkan.h>
 
 namespace himalaya::rhi {
+    /** @brief Color attachment blend presets supported by graphics pipelines. */
+    enum class BlendMode : uint8_t {
+        /** @brief Disable blending and write shader output directly. */
+        None,
+
+        /** @brief Regular straight-alpha over blend. */
+        Alpha,
+
+        /** @brief Front-to-back premultiplied-under blend for GS composition. */
+        PremultipliedUnder,
+    };
+
     /**
      * @brief Description for creating a graphics pipeline.
      *
@@ -43,8 +55,8 @@ namespace himalaya::rhi {
         /** @brief MSAA sample count (1 = no MSAA, must be a valid VkSampleCountFlagBits value). */
         uint32_t sample_count;
 
-        /** @brief Enable alpha blending on the first color attachment. */
-        bool blend_enable = false;
+        /** @brief Blend preset applied to all color attachments. */
+        BlendMode blend_mode = BlendMode::None;
 
         /** @brief Descriptor set layouts for the pipeline layout. */
         std::vector<VkDescriptorSetLayout> descriptor_set_layouts;

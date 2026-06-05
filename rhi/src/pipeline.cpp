@@ -82,14 +82,27 @@ namespace himalaya::rhi {
             att.colorWriteMask =
                     VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
                     VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
-            if (desc.blend_enable) {
-                att.blendEnable = VK_TRUE;
-                att.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
-                att.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
-                att.colorBlendOp = VK_BLEND_OP_ADD;
-                att.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
-                att.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
-                att.alphaBlendOp = VK_BLEND_OP_ADD;
+            switch (desc.blend_mode) {
+                case BlendMode::None:
+                    break;
+                case BlendMode::Alpha:
+                    att.blendEnable = VK_TRUE;
+                    att.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+                    att.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+                    att.colorBlendOp = VK_BLEND_OP_ADD;
+                    att.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+                    att.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+                    att.alphaBlendOp = VK_BLEND_OP_ADD;
+                    break;
+                case BlendMode::PremultipliedUnder:
+                    att.blendEnable = VK_TRUE;
+                    att.srcColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_DST_ALPHA;
+                    att.dstColorBlendFactor = VK_BLEND_FACTOR_ONE;
+                    att.colorBlendOp = VK_BLEND_OP_ADD;
+                    att.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_DST_ALPHA;
+                    att.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+                    att.alphaBlendOp = VK_BLEND_OP_ADD;
+                    break;
             }
         }
 

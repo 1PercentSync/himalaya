@@ -18,6 +18,7 @@
 #include <himalaya/rhi/acceleration_structure.h>
 #include <himalaya/passes/gaussian_splat_bitonic_sort_pass.h>
 #include <himalaya/passes/gaussian_splat_cull_project_pass.h>
+#include <himalaya/passes/gaussian_splat_draw_pass.h>
 #include <himalaya/passes/gaussian_splat_pass_resources.h>
 #include <himalaya/passes/gaussian_splat_reset_pass.h>
 #include <himalaya/passes/reference_view_pass.h>
@@ -321,6 +322,9 @@ namespace himalaya::app {
         /** @brief Compute bitonic sort pass for the GS correctness baseline. */
         passes::GaussianSplatBitonicSortPass gaussian_splat_bitonic_sort_pass_{};
 
+        /** @brief Graphics pass for GS instanced quad composition. */
+        passes::GaussianSplatDrawPass gaussian_splat_draw_pass_{};
+
         /** @brief Acceleration structure manager (RT, initialized when rt_supported). */
         rhi::AccelerationStructureManager as_manager_{};
 
@@ -344,6 +348,9 @@ namespace himalaya::app {
 
         /** @brief Denoised output buffer (RGBA32F, Relative 1.0x, TransferDst | Sampled); created when rt_supported. */
         framework::RGManagedHandle managed_denoised_;
+
+        /** @brief GS premultiplied composition target (R16G16B16A16Sfloat, Relative 1.0x, ColorAttachment | Sampled). */
+        framework::RGManagedHandle managed_gs_composition_;
 
         /** @brief OIDN asynchronous denoiser instance (reference view). */
         framework::Denoiser denoiser_{};
