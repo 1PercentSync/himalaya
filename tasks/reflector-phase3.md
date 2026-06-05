@@ -53,7 +53,7 @@
 - [x] 实现 screen-space projection 数据生成（center_px、2D covariance、正定化、conic、3σ OBB extent、giant projection discard）
 - [x] 实现 per-visible-splat SH evaluation 与 projected data 写入（camera→splat view dir、all-degree RGB、负分量 clamp）
 - [x] 实现 visible append、sort entry 生成与 indirect instanceCount 更新（subgroup uniform control flow、distance_key、sentinel、global_splat_index）
-- [ ] 请求用户在 CLion 中编译验证
+- [x] 请求用户在 CLion 中编译验证
 
 ## Step 5:Bitonic sort correctness baseline
 

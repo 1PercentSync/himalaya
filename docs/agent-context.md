@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的渲染器
 - **分支**：`reflector` — Path Tracing + Gaussian Splatting
 - **Phase**：Phase 3.0 — Gaussian Splatting 基础渲染
-- **进度**：Phase 3.0 Step 4 第六小项完成：visible append、sort entry 生成与 indirect instanceCount 更新已实现，采用 subgroup aggregated append；用户已在 CLion 编译验证通过
+- **进度**：Phase 3.0 Step 4 完成：cull/project compute shader 已实现 world-space cull、projection 防御、projected data、SH evaluation、subgroup visible append、sort entry 生成与 indirect instanceCount 更新；用户已在 CLion 编译验证通过
 
 ### 下一个任务
 
-Phase 3.0 Step 4 最后一小项：请求用户在 CLion 中编译验证
+Phase 3.0 Step 5 第一小项：创建 bitonic sort compute shader（2×32-bit sort entry compare-and-swap；lexicographic `(distance_key, global_splat_index)` 升序；sentinel 排末尾）
 
 ---
 
