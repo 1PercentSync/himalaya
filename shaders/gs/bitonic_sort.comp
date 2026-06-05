@@ -1,0 +1,82 @@
+/**
+ * @file bitonic_sort.comp
+ * @brief In-place Gaussian Splatting bitonic sort step shader.
+ *
+ * Phase 3.0 uses bitonic sort only as a deterministic correctness baseline.
+ * The shader intentionally sorts the primary sort_entries buffer in place and
+ * does not touch sort_entries_scratch. The scratch buffer is reserved for the
+ * later out-of-place radix / ping-pong scatter path.
+ */
+
+#version 460
+
+layout (local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+
+/**
+ * The invalid sentinel is {UINT_MAX, UINT_MAX}; no explicit sentinel branch is
+ * needed because it sorts naturally to the end under ascending lexicographic order.
+ */
+
+/** Sort entry payload, matching the C++ std430 layout. */
+struct GaussianSplatSortEntry {
+    uint distance_key;
+    uint global_splat_index;
+};
+
+/** Push constants local to the bitonic sort pipeline. */
+layout (push_constant) uniform GSBitonicSortPushConstantBlock {
+    uint sort_capacity;
+    uint stage_k;
+    uint step_j;
+    uint _padding;
+} gs_sort_pc;
+
+/** Primary sort entries. Sorted in place by this baseline shader. */
+layout (set = 3, binding = 5) buffer GSSortEntriesBuffer {
+    GaussianSplatSortEntry gs_sort_entries[];
+};
+
+/** Returns true when lhs should appear before rhs in ascending deterministic order. */
+bool gs_sort_entry_less(GaussianSplatSortEntry lhs, GaussianSplatSortEntry rhs) {
+    if (lhs.distance_key != rhs.distance_key) {
+        return lhs.distance_key < rhs.distance_key;
+    }
+    return lhs.global_splat_index < rhs.global_splat_index;
+}
+
+/** Returns the earlier entry under lexicographic ascending order. */
+GaussianSplatSortEntry gs_sort_entry_min(GaussianSplatSortEntry lhs, GaussianSplatSortEntry rhs) {
+    return gs_sort_entry_less(lhs, rhs) ? lhs : rhs;
+}
+
+/** Returns the later entry under lexicographic ascending order. */
+GaussianSplatSortEntry gs_sort_entry_max(GaussianSplatSortEntry lhs, GaussianSplatSortEntry rhs) {
+    return gs_sort_entry_less(lhs, rhs) ? rhs : lhs;
+}
+
+void main() {
+    uint index = gl_GlobalInvocationID.x;
+    if (index >= gs_sort_pc.sort_capacity) {
+        return;
+    }
+
+    uint partner = index ^ gs_sort_pc.step_j;
+    if (partner >= gs_sort_pc.sort_capacity || partner <= index) {
+        return;
+    }
+
+    GaussianSplatSortEntry a = gs_sort_entries[index];
+    GaussianSplatSortEntry b = gs_sort_entries[partner];
+
+    bool ascending_segment = (index & gs_sort_pc.stage_k) == 0u;
+    GaussianSplatSortEntry lower = gs_sort_entry_min(a, b);
+    GaussianSplatSortEntry upper = gs_sort_entry_max(a, b);
+
+    if (ascending_segment) {
+        gs_sort_entries[index] = lower;
+        gs_sort_entries[partner] = upper;
+    } else {
+        gs_sort_entries[index] = upper;
+        gs_sort_entries[partner] = lower;
+    }
+}
