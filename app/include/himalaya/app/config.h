@@ -27,6 +27,14 @@ namespace himalaya::app {
         std::string env_path;
 
         /**
+         * @brief Persisted render mode name.
+         *
+         * Supported values are "path_tracing" and "gaussian_splatting".
+         * Empty or unknown values fall back to Path Tracing.
+         */
+        std::string render_mode;
+
+        /**
          * @brief Persisted spdlog log level name (e.g. "warn", "info").
          *
          * Empty string means no user override — Application falls back to

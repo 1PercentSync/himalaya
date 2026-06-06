@@ -9,7 +9,7 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的渲染器
 - **分支**：`reflector` — Path Tracing + Gaussian Splatting
 - **Phase**：Phase 3.0 — Gaussian Splatting 基础渲染
-- **进度**：Phase 3.0 Step 7 完成并由用户在 CLion 编译验证通过：RenderMode 状态模型与分发、GS bounds 缓存、基础 `render_gaussian_splatting()` orchestration、`lin_rec709_display` bypass、`srgb_rec709_display` sRGB→linear conversion、TonemappingPass `HdrAces` / `LinearClamp` 已接入
+- **进度**：Phase 3.0 Step 7 完成并由用户在 CLion 编译验证通过：RenderMode 状态模型与分发、Path Tracing checkbox 模式切换、GS bounds 缓存、基础 `render_gaussian_splatting()` orchestration、`lin_rec709_display` bypass、`srgb_rec709_display` sRGB→linear conversion、TonemappingPass `HdrAces` / `LinearClamp` 已接入
 
 ### 下一个任务
 

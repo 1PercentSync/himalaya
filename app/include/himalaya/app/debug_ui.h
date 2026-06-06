@@ -53,7 +53,7 @@ namespace himalaya::app {
 
         // --- Render mode ---
 
-        /** @brief Application-selected render path. Mutable through the render mode combo. */
+        /** @brief Application-selected render path. Mutable through the Path Tracing checkbox. */
         framework::RenderMode& render_mode;
 
         /** @brief Whether RT hardware is available. */

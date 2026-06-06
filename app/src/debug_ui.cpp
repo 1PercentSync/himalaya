@@ -195,14 +195,16 @@ namespace himalaya::app {
             if (only_fifo) { ImGui::EndDisabled(); }
         }
 
-        // Render mode selection. Actual renderer dispatch/fallback is handled by Renderer.
+        // Render mode toggle. Checked = PT, unchecked = GS.
         {
-            constexpr const char *kRenderModeLabels[] = {"Path Tracing", "Gaussian Splatting"};
-            int current_mode = ctx.render_mode == framework::RenderMode::GaussianSplatting ? 1 : 0;
-            if (ImGui::Combo("Render Mode", &current_mode, kRenderModeLabels, IM_ARRAYSIZE(kRenderModeLabels))) {
-                ctx.render_mode = current_mode == 1
-                                      ? framework::RenderMode::GaussianSplatting
-                                      : framework::RenderMode::PathTracing;
+            bool pt_enabled = ctx.render_mode == framework::RenderMode::PathTracing;
+            if (ImGui::Checkbox("Path Tracing", &pt_enabled)) {
+                ctx.render_mode = pt_enabled
+                                      ? framework::RenderMode::PathTracing
+                                      : framework::RenderMode::GaussianSplatting;
+            }
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("Uncheck to switch to Gaussian Splatting.");
             }
         }
 

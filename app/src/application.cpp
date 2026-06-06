@@ -32,6 +32,32 @@ namespace himalaya::app {
     /** @brief Default log level used when config has no override. */
     constexpr auto kDefaultLogLevel = spdlog::level::warn;
 
+    /** @brief Config string for the path tracing render mode. */
+    constexpr auto kRenderModePathTracing = "path_tracing";
+
+    /** @brief Config string for the Gaussian Splatting render mode. */
+    constexpr auto kRenderModeGaussianSplatting = "gaussian_splatting";
+
+    /** @brief Converts a render mode enum to its persisted config string. */
+    const char *render_mode_to_config_string(const framework::RenderMode mode) {
+        switch (mode) {
+            case framework::RenderMode::PathTracing: return kRenderModePathTracing;
+            case framework::RenderMode::GaussianSplatting: return kRenderModeGaussianSplatting;
+        }
+        return kRenderModePathTracing;
+    }
+
+    /** @brief Parses a persisted render mode string, falling back to PathTracing. */
+    framework::RenderMode render_mode_from_config_string(const std::string &value) {
+        if (value == kRenderModeGaussianSplatting) {
+            return framework::RenderMode::GaussianSplatting;
+        }
+        if (!value.empty() && value != kRenderModePathTracing) {
+            spdlog::warn("Unknown render_mode in config: {}, using path tracing", value);
+        }
+        return framework::RenderMode::PathTracing;
+    }
+
     // ---- Init / Destroy ----
 
     void Application::init() {
@@ -46,6 +72,8 @@ namespace himalaya::app {
             : spdlog::level::from_str(config_.log_level));
 
         pt_allow_tearing_ = config_.pt_allow_tearing;
+        render_mode_ = render_mode_from_config_string(config_.render_mode);
+        config_.render_mode = render_mode_to_config_string(render_mode_);
 
         glfwInit();
         glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
@@ -460,6 +488,12 @@ namespace himalaya::app {
 
         if (config_.pt_allow_tearing != pt_allow_tearing_) {
             config_.pt_allow_tearing = pt_allow_tearing_;
+            save_config(config_);
+        }
+
+        const std::string current_render_mode = render_mode_to_config_string(render_mode_);
+        if (config_.render_mode != current_render_mode) {
+            config_.render_mode = current_render_mode;
             save_config(config_);
         }
     }
