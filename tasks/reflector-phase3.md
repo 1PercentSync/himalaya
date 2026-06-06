@@ -75,8 +75,8 @@
 - [x] 扩展 TonemappingPass mode（`HdrAces` / `LinearClamp` push constant；PT 显式使用 `HdrAces`；`LinearClamp` hard clamp `[0,1]`,输出 alpha=1）
 - [x] 建立 `RenderMode` 状态模型（复用 `framework::RenderMode { PathTracing, GaussianSplatting }`,替换 `pt_mode_` 过渡状态并清理 PT-only UI placeholder）
 - [x] 实现 `RenderMode` 分发与 GS path guard（PT / GS scene 独立加载；无可渲染场景时走明确 fallback）
-- [ ] 实现 GS near plane 计算与 push constants 填充（scene AABB diagonal × 0.005,仅 GS 模式使用；填齐 count/capacity/colorSpace/maxSH/near/extent/thresholds）
-- [ ] 创建基础 `render_gaussian_splatting()` orchestration（reset → cull/project → sort → draw → TonemappingPass；先支持 `lin_rec709_display` bypass,`srgb_rec709_display` 留给 conversion 小项）
+- [x] 缓存 GS near plane 所需 scene bounds（Renderer 记录已上传 GS scene AABB；near 值在 GS orchestration 中按 scene AABB diagonal × 0.005 计算,仅 GS 模式使用）
+- [ ] 创建基础 `render_gaussian_splatting()` orchestration（填齐 `GSPushConstants` count/capacity/colorSpace/maxSH/near/extent/thresholds；reset → cull/project → sort → draw → TonemappingPass；先支持 `lin_rec709_display` bypass,`srgb_rec709_display` 留给 conversion 小项）
 - [ ] 实现 GS color conversion path（新增 viewport-sized GS linear target；`srgb_rec709_display` composition → sRGB→linear pass → TonemappingPass；`lin_rec709_display` bypass；RGB only conversion,alpha preserved）
 - [ ] 请求用户在 CLion 中编译验证
 

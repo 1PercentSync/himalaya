@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的渲染器
 - **分支**：`reflector` — Path Tracing + Gaussian Splatting
 - **Phase**：Phase 3.0 — Gaussian Splatting 基础渲染
-- **进度**：Phase 3.0 Step 7 第三小项完成：`Renderer::render()` 已按 `RenderInput::render_mode` 分发 PT / GS；无 RT/TLAS 或无有效 GS scene 时明确 fallback 到 ImGui-only，GS 有效场景暂待后续 orchestration 接入
+- **进度**：Phase 3.0 Step 7 第四小项完成：Renderer 已在 GS scene build 成功后缓存已上传 scene AABB，并在 destroy / build 失败时清空；该 bounds 将用于 GS orchestration 中计算 GS-specific near plane
 
 ### 下一个任务
 
-Phase 3.0 Step 7 第四小项：实现 GS near plane 计算与 push constants 填充（scene AABB diagonal × 0.005，仅 GS 模式使用；填齐 count/capacity/colorSpace/maxSH/near/extent/thresholds）
+Phase 3.0 Step 7 第五小项：创建基础 `render_gaussian_splatting()` orchestration（填齐 `GSPushConstants` count/capacity/colorSpace/maxSH/near/extent/thresholds；reset → cull/project → sort → draw → TonemappingPass；先支持 `lin_rec709_display` bypass，`srgb_rec709_display` 留给 conversion 小项）
 
 ---
 

@@ -160,8 +160,8 @@ float power = -0.5 * mahalanobis;
 - TonemappingPass 保持最终 swapchain output pass，并通过 pass-local push constant 显式选择 mode；调用方不得依赖默认 mode。PT path 显式使用 `HdrAces`；GS path 使用 `LinearClamp`，跳过 exposure / tone curve，对 linear display-referred input 做 per-channel hard clamp `[0,1]` 并输出 alpha=1。mode 不放入 GlobalUBO，不新增 pipeline。
 - 复用 `framework::RenderMode { PathTracing, GaussianSplatting }` 状态模型，替换 `pt_mode_` 过渡状态并清理 PT-only UI placeholder。
 - `Renderer::render()` 按 `RenderMode` 分发 PT / GS；两个 scene 可以独立加载，RenderMode 只控制当前帧走哪条路径；无可渲染场景时走明确 fallback。
-- GS near plane 初始为 scene AABB diagonal × 0.005，仅 GS 模式使用；填齐 `GSPushConstants` 的 count、capacity、colorSpace、maxSH、near、extent 与 discard thresholds。
-- 新增 `render_gaussian_splatting()` 作为 GS path orchestration，顺序为 reset → cull/project → sort → draw → TonemappingPass；基础接入先支持 `lin_rec709_display` 直接作为 TonemappingPass input。
+- Renderer 在 GS scene build 成功后缓存已上传 scene AABB，作为 GS-specific near plane 的数据来源；near 值在 GS orchestration 中按 scene AABB diagonal × 0.005 计算，仅 GS 模式使用。
+- 新增 `render_gaussian_splatting()` 作为 GS path orchestration，在其中填齐 `GSPushConstants` 的 count、capacity、colorSpace、maxSH、near、extent 与 discard thresholds，并按 reset → cull/project → sort → draw → TonemappingPass 顺序录制；基础接入先支持 `lin_rec709_display` 直接作为 TonemappingPass input。
 - `srgb_rec709_display`：composition target 存 sRGB display-referred premultiplied RGB + alpha；sRGB→linear conversion pass 只转换 RGB，alpha 原样保留，输出 linear target 后再进入 TonemappingPass。
 - `lin_rec709_display`：composition target 已是 linear，直接作为 TonemappingPass input。
 - TonemappingPass 不做 GS sRGB decode；GS 进入 TonemappingPass 前必须已经是 linear。
