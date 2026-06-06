@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的渲染器
 - **分支**：`reflector` — Path Tracing + Gaussian Splatting
 - **Phase**：Phase 3.0 — Gaussian Splatting 基础渲染
-- **进度**：Phase 3.0 Step 7 第一小项完成：TonemappingPass 已支持显式 `HdrAces` / `LinearClamp` mode push constant；PT path 显式选择 `HdrAces`，GS 后续将使用 `LinearClamp` 输出 linear display-referred input
+- **进度**：Phase 3.0 Step 7 第二小项完成：已复用 `framework::RenderMode { PathTracing, GaussianSplatting }` 替换 `pt_mode_` 过渡状态，Debug UI 改为 Render Mode combo，Application → Renderer 已传递 `RenderInput::render_mode`
 
 ### 下一个任务
 
-Phase 3.0 Step 7 第二小项：建立 `RenderMode` 状态模型（新增 `RenderMode { PathTracing, GaussianSplatting }`，替换 `pt_mode_` 过渡状态并清理 PT-only UI placeholder）
+Phase 3.0 Step 7 第三小项：实现 `RenderMode` 分发与 GS path guard（PT / GS scene 独立加载；无可渲染场景时走明确 fallback）
 
 ---
 
