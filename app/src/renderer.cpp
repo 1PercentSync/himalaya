@@ -54,10 +54,25 @@ namespace himalaya::app {
         pending_semaphore_signal_ = {};
         fill_common_gpu_data(input);
 
-        if (ctx_->rt_supported && scene_as_builder_.tlas_handle().as != VK_NULL_HANDLE) {
-            render_path_tracing(cmd, input);
-        } else {
-            render_imgui_only(cmd, input);
+        switch (input.render_mode) {
+            case framework::RenderMode::PathTracing:
+                if (ctx_->rt_supported && scene_as_builder_.tlas_handle().as != VK_NULL_HANDLE) {
+                    render_path_tracing(cmd, input);
+                } else {
+                    render_imgui_only(cmd, input);
+                }
+                break;
+            case framework::RenderMode::GaussianSplatting:
+                if (!gaussian_splat_scene_builder_.valid()) {
+                    render_imgui_only(cmd, input);
+                    break;
+                }
+
+                // The GS render path is wired in the following Step 7 items.
+                // Until then, valid GS requests use the same explicit fallback
+                // instead of accidentally running PT.
+                render_imgui_only(cmd, input);
+                break;
         }
 
         ++frame_counter_;
