@@ -11,6 +11,8 @@
 
 #include <himalaya/rhi/pipeline.h>
 
+#include <cstdint>
+
 #include <vulkan/vulkan.h>
 
 namespace himalaya::rhi {
@@ -26,6 +28,32 @@ namespace himalaya::framework {
 } // namespace himalaya::framework
 
 namespace himalaya::passes {
+    /**
+     * @brief Output transform selected by TonemappingPass at record time.
+     */
+    enum class TonemappingMode : uint32_t {
+        /** @brief Path-tracing HDR path: exposure scale followed by ACES fit. */
+        HdrAces = 0,
+
+        /** @brief GS linear display-referred path: per-channel hard clamp only. */
+        LinearClamp = 1,
+    };
+
+    /**
+     * @brief Push constant layout for TonemappingPass mode selection.
+     *
+     * Kept pass-local so GS output mode does not leak into GlobalUBO. Must match
+     * the push constant block declared in shaders/tonemapping.frag.
+     */
+    struct TonemappingPushConstants {
+        uint32_t mode = static_cast<uint32_t>(TonemappingMode::HdrAces); ///< TonemappingMode encoded as uint.
+        uint32_t padding0 = 0; ///< Explicit padding for 16-byte push constant alignment.
+        uint32_t padding1 = 0; ///< Explicit padding for 16-byte push constant alignment.
+        uint32_t padding2 = 0; ///< Explicit padding for 16-byte push constant alignment.
+    };
+
+    static_assert(sizeof(TonemappingPushConstants) == 16);
+
     /**
      * @brief Tonemapping pass — fullscreen fragment shader reading HDR color.
      *
@@ -52,10 +80,13 @@ namespace himalaya::passes {
         /**
          * @brief Register RG resource usage and provide the execute callback.
          *
-         * @param rg  Render graph to add the pass to.
-         * @param ctx Per-frame context with RG resource IDs.
+         * @param rg   Render graph to add the pass to.
+         * @param ctx  Per-frame context with RG resource IDs.
+         * @param mode Explicit output transform mode for the current render path.
          */
-        void record(framework::RenderGraph &rg, const framework::FrameContext &ctx) const;
+        void record(framework::RenderGraph &rg,
+                    const framework::FrameContext &ctx,
+                    TonemappingMode mode) const;
 
         /**
          * @brief Rebuild pipeline by recompiling shaders from disk.

@@ -314,7 +314,7 @@ namespace himalaya::app {
             pending_semaphore_signal_ = denoiser_.launch_processing();
         }
 
-        tonemapping_pass_.record(render_graph_, frame_ctx);
+        tonemapping_pass_.record(render_graph_, frame_ctx, passes::TonemappingMode::HdrAces);
 
         // --- ImGui pass ---
         const std::array imgui_resources = {

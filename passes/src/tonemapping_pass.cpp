@@ -78,7 +78,12 @@ namespace himalaya::passes {
         const auto set_layouts = dm_->get_graphics_set_layouts();
         desc.descriptor_set_layouts = {set_layouts.begin(), set_layouts.end()};
 
-        // No push constants needed for tonemapping
+        const VkPushConstantRange push_range{
+            .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+            .offset = 0,
+            .size = sizeof(TonemappingPushConstants),
+        };
+        desc.push_constant_ranges = {push_range};
 
         pipeline_ = rhi::create_graphics_pipeline(ctx_->device, desc);
 
@@ -89,7 +94,8 @@ namespace himalaya::passes {
     // ---- Per-frame recording ----
 
     void TonemappingPass::record(framework::RenderGraph &rg,
-                                 const framework::FrameContext &ctx) const {
+                                 const framework::FrameContext &ctx,
+                                 const TonemappingMode mode) const {
         // Read hdr_color (Fragment sampler), write swapchain (ColorAttachment).
         const std::array resources = {
             framework::RGResourceUsage{
@@ -137,6 +143,14 @@ namespace himalaya::passes {
                             dm_->get_set2(ctx.frame_index),
                         };
                         cmd.bind_descriptor_sets(pipeline_.layout, 0, sets.data(), static_cast<uint32_t>(sets.size()));
+
+                        const TonemappingPushConstants push_constants{
+                            .mode = static_cast<uint32_t>(mode),
+                        };
+                        cmd.push_constants(pipeline_.layout,
+                                           VK_SHADER_STAGE_FRAGMENT_BIT,
+                                           &push_constants,
+                                           sizeof(push_constants));
 
                         // Normal viewport (no Y-flip): fullscreen post-processing
                         // samples a texture, no 3D coordinate convention to fix.
