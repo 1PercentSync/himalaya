@@ -18,6 +18,7 @@ namespace himalaya::rhi {
 namespace himalaya::framework {
     struct Camera;
     enum class DenoiseState : uint8_t;
+    enum class RenderMode : uint8_t;
     struct PTConfig;
 } // namespace himalaya::framework
 
@@ -52,8 +53,8 @@ namespace himalaya::app {
 
         // --- Render mode ---
 
-        /** @brief PT mode active (mutable — future: checkbox toggles PT vs GS). */
-        bool& pt_mode;
+        /** @brief Application-selected render path. Mutable through the render mode combo. */
+        framework::RenderMode& render_mode;
 
         /** @brief Whether RT hardware is available. */
         bool rt_supported;

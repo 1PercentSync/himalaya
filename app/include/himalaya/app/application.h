@@ -12,6 +12,7 @@
 #include <himalaya/app/scene_loader.h>
 #include <himalaya/framework/camera.h>
 #include <himalaya/framework/gaussian_splat_data.h>
+#include <himalaya/framework/scene_data.h>
 #include <himalaya/framework/imgui_backend.h>
 #include <himalaya/rhi/context.h>
 #include <himalaya/rhi/descriptors.h>
@@ -109,8 +110,8 @@ namespace himalaya::app {
         /** @brief IBL horizontal rotation angle in radians (left-click drag controlled). */
         float ibl_yaw_ = 0.0f;
 
-        /** @brief PT mode active (always true; future: toggleable for PT vs GS). */
-        bool pt_mode_ = true;
+        /** @brief Application-selected render path for the current frame. */
+        framework::RenderMode render_mode_ = framework::RenderMode::PathTracing;
 
         /** @brief Path tracing configuration parameters. */
         framework::PTConfig pt_config_{};

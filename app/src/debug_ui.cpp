@@ -195,13 +195,14 @@ namespace himalaya::app {
             if (only_fifo) { ImGui::EndDisabled(); }
         }
 
-        // Render mode toggle (PT remains locked until the GS render path is wired.)
+        // Render mode selection. Actual renderer dispatch/fallback is handled by Renderer.
         {
-            ImGui::BeginDisabled();
-            ImGui::Checkbox("Path Tracing", &ctx.pt_mode);
-            ImGui::EndDisabled();
-            if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
-                ImGui::SetTooltip("Gaussian Splatting render mode is not wired yet");
+            constexpr const char *kRenderModeLabels[] = {"Path Tracing", "Gaussian Splatting"};
+            int current_mode = ctx.render_mode == framework::RenderMode::GaussianSplatting ? 1 : 0;
+            if (ImGui::Combo("Render Mode", &current_mode, kRenderModeLabels, IM_ARRAYSIZE(kRenderModeLabels))) {
+                ctx.render_mode = current_mode == 1
+                                      ? framework::RenderMode::GaussianSplatting
+                                      : framework::RenderMode::PathTracing;
             }
         }
 
@@ -228,7 +229,7 @@ namespace himalaya::app {
         }
 
         // Path Tracing controls (visible only when PT mode is active)
-        if (ctx.pt_mode) {
+        if (ctx.render_mode == framework::RenderMode::PathTracing) {
             ImGui::Separator();
             if (ImGui::CollapsingHeader("Path Tracing##settings", ImGuiTreeNodeFlags_DefaultOpen)) {
                 // Status line
@@ -344,7 +345,7 @@ namespace himalaya::app {
                                 static_cast<double>(ctx.last_denoise_duration));
                 }
             }
-        } // if (ctx.pt_mode)
+        } // if PathTracing
 
         // Rendering section
         ImGui::Separator();

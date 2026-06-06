@@ -119,7 +119,7 @@ namespace himalaya::app {
         }
 
         // Camera: position based on current render mode
-        if (!pt_mode_ && gs_scene_) {
+        if (render_mode_ == framework::RenderMode::GaussianSplatting && gs_scene_) {
             auto_position_camera(gs_scene_->scene_bounds);
             camera_controller_.set_focus_target(&gs_scene_->scene_bounds);
         } else {
@@ -175,7 +175,7 @@ namespace himalaya::app {
             }
         }
 
-        if (pt_mode_) {
+        if (render_mode_ == framework::RenderMode::PathTracing) {
             auto_position_camera(scene_loader_.scene_bounds());
             camera_controller_.set_focus_target(&scene_loader_.scene_bounds());
         }
@@ -264,7 +264,7 @@ namespace himalaya::app {
                     spdlog::info("Loaded GS scene: {} ({} primitives)",
                                  path, gs_scene_->primitives.size());
 
-                    if (!pt_mode_) {
+                    if (render_mode_ == framework::RenderMode::GaussianSplatting) {
                         auto_position_camera(gs_scene_->scene_bounds);
                         camera_controller_.set_focus_target(&gs_scene_->scene_bounds);
                     }
@@ -376,7 +376,7 @@ namespace himalaya::app {
             .user_present_mode = user_present_mode_,
             .camera = camera_,
             .ibl_rotation_deg = glm::degrees(ibl_yaw_),
-            .pt_mode = pt_mode_,
+            .render_mode = render_mode_,
             .rt_supported = context_.rt_supported,
             .pt_sample_count = renderer_.pt_sample_count(),
             .pt_config = pt_config_,
@@ -450,7 +450,7 @@ namespace himalaya::app {
 
         // ---- Effective present mode (user preference + PT tearing override) ----
         rhi::PresentMode effective = user_present_mode_;
-        if (pt_allow_tearing_) {
+        if (render_mode_ == framework::RenderMode::PathTracing && pt_allow_tearing_) {
             effective = rhi::PresentMode::Immediate;
         }
         if (effective != swapchain_.present_mode) {
@@ -472,6 +472,7 @@ namespace himalaya::app {
         const RenderInput input{
             .image_index = image_index_,
             .frame_index = context_.frame_index,
+            .render_mode = render_mode_,
             .camera = camera_,
             .indirect_intensity = indirect_intensity_,
             .exposure = std::pow(2.0f, ev_),
