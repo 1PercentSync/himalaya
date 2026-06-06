@@ -107,7 +107,7 @@ rgb                // SH-evaluated RGB in primitive colorSpace
 - Shader skeleton 先接通 Set 3、GlobalUBO 和 push constants，workgroup size 初始使用 256。
 - World-space cull 使用 sphere(center=`position_world`, radius=`world_radius_3sigma`) vs frustum planes。
 - 投影防御包括 behind-camera discard、near-plane unstable discard 和 projection NaN/Inf 防御。Projection z clamp 只用于防止 NaN/Inf，不用于强行保留贴脸 splat。
-- `center_px` 由 clip/NDC 转 pixel，使用 Vulkan framebuffer 坐标：top-left origin、x right、y down，不做 Y flip。
+- `center_px` 由 camera/projection NDC 转 pixel，使用 framebuffer 坐标：top-left origin、x right、y down；由于相机/PT NDC 为 Y-up，而 Vulkan positive-height viewport 的屏幕方向为 Y-down，NDC→pixel 在 GS cull/project 中执行一次 Y flip。
 - 2D covariance 使用 view-space covariance 和 pixel focal length：
   - `fx = 0.5 * width * abs(proj[0][0])`
   - `fy = 0.5 * height * abs(proj[1][1])`
@@ -136,7 +136,7 @@ Bitonic sort 用于建立 deterministic correctness baseline，后续 radix 必�
 
 - 使用 non-indexed instanced draw，每个 splat 6 vertices，`gl_VertexIndex % 6` 展开两个三角形。
 - Vertex shader 通过 sorted entry 读取 `global_splat_index`，再读取 `projected_data[global_splat_index]`。
-- Quad corner：`center_px + sx * axis0_extent_px + sy * axis1_extent_px`。Pixel → NDC 不做 Y flip；GS draw 使用 positive-height normal viewport。
+- Quad corner：`center_px + sx * axis0_extent_px + sy * axis1_extent_px`。Pixel → Vulkan NDC 使用 positive-height viewport 的正常映射，不做第二次 Y flip。
 - Fragment shader 直接使用 `gl_FragCoord.xy - center_px`，与 pixel-space conic 保持同一坐标系。
 
 ```glsl
@@ -238,8 +238,9 @@ Step 9 在硬件光栅 correctness baseline 建立后执行，用于补齐 Phase
 ### Projection、cull 与 draw
 
 - GS 使用与 PT/reference view 相同的 camera pose、FOV、aspect 和 viewport；可使用 GS-specific near plane 保持投影稳定。
-- Projected center、2D covariance、OBB axes/extents 均使用 Vulkan framebuffer pixel space：top-left origin、x right、y down。
-- GS draw pass 使用 positive-height normal viewport；pixel → NDC 不做 Y flip；fragment 直接使用 `gl_FragCoord.xy - center_px`。
+- Projected center、2D covariance、OBB axes/extents 均使用 framebuffer pixel space：top-left origin、x right、y down。
+- 相机/PT projection NDC 约定为 Y-up；GS cull/project 在 NDC→pixel 与 2D covariance Jacobian 中执行一次 Y flip，使 projected data 与 `gl_FragCoord` 的 y-down 坐标一致。
+- GS draw pass 使用 positive-height normal viewport；pixel → Vulkan NDC 使用正常 viewport 映射，不做第二次 Y flip；fragment 直接使用 `gl_FragCoord.xy - center_px`。
 - 2D covariance 使用 view-space covariance 和 pixel focal length 推导，保证 covariance、OBB extents、conic 和 `gl_FragCoord.xy` 在同一 pixel coordinate system。
 - World-space frustum cull 使用 sphere(center=`position_world`, radius=`world_radius_3sigma`) vs frustum planes。
 - Behind-camera / near-plane 不稳定 / projected OBB 过大的 splat 可 discard；projection z clamp 只用于防止 NaN/Inf，不用于强行保留贴脸 splat。

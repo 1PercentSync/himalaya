@@ -82,7 +82,7 @@
 
 ## Step 8:Phase 3.0 correctness validation
 
-- [ ] 验证 happy path scene 能正确渲染（ellipse + perspective + cameraDistance + consistent metadata + identity/no-rotation transform）
+- [x] 验证 happy path scene 能正确渲染（ellipse + perspective + cameraDistance + consistent metadata + identity/no-rotation transform）
 - [ ] 验证 multi-primitive global buffer 拼接正确（不保留无实际消费的 per-primitive range contract）
 - [ ] 验证 colorSpace 输出路径（`srgb_rec709_display` conversion 与 `lin_rec709_display` bypass）
 - [ ] 验证核心渲染正确性（投影中心、3σ OBB、front-to-back sorting、premultiplied-under blend、Tonemapping bypass）

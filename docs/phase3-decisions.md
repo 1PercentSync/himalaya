@@ -56,7 +56,7 @@ Compute shader 中涉及 append、归约、scan 的操作优先采用 subgroup �
 
 ### 投影空间与 OBB
 
-Projected center、2D covariance、OBB axes/extents 在 Phase 3.x 中统一使用 screen pixel space。硬件光栅路径使用 oriented quad；tile-based compute 路径使用 OBB-tile 相交测试。该约定保证 Phase 3.0 与 Phase 3.5 的投影数据可以复用。
+Projected center、2D covariance、OBB axes/extents 在 Phase 3.x 中统一使用 screen pixel space（top-left origin、x right、y down）。相机/PT projection NDC 约定为 Y-up；GS projection 在 NDC→pixel 与 2D covariance Jacobian 中执行一次 Y flip，使 projected data 与 `gl_FragCoord` 坐标一致。硬件光栅路径使用 oriented quad；tile-based compute 路径使用 OBB-tile 相交测试。该约定保证 Phase 3.0 与 Phase 3.5 的投影数据可以复用。
 
 ### 色彩与输出
 
