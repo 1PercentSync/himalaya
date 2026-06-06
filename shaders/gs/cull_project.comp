@@ -104,10 +104,10 @@ bool gs_projection_guard(vec3 center_world, out vec3 center_view_xyz, out vec3 c
     return true;
 }
 
-/** Converts Vulkan NDC to top-left-origin framebuffer pixel coordinates. */
+/** Converts Vulkan NDC to positive-height viewport framebuffer pixel coordinates. */
 vec2 gs_ndc_to_pixel(vec2 ndc) {
     return vec2((ndc.x * 0.5 + 0.5) * global.screen_size.x,
-                (0.5 - ndc.y * 0.5) * global.screen_size.y);
+                (ndc.y * 0.5 + 0.5) * global.screen_size.y);
 }
 
 /** Reconstructs the baked world covariance matrix from the packed Set 3 layout. */
@@ -137,8 +137,8 @@ float gs_project_covariance_entry(vec3 jacobian_a, mat3 covariance_view, vec3 ja
 /**
  * Projects baked 3D covariance into 2D pixel-space covariance.
  *
- * Pixel coordinates use top-left origin, x right, y down. The Jacobian therefore
- * carries a negative y row relative to view-space y-up coordinates.
+ * Pixel coordinates use the same positive-height Vulkan viewport convention as
+ * gl_FragCoord and the draw pass. No additional Y flip is applied here.
  */
 bool gs_project_covariance_2d(vec3 center_view, mat3 covariance_world, out mat2 covariance_2d) {
     mat3 world_to_view = mat3(global.view);
@@ -161,8 +161,8 @@ bool gs_project_covariance_2d(vec3 center_view, mat3 covariance_world, out mat2 
                            0.0,
                            fx * center_view.x * inv_depth_sq);
     vec3 jacobian_y = vec3(0.0,
-                           -fy * inv_depth,
-                           -fy * center_view.y * inv_depth_sq);
+                           fy * inv_depth,
+                           fy * center_view.y * inv_depth_sq);
 
     float cov_xx = gs_project_covariance_entry(jacobian_x, covariance_view, jacobian_x);
     float cov_xy = gs_project_covariance_entry(jacobian_x, covariance_view, jacobian_y);
