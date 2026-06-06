@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的渲染器
 - **分支**：`reflector` — Path Tracing + Gaussian Splatting
 - **Phase**：Phase 3.0 — Gaussian Splatting 基础渲染
-- **进度**：Phase 3.0 Step 7 第二小项完成：已复用 `framework::RenderMode { PathTracing, GaussianSplatting }` 替换 `pt_mode_` 过渡状态，Debug UI 改为 Render Mode combo，Application → Renderer 已传递 `RenderInput::render_mode`
+- **进度**：Phase 3.0 Step 7 第三小项完成：`Renderer::render()` 已按 `RenderInput::render_mode` 分发 PT / GS；无 RT/TLAS 或无有效 GS scene 时明确 fallback 到 ImGui-only，GS 有效场景暂待后续 orchestration 接入
 
 ### 下一个任务
 
-Phase 3.0 Step 7 第三小项：实现 `RenderMode` 分发与 GS path guard（PT / GS scene 独立加载；无可渲染场景时走明确 fallback）
+Phase 3.0 Step 7 第四小项：实现 GS near plane 计算与 push constants 填充（scene AABB diagonal × 0.005，仅 GS 模式使用；填齐 count/capacity/colorSpace/maxSH/near/extent/thresholds）
 
 ---
 
