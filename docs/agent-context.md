@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Phase 3.0 Step 7 第一小项：创建 `render_gaussian_splatting()` orchestration（reset → cull/project → sort → draw → optional conversion → TonemappingPass）
+Phase 3.0 Step 7 第一小项：扩展 TonemappingPass mode（`HdrAces` / `LinearClamp` push constant；PT 默认保持 `HdrAces`；`LinearClamp` hard clamp `[0,1]`，输出 alpha=1）
 
 ---
 
