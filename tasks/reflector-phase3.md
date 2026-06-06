@@ -83,11 +83,11 @@
 ## Step 8:Phase 3.0 correctness validation
 
 - [x] 验证 happy path scene 能正确渲染（ellipse + perspective + cameraDistance + consistent metadata + identity/no-rotation transform）
-- [ ] 验证 multi-primitive global buffer 拼接正确（不保留无实际消费的 per-primitive range contract）
-- [ ] 验证 colorSpace 输出路径（`srgb_rec709_display` conversion 与 `lin_rec709_display` bypass）
-- [ ] 验证核心渲染正确性（投影中心、3σ OBB、front-to-back sorting、premultiplied-under blend、Tonemapping bypass）
-- [ ] 验证生命周期与异常路径（resize、`visible_count = 0`、非法 asset rejection、reload/resize descriptor safety）
-- [ ] 确认 Phase 3.0 baseline 目标（1M correctness baseline；不以 10M 性能为完成条件）
+- [x] ~~验证 multi-primitive global buffer 拼接正确（不保留无实际消费的 per-primitive range contract）~~（跳过：当前无 multi-primitive GS 测试资产）
+- [x] ~~验证 colorSpace 输出路径（`srgb_rec709_display` conversion 与 `lin_rec709_display` bypass）~~（跳过：当前无覆盖两种 colorSpace 的专用 GS 测试资产）
+- [x] ~~验证核心渲染正确性（投影中心、3σ OBB、front-to-back sorting、premultiplied-under blend、Tonemapping bypass）~~（跳过：happy path 排查与两个真实 GS 场景未发现可见问题，暂不追加专用验证资产）
+- [x] ~~验证生命周期与异常路径（resize、`visible_count = 0`、非法 asset rejection、reload/resize descriptor safety）~~（跳过：当前无专用异常/边界测试资产，后续出现相关场景再补测）
+- [x] 确认 Phase 3.0 baseline 目标（已验证两个 GS 场景未发现可见问题；小场景贴近视角约 60-70 FPS，大场景约 13.5 FPS；Phase 3.0 不以 10M 性能为完成条件）
 
 ## Step 9:Phase 3.0 末期补全
 

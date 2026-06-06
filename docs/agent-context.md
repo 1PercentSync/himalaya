@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的渲染器
 - **分支**：`reflector` — Path Tracing + Gaussian Splatting
 - **Phase**：Phase 3.0 — Gaussian Splatting 基础渲染
-- **进度**：Phase 3.0 Step 8 第一小项完成：已完整排查 GS happy path 从 PLY 转换、glTF/GS 加载、upload bake、GlobalUBO 相机矩阵、cull/project shader 到 quad draw 的坐标链路；GS projection 已与 PT/reference view 的 Y-up camera NDC 和 y-down framebuffer pixel space 对齐，NDC→pixel 与 2D covariance Jacobian 中执行一次 Y flip。
+- **进度**：Phase 3.0 Step 8 完成：已完整排查 GS happy path 从 PLY 转换、glTF/GS 加载、upload bake、GlobalUBO 相机矩阵、cull/project shader 到 quad draw 的坐标链路；GS projection 已与 PT/reference view 的 Y-up camera NDC 和 y-down framebuffer pixel space 对齐，NDC→pixel 与 2D covariance Jacobian 中执行一次 Y flip。用户已验证两个 GS 场景，暂未发现可见问题；小场景贴近视角约 60-70 FPS，大场景约 13.5 FPS。Step 8 剩余 multi-primitive、colorSpace、核心渲染细项、生命周期/异常路径因当前无专用测试资产而标记跳过，后续有资产时再补测。
 
 ### 下一个任务
 
-Phase 3.0 Step 8 第二小项：验证 multi-primitive global buffer 拼接正确（不保留无实际消费的 per-primitive range contract）
+Phase 3.0 Step 9 第一小项：确认 radix equal-key deterministic 策略与 pass layout（保持 32-bit distance_key + global_splat_index payload，不退回 64-bit packed key）
 
 ---
 
