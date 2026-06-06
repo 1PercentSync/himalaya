@@ -491,6 +491,16 @@ namespace himalaya::app {
         void render_imgui_only(rhi::CommandBuffer &cmd, const RenderInput &input);
 
         /**
+         * @brief Gaussian Splatting render path: preprocess, draw, tonemap, ImGui.
+         *
+         * Phase 3.0 baseline path records reset → cull/project → sort → draw
+         * and feeds a linear composition target into TonemappingPass with
+         * LinearClamp mode. The sRGB scene conversion branch is added by the
+         * following Step 7 item.
+         */
+        void render_gaussian_splatting(rhi::CommandBuffer &cmd, const RenderInput &input);
+
+        /**
          * @brief Records the GS reset → cull/project → sort preprocessing chain.
          *
          * Imports the GS scene buffers once and shares the resulting RG IDs across

@@ -5,6 +5,8 @@
 
 #include <himalaya/app/renderer.h>
 
+#include <himalaya/framework/frame_context.h>
+#include <himalaya/framework/gaussian_splat_data.h>
 #include <himalaya/framework/imgui_backend.h>
 #include <himalaya/framework/render_graph.h>
 #include <himalaya/framework/scene_data.h>
@@ -12,7 +14,10 @@
 #include <himalaya/rhi/resources.h>
 #include <himalaya/rhi/swapchain.h>
 
+#include <algorithm>
 #include <array>
+
+#include <glm/geometric.hpp>
 
 #include <GLFW/glfw3.h>
 
@@ -68,10 +73,7 @@ namespace himalaya::app {
                     break;
                 }
 
-                // The GS render path is wired in the following Step 7 items.
-                // Until then, valid GS requests use the same explicit fallback
-                // instead of accidentally running PT.
-                render_imgui_only(cmd, input);
+                render_gaussian_splatting(cmd, input);
                 break;
         }
 
@@ -97,6 +99,93 @@ namespace himalaya::app {
         gaussian_splat_bitonic_sort_pass_.record(render_graph_, resources, scene, frame_index);
 
         return resources;
+    }
+
+    void Renderer::render_gaussian_splatting(rhi::CommandBuffer &cmd, const RenderInput &input) {
+        const auto &scene = gaussian_splat_scene_builder_.gpu_scene();
+        if (scene.metadata.color_space != framework::GaussianSplatColorSpace::LinRec709Display) {
+            render_imgui_only(cmd, input);
+            return;
+        }
+
+        render_graph_.clear();
+
+        const auto swapchain_image = render_graph_.import_image(
+            "Swapchain",
+            swapchain_image_handles_[input.image_index],
+            VK_IMAGE_LAYOUT_UNDEFINED,
+            VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+
+        const auto composition_resource = render_graph_.use_managed_image(managed_gs_composition_,
+                                                                          VK_IMAGE_LAYOUT_UNDEFINED,
+                                                                          false);
+
+        const glm::vec3 diagonal_vector = gaussian_splat_scene_bounds_.max - gaussian_splat_scene_bounds_.min;
+        const float scene_diagonal = glm::length(diagonal_vector);
+        const float screen_short_side = static_cast<float>(std::min(swapchain_->extent.width,
+                                                                    swapchain_->extent.height));
+        const passes::GSPushConstants push_constants{
+            .total_splat_count = scene.total_splat_count,
+            .sort_capacity = scene.sort_capacity,
+            .color_space = static_cast<uint32_t>(scene.metadata.color_space),
+            .max_sh_degree = scene.metadata.max_sh_degree,
+            .near_gs = scene_diagonal * 0.005f,
+            .max_projected_extent_px = screen_short_side * 0.25f,
+            .alpha_discard_threshold = 1.0e-4f,
+            .power_discard_threshold = -20.0f,
+        };
+
+        const auto gs_resources = record_gaussian_splat_preprocess(scene,
+                                                                   input.frame_index,
+                                                                   push_constants);
+        gaussian_splat_draw_pass_.record(render_graph_,
+                                         composition_resource,
+                                         gs_resources,
+                                         scene,
+                                         input.frame_index,
+                                         push_constants);
+
+        framework::FrameContext frame_ctx{};
+        frame_ctx.swapchain = swapchain_image;
+        frame_ctx.hdr_color = composition_resource;
+        frame_ctx.frame_index = input.frame_index;
+        frame_ctx.frame_number = frame_counter_;
+
+        const auto composition_backing = render_graph_.get_managed_backing_image(managed_gs_composition_);
+        descriptor_manager_->update_render_target(input.frame_index, 0, composition_backing, default_sampler_);
+
+        tonemapping_pass_.record(render_graph_, frame_ctx, passes::TonemappingMode::LinearClamp);
+
+        const std::array imgui_resources = {
+            framework::RGResourceUsage{
+                swapchain_image,
+                framework::RGAccessType::ReadWrite,
+                framework::RGStage::ColorAttachment,
+            },
+        };
+        render_graph_.add_pass("ImGui", imgui_resources,
+                               [this, &input](const rhi::CommandBuffer &pass_cmd) {
+                                   VkRenderingAttachmentInfo color_attachment{};
+                                   color_attachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+                                   color_attachment.imageView = swapchain_->image_views[input.image_index];
+                                   color_attachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+                                   color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+                                   color_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+
+                                   VkRenderingInfo rendering_info{};
+                                   rendering_info.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
+                                   rendering_info.renderArea = {{0, 0}, swapchain_->extent};
+                                   rendering_info.layerCount = 1;
+                                   rendering_info.colorAttachmentCount = 1;
+                                   rendering_info.pColorAttachments = &color_attachment;
+
+                                   pass_cmd.begin_rendering(rendering_info);
+                                   imgui_->render(pass_cmd.handle());
+                                   pass_cmd.end_rendering();
+                               });
+
+        render_graph_.compile();
+        render_graph_.execute(cmd);
     }
 
     void Renderer::render_imgui_only(rhi::CommandBuffer &cmd, const RenderInput &input) {
