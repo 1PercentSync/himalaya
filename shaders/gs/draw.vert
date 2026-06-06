@@ -27,7 +27,10 @@ vec2 gs_quad_corner(uint vertex_index) {
     return corners[vertex_index % 6u];
 }
 
-/** Converts positive-height viewport framebuffer pixel coordinates back to Vulkan NDC. */
+/**
+ * Converts top-left framebuffer pixel coordinates to Vulkan NDC for a
+ * positive-height viewport.
+ */
 vec2 gs_pixel_to_ndc(vec2 pixel) {
     vec2 inv_screen = 1.0 / max(global.screen_size, vec2(1.0));
     return vec2(pixel.x * inv_screen.x * 2.0 - 1.0,
