@@ -6,6 +6,8 @@
 #version 460
 
 #include "common/bindings.glsl"
+
+#define GS_WORK_BUFFER_QUALIFIER readonly
 #include "gs/gs_common.glsl"
 
 layout(location = 0) flat in vec2 in_center_px;

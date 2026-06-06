@@ -86,6 +86,10 @@ uint gs_sh_packed_vec4_stride() {
 
 // ---- Set 3: static baked buffers + work buffers ----
 
+#ifndef GS_WORK_BUFFER_QUALIFIER
+#define GS_WORK_BUFFER_QUALIFIER
+#endif
+
 layout (set = 3, binding = 0) readonly buffer GSPositionRadiusBuffer {
     vec4 gs_position_radius[]; // xyz = world position, w = world 3-sigma radius
 };
@@ -98,23 +102,23 @@ layout (set = 3, binding = 2) readonly buffer GSSHCoefficientBuffer {
     vec4 gs_sh_coefficients[]; // indexed by global_splat_index * sh_packed_vec4_stride + local_vec4
 };
 
-layout (set = 3, binding = 3) buffer GSVisibleCountBuffer {
+layout (set = 3, binding = 3) GS_WORK_BUFFER_QUALIFIER buffer GSVisibleCountBuffer {
     uint gs_visible_count;
 };
 
-layout (set = 3, binding = 4) buffer GSProjectedDataBuffer {
+layout (set = 3, binding = 4) GS_WORK_BUFFER_QUALIFIER buffer GSProjectedDataBuffer {
     GaussianSplatProjectedData gs_projected_data[];
 };
 
-layout (set = 3, binding = 5) buffer GSSortEntriesBuffer {
+layout (set = 3, binding = 5) GS_WORK_BUFFER_QUALIFIER buffer GSSortEntriesBuffer {
     GaussianSplatSortEntry gs_sort_entries[];
 };
 
-layout (set = 3, binding = 6) buffer GSSortEntriesScratchBuffer {
+layout (set = 3, binding = 6) GS_WORK_BUFFER_QUALIFIER buffer GSSortEntriesScratchBuffer {
     GaussianSplatSortEntry gs_sort_entries_scratch[];
 };
 
-layout (set = 3, binding = 7) buffer GSIndirectDrawBuffer {
+layout (set = 3, binding = 7) GS_WORK_BUFFER_QUALIFIER buffer GSIndirectDrawBuffer {
     GaussianSplatDrawIndirectCommand gs_indirect_draw;
 };
 
