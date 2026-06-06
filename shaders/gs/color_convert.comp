@@ -1,0 +1,33 @@
+#version 460
+#extension GL_EXT_nonuniform_qualifier : require
+
+/**
+ * Gaussian Splatting color conversion pass.
+ *
+ * Converts composition output from KHR `srgb_rec709_display` to linear
+ * display-referred RGB before TonemappingPass. Alpha is preserved unchanged.
+ */
+
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+layout(set = 0, binding = 0) uniform sampler2D gs_composition_srgb;
+layout(set = 0, binding = 1, rgba16f) writeonly uniform image2D gs_linear_output;
+
+vec3 srgb_to_linear(vec3 c) {
+    bvec3 cutoff = lessThanEqual(c, vec3(0.04045));
+    vec3 low = c / 12.92;
+    vec3 high = pow((c + 0.055) / 1.055, vec3(2.4));
+    return mix(high, low, cutoff);
+}
+
+void main() {
+    ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 size = imageSize(gs_linear_output);
+    if (any(greaterThanEqual(pixel, size))) {
+        return;
+    }
+
+    vec4 srgb_color = texelFetch(gs_composition_srgb, pixel, 0);
+    vec3 linear_rgb = srgb_to_linear(max(srgb_color.rgb, vec3(0.0)));
+    imageStore(gs_linear_output, pixel, vec4(linear_rgb, srgb_color.a));
+}

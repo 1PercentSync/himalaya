@@ -111,7 +111,7 @@ namespace himalaya::passes {
         };
 
         rg.add_pass("Tonemapping", resources,
-                    [this, &rg, &ctx](const rhi::CommandBuffer &cmd) {
+                    [this, &rg, &ctx, mode](const rhi::CommandBuffer &cmd) {
                         // Color attachment: swapchain image
                         const auto swapchain_handle = rg.get_image(ctx.swapchain);
                         VkRenderingAttachmentInfo color_attachment{};

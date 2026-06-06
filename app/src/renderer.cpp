@@ -11,6 +11,7 @@
 #include <himalaya/framework/render_graph.h>
 #include <himalaya/framework/scene_data.h>
 #include <himalaya/rhi/commands.h>
+#include <himalaya/rhi/descriptors.h>
 #include <himalaya/rhi/resources.h>
 #include <himalaya/rhi/swapchain.h>
 
@@ -103,10 +104,6 @@ namespace himalaya::app {
 
     void Renderer::render_gaussian_splatting(rhi::CommandBuffer &cmd, const RenderInput &input) {
         const auto &scene = gaussian_splat_scene_builder_.gpu_scene();
-        if (scene.metadata.color_space != framework::GaussianSplatColorSpace::LinRec709Display) {
-            render_imgui_only(cmd, input);
-            return;
-        }
 
         render_graph_.clear();
 
@@ -119,6 +116,12 @@ namespace himalaya::app {
         const auto composition_resource = render_graph_.use_managed_image(managed_gs_composition_,
                                                                           VK_IMAGE_LAYOUT_UNDEFINED,
                                                                           false);
+        framework::RGResourceId linear_resource{};
+        if (scene.metadata.color_space == framework::GaussianSplatColorSpace::SrgbRec709Display) {
+            linear_resource = render_graph_.use_managed_image(managed_gs_linear_,
+                                                              VK_IMAGE_LAYOUT_UNDEFINED,
+                                                              false);
+        }
 
         const glm::vec3 diagonal_vector = gaussian_splat_scene_bounds_.max - gaussian_splat_scene_bounds_.min;
         const float scene_diagonal = glm::length(diagonal_vector);
@@ -145,14 +148,21 @@ namespace himalaya::app {
                                          input.frame_index,
                                          push_constants);
 
+        framework::RGResourceId tonemapping_input = composition_resource;
+        rhi::ImageHandle tonemapping_input_backing = render_graph_.get_managed_backing_image(managed_gs_composition_);
+        if (scene.metadata.color_space == framework::GaussianSplatColorSpace::SrgbRec709Display) {
+            gaussian_splat_color_convert_pass_.record(render_graph_, composition_resource, linear_resource);
+            tonemapping_input = linear_resource;
+            tonemapping_input_backing = render_graph_.get_managed_backing_image(managed_gs_linear_);
+        }
+
         framework::FrameContext frame_ctx{};
         frame_ctx.swapchain = swapchain_image;
-        frame_ctx.hdr_color = composition_resource;
+        frame_ctx.hdr_color = tonemapping_input;
         frame_ctx.frame_index = input.frame_index;
         frame_ctx.frame_number = frame_counter_;
 
-        const auto composition_backing = render_graph_.get_managed_backing_image(managed_gs_composition_);
-        descriptor_manager_->update_render_target(input.frame_index, 0, composition_backing, default_sampler_);
+        descriptor_manager_->update_render_target(input.frame_index, 0, tonemapping_input_backing, default_sampler_);
 
         tonemapping_pass_.record(render_graph_, frame_ctx, passes::TonemappingMode::LinearClamp);
 

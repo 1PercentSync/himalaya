@@ -8,6 +8,7 @@ target_sources(himalaya_passes PRIVATE
         src/gaussian_splat_cull_project_pass.cpp
         src/gaussian_splat_bitonic_sort_pass.cpp
         src/gaussian_splat_draw_pass.cpp
+        src/gaussian_splat_color_convert_pass.cpp
 )
 
 target_include_directories(himalaya_passes PUBLIC include)

@@ -17,6 +17,7 @@
 #include <himalaya/framework/texture.h>
 #include <himalaya/rhi/acceleration_structure.h>
 #include <himalaya/passes/gaussian_splat_bitonic_sort_pass.h>
+#include <himalaya/passes/gaussian_splat_color_convert_pass.h>
 #include <himalaya/passes/gaussian_splat_cull_project_pass.h>
 #include <himalaya/passes/gaussian_splat_draw_pass.h>
 #include <himalaya/passes/gaussian_splat_pass_resources.h>
@@ -328,6 +329,9 @@ namespace himalaya::app {
         /** @brief Graphics pass for GS instanced quad composition. */
         passes::GaussianSplatDrawPass gaussian_splat_draw_pass_{};
 
+        /** @brief Compute pass for GS sRGB display-referred RGB to linear RGB conversion. */
+        passes::GaussianSplatColorConvertPass gaussian_splat_color_convert_pass_{};
+
         /** @brief Acceleration structure manager (RT, initialized when rt_supported). */
         rhi::AccelerationStructureManager as_manager_{};
 
@@ -357,6 +361,9 @@ namespace himalaya::app {
 
         /** @brief GS premultiplied composition target (R16G16B16A16Sfloat, Relative 1.0x, ColorAttachment | Sampled). */
         framework::RGManagedHandle managed_gs_composition_;
+
+        /** @brief GS linear target after optional color conversion (R16G16B16A16Sfloat, Relative 1.0x, Storage | Sampled). */
+        framework::RGManagedHandle managed_gs_linear_;
 
         /** @brief OIDN asynchronous denoiser instance (reference view). */
         framework::Denoiser denoiser_{};

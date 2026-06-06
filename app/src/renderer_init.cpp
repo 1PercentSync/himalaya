@@ -48,6 +48,18 @@ namespace himalaya::app {
                 .sample_count = 1,
                 .mip_levels = 1,
             }, false);
+        managed_gs_linear_ = render_graph_.create_managed_image(
+            "GS Linear", {
+                .size_mode = framework::RGSizeMode::Relative,
+                .width_scale = 1.0f,
+                .height_scale = 1.0f,
+                .width = 0,
+                .height = 0,
+                .format = rhi::Format::R16G16B16A16Sfloat,
+                .usage = rhi::ImageUsage::Storage | rhi::ImageUsage::Sampled,
+                .sample_count = 1,
+                .mip_levels = 1,
+            }, false);
 
         // --- PT resources (only when RT is supported) ---
 
@@ -235,6 +247,10 @@ namespace himalaya::app {
                                         *descriptor_manager_,
                                         shader_compiler_,
                                         gaussian_splat_pass_resources_.descriptor_set_layout());
+        gaussian_splat_color_convert_pass_.setup(*ctx_,
+                                                 *resource_manager_,
+                                                 shader_compiler_,
+                                                 default_sampler_);
         tonemapping_pass_.setup(*ctx_, *resource_manager_, *descriptor_manager_, shader_compiler_, swapchain_->format);
 
         if (ctx_->rt_supported) {
@@ -249,6 +265,7 @@ namespace himalaya::app {
         gaussian_splat_cull_project_pass_.destroy();
         gaussian_splat_bitonic_sort_pass_.destroy();
         gaussian_splat_draw_pass_.destroy();
+        gaussian_splat_color_convert_pass_.destroy();
         gaussian_splat_pass_resources_.destroy();
         emissive_light_builder_.destroy();
         scene_as_builder_.destroy();
@@ -292,6 +309,9 @@ namespace himalaya::app {
         }
         if (managed_gs_composition_.valid()) {
             render_graph_.destroy_managed_image(managed_gs_composition_);
+        }
+        if (managed_gs_linear_.valid()) {
+            render_graph_.destroy_managed_image(managed_gs_linear_);
         }
         denoiser_.destroy();
         unregister_swapchain_images();
@@ -403,6 +423,7 @@ namespace himalaya::app {
         gaussian_splat_cull_project_pass_.rebuild_pipelines();
         gaussian_splat_bitonic_sort_pass_.rebuild_pipelines();
         gaussian_splat_draw_pass_.rebuild_pipelines();
+        gaussian_splat_color_convert_pass_.rebuild_pipelines();
         if (ctx_->rt_supported) {
             reference_view_pass_.rebuild_pipelines();
         }
