@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的渲染器
 - **分支**：`reflector` — Path Tracing + Gaussian Splatting
 - **Phase**：Phase 3.0 — Gaussian Splatting 基础渲染
-- **进度**：Phase 3.0 Step 7 第五小项完成：基础 `render_gaussian_splatting()` 已接入，按 reset → cull/project → sort → draw → TonemappingPass 顺序录制；`GSPushConstants` 在 orchestration 中就地填充，`lin_rec709_display` 直接进入 `LinearClamp`，`srgb_rec709_display` 暂待 conversion 小项
+- **进度**：Phase 3.0 Step 7 完成并由用户在 CLion 编译验证通过：RenderMode 状态模型与分发、GS bounds 缓存、基础 `render_gaussian_splatting()` orchestration、`lin_rec709_display` bypass、`srgb_rec709_display` sRGB→linear conversion、TonemappingPass `HdrAces` / `LinearClamp` 已接入
 
 ### 下一个任务
 
-Phase 3.0 Step 7 第六小项：实现 GS color conversion path（新增 viewport-sized GS linear target；`srgb_rec709_display` composition → sRGB→linear pass → TonemappingPass；`lin_rec709_display` bypass；RGB only conversion，alpha preserved）
+Phase 3.0 Step 8 第一小项：验证 happy path scene 能正确渲染（ellipse + perspective + cameraDistance + consistent metadata + identity/no-rotation transform）
 
 ---
 
