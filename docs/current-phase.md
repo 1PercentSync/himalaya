@@ -631,8 +631,7 @@ for each digit:
 
 本 Step 实现并接入 Step 9 冻结的 visible-count-driven 4-bit radix sort，默认启用 Radix，并保留 Bitonic Debug UI 对比路径。
 
-- `GSRadixArgs` CPU/GPU struct、offset `static_assert` 和 GLSL layout 必须与 Step 9 struct contract 一致。
-- `GS Radix Args` pass 读取 GPU 侧 `visible_count`，写 scalar fields、indirect dispatch slots、runtime scan input counts、`bucket_totals` / `bucket_bases` 初始值。
+- `GS Radix Args` pass 读取 GPU 侧 `visible_count`，写 `GSRadixArgs` runtime fields、indirect dispatch slots、runtime scan input counts、`bucket_totals` / `bucket_bases` 初始值；`GSRadixArgs` struct / offset `static_assert` 归属 Step 10。
 - Radix shader 分别实现 histogram、prefix level、bucket bases、scatter local-rank；各 shader 的 push constants 和 buffer layout 必须遵循 Step 9 contract。
 - `GS Radix Sort` orchestration 按 capacity level loop 录制 indirect dispatch，按 digit 循环 histogram、radix prefix、bucket bases、scatter，并按 Step 9 barrier contract 手写 pass 内 compute-to-compute barriers。
 - Radix sort 必须处理完整 `[0, active_capacity)`，tail sentinel 参与每个 digit；最终结果必须位于 primary `sort_entries`。

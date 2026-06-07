@@ -116,8 +116,7 @@
 
 ## Step 12: Visible-count-driven 4-bit radix sort
 
-- [ ] 实现 `GSRadixArgs` CPU/GPU struct 与 offset `static_assert`
-- [ ] 实现 radix args shader/pass
+- [ ] 实现 radix args shader/pass（读取 `visible_count`，写 `GSRadixArgs` runtime fields / indirect dispatch slots / zero dispatch）
 - [ ] 实现 radix histogram shader
 - [ ] 实现 radix prefix level shader
 - [ ] 实现 radix bucket bases shader
