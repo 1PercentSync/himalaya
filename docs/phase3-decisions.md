@@ -28,7 +28,7 @@ Phase 编号约定：
 
 ### 渲染模式互斥
 
-GS 渲染与 PT 渲染是独立 `RenderMode`，每帧只走一条路径。Phase 3.x 不要求 GS 与 mesh / skybox / PT 结果同屏合成。GS 专用 near plane、projection 稳定性策略和 output mode 只在 GS path 中生效。
+GS 渲染与 PT 渲染是独立 `RenderMode`，每帧只走一条路径。Phase 3.x 不要求 GS 与 mesh / skybox / PT 结果同屏合成。GS projection 稳定性检查使用独立的 GS near 参数，output mode 只在 GS path 中生效。
 
 ### 上游管线复用
 
