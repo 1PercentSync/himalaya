@@ -384,16 +384,16 @@ Radix sort push constants:
 ```text
 struct GSRadixHistogramPush {
     uint digit_shift;
-    uint active_capacity;
     uint max_radix_block_count;
 }
 
 struct GSRadixPrefixPush {
     uint level;
-    uint input_count;
     uint input_offset;
     uint output_offset;
-    uint has_output_level;
+    uint capacity_level_count;
+    uint capacity_level_offsets[8];
+    uint capacity_level_counts[8];
     uint max_radix_block_count;
 }
 
@@ -403,18 +403,17 @@ struct GSRadixBucketBasesPush {
 
 struct GSRadixScatterPush {
     uint digit_shift;
-    uint active_capacity;
-    uint radix_capacity_level_count;
-    uint radix_level_offsets[8];
-    uint radix_level_counts[8];
+    uint capacity_level_count;
+    uint capacity_level_offsets[8];
+    uint capacity_level_counts[8];
     uint max_radix_block_count;
 }
 ```
 
 RHI command contract:
 
-- Step 9 must add `CommandBuffer::dispatch_indirect(BufferHandle buffer, VkDeviceSize offset)`.
-- The method records `vkCmdDispatchIndirect` with the buffer and byte offset.
+- Step 9 must add `CommandBuffer::dispatch_indirect(VkBuffer buffer, VkDeviceSize offset)`.
+- The method records `vkCmdDispatchIndirect` with the raw Vulkan buffer and byte offset, matching the existing `draw_indirect()` style where `CommandBuffer` does not resolve engine buffer handles.
 - `radix_args` indirect slot offsets are fixed by the `GSRadixArgs` offsets above:
 
 ```text
@@ -423,19 +422,23 @@ scatter_dispatch_offset   = 64
 prefix_dispatch_offset(i) = 80 + i * 16
 ```
 
-`GSRadixPrefixPush` level 语义：
+`GSRadixPrefixPush` 只包含 CPU 录制命令时已知的 capacity layout 和当前 level 参数；runtime active count 从 `radix_args.radix_scan_input_counts[level]` 读取。`GSRadixPrefixPush` level 语义：
 
-- `level == 0`：input 是 `radix_histogram`，local exclusive prefix 写 `radix_block_offsets`；如果 `has_output_level != 0`，parent raw sums 写 `radix_scan_buffer[output_offset]`。
-- `level > 0`：input 是 `radix_scan_buffer[input_offset]`，当前 level exclusive prefix 原地写回同一 range；如果 `has_output_level != 0`，parent raw sums 写 `radix_scan_buffer[output_offset]`。
-- `has_output_level == 0` 表示 final level；prefix shader 不写 parent level，而是写 `radix_args.bucket_totals[16]`。
+- `level == 0`：input 是 `radix_histogram`，local exclusive prefix 写 `radix_block_offsets`。
+- `level > 0`：input 是 `radix_scan_buffer[input_offset]`，当前 level exclusive prefix 原地写回同一 range。
+- Shader 内判断 `is_final = level + 1 == radix_args.radix_scan_level_count`。
+- Shader 内判断 `has_output_level = level + 1 < radix_args.radix_scan_level_count`。
+- 若 `has_output_level`，parent raw sums 写 `radix_scan_buffer[output_offset]`。
+- 若 `is_final`，prefix shader 不写 parent level，而是写 `radix_args.bucket_totals[16]`。
+- Final level 写 `bucket_totals[bucket]` 时必须使用 scan 前的 raw sum / workgroup total；不能使用当前 level 原地扫描后的 exclusive prefix 值。
 
 Radix dispatch 形状：
 
 - Histogram：`dispatchIndirect(radix_args.histogram_dispatch)`，`x = block_count`，每个 256-entry radix block 一个 workgroup。
 - Scatter：`dispatchIndirect(radix_args.scatter_dispatch)`，`x = block_count`，每个 256-entry radix block 一个 workgroup。
-- Prefix：`dispatchIndirect(radix_args.prefix_dispatch[level])`，active level 的 `x = ceil(radix_scan_input_counts[level] / 256)`、`y = 16` buckets；inactive level 使用 zero dispatch。
+- Prefix：`dispatchIndirect(radix_args.prefix_dispatch[level])`，active level 的 `x = ceil(radix_args.radix_scan_input_counts[level] / 256)`、`y = 16` buckets；inactive level 使用 zero dispatch。
 - Bucket bases：一个普通 compute dispatch，单个 workgroup 读取 `bucket_totals[16]`，写 `bucket_bases[16]`。
-- Last active block 读取 input entry 前必须 guard `entry_index < active_capacity`。
+- Histogram / scatter shader 从 `radix_args.active_capacity` 读取 runtime active capacity。Last active block 读取 input entry 前必须 guard `entry_index < radix_args.active_capacity`。
 - Radix 必须处理完整 `[0, active_capacity)` 范围，不得只处理 `[0, active_count)`；`[active_count, active_capacity)` 由全量 reset 保证为 sentinel，并参与每个 digit 的 histogram/scatter，避免后续 digit 读 undefined。
 - Histogram shader 每个 digit 必须为每个 active block 覆盖写满 16 个 bucket counters；prefix 不得读取 inactive blocks。
 
@@ -478,7 +481,7 @@ local_rank = workgroup_bucket_prefix[subgroup_id][bucket] + subgroup_rank
 
 - Subgroup size 动态使用 `gl_SubgroupSize`；不得假设固定 32-wide subgroup。
 - Shared subgroup histogram array 必须按 256-thread workgroup 下的最大 subgroup 数量和 16 buckets 预留；按 Vulkan core 最小 subgroup size 4 计算，最坏为 `16 * 64` 个 `uint`。
-- 每个 scatter workgroup 在 per-entry scatter 前先为 16 个 bucket 计算当前 block 的 full offset，并写入 shared memory。`radix_level_offset/count` 来自 capacity layout，active parent level 数量为 `max(radix_args.radix_scan_level_count - 1, 0)`：
+- 每个 scatter workgroup 在 per-entry scatter 前先为 16 个 bucket 计算当前 block 的 full offset，并写入 shared memory。Capacity `radix_level_offset/count` 来自 push constants；active parent level 数量从 `radix_args.radix_scan_level_count` 派生为 `max(radix_args.radix_scan_level_count - 1, 0)`：
 
 ```text
 full_block_offset[bucket] = radix_block_offsets[bucket, block]
@@ -548,6 +551,7 @@ for each digit:
 
     for level in 0..radix_args.radix_scan_level_count-1:
         radix prefix level dispatch
+        shader reads runtime input_count / final-level state from radix_args
         barrier prefix outputs: Compute write -> Compute read/write
             level 0 output includes radix_block_offsets
             non-final level output includes radix_scan_buffer parent range
