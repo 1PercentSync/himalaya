@@ -91,11 +91,17 @@
 
 ## Step 9:Phase 3.0 末期补全
 
-- [ ] 确认 radix sort pass layout（key/equal-key 策略已选：32-bit distance_key stable radix + global_splat_index payload；radix 前 per-splat flag / prefix compact 生成 deterministic visible list）
-- [ ] 实现 radix capacity sort shader passes（histogram、prefix sum、scatter,支持 ping-pong payload 搬运）
-- [ ] 实现 radix capacity dispatch orchestration 并替换 bitonic dispatch
-- [ ] 验证 radix capacity 与 bitonic capacity baseline 渲染结果一致
-- [ ] 实现 visible-count-driven radix dispatch（GPU 侧根据 visible_count 限制排序工作量,不进行 CPU readback）
+- [x] 确认 radix sort 完整方案与 pass layout（32-bit distance_key stable 4-bit radix + global_splat_index payload；distance-key sentinel + hierarchical prefix compact 生成 deterministic visible list；首版直接 visible-count-driven；Bitonic 保留为 Debug UI 对比路径）
+- [ ] 重命名 RenderGraph indirect command usage（`DrawIndirect` → `IndirectCommand`，覆盖 draw/dispatch indirect）
+- [ ] 扩展 GS work buffer / descriptor 契约（`distance_keys_by_global`、`visibility_prefix_local`、packed visibility/radix scan buffers、`radix_args`、4-bit `radix_histogram` / `radix_block_offsets`）
+- [ ] 实现 cull/project distance-key 输出（全量写 `distance_keys_by_global`，`UINT_MAX` 表示 invisible；不再 append sort entries / 写 visible count）
+- [ ] 实现 visibility hierarchical exclusive scan（block size 256、packed levels、finalization 写 `visible_count` 和 `indirect.instanceCount`）
+- [ ] 实现 deterministic visible compact（按 global index 顺序输出 `sort_entries`，compact 内现场计算 block offset）
+- [ ] 用 Bitonic + deterministic compact 做简略视觉验证（Bitonic 继续按 `sort_capacity` 全量排序）
+- [ ] 实现 radix args pass（GPU 侧 active count/capacity、block count、histogram/scatter indirect dispatch、per-level prefix dispatch；zero dispatch 处理 empty visible set）
+- [ ] 实现 visible-count-driven 4-bit radix shaders（bucket-major histogram、hierarchical prefix、bucket bases、stable scatter、ping-pong payload 搬运）
+- [ ] 接入 radix sort orchestration 与 Debug UI sort mode（默认 Radix，Bitonic 可切换对比；radix pass 内部手写 digit 间 barriers）
+- [ ] 用 Debug UI 做 Radix / Bitonic 视觉 A/B 验证
 - [ ] 实现 Wigner-D SH rotation upload bake（提取 proper rotation,旋转 degree 1-3 SH 系数）
 - [ ] 验证 Wigner-D 正确性（identity 不变、degree 1 已知旋转、与 PLY 坐标翻转规则一致）
 - [ ] 请求用户在 CLion 中编译验证

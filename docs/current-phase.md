@@ -181,10 +181,18 @@ float power = -0.5 * mahalanobis;
 
 Step 9 在硬件光栅 correctness baseline 建立后执行，用于补齐 Phase 3.0 末期目标。
 
-- Radix sort 首版采用 32-bit `distance_key` stable radix，`global_splat_index` 作为 payload 搬运，不使用 64-bit packed key。Equal-key deterministic 顺序通过 radix 前生成 deterministic visible list 保证：cull/project 写 per-splat visibility flag / distance key / projected data，prefix compact 按 global splat index 顺序生成 visible list，再对 visible list 做 stable radix(distance_key)。Workgroup-local compact + group prefix 的更高效方案留作后续运行时优化。
-- Radix capacity path 包含 histogram、prefix sum、scatter 和 ping-pong payload 搬运；完成后替换 bitonic dispatch。
-- Radix capacity 必须与 Bitonic capacity baseline 对比渲染结果。
-- Visible-count-driven radix 由 GPU 侧 `visible_count` 限制排序工作量，不做 CPU readback。
+- RenderGraph indirect command usage 统一命名为 `IndirectCommand`，覆盖 draw indirect 与 dispatch indirect；Vulkan 映射仍为 `VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT` + `VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT`。
+- Radix sort 首版采用 32-bit `distance_key` stable radix，`global_splat_index` 作为 payload 搬运，不使用 64-bit packed key。首版 digit width 为 4-bit：`bucket_count = 16`、`digit_count = 8`；后续 Phase 3.1 再评估 8-bit radix，不提前分配 256-bucket buffers。
+- Equal-key deterministic 顺序通过 radix 前的 deterministic visible list 保证：cull/project 对每个 global splat 全量写 `distance_keys_by_global[i] = visible ? distance_key : UINT_MAX`，其中 `UINT_MAX` 表示 invisible / invalid；projected data 仍按 global splat index dense 写入，invisible splat 的 projected data 未定义。
+- Visibility prefix 使用 256 block size 的专用 hierarchical exclusive scan，不引入通用 GPU scan 工具。`visibility_prefix_local` 存 block-local exclusive prefix；多级 sums 打包在 `visibility_scan_buffer` 中，level offsets/counts 由 CPU-side scan level layout helper 计算并通过 push constants 传递。Visibility scan finalization 写 `visible_count` 和 `indirect.instanceCount`。
+- Visible compact 按 `total_splat_count` dispatch，现场根据 packed scan levels 计算 original block 的 global offset，并写 `sort_entries[local_prefix + block_offset] = {distance_key, global_splat_index}`。不额外物化完整 block offset buffer。Deterministic compact 完成后先接回 Bitonic 做简略视觉验证，再接入 Radix。
+- Radix args 使用独立 `GS Radix Args` pass 生成，读取 GPU 侧 `visible_count`，写 `active_count`、`active_capacity = next_power_of_two(visible_count)`、`block_count`、histogram/scatter indirect dispatch commands，以及每层 radix prefix scan 的 indirect dispatch commands / level counts。`visible_count = 0` 时 `active_capacity = 0`，相关 indirect dispatch 写 zero dispatch。
+- Radix histogram / prefix / scatter 在单个 `GS Radix Sort` RG pass 内按 digit 循环录制，digit 内部手写必要 compute-to-compute barriers。Histogram 每个 digit 完整覆盖 active blocks × 16 buckets，不额外 clear；inactive entries 未定义且不得读取。
+- Radix histogram 和 block offsets 使用 bucket-major layout：`index = bucket * max_block_count + block`。`radix_histogram` 与 `radix_block_offsets` 分开存储；radix prefix 使用专用 hierarchical exclusive scan，临时 sums 打包在独立 `radix_scan_buffer` 中。`bucket_bases[16]` 放入 `radix_args`，每个 digit prefix 后覆盖同一份 bucket bases。
+- Radix scatter 的 local rank 使用 subgroup ballot rank + shared subgroup histogram prefix；shader 使用 `gl_SubgroupSize` 动态处理，不假设固定 subgroup size。Scatter 公式为 `dst = bucket_base[bucket] + block_offset[bucket, block] + local_rank`。
+- Radix 以 primary `sort_entries` 为输入，`sort_entries_scratch` 作为 ping-pong scratch。4-bit 共 8 轮，最终结果必须回到 primary `sort_entries`；draw pass 永远读取 primary。
+- Debug UI 提供 GS sort mode 运行时切换，默认 Radix，Bitonic 保留为 debug baseline。Bitonic 与 Radix 共用 deterministic compact 输出；Bitonic 仍按 `sort_capacity` 全量排序。Radix / Bitonic 一致性通过 Debug UI 视觉 A/B 对比验证，不实现 GPU exact compare 或 CPU readback。
+- Phase 3.1 再评估 workgroup-local compact + group prefix、range-aware reset / tail sentinel 初始化、8-bit radix 等运行时优化；Phase 3.0 首版不提前决定这些演进方式。
 - Wigner-D SH rotation 从 transform 提取 proper rotation，旋转 degree 1-3 SH 系数，并集成到 upload bake。
 - Wigner-D 验证至少包括 identity 不变、degree 1 已知旋转、与 PLY 坐标翻转规则一致性检查。
 
@@ -248,13 +256,13 @@ Step 9 在硬件光栅 correctness baseline 建立后执行，用于补齐 Phase
 
 ### Sort 与 draw range
 
-- 当前 bitonic baseline 的 sort entry 为 2×32-bit：`distance_key + global_splat_index`。Step 9 radix 首版保持 32-bit `distance_key` stable radix + `global_splat_index` payload；equal-key 顺序由 deterministic visible list 的 global-index 顺序保证。
-- `distance_key = floatBitsToUint(camera_distance_squared)`，仅对 finite non-negative float 使用；invalid sentinel 为 `{UINT_MAX, UINT_MAX}`。
-- 每帧 reset：`visible_count = 0`、sort entries 填 sentinel、`indirect.instanceCount = 0`。
-- Cull/project append valid entries 到 `sort_entries[0..visible_count)`；ascending sort 后 valid entries 在前，sentinel 在尾。
-- Bitonic compare 使用 lexicographic `(distance_key, global_splat_index)`；未来 sort 实现也必须对相同 `distance_key` 保持 deterministic ordering，避免透明累积闪烁。
-- Phase 3.0 Bitonic baseline 使用 primary `sort_entries` 的 in-place compare-and-swap；scratch sort buffer 保留给后续 out-of-place radix / ping-pong scatter，不为 bitonic 强行增加 buffer 搬运。
-- Bitonic orchestration 作为单个 RenderGraph pass 内的多 dispatch 序列执行，并在 dispatch step 之间手写 compute-to-compute buffer barrier，避免按 step 拆分导致 RG pass 数随 `log2(N) * (log2(N)+1) / 2` 膨胀。
+- Sort entry 为 2×32-bit：`distance_key + global_splat_index`。`distance_key = floatBitsToUint(camera_distance_squared)`，仅对 finite non-negative float 使用；invalid sentinel 为 `{UINT_MAX, UINT_MAX}`。
+- Step 9 起 cull/project 不再 atomic append visible list，而是全量写 `distance_keys_by_global`。`distance_keys_by_global[i] == UINT_MAX` 表示 invisible；visibility scan / compact 根据该 sentinel 按 global splat index 顺序生成 deterministic visible list。
+- 每帧 reset：`visible_count = 0`、`sort_entries` / `sort_entries_scratch` 全量填 sentinel、`indirect.instanceCount = 0`。`distance_keys_by_global` 不 reset，由 cull/project 全量覆盖。
+- Visibility scan finalization 写 `visible_count` 和 `indirect.instanceCount`；draw 使用 `visible_count`，不 draw capacity。
+- Bitonic compare 使用 lexicographic `(distance_key, global_splat_index)`；Bitonic debug baseline 与 Radix 共用 deterministic compact 输出，但仍按 `sort_capacity` 全量排序。
+- Radix 使用 stable 4-bit LSD radix，仅排序 `[0, active_capacity)`，其中 `active_capacity` 由 GPU 侧 `visible_count` 派生。Compact 后 `[visible_count, active_capacity)` 的 sentinel 由全量 reset 保证。
+- Radix 完成后 sorted result 必须位于 primary `sort_entries`；draw pass 不感知 sort 内部 ping-pong 状态。
 - `VkDrawIndirectCommand` 固定字段由 CPU 初始化：`vertexCount = 6`、`firstVertex = 0`、`firstInstance = 0`。GPU 只写 `instanceCount = visible_count`。
 
 ### Color、alpha 与 output
@@ -283,4 +291,4 @@ Step 9 在硬件光栅 correctness baseline 建立后执行，用于补齐 Phase
 - 支持单个或多个 GS primitive，primitive 拼接为 global splat buffers；不保留无实际消费的 CPU per-primitive ranges。
 - 支持 `srgb_rec709_display` 和 `lin_rec709_display` 二选一 scene；不支持 mixed colorSpace scene。
 - 以 1M splat 级别 correctness baseline 为目标，不以 10M 性能为 Phase 3.0 完成条件。
-- 必须验证：投影中心、3σ OBB、front-to-back 排序、premultiplied-under blend、color conversion、TonemappingPass GS bypass、resize、`visible_count = 0`、非法 asset rejection。
+- 必须验证：投影中心、3σ OBB、front-to-back 排序、premultiplied-under blend、color conversion、TonemappingPass GS bypass、resize、`visible_count = 0`、非法 asset rejection。Step 9 额外验证 deterministic compact + Bitonic 简略视觉结果、Radix / Bitonic Debug UI 视觉 A/B，以及 Wigner-D identity / degree 1 / PLY 坐标翻转一致性。
