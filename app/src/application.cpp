@@ -419,6 +419,7 @@ namespace himalaya::app {
             .last_denoise_duration = renderer_.last_denoise_duration(),
             .indirect_intensity = indirect_intensity_,
             .ev = ev_,
+            .gs_near_plane = gs_near_plane_,
             .scene_path = config_.scene_path,
             .gs_scene_path = config_.gs_scene_path,
             .env_path = config_.env_path,
@@ -434,6 +435,10 @@ namespace himalaya::app {
         };
         // ReSharper disable once CppUseStructuredBinding
         const auto actions = debug_ui_.draw(ui_ctx);
+
+        // DebugUI can edit camera projection parameters after the controller
+        // has updated matrices, so refresh once more before rendering.
+        camera_.update_all();
 
         if (actions.error_dismissed) {
             error_message_.clear();
@@ -508,6 +513,7 @@ namespace himalaya::app {
             .frame_index = context_.frame_index,
             .render_mode = render_mode_,
             .camera = camera_,
+            .gs_near_plane = gs_near_plane_,
             .indirect_intensity = indirect_intensity_,
             .exposure = std::pow(2.0f, ev_),
             .ibl_rotation_sin = std::sin(ibl_yaw_),

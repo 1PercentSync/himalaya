@@ -102,6 +102,9 @@ namespace himalaya::app {
         /** @brief Editable reference to the exposure value in EV stops. */
         float& ev;
 
+        /** @brief Editable GS projection-stability near distance in world units. */
+        float& gs_near_plane;
+
         // --- Current file paths (display) ---
 
         /** @brief Current PT scene file path (empty = no scene loaded). */

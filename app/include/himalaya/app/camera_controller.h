@@ -18,8 +18,9 @@ namespace himalaya::app {
      *
      * Hold right mouse button to rotate the camera. WASD moves along the
      * camera's forward/right directions, Space ascends, Ctrl descends.
-     * Hold Shift to sprint (3x speed). Call update() once per frame
-     * after glfwPollEvents().
+     * Hold Shift to sprint (3x speed). Press F to frame the focus target,
+     * or R to move the camera to the world origin while keeping orientation.
+     * Call update() once per frame after glfwPollEvents().
      */
     class CameraController {
     public:

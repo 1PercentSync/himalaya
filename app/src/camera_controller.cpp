@@ -96,9 +96,15 @@ namespace himalaya::app {
                 camera_->position += glm::normalize(move) * speed * delta_time;
             }
 
-            // F-key focus: move to frame the scene AABB, keep current orientation
+            // F-key focus: move to frame the scene AABB, keep current orientation.
             if (focus_target_ && ImGui::IsKeyPressed(ImGuiKey_F, false)) {
                 camera_->position = camera_->compute_focus_position(*focus_target_);
+            }
+
+            // R-key origin snap: useful for outlier-heavy GS scenes whose bounds
+            // make automatic framing land far away from the captured subject.
+            if (ImGui::IsKeyPressed(ImGuiKey_R, false)) {
+                camera_->position = glm::vec3(0.0f);
             }
         }
 

@@ -38,7 +38,7 @@ namespace himalaya::framework {
         /** @brief Vertical field of view in radians. */
         float fov = glm::radians(60.0f);
 
-        /** @brief Distance to the near clipping plane. */
+        /** @brief Distance to the near clipping plane, in world units. */
         float near_plane = 0.1f;
 
         /** @brief Distance to the far clipping plane. */

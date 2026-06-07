@@ -105,6 +105,9 @@ namespace himalaya::app {
         /** @brief Exposure value in EV (pow(2, ev) gives linear exposure multiplier). */
         float ev_ = 0.0f;
 
+        /** @brief GS projection-stability near distance in world units. */
+        float gs_near_plane_ = 0.25f;
+
         // --- IBL rotation ---
 
         /** @brief IBL horizontal rotation angle in radians (left-click drag controlled). */

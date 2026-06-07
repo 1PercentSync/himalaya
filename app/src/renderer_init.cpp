@@ -380,22 +380,15 @@ namespace himalaya::app {
 
     bool Renderer::build_gaussian_splat_scene(const framework::GaussianSplatScene &scene,
                                               std::string &error_message) {
-        const bool ok = gaussian_splat_scene_builder_.build(*ctx_,
-                                                            *resource_manager_,
-                                                            gaussian_splat_pass_resources_.descriptor_set_layout(),
-                                                            scene,
-                                                            error_message);
-        if (ok) {
-            gaussian_splat_scene_bounds_ = scene.scene_bounds;
-        } else {
-            gaussian_splat_scene_bounds_ = {};
-        }
-        return ok;
+        return gaussian_splat_scene_builder_.build(*ctx_,
+                                                   *resource_manager_,
+                                                   gaussian_splat_pass_resources_.descriptor_set_layout(),
+                                                   scene,
+                                                   error_message);
     }
 
     void Renderer::destroy_gaussian_splat_scene() {
         gaussian_splat_scene_builder_.destroy();
-        gaussian_splat_scene_bounds_ = {};
     }
 
     // ---- Environment reload ----

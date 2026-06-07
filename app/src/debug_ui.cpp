@@ -358,6 +358,12 @@ namespace himalaya::app {
 
             slider_float_deferred("IBL Intensity", &ctx.indirect_intensity, 0.0f, 5.0f, "%.2f");
             slider_float_deferred("EV", &ctx.ev, -4.0f, 4.0f, "%.1f");
+            slider_float_deferred("GS Near",
+                                  &ctx.gs_near_plane,
+                                  0.01f,
+                                  10.0f,
+                                  "%.2f",
+                                  ImGuiSliderFlags_Logarithmic);
         }
 
         // Camera section

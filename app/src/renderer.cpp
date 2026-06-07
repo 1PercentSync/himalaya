@@ -18,8 +18,6 @@
 #include <algorithm>
 #include <array>
 
-#include <glm/geometric.hpp>
-
 #include <GLFW/glfw3.h>
 
 namespace himalaya::app {
@@ -123,8 +121,6 @@ namespace himalaya::app {
                                                               false);
         }
 
-        const glm::vec3 diagonal_vector = gaussian_splat_scene_bounds_.max - gaussian_splat_scene_bounds_.min;
-        const float scene_diagonal = glm::length(diagonal_vector);
         const float screen_short_side = static_cast<float>(std::min(swapchain_->extent.width,
                                                                     swapchain_->extent.height));
         const passes::GSPushConstants push_constants{
@@ -132,7 +128,7 @@ namespace himalaya::app {
             .sort_capacity = scene.sort_capacity,
             .color_space = static_cast<uint32_t>(scene.metadata.color_space),
             .max_sh_degree = scene.metadata.max_sh_degree,
-            .near_gs = scene_diagonal * 0.005f,
+            .near_gs = input.gs_near_plane,
             .max_projected_extent_px = screen_short_side * 0.25f,
             .alpha_discard_threshold = 1.0e-4f,
             .power_discard_threshold = -20.0f,

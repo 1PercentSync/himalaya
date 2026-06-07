@@ -67,6 +67,9 @@ namespace himalaya::app {
         /** @brief Camera state (position, matrices). */
         const framework::Camera &camera;
 
+        /** @brief GS projection-stability near distance, independent of camera projection near. */
+        float gs_near_plane;
+
         /** @brief Indirect light intensity multiplier. */
         float indirect_intensity;
 
@@ -343,9 +346,6 @@ namespace himalaya::app {
 
         /** @brief Gaussian Splatting scene resource builder and owner. */
         framework::GaussianSplatSceneBuilder gaussian_splat_scene_builder_{};
-
-        /** @brief World-space AABB for the currently uploaded GS scene. */
-        framework::AABB gaussian_splat_scene_bounds_{};
 
         /** @brief PT accumulation buffer (RGBA32F, Relative 1.0x, Storage); created when rt_supported. */
         framework::RGManagedHandle managed_pt_accumulation_;
