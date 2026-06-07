@@ -604,45 +604,47 @@ for each digit:
 - Bucket bases → scatter barrier covers `radix_args.bucket_bases`、`radix_block_offsets` 和 `radix_scan_buffer` reads.
 - Scatter output barrier makes the current digit output visible to the next digit input. The final digit output is primary `sort_entries`; the following draw pass dependency is handled by RenderGraph.
 
-### Step 10：RG indirect command 与 GS radix 资源契约
+### Step 10：Radix infrastructure / resource contract
 
-本 Step 将 Step 9 冻结的 resource / synchronization contract 落到 framework 和 GS scene resource owner 中，不实现排序算法本体。
+本 Step 将 Step 9 冻结的 framework / RHI / resource contract 落到代码中，不改变 GS visible-list 生成和排序算法行为。
 
 - RenderGraph indirect command usage 由 `DrawIndirect` 重命名为 `IndirectCommand`，覆盖 draw indirect 与 dispatch indirect；Vulkan 映射仍为 `VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT` + `VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT`。
 - RenderGraph 支持同一 pass 内同一 resource 多 usage 聚合：stage/access OR 合并，只用于 cross-pass dependency，不根据同 pass duplicate usage 声明顺序生成 same-pass barrier。
 - RHI `CommandBuffer` 新增 `dispatch_indirect(VkBuffer buffer, VkDeviceSize offset)`，与现有 `draw_indirect()` 风格一致，不在 `CommandBuffer` 内解析 engine `BufferHandle`。
-- GS Set 3 追加 Step 9 固定的新 binding 8-14，并由 GS scene resource owner 创建、销毁、写 descriptor。
+- 定义 GS radix shared constants、Set 3 binding enum、CPU/GPU structs 和 offset / size `static_assert`；这些定义不应隐式改变当前 Bitonic path 行为。
+- GS scene resource owner 创建新增 work buffers，写入新增 descriptor bindings，并在 GS pass resources 中导入对应 RG resources。
 - `radix_args` 使用 `StorageBuffer | IndirectBuffer`，其他新增 work buffers 按 Step 9 表格中的 usage / reset contract 创建。
 
 ### Step 11：Deterministic visible list
 
 本 Step 替换 cull/project 的 atomic append 输出，生成 deterministic visible list，并先接回 Bitonic baseline 做视觉验证。
 
-- Cull/project 全量写 `distance_keys_by_global`，`UINT_MAX` 表示 invisible / invalid；不再 append `sort_entries`，不再写 `visible_count` 或 `indirect.instanceCount`。
-- Visibility scan 使用 Step 9 定义的 hierarchical exclusive scan，写 `visibility_prefix_local`、`visibility_scan_buffer`、`visible_count` 和 `indirect.instanceCount`。
+- Cull/project 先全量写 `distance_keys_by_global`，`UINT_MAX` 表示 invisible / invalid；实现初期可临时保留旧 append/count 输出，直到 scan/compact 接通。
+- CPU-side scan level layout helper 负责生成 visibility/radix packed level offsets/counts；本 Step 先消费 visibility layout。
+- Visibility leaf scan 写 `visibility_prefix_local` 和 level0 raw sums。
+- Visibility level scan / finalization 逐层扫描 packed sums，并在 finalization 写 `visible_count` 和 `indirect.instanceCount`。
 - Visible compact 按 global splat index 顺序写 primary `sort_entries[0..visible_count)`，block offset 在 compact 中现场从 scan levels 累加。
+- Scan/compact 接通后切换 GS preprocess 到 deterministic compact 输出，并移除 cull/project 旧 append/count/indirect 写入。
 - Bitonic debug baseline 共用 deterministic compact 输出，继续按 `sort_capacity` 全量排序，用于在 radix 接入前做简略视觉验证。
 
 ### Step 12：Visible-count-driven 4-bit radix sort
 
 本 Step 实现并接入 Step 9 冻结的 visible-count-driven 4-bit radix sort，默认启用 Radix，并保留 Bitonic Debug UI 对比路径。
 
-- `GS Radix Args` pass 读取 GPU 侧 `visible_count`，写 `GSRadixArgs` scalar fields、indirect dispatch slots、runtime scan input counts、`bucket_totals` / `bucket_bases` 初始值。
-- `GS Radix Sort` pass 内部按 digit 循环 histogram、radix prefix、bucket bases、scatter，并按 Step 9 barrier contract 手写 pass 内 compute-to-compute barriers。
+- `GSRadixArgs` CPU/GPU struct、offset `static_assert` 和 GLSL layout 必须与 Step 9 struct contract 一致。
+- `GS Radix Args` pass 读取 GPU 侧 `visible_count`，写 scalar fields、indirect dispatch slots、runtime scan input counts、`bucket_totals` / `bucket_bases` 初始值。
+- Radix shader 分别实现 histogram、prefix level、bucket bases、scatter local-rank；各 shader 的 push constants 和 buffer layout 必须遵循 Step 9 contract。
+- `GS Radix Sort` orchestration 按 capacity level loop 录制 indirect dispatch，按 digit 循环 histogram、radix prefix、bucket bases、scatter，并按 Step 9 barrier contract 手写 pass 内 compute-to-compute barriers。
 - Radix sort 必须处理完整 `[0, active_capacity)`，tail sentinel 参与每个 digit；最终结果必须位于 primary `sort_entries`。
-- Debug UI 提供 GS sort mode 切换，默认 Radix；Bitonic 保留为 runtime baseline。Radix / Bitonic 一致性通过视觉 A/B 验证，不实现 GPU exact compare 或 CPU readback。
+- Renderer 内部 GS sort mode 和 Debug UI 提供 Bitonic / Radix 切换；默认 Radix，Bitonic 保留为 runtime baseline。Radix / Bitonic 一致性通过视觉 A/B 验证，不实现 GPU exact compare 或 CPU readback。
 
-### Step 13：Wigner-D SH rotation
+### Step 13：Wigner-D SH rotation + Phase 3.0 final validation
 
-本 Step 补齐非 identity transform rotation 下的 SH upload bake。
+本 Step 补齐非 identity transform rotation 下的 SH upload bake，并由用户在 CLion 中执行最终编译验证。Agent 不运行 CMake / build / run。
 
+- Wigner-D rotation math helpers 必须覆盖 degree 1-3 SH rotation 所需矩阵。
 - Wigner-D SH rotation 从 transform 提取 proper rotation，旋转 degree 1-3 SH 系数，并集成到 upload bake。
 - Wigner-D 验证至少包括 identity 不变、degree 1 已知旋转、与 PLY 坐标翻转规则一致性检查。
-
-### Step 14：Phase 3.0 final validation
-
-本 Step 由用户在 CLion 中执行最终编译验证。Agent 不运行 CMake / build / run。
-
 - 请求用户在 CLion 中编译验证。
 
 

@@ -93,30 +93,43 @@
 
 - [x] 确认 radix sort 完整方案与 pass layout（32-bit distance_key stable 4-bit radix + global_splat_index payload；distance-key sentinel + hierarchical prefix compact 生成 deterministic visible list；首版直接 visible-count-driven；Bitonic 保留为 Debug UI 对比路径）
 
-## Step 10: RG indirect command 与 GS radix 资源契约
+## Step 10: Radix infrastructure / resource contract
 
 - [ ] 重命名 RenderGraph indirect command usage（`DrawIndirect` → `IndirectCommand`，覆盖 draw/dispatch indirect）
-- [ ] 扩展 GS work buffer / descriptor 契约（`distance_keys_by_global`、`visibility_prefix_local`、packed visibility/radix scan buffers、`radix_args`、4-bit `radix_histogram` / `radix_block_offsets`）
+- [ ] 实现 RenderGraph 同 pass 同 resource 多 usage 聚合
+- [ ] 新增 `CommandBuffer::dispatch_indirect(VkBuffer, VkDeviceSize)`
+- [ ] 定义 GS radix shared constants / binding enum / GPU structs / `static_assert`
+- [ ] 创建新增 GS work buffers
+- [ ] 写入新增 GS descriptor bindings，并导入 RG resources
+- [ ] 请求用户在 CLion 中编译验证
 
 ## Step 11: Deterministic visible list
 
-- [ ] 实现 cull/project distance-key 输出（全量写 `distance_keys_by_global`，`UINT_MAX` 表示 invisible；不再 append sort entries / 写 visible count）
-- [ ] 实现 visibility hierarchical exclusive scan（block size 256、packed levels、finalization 写 `visible_count` 和 `indirect.instanceCount`）
-- [ ] 实现 deterministic visible compact（按 global index 顺序输出 `sort_entries`，compact 内现场计算 block offset）
-- [ ] 用 Bitonic + deterministic compact 做简略视觉验证（Bitonic 继续按 `sort_capacity` 全量排序）
+- [ ] 实现 cull/project 全量写 `distance_keys_by_global`，临时保留旧 append 路径
+- [ ] 实现 CPU-side scan level layout helper
+- [ ] 实现 visibility leaf scan shader/pass
+- [ ] 实现 visibility level scan / finalization shader/pass
+- [ ] 实现 deterministic compact shader/pass
+- [ ] 切换 GS preprocess 到 scan/compact 输出，并移除旧 append/count 写入
+- [ ] 用 Bitonic + deterministic compact 做简略视觉验证
+- [ ] 请求用户在 CLion 中编译验证
 
 ## Step 12: Visible-count-driven 4-bit radix sort
 
-- [ ] 实现 radix args pass（GPU 侧 active count/capacity、block count、histogram/scatter indirect dispatch、per-level prefix dispatch；zero dispatch 处理 empty visible set）
-- [ ] 实现 visible-count-driven 4-bit radix shaders（bucket-major histogram、hierarchical prefix、bucket bases、stable scatter、ping-pong payload 搬运）
-- [ ] 接入 radix sort orchestration 与 Debug UI sort mode（默认 Radix，Bitonic 可切换对比；radix pass 内部手写 digit 间 barriers）
+- [ ] 实现 `GSRadixArgs` CPU/GPU struct 与 offset `static_assert`
+- [ ] 实现 radix args shader/pass
+- [ ] 实现 radix histogram shader
+- [ ] 实现 radix prefix level shader
+- [ ] 实现 radix bucket bases shader
+- [ ] 实现 radix scatter shader local-rank
+- [ ] 接入 radix sort orchestration（indirect dispatch、capacity level loop、pass 内 barriers、8 digit ping-pong）
+- [ ] 实现 Renderer 内部 GS sort mode + Debug UI 切换，默认 Radix
 - [ ] 用 Debug UI 做 Radix / Bitonic 视觉 A/B 验证
+- [ ] 请求用户在 CLion 中编译验证
 
-## Step 13: Wigner-D SH rotation
+## Step 13: Wigner-D SH rotation + Phase 3.0 final validation
 
-- [ ] 实现 Wigner-D SH rotation upload bake（提取 proper rotation,旋转 degree 1-3 SH 系数）
-- [ ] 验证 Wigner-D 正确性（identity 不变、degree 1 已知旋转、与 PLY 坐标翻转规则一致）
-
-## Step 14: Phase 3.0 final validation
-
+- [ ] 实现 Wigner-D rotation math helpers
+- [ ] 集成 Wigner-D SH rotation upload bake
+- [ ] 验证 Wigner-D 正确性
 - [ ] 请求用户在 CLion 中编译验证
