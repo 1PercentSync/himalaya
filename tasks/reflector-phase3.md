@@ -91,7 +91,7 @@
 
 ## Step 9:Phase 3.0 末期补全
 
-- [ ] 确认 radix equal-key deterministic 策略与 pass layout（保持 32-bit distance_key + global_splat_index payload,不退回 64-bit packed key）
+- [ ] 确认 radix sort 的 key 表示、equal-key deterministic 策略与 pass layout（比较 32-bit distance_key + global_splat_index payload、64-bit packed key 等方案）
 - [ ] 实现 radix capacity sort shader passes（histogram、prefix sum、scatter,支持 ping-pong payload 搬运）
 - [ ] 实现 radix capacity dispatch orchestration 并替换 bitonic dispatch
 - [ ] 验证 radix capacity 与 bitonic capacity baseline 渲染结果一致

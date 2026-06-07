@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Phase 3.0 Step 9 第一小项：确认 radix equal-key deterministic 策略与 pass layout（保持 32-bit distance_key + global_splat_index payload，不退回 64-bit packed key）
+Phase 3.0 Step 9 第一小项：重新确认 radix sort 的 key 表示、equal-key deterministic 策略与 pass layout；比较 32-bit distance_key + global_splat_index payload、64-bit packed key 等方案。
 
 ---
 

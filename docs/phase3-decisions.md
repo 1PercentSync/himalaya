@@ -38,7 +38,7 @@ Cull、projection、visible list、sort key 和排序结果是 Phase 3.x 的稳�
 
 所有 Phase 3.x 路径统一使用 front-to-back 排序。排序依据采用 KHR `sortingMethod = cameraDistance` 对应的 camera distance squared，避免每 splat `sqrt`。
 
-Sort entry 物理存储为 2×32-bit：`distance_key + global_splat_index`。`distance_key` 是 32-bit float key 的 bit encoding，`global_splat_index` 作为 payload 搬运。Radix sort 只处理 32-bit distance key，而不是 64-bit packed key，以减少 radix pass 数。相同 key 的顺序必须 deterministic，避免半透明累积闪烁。
+当前 bitonic baseline 使用 2×32-bit sort entry：`distance_key + global_splat_index`。`distance_key` 是 camera distance squared 的 key 表示，`global_splat_index` 供 draw 阶段索引 projected data，并可作为 deterministic tie-breaker 的候选数据。Radix sort 的具体 key 表示需要在 Step 9 实现前重新确认，候选包括 32-bit `distance_key` + payload、64-bit packed key，以及其他 deterministic tie-break 方案；实现应避免 equal-key 顺序因帧间不稳定而导致透明累积闪烁。
 
 ### Descriptor 与资源模型
 
