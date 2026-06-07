@@ -18,7 +18,7 @@ Phase 2 已完成 GS 数据管线（PLY → glTF 转换 + GS glTF 加载）和 C
 - GS 持久 Set 3：static baked buffers + capacity-based work buffers。
 - RenderGraph buffer barrier 扩展：GS compute/sort/draw 所需 buffer hazard 自动同步。
 - Cull/Project compute：视锥剔除、2D pixel-space 投影、OBB、SH 求值、visible append、sort entry 生成。
-- Bitonic sort correctness baseline；Phase 3.0 末期再接 radix capacity / visible-count-driven radix。
+- Bitonic sort correctness baseline；Phase 3.0 末期再接 deterministic compact / visible-count-driven 4-bit radix。
 - Instanced quad draw + front-to-back premultiplied-under blend。
 - GS color conversion path + TonemappingPass `LinearClamp` mode。
 
@@ -67,7 +67,7 @@ rgb                // SH-evaluated RGB in primitive colorSpace
 ```
 
 - 实际 GPU struct 按 std430 / vec4 packing 实现；fragment shader 不做 per-pixel matrix inverse。
-- 当前 bitonic baseline 的 sort entry 物理格式为 2×32-bit：`distance_key + global_splat_index`。Step 9 radix 首版采用 32-bit `distance_key` stable radix，`global_splat_index` 作为 payload 搬运；equal-key deterministic 顺序由 radix 前的 deterministic visible list 生成保证。Indirect command 固定字段由 CPU 初始化，GPU 只写 `instanceCount`。
+- 当前 bitonic baseline 的 sort entry 物理格式为 2×32-bit：`distance_key + global_splat_index`。Phase 3.0 radix 首版采用 32-bit `distance_key` stable radix，`global_splat_index` 作为 payload 搬运；equal-key deterministic 顺序由 radix 前的 deterministic visible list 生成保证。Indirect command 固定字段由 CPU 初始化，GPU 只写 `instanceCount`。
 - Direct glTF/GLB load path 必须补齐校验：`OPACITY` finite `[0,1]`、`SCALE` finite `>=0`、`ROTATION` finite unit quaternion。
 - 同一 GS scene 内所有 primitive metadata 必须一致：`kernel=ellipse`、`projection=perspective`、`sortingMethod=cameraDistance`、`colorSpace` 一致。
 - 非法 glTF 按 KHR 语义报错，不静默 clamp、normalize 或混合渲染。PLY 转换路径产生有效数据，不替代直接加载校验。
@@ -83,7 +83,7 @@ rgb                // SH-evaluated RGB in primitive colorSpace
   - `Σ_world = M3x3 * Σ_local * M3x3ᵀ`
   - GPU 存 symmetric 3×3 的 6 个 float。
 - `world_radius_3sigma = 3 * sqrt(max(lambda_max(Σ_world), 0))`，作为 world-space frustum sphere cull 半径；`lambda_max` 为 symmetric covariance 的最大特征值。该值在 upload-time 预计算，避免每帧 shader 重复求解。
-- SH upload 前期只支持不需要 Wigner-D 的 happy path：node proper rotation 近似 identity 时直接上传；node rotation 非 identity 但 scene/primitive `max_sh_degree == 0` 时允许直接上传；node rotation 非 identity 且存在 degree 1-3 SH 时必须报错并回退空 GS scene。该拦截属于 Renderer/GS builder 的能力限制，应在 CPU preflight / static buffer upload 前完成，避免失败场景进入 GPU buffer 创建上传。完整 Wigner-D 放到 Step 9。
+- SH upload 前期只支持不需要 Wigner-D 的 happy path：node proper rotation 近似 identity 时直接上传；node rotation 非 identity 但 scene/primitive `max_sh_degree == 0` 时允许；node rotation 非 identity 且存在 degree 1-3 SH 时必须报错并回退空 GS scene。该拦截属于 Renderer/GS builder 的能力限制，应在 CPU preflight / static buffer upload 前完成，避免失败场景进入 GPU buffer 创建上传。完整 Wigner-D 放到 Step 13。
 - 多个 primitive 按顺序拼接成 global splat buffers；Phase 3.0 不保留 per-primitive range contract，报错定位使用当前遍历的 primitive/local splat index，shader 仅依赖 global splat index。
 - GPU static buffers 不保留 raw rotation / scale 作为渲染必需数据；CPU 侧可保留用于 reload/debug/future rebake。GS GPU scene resource owner 仿照现有 PT 路径的 `SceneASBuilder` / `EmissiveLightBuilder` 模式：Loader 只产出 CPU scene，Renderer 持有 builder/owner，Application 只负责 scene switch orchestration 和 immediate scope。
 
@@ -177,9 +177,9 @@ float power = -0.5 * mahalanobis;
 - 生命周期与异常路径至少覆盖 resize、`visible_count = 0`、非法 asset rejection、reload/resize 后 descriptor 不指向已销毁资源。
 - 目标是 1M splat 级别 correctness baseline；10M 性能不是 Phase 3.0 完成条件。
 
-### Step 9：Phase 3.0 末期补全
+### Step 9：GS radix 方案冻结
 
-Step 9 在硬件光栅 correctness baseline 建立后执行，用于补齐 Phase 3.0 末期目标。
+Step 9 在硬件光栅 correctness baseline 建立后执行，用于冻结 GS radix 首版实现契约，避免后续实现时临时决策。代码实现拆分到 Step 10-12；Wigner-D 拆分到 Step 13。
 
 - RenderGraph indirect command usage 统一命名为 `IndirectCommand`，覆盖 draw indirect 与 dispatch indirect；Vulkan 映射仍为 `VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT` + `VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT`。
 - Radix sort 首版采用 32-bit `distance_key` stable radix，`global_splat_index` 作为 payload 搬运，不使用 64-bit packed key。首版 digit width 为 4-bit：`bucket_count = 16`、`digit_count = 8`；后续 Phase 3.1 再评估 8-bit radix，不提前分配 256-bucket buffers。
@@ -413,7 +413,7 @@ struct GSRadixScatterPush {
 
 RHI command contract:
 
-- Step 9 must add `CommandBuffer::dispatch_indirect(VkBuffer buffer, VkDeviceSize offset)`.
+- Step 10 must add `CommandBuffer::dispatch_indirect(VkBuffer buffer, VkDeviceSize offset)`.
 - The method records `vkCmdDispatchIndirect` with the raw Vulkan buffer and byte offset, matching the existing `draw_indirect()` style where `CommandBuffer` does not resolve engine buffer handles.
 - `radix_args` indirect slot offsets are fixed by the `GSRadixArgs` offsets above:
 
@@ -604,8 +604,46 @@ for each digit:
 - Bucket bases → scatter barrier covers `radix_args.bucket_bases`、`radix_block_offsets` 和 `radix_scan_buffer` reads.
 - Scatter output barrier makes the current digit output visible to the next digit input. The final digit output is primary `sort_entries`; the following draw pass dependency is handled by RenderGraph.
 
+### Step 10：RG indirect command 与 GS radix 资源契约
+
+本 Step 将 Step 9 冻结的 resource / synchronization contract 落到 framework 和 GS scene resource owner 中，不实现排序算法本体。
+
+- RenderGraph indirect command usage 由 `DrawIndirect` 重命名为 `IndirectCommand`，覆盖 draw indirect 与 dispatch indirect；Vulkan 映射仍为 `VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT` + `VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT`。
+- RenderGraph 支持同一 pass 内同一 resource 多 usage 聚合：stage/access OR 合并，只用于 cross-pass dependency，不根据同 pass duplicate usage 声明顺序生成 same-pass barrier。
+- RHI `CommandBuffer` 新增 `dispatch_indirect(VkBuffer buffer, VkDeviceSize offset)`，与现有 `draw_indirect()` 风格一致，不在 `CommandBuffer` 内解析 engine `BufferHandle`。
+- GS Set 3 追加 Step 9 固定的新 binding 8-14，并由 GS scene resource owner 创建、销毁、写 descriptor。
+- `radix_args` 使用 `StorageBuffer | IndirectBuffer`，其他新增 work buffers 按 Step 9 表格中的 usage / reset contract 创建。
+
+### Step 11：Deterministic visible list
+
+本 Step 替换 cull/project 的 atomic append 输出，生成 deterministic visible list，并先接回 Bitonic baseline 做视觉验证。
+
+- Cull/project 全量写 `distance_keys_by_global`，`UINT_MAX` 表示 invisible / invalid；不再 append `sort_entries`，不再写 `visible_count` 或 `indirect.instanceCount`。
+- Visibility scan 使用 Step 9 定义的 hierarchical exclusive scan，写 `visibility_prefix_local`、`visibility_scan_buffer`、`visible_count` 和 `indirect.instanceCount`。
+- Visible compact 按 global splat index 顺序写 primary `sort_entries[0..visible_count)`，block offset 在 compact 中现场从 scan levels 累加。
+- Bitonic debug baseline 共用 deterministic compact 输出，继续按 `sort_capacity` 全量排序，用于在 radix 接入前做简略视觉验证。
+
+### Step 12：Visible-count-driven 4-bit radix sort
+
+本 Step 实现并接入 Step 9 冻结的 visible-count-driven 4-bit radix sort，默认启用 Radix，并保留 Bitonic Debug UI 对比路径。
+
+- `GS Radix Args` pass 读取 GPU 侧 `visible_count`，写 `GSRadixArgs` scalar fields、indirect dispatch slots、runtime scan input counts、`bucket_totals` / `bucket_bases` 初始值。
+- `GS Radix Sort` pass 内部按 digit 循环 histogram、radix prefix、bucket bases、scatter，并按 Step 9 barrier contract 手写 pass 内 compute-to-compute barriers。
+- Radix sort 必须处理完整 `[0, active_capacity)`，tail sentinel 参与每个 digit；最终结果必须位于 primary `sort_entries`。
+- Debug UI 提供 GS sort mode 切换，默认 Radix；Bitonic 保留为 runtime baseline。Radix / Bitonic 一致性通过视觉 A/B 验证，不实现 GPU exact compare 或 CPU readback。
+
+### Step 13：Wigner-D SH rotation
+
+本 Step 补齐非 identity transform rotation 下的 SH upload bake。
+
 - Wigner-D SH rotation 从 transform 提取 proper rotation，旋转 degree 1-3 SH 系数，并集成到 upload bake。
 - Wigner-D 验证至少包括 identity 不变、degree 1 已知旋转、与 PLY 坐标翻转规则一致性检查。
+
+### Step 14：Phase 3.0 final validation
+
+本 Step 由用户在 CLion 中执行最终编译验证。Agent 不运行 CMake / build / run。
+
+- 请求用户在 CLion 中编译验证。
 
 
 ## Phase 3.0 决策
@@ -668,7 +706,7 @@ for each digit:
 ### Sort 与 draw range
 
 - Sort entry 为 2×32-bit：`distance_key + global_splat_index`。`distance_key = floatBitsToUint(camera_distance_squared)`，仅对 finite non-negative float 使用；invalid sentinel 为 `{UINT_MAX, UINT_MAX}`。
-- Step 9 起 cull/project 不再 atomic append visible list，而是全量写 `distance_keys_by_global`。`distance_keys_by_global[i] == UINT_MAX` 表示 invisible；visibility scan / compact 根据该 sentinel 按 global splat index 顺序生成 deterministic visible list。
+- Step 11 起 cull/project 不再 atomic append visible list，而是全量写 `distance_keys_by_global`。`distance_keys_by_global[i] == UINT_MAX` 表示 invisible；visibility scan / compact 根据该 sentinel 按 global splat index 顺序生成 deterministic visible list。
 - 每帧 reset：`visible_count = 0`、`sort_entries` / `sort_entries_scratch` 全量填 sentinel、`indirect.instanceCount = 0`。`distance_keys_by_global` 不 reset，由 cull/project 全量覆盖。
 - Visibility scan finalization 写 `visible_count` 和 `indirect.instanceCount`；draw 使用 `visible_count`，不 draw capacity。
 - Bitonic compare 使用 lexicographic `(distance_key, global_splat_index)`；Bitonic debug baseline 与 Radix 共用 deterministic compact 输出，但仍按 `sort_capacity` 全量排序。
@@ -702,4 +740,4 @@ for each digit:
 - 支持单个或多个 GS primitive，primitive 拼接为 global splat buffers；不保留无实际消费的 CPU per-primitive ranges。
 - 支持 `srgb_rec709_display` 和 `lin_rec709_display` 二选一 scene；不支持 mixed colorSpace scene。
 - 以 1M splat 级别 correctness baseline 为目标，不以 10M 性能为 Phase 3.0 完成条件。
-- 必须验证：投影中心、3σ OBB、front-to-back 排序、premultiplied-under blend、color conversion、TonemappingPass GS bypass、resize、`visible_count = 0`、非法 asset rejection。Step 9 额外验证 deterministic compact + Bitonic 简略视觉结果、Radix / Bitonic Debug UI 视觉 A/B，以及 Wigner-D identity / degree 1 / PLY 坐标翻转一致性。
+- 必须验证：投影中心、3σ OBB、front-to-back 排序、premultiplied-under blend、color conversion、TonemappingPass GS bypass、resize、`visible_count = 0`、非法 asset rejection。Step 11-13 额外验证 deterministic compact + Bitonic 简略视觉结果、Radix / Bitonic Debug UI 视觉 A/B，以及 Wigner-D identity / degree 1 / PLY 坐标翻转一致性。

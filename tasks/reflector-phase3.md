@@ -89,19 +89,34 @@
 - [x] ~~验证生命周期与异常路径（resize、`visible_count = 0`、非法 asset rejection、reload/resize descriptor safety）~~（跳过：当前无专用异常/边界测试资产，后续出现相关场景再补测）
 - [x] 确认 Phase 3.0 baseline 目标（已验证两个 GS 场景未发现可见问题；小场景贴近视角约 60-70 FPS，大场景约 13.5 FPS；Phase 3.0 不以 10M 性能为完成条件）
 
-## Step 9:Phase 3.0 末期补全
+## Step 9: GS radix 方案冻结
 
 - [x] 确认 radix sort 完整方案与 pass layout（32-bit distance_key stable 4-bit radix + global_splat_index payload；distance-key sentinel + hierarchical prefix compact 生成 deterministic visible list；首版直接 visible-count-driven；Bitonic 保留为 Debug UI 对比路径）
+
+## Step 10: RG indirect command 与 GS radix 资源契约
+
 - [ ] 重命名 RenderGraph indirect command usage（`DrawIndirect` → `IndirectCommand`，覆盖 draw/dispatch indirect）
 - [ ] 扩展 GS work buffer / descriptor 契约（`distance_keys_by_global`、`visibility_prefix_local`、packed visibility/radix scan buffers、`radix_args`、4-bit `radix_histogram` / `radix_block_offsets`）
+
+## Step 11: Deterministic visible list
+
 - [ ] 实现 cull/project distance-key 输出（全量写 `distance_keys_by_global`，`UINT_MAX` 表示 invisible；不再 append sort entries / 写 visible count）
 - [ ] 实现 visibility hierarchical exclusive scan（block size 256、packed levels、finalization 写 `visible_count` 和 `indirect.instanceCount`）
 - [ ] 实现 deterministic visible compact（按 global index 顺序输出 `sort_entries`，compact 内现场计算 block offset）
 - [ ] 用 Bitonic + deterministic compact 做简略视觉验证（Bitonic 继续按 `sort_capacity` 全量排序）
+
+## Step 12: Visible-count-driven 4-bit radix sort
+
 - [ ] 实现 radix args pass（GPU 侧 active count/capacity、block count、histogram/scatter indirect dispatch、per-level prefix dispatch；zero dispatch 处理 empty visible set）
 - [ ] 实现 visible-count-driven 4-bit radix shaders（bucket-major histogram、hierarchical prefix、bucket bases、stable scatter、ping-pong payload 搬运）
 - [ ] 接入 radix sort orchestration 与 Debug UI sort mode（默认 Radix，Bitonic 可切换对比；radix pass 内部手写 digit 间 barriers）
 - [ ] 用 Debug UI 做 Radix / Bitonic 视觉 A/B 验证
+
+## Step 13: Wigner-D SH rotation
+
 - [ ] 实现 Wigner-D SH rotation upload bake（提取 proper rotation,旋转 degree 1-3 SH 系数）
 - [ ] 验证 Wigner-D 正确性（identity 不变、degree 1 已知旋转、与 PLY 坐标翻转规则一致）
+
+## Step 14: Phase 3.0 final validation
+
 - [ ] 请求用户在 CLion 中编译验证

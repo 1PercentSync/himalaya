@@ -9,11 +9,11 @@
 - **项目**：Himalaya — 基于 Vulkan 1.4 的渲染器
 - **分支**：`reflector` — Path Tracing + Gaussian Splatting
 - **Phase**：Phase 3.0 — Gaussian Splatting 基础渲染
-- **进度**：Phase 3.0 Step 9 第一小项完成：radix sort 完整方案与 pass layout 已确认；Step 8 correctness validation 已完成，已验证两个 GS 场景暂未发现可见问题。
+- **进度**：Phase 3.0 Step 9 完成：GS radix 首版方案和实现契约已冻结；Step 8 correctness validation 已完成，已验证两个 GS 场景暂未发现可见问题。
 
 ### 下一个任务
 
-Phase 3.0 Step 9 下一小项：重命名 RenderGraph indirect command usage（`DrawIndirect` → `IndirectCommand`，覆盖 draw/dispatch indirect）。
+Phase 3.0 Step 10 第一小项：重命名 RenderGraph indirect command usage（`DrawIndirect` → `IndirectCommand`，覆盖 draw/dispatch indirect）。
 
 ---
 

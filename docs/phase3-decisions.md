@@ -38,7 +38,7 @@ Cull、projection、visible list、sort key 和排序结果是 Phase 3.x 的稳�
 
 所有 Phase 3.x 路径统一使用 front-to-back 排序。排序依据采用 KHR `sortingMethod = cameraDistance` 对应的 camera distance squared，避免每 splat `sqrt`。
 
-当前 bitonic baseline 使用 2×32-bit sort entry：`distance_key + global_splat_index`。Step 9 radix 首版采用 32-bit `distance_key` stable radix，`global_splat_index` 作为 payload 搬运供 draw 阶段索引 projected data，不使用 64-bit packed key。Equal-key deterministic 顺序通过 radix 前的 deterministic visible list 生成保证：cull/project 全量写 `distance_keys_by_global`，其中 `UINT_MAX` 表示 invisible / invalid；visibility scan + compact 按 global splat index 顺序生成 visible list，再对 visible list 做 stable radix(distance_key)。实现应避免 equal-key 顺序因帧间不稳定而导致透明累积闪烁。
+当前 bitonic baseline 使用 2×32-bit sort entry：`distance_key + global_splat_index`。Phase 3.0 radix 首版采用 32-bit `distance_key` stable radix，`global_splat_index` 作为 payload 搬运供 draw 阶段索引 projected data，不使用 64-bit packed key。Equal-key deterministic 顺序通过 radix 前的 deterministic visible list 生成保证：cull/project 全量写 `distance_keys_by_global`，其中 `UINT_MAX` 表示 invisible / invalid；visibility scan + compact 按 global splat index 顺序生成 visible list，再对 visible list 做 stable radix(distance_key)。实现应避免 equal-key 顺序因帧间不稳定而导致透明累积闪烁。
 
 ### Descriptor 与资源模型
 
@@ -83,7 +83,7 @@ Phase 3.0 使用 per-channel hard clamp 作为 KHR 允许的 clamped output。�
 - Packed SoA GPU buffers，通过 GS 持久 Set 3 绑定：`position_radius`、`covariance_opacity`、`sh_coefficients`。
 - RenderGraph buffer barrier 扩展，支持 GS compute/sort/draw 的 buffer hazard。
 - Compute frustum cull + 2D projection + SH evaluation。
-- Bitonic sort correctness baseline；Step 9 接 deterministic compact + visible-count-driven 4-bit radix，并保留 Bitonic 作为 Debug UI 对比路径。
+- Bitonic sort correctness baseline；Phase 3.0 末期接 deterministic compact + visible-count-driven 4-bit radix，并保留 Bitonic 作为 Debug UI 对比路径。
 - Indirect instanced quad draw + front-to-back premultiplied-under hardware blend。
 - GS color conversion path + TonemappingPass `LinearClamp` output mode。
 
