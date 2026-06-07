@@ -193,6 +193,271 @@ Step 9 在硬件光栅 correctness baseline 建立后执行，用于补齐 Phase
 - Radix 以 primary `sort_entries` 为输入，`sort_entries_scratch` 作为 ping-pong scratch。4-bit 共 8 轮，最终结果必须回到 primary `sort_entries`；draw pass 永远读取 primary。
 - Debug UI 提供 GS sort mode 运行时切换，默认 Radix，Bitonic 保留为 debug baseline。Bitonic 与 Radix 共用 deterministic compact 输出；Bitonic 仍按 `sort_capacity` 全量排序。Radix / Bitonic 一致性通过 Debug UI 视觉 A/B 对比验证，不实现 GPU exact compare 或 CPU readback。
 - Phase 3.1 再评估 workgroup-local compact + group prefix、range-aware reset / tail sentinel 初始化、8-bit radix 等运行时优化；Phase 3.0 首版不提前决定这些演进方式。
+
+#### Step 9 radix implementation details
+
+以下细节仅约束 Step 9 radix 首版实现，不回写 Step 0-8 已完成小项。
+
+Set 3 新增 binding 追加在现有 0-7 之后，编号固定为：
+
+| Binding | Buffer | Element / layout | Size | Usage | Reset |
+|---------|--------|------------------|------|-------|-------|
+| 8 | `distance_keys_by_global` | `uint32_t`，`UINT_MAX` = invisible / invalid | `total_splat_count * 4` | StorageBuffer | 不 reset；cull/project 全量覆盖 |
+| 9 | `visibility_prefix_local` | `uint32_t` block-local exclusive prefix | `total_splat_count * 4` | StorageBuffer | 不 reset；visibility scan 覆盖 |
+| 10 | `visibility_scan_buffer` | packed `uint32_t` scan levels | `sum(visibility_level_counts) * 4` | StorageBuffer | 不 reset；scan level dispatch 覆盖 active ranges |
+| 11 | `radix_args` | radix params + 16-byte indirect command slots + `bucket_bases[16]` | 固定 struct size，C++/GLSL `static_assert` 对齐 | StorageBuffer + IndirectBuffer | args pass 覆盖 |
+| 12 | `radix_histogram` | `uint32_t` bucket-major counters | `16 * max_radix_block_count * 4` | StorageBuffer | 不 clear；histogram 每 digit 覆盖 active range |
+| 13 | `radix_block_offsets` | `uint32_t` bucket-major offsets | `16 * max_radix_block_count * 4` | StorageBuffer | 不 reset；radix prefix 覆盖 active range |
+| 14 | `radix_scan_buffer` | packed `uint32_t` radix scan levels | `16 * sum(radix_level_counts) * 4` | StorageBuffer | 不 reset；radix prefix 覆盖 active ranges |
+
+公共常量：
+
+```text
+kGSScanBlockSize = 256
+kGSRadixBlockSize = 256
+kGSRadixDigitBits = 4
+kGSRadixBucketCount = 16
+kGSRadixDigitCount = 8
+kGSScanMaxLevels = 8
+max_radix_block_count = ceil(sort_capacity / kGSRadixBlockSize)
+```
+
+`radix_args` struct 使用 16-byte dispatch slot，不直接用 12-byte packed `VkDispatchIndirectCommand` 数组。Vulkan indirect dispatch offset 指向 slot 开头，只读取前三个 `uint32_t`，第 4 个 padding 被忽略。
+
+```text
+struct GSDispatchIndirectSlot {
+    uint x;
+    uint y;
+    uint z;
+    uint pad;
+}
+
+struct GSRadixArgs {
+    uint active_count;
+    uint active_capacity;
+    uint block_count;
+    uint radix_scan_level_count;
+
+    uint radix_scan_input_counts[8];
+
+    GSDispatchIndirectSlot histogram_dispatch;
+    GSDispatchIndirectSlot scatter_dispatch;
+    GSDispatchIndirectSlot prefix_dispatches[8];
+
+    uint bucket_bases[16];
+}
+```
+
+`GSRadixArgs` 预期 offset：
+
+```text
+active_count              0
+active_capacity           4
+block_count               8
+radix_scan_level_count    12
+radix_scan_input_counts   16
+histogram_dispatch        48
+scatter_dispatch          64
+prefix_dispatches         80
+bucket_bases              208
+sizeof                    272
+```
+
+`visible_count` 特例写法：
+
+```text
+visible_count == 0:
+    active_count = 0
+    active_capacity = 0
+    block_count = 0
+    radix_scan_level_count = 0
+    all radix_scan_input_counts = 0
+    all dispatch slots = {0, 1, 1, 0}
+    bucket_bases = 0
+
+visible_count == 1:
+    active_count = 1
+    active_capacity = 1
+    block_count = 0
+    radix_scan_level_count = 0
+    all dispatch slots = {0, 1, 1, 0}
+    bucket_bases = 0
+
+visible_count >= 2:
+    active_capacity = next_power_of_two(visible_count)
+    block_count = ceil(active_capacity / 256)
+    radix_scan_input_counts[0] = block_count
+    radix_scan_input_counts[i + 1] = ceil(radix_scan_input_counts[i] / 256)，直到上一层 count 为 1
+    radix_scan_level_count = 有效 radix_scan_input_counts 数量
+    histogram_dispatch = {block_count, 1, 1, 0}
+    scatter_dispatch = {block_count, 1, 1, 0}
+    active prefix_dispatches[level] = {ceil(radix_scan_input_counts[level] / 256), 16, 1, 0}
+    inactive prefix_dispatches[level] = {0, 1, 1, 0}
+```
+
+CPU-side scan level layout helper（用于 packed scan buffer 的 parent levels）：
+
+```text
+build_scan_level_layout(input_count):
+    count = ceil(input_count / 256)
+    while count > 0:
+        append level_count = count
+        if count == 1: break
+        count = ceil(count / 256)
+
+level_offset[0] = 0
+level_offset[i + 1] = level_offset[i] + level_count[i]
+total_level_values = sum(level_count)
+```
+
+Visibility 使用 `build_scan_level_layout(total_splat_count)` 得到 `visibility_level_count/offset`。Radix buffer 容量使用 `build_scan_level_layout(max_radix_block_count)` 得到 `radix_level_count/offset`；运行时 `radix_scan_input_counts[level]` 可以小于或等于对应 capacity level，prefix shader 只读写 active count 范围。
+
+Visibility scan 契约：
+
+- Leaf scan dispatch `ceil(total_splat_count / 256)` 个 workgroup。
+- 对 splat `i`，`flag = distance_keys_by_global[i] != UINT_MAX ? 1 : 0`。
+- Leaf scan 写 `visibility_prefix_local[i] = exclusive_prefix(flag)`，范围仅限当前 256-splat leaf block。
+- Leaf scan 写 raw leaf block sums 到 `visibility_scan_buffer[level_offset[0] + leaf_block_id]`。
+- 每个 higher scan level 原地扫描当前 level range：dispatch 前该 range 存 raw sums；dispatch 后该 range 存该 level 的 exclusive prefixes；若存在 parent level，则同时把 parent raw sums 写到下一层 range。
+- Final scan level 根据 total sum 写 `visible_count` 和 `indirect.instanceCount`。
+- Compact 通过累加各 level 已扫描 prefix，计算 original leaf block `b` 的 global offset：
+
+```text
+block_offset = sum over level l:
+    visibility_scan_buffer[level_offset[l] + floor(b / 256^l)]
+```
+
+Compact 写入：
+
+```text
+if distance_keys_by_global[i] != UINT_MAX:
+    dst = visibility_prefix_local[i] + block_offset
+    sort_entries[dst] = { distance_keys_by_global[i], i }
+```
+
+Radix dispatch 形状：
+
+- Histogram：`dispatchIndirect(radix_args.histogram_dispatch)`，`x = block_count`，每个 256-entry radix block 一个 workgroup。
+- Scatter：`dispatchIndirect(radix_args.scatter_dispatch)`，`x = block_count`，每个 256-entry radix block 一个 workgroup。
+- Prefix：`dispatchIndirect(radix_args.prefix_dispatch[level])`，active level 的 `x = ceil(radix_scan_input_counts[level] / 256)`、`y = 16` buckets；inactive level 使用 zero dispatch。
+- Last active block 读取 input entry 前必须 guard `entry_index < active_capacity`。
+- Histogram shader 每个 digit 必须为每个 active block 覆盖写满 16 个 bucket counters；prefix 不得读取 inactive blocks。
+
+Radix histogram / offset buffer 使用 bucket-major indexing：
+
+```text
+index = bucket * max_radix_block_count + block
+```
+
+`radix_block_offsets` 只存 level0 local exclusive prefix，不存 full per-bucket block offset。Scatter 现场从 `radix_scan_buffer` 累加 parent level prefix，合成 full offset；这与 visibility compact 的现场累加策略一致，并避免单独的 add-propagation pass。
+
+每个 digit 的 radix prefix 最终得到：
+
+```text
+bucket_total[bucket] = sum(histogram[bucket][0..block_count))
+bucket_bases[0] = 0
+bucket_bases[bucket] = sum(bucket_total[0..bucket))
+```
+
+`bucket_bases[16]` 由 radix prefix 写入 `radix_args`，每个 digit 覆盖同一份当前 digit 的 bases。
+
+Radix scatter local-rank 契约：
+
+```text
+bucket = (entry.distance_key >> digit_shift) & 0xFu
+subgroup_rank = count previous active lanes in this subgroup with the same bucket
+subgroup_bucket_count[subgroup_id][bucket] = subgroup count for bucket
+workgroup_bucket_prefix = exclusive prefix of subgroup_bucket_count over subgroup_id
+local_rank = workgroup_bucket_prefix[subgroup_id][bucket] + subgroup_rank
+```
+
+- Subgroup size 动态使用 `gl_SubgroupSize`；不得假设固定 32-wide subgroup。
+- Shared subgroup histogram array 必须按 256-thread workgroup 下的最大 subgroup 数量和 16 buckets 预留；按 Vulkan core 最小 subgroup size 4 计算，最坏为 `16 * 64` 个 `uint`。
+- 每个 scatter workgroup 在 per-entry scatter 前先为 16 个 bucket 计算当前 block 的 full offset，并写入 shared memory：
+
+```text
+full_block_offset[bucket] = radix_block_offsets[bucket, block]
+for each parent level l:
+    parent_index = floor(block / 256^(l + 1))
+    full_block_offset[bucket] += radix_scan_buffer[
+        16 * radix_level_offset[l] + bucket * radix_level_count[l] + parent_index
+    ]
+```
+
+- Scatter destination 使用合成后的 full offset 和当前 digit 的 bucket base：
+
+```text
+dst = bucket_base[bucket] + full_block_offset[bucket] + local_rank
+```
+
+4-bit radix 的 ping-pong parity 固定为：
+
+```text
+digit 0: sort_entries -> sort_entries_scratch
+digit 1: sort_entries_scratch -> sort_entries
+...
+digit 7: sort_entries_scratch -> sort_entries
+```
+
+8 个 digit 后排序结果必须位于 primary `sort_entries`；4-bit 首版不允许增加 copy-back pass。`active_count <= 1` 时可以跳过 radix sort，因为 compact 已经在 primary `sort_entries` 中产生 draw 顺序。
+
+Pass 顺序固定为：
+
+```text
+GS Work Buffer Reset
+GS Cull Project Keys
+GS Visibility Scan
+GS Visible Compact
+if sort_mode == Bitonic:
+    GS Bitonic Sort
+else:
+    GS Radix Args
+    GS Radix Sort
+GS Draw
+```
+
+- Reset writes `visible_count`、`sort_entries`、`sort_entries_scratch`、`indirect_draw.instanceCount`.
+- Cull/project reads static GS buffers + GlobalUBO, writes `projected_data` and `distance_keys_by_global`.
+- Visibility scan reads `distance_keys_by_global`, writes `visibility_prefix_local`、`visibility_scan_buffer`、`visible_count`、`indirect_draw.instanceCount`.
+- Compact reads `distance_keys_by_global`、`visibility_prefix_local`、`visibility_scan_buffer`, writes primary `sort_entries`.
+- Radix args reads `visible_count`, writes `radix_args`.
+- Radix sort reads/writes `sort_entries`、`sort_entries_scratch`、`radix_histogram`、`radix_block_offsets`、`radix_scan_buffer`、`radix_args`.
+- Draw reads primary `sort_entries`、`projected_data`、`indirect_draw`.
+
+`radix_args` 的 RenderGraph usage 契约：
+
+- `radix_args` remains a single buffer with `StorageBuffer | IndirectBuffer` usage.
+- RenderGraph must support declaring multiple usages for the same buffer in the same pass and aggregate them into one stage/access set for dependency calculation.
+- `GS Radix Sort` declares `radix_args` as both Compute SSBO read/write and IndirectCommand read.
+- The cross-pass `GS Radix Args` → `GS Radix Sort` dependency is handled by RenderGraph through the aggregated usage.
+- Manual barriers are still required inside `GS Radix Sort` between internal dispatches that read/write the same buffers within one RG pass.
+
+`GS Radix Sort` pass 内部 barrier 顺序：
+
+```text
+for each digit:
+    histogram dispatch
+    barrier radix_histogram: Compute write -> Compute read/write
+
+    radix prefix level 0
+    barrier radix_block_offsets/radix_scan_buffer: Compute write -> Compute read/write
+
+    for each additional radix prefix level:
+        prefix level dispatch
+        barrier radix_scan_buffer: Compute write -> Compute read/write
+
+    bucket_bases write in radix_args
+    barrier radix_args/radix_block_offsets/radix_scan_buffer: Compute write -> Compute read
+
+    scatter dispatch
+    barrier scatter output sort buffer: Compute write -> Compute read/write
+```
+
+- Histogram → prefix barrier covers `radix_histogram` reads.
+- Prefix level barriers cover in-place scanned parent levels in `radix_scan_buffer`.
+- Prefix → scatter barrier covers `radix_args.bucket_bases`、`radix_block_offsets` 和 `radix_scan_buffer` reads.
+- Scatter output barrier makes the current digit output visible to the next digit input. The final digit output is primary `sort_entries`; the following draw pass dependency is handled by RenderGraph.
+
 - Wigner-D SH rotation 从 transform 提取 proper rotation，旋转 degree 1-3 SH 系数，并集成到 upload bake。
 - Wigner-D 验证至少包括 identity 不变、degree 1 已知旋转、与 PLY 坐标翻转规则一致性检查。
 
