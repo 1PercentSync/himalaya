@@ -67,7 +67,7 @@ rgb                // SH-evaluated RGB in primitive colorSpace
 ```
 
 - 实际 GPU struct 按 std430 / vec4 packing 实现；fragment shader 不做 per-pixel matrix inverse。
-- 当前 bitonic baseline 的 sort entry 物理格式为 2×32-bit：`distance_key + global_splat_index`。Radix sort 的 key 表示在 Step 9 重新确认。Indirect command 固定字段由 CPU 初始化，GPU 只写 `instanceCount`。
+- 当前 bitonic baseline 的 sort entry 物理格式为 2×32-bit：`distance_key + global_splat_index`。Step 9 radix 首版采用 32-bit `distance_key` stable radix，`global_splat_index` 作为 payload 搬运；equal-key deterministic 顺序由 radix 前的 deterministic visible list 生成保证。Indirect command 固定字段由 CPU 初始化，GPU 只写 `instanceCount`。
 - Direct glTF/GLB load path 必须补齐校验：`OPACITY` finite `[0,1]`、`SCALE` finite `>=0`、`ROTATION` finite unit quaternion。
 - 同一 GS scene 内所有 primitive metadata 必须一致：`kernel=ellipse`、`projection=perspective`、`sortingMethod=cameraDistance`、`colorSpace` 一致。
 - 非法 glTF 按 KHR 语义报错，不静默 clamp、normalize 或混合渲染。PLY 转换路径产生有效数据，不替代直接加载校验。
@@ -181,7 +181,7 @@ float power = -0.5 * mahalanobis;
 
 Step 9 在硬件光栅 correctness baseline 建立后执行，用于补齐 Phase 3.0 末期目标。
 
-- Radix sort 实现前需要重新确认 key 表示、equal-key deterministic 策略与 pass layout；需要比较 32-bit `distance_key` + `global_splat_index` payload、64-bit packed key，以及其他能保证 deterministic ordering 的方案。
+- Radix sort 首版采用 32-bit `distance_key` stable radix，`global_splat_index` 作为 payload 搬运，不使用 64-bit packed key。Equal-key deterministic 顺序通过 radix 前生成 deterministic visible list 保证：cull/project 写 per-splat visibility flag / distance key / projected data，prefix compact 按 global splat index 顺序生成 visible list，再对 visible list 做 stable radix(distance_key)。Workgroup-local compact + group prefix 的更高效方案留作后续运行时优化。
 - Radix capacity path 包含 histogram、prefix sum、scatter 和 ping-pong payload 搬运；完成后替换 bitonic dispatch。
 - Radix capacity 必须与 Bitonic capacity baseline 对比渲染结果。
 - Visible-count-driven radix 由 GPU 侧 `visible_count` 限制排序工作量，不做 CPU readback。
@@ -248,7 +248,7 @@ Step 9 在硬件光栅 correctness baseline 建立后执行，用于补齐 Phase
 
 ### Sort 与 draw range
 
-- 当前 bitonic baseline 的 sort entry 为 2×32-bit：`distance_key + global_splat_index`；Radix sort 的 key 表示在 Step 9 重新确认。
+- 当前 bitonic baseline 的 sort entry 为 2×32-bit：`distance_key + global_splat_index`。Step 9 radix 首版保持 32-bit `distance_key` stable radix + `global_splat_index` payload；equal-key 顺序由 deterministic visible list 的 global-index 顺序保证。
 - `distance_key = floatBitsToUint(camera_distance_squared)`，仅对 finite non-negative float 使用；invalid sentinel 为 `{UINT_MAX, UINT_MAX}`。
 - 每帧 reset：`visible_count = 0`、sort entries 填 sentinel、`indirect.instanceCount = 0`。
 - Cull/project append valid entries 到 `sort_entries[0..visible_count)`；ascending sort 后 valid entries 在前，sentinel 在尾。

@@ -13,7 +13,7 @@
 
 ### 下一个任务
 
-Phase 3.0 Step 9 第一小项：重新确认 radix sort 的 key 表示、equal-key deterministic 策略与 pass layout；比较 32-bit distance_key + global_splat_index payload、64-bit packed key 等方案。
+Phase 3.0 Step 9 第一小项：继续确认 radix sort pass layout。已选 key/equal-key 策略：32-bit distance_key stable radix + global_splat_index payload；radix 前用 per-splat visibility flag / prefix compact 按 global splat index 顺序生成 deterministic visible list。workgroup-local compact + group prefix 作为后续运行时优化候选。
 
 ---
 
