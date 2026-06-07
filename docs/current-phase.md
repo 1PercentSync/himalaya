@@ -422,10 +422,40 @@ scatter_dispatch_offset   = 64
 prefix_dispatch_offset(i) = 80 + i * 16
 ```
 
-`GSRadixPrefixPush` 只包含 CPU 录制命令时已知的 capacity layout 和当前 level 参数；runtime active count 从 `radix_args.radix_scan_input_counts[level]` 读取。`GSRadixPrefixPush` level 语义：
+`GSRadixPrefixPush` 只包含 CPU 录制命令时已知的 capacity layout 和当前 level 参数；runtime active count 从 `radix_args.radix_scan_input_counts[level]` 读取。CPU 必须按 capacity layout 录制所有 prefix levels，不能按 `radix_args.radix_scan_level_count` 循环：
+
+```text
+for level in 0..capacity_level_count-1:
+    bind GSRadixPrefixPush(level, input_offset, output_offset, capacity layout)
+    dispatchIndirect(radix_args.prefix_dispatches[level])
+```
+
+Inactive runtime levels 依赖 `radix_args.prefix_dispatches[level] = {0, 1, 1, 0}` 形成 zero dispatch；shader 内再读取 `radix_args.radix_scan_level_count` 判断 active / final。
+
+`GSRadixPrefixPush` offset 映射固定为：
+
+```text
+level == 0:
+    input = radix_histogram
+    input_offset = unused
+    output_offset = capacity_level_offsets[0]
+
+level > 0:
+    input = radix_scan_buffer[capacity_level_offsets[level - 1]]
+    input_offset = capacity_level_offsets[level - 1]
+
+level + 1 < capacity_level_count:
+    output_offset = capacity_level_offsets[level]
+
+level + 1 == capacity_level_count:
+    output_offset = unused
+```
+
+`GSRadixPrefixPush` level 语义：
 
 - `level == 0`：input 是 `radix_histogram`，local exclusive prefix 写 `radix_block_offsets`。
 - `level > 0`：input 是 `radix_scan_buffer[input_offset]`，当前 level exclusive prefix 原地写回同一 range。
+- Shader 内判断 `is_active = level < radix_args.radix_scan_level_count`；zero dispatch 的 inactive level 通常不会执行，但 shader 仍应防御性 early return。
 - Shader 内判断 `is_final = level + 1 == radix_args.radix_scan_level_count`。
 - Shader 内判断 `has_output_level = level + 1 < radix_args.radix_scan_level_count`。
 - 若 `has_output_level`，parent raw sums 写 `radix_scan_buffer[output_offset]`。
@@ -436,7 +466,7 @@ Radix dispatch 形状：
 
 - Histogram：`dispatchIndirect(radix_args.histogram_dispatch)`，`x = block_count`，每个 256-entry radix block 一个 workgroup。
 - Scatter：`dispatchIndirect(radix_args.scatter_dispatch)`，`x = block_count`，每个 256-entry radix block 一个 workgroup。
-- Prefix：`dispatchIndirect(radix_args.prefix_dispatch[level])`，active level 的 `x = ceil(radix_args.radix_scan_input_counts[level] / 256)`、`y = 16` buckets；inactive level 使用 zero dispatch。
+- Prefix：CPU 按 `capacity_level_count` 录制 `dispatchIndirect(radix_args.prefix_dispatches[level])`；active level 的 `x = ceil(radix_args.radix_scan_input_counts[level] / 256)`、`y = 16` buckets；inactive level 使用 zero dispatch。
 - Bucket bases：一个普通 compute dispatch，单个 workgroup 读取 `bucket_totals[16]`，写 `bucket_bases[16]`。
 - Histogram / scatter shader 从 `radix_args.active_capacity` 读取 runtime active capacity。Last active block 读取 input entry 前必须 guard `entry_index < radix_args.active_capacity`。
 - Radix 必须处理完整 `[0, active_capacity)` 范围，不得只处理 `[0, active_count)`；`[active_count, active_capacity)` 由全量 reset 保证为 sentinel，并参与每个 digit 的 histogram/scatter，避免后续 digit 读 undefined。
@@ -549,13 +579,15 @@ for each digit:
     histogram dispatch
     barrier radix_histogram: Compute write -> Compute read
 
-    for level in 0..radix_args.radix_scan_level_count-1:
-        radix prefix level dispatch
-        shader reads runtime input_count / final-level state from radix_args
+    for level in 0..capacity_level_count-1:
+        bind prefix push constants using capacity offset mapping
+        dispatchIndirect(radix_args.prefix_dispatches[level])
+        shader reads runtime input_count / active / final-level state from radix_args
         barrier prefix outputs: Compute write -> Compute read/write
-            level 0 output includes radix_block_offsets
-            non-final level output includes radix_scan_buffer parent range
-            final level output includes radix_args.bucket_totals
+            level 0 output includes radix_block_offsets when active
+            non-final active level output includes radix_scan_buffer parent range
+            final active level output includes radix_args.bucket_totals
+            inactive levels are zero dispatch and produce no writes
 
     bucket bases dispatch
     barrier radix_args.bucket_bases/radix_block_offsets/radix_scan_buffer: Compute write -> Compute read
