@@ -289,6 +289,7 @@ visible_count == 1:
     bucket_bases = 0
 
 visible_count >= 2:
+    active_count = visible_count
     active_capacity = next_power_of_two(visible_count)
     block_count = ceil(active_capacity / 256)
     radix_scan_input_counts[0] = block_count
@@ -537,7 +538,7 @@ digit 1: sort_entries_scratch -> sort_entries
 digit 7: sort_entries_scratch -> sort_entries
 ```
 
-8 个 digit 后排序结果必须位于 primary `sort_entries`；4-bit 首版不允许增加 copy-back pass。`active_count <= 1` 时可以跳过 radix sort，因为 compact 已经在 primary `sort_entries` 中产生 draw 顺序。
+8 个 digit 后排序结果必须位于 primary `sort_entries`；4-bit 首版不允许增加 copy-back pass。CPU 不基于 `active_count` 跳过 `GS Radix Sort` pass，因为 command recording 时不知道 GPU visible count；`active_count <= 1` 时由 `radix_args` 写 zero dispatch，使 histogram / prefix / scatter no-op，primary `sort_entries` 保持 compact 输出。
 
 Pass 顺序固定为：
 
