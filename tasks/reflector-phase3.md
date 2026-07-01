@@ -95,6 +95,7 @@
 
 ## Step 10: Radix infrastructure / resource contract
 
+- [ ] 检查 BC6H_UFLOAT DFD sample descriptor：`channel_type` 应带 `KHR_DF_SAMPLE_DATATYPE_FLOAT`（0x80），`upper` 应为 `0x3F800000`（float 1.0f），非 `UINT32_MAX`。参考 Khronos `dfdutils` `setChannelFlags(channel, s_UFLOAT)` 及 qualquer 项目同一问题的修复
 - [ ] 重命名 RenderGraph indirect command usage（`DrawIndirect` → `IndirectCommand`，覆盖 draw/dispatch indirect）
 - [ ] 实现 RenderGraph 同 pass 同 resource 多 usage 聚合
 - [ ] 新增 `CommandBuffer::dispatch_indirect(VkBuffer, VkDeviceSize)`
